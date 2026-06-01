@@ -1,4 +1,10 @@
 require('dotenv').config();
+
+if (process.env.PRODUCTION !== 'true') {
+  console.error('❌ 로컬 환경에서는 봇을 실행할 수 없습니다. 호스트 서버에서만 실행해주세요.');
+  process.exit(1);
+}
+
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
