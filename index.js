@@ -30,6 +30,14 @@ client.once('clientReady', (c) => {
 
 client.on('interactionCreate', async (interaction) => {
   try {
+    const allowedChannel = process.env.ALLOWED_CHANNEL_ID;
+    if (allowedChannel && interaction.channelId !== allowedChannel) {
+      if (interaction.isRepliable()) {
+        await interaction.reply({ content: '❌ 이 채널에서는 사용할 수 없습니다.', ephemeral: true });
+      }
+      return;
+    }
+
     if (interaction.isChatInputCommand()) {
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
