@@ -1,18 +1,3 @@
 {
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "Stop-Process -Name node -Force -ErrorAction SilentlyContinue; Start-Process node -ArgumentList 'index.js' -WorkingDirectory 'C:\\Users\\minho\\OneDrive\\Desktop\\Arcade_BOT' -WindowStyle Hidden",
-            "shell": "powershell",
-            "statusMessage": "디스코드 봇 재시작 중...",
-            "timeout": 10
-          }
-        ]
-      }
-    ]
-  }
+  "hooks": {}
 }
