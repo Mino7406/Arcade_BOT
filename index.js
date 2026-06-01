@@ -2,7 +2,8 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const { handleGameSelect, handleNaejeonModal, handleNaejeonButton, handleNaejeonMatchEditModal } = require('./handlers/naejeon');
+const { handleGameSelect, handleNaejeonModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleTeamAssign } = require('./handlers/naejeon');
+const { handleMojipGameSelect, handleMojipModal, handleMojipButton, handleMojipMatchEditModal } = require('./handlers/mojip');
 
 const client = new Client({
   intents: [
@@ -37,6 +38,10 @@ client.on('interactionCreate', async (interaction) => {
     } else if (interaction.isStringSelectMenu()) {
       if (interaction.customId === 'naejeon:game_select') {
         await handleGameSelect(interaction);
+      } else if (interaction.customId.startsWith('naejeon:team_assign:')) {
+        await handleTeamAssign(interaction);
+      } else if (interaction.customId === 'mojip:game_select') {
+        await handleMojipGameSelect(interaction);
       }
 
     } else if (interaction.isModalSubmit()) {
@@ -44,11 +49,17 @@ client.on('interactionCreate', async (interaction) => {
         await handleNaejeonModal(interaction);
       } else if (interaction.customId.startsWith('naejeon:match_edit_modal:')) {
         await handleNaejeonMatchEditModal(interaction);
+      } else if (interaction.customId.startsWith('mojip:modal:')) {
+        await handleMojipModal(interaction);
+      } else if (interaction.customId.startsWith('mojip:match_edit_modal:')) {
+        await handleMojipMatchEditModal(interaction);
       }
 
     } else if (interaction.isButton()) {
       if (interaction.customId.startsWith('naejeon:')) {
         await handleNaejeonButton(interaction);
+      } else if (interaction.customId.startsWith('mojip:')) {
+        await handleMojipButton(interaction);
       }
     }
   } catch (error) {

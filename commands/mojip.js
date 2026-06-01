@@ -2,12 +2,12 @@ const { SlashCommandBuilder, ActionRowBuilder, StringSelectMenuBuilder } = requi
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName('내전')
-    .setDescription('내전을 생성합니다.'),
+    .setName('모집')
+    .setDescription('게임 모집을 생성합니다.'),
 
   async execute(interaction) {
     const selectMenu = new StringSelectMenuBuilder()
-      .setCustomId('naejeon:game_select')
+      .setCustomId('mojip:game_select')
       .setPlaceholder('게임을 선택하세요')
       .addOptions([
         { label: '리그 오브 레전드', value: 'lol',       emoji: { id: '1510933684750913626' } },
@@ -18,11 +18,9 @@ module.exports = {
         { label: '직접 입력',        value: 'custom',    emoji: '✏️' },
       ]);
 
-    const row = new ActionRowBuilder().addComponents(selectMenu);
-
     await interaction.reply({
-      content: '🎮 **내전 생성**\n어떤 게임의 내전을 만들까요?',
-      components: [row],
+      content: '🎮 **게임 모집 생성**\n어떤 게임의 모집을 만들까요?',
+      components: [new ActionRowBuilder().addComponents(selectMenu)],
       ephemeral: true,
     });
   },
