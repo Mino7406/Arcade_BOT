@@ -31,7 +31,8 @@ client.once('clientReady', (c) => {
 client.on('interactionCreate', async (interaction) => {
   try {
     const allowedChannel = process.env.ALLOWED_CHANNEL_ID;
-    if (allowedChannel && interaction.channelId !== allowedChannel) {
+    const allowedChannels = allowedChannel ? allowedChannel.split(',').map(id => id.trim()) : [];
+    if (allowedChannels.length > 0 && !allowedChannels.includes(interaction.channelId)) {
       if (interaction.isRepliable()) {
         await interaction.reply({ content: '❌ 이 채널에서는 사용할 수 없습니다.', ephemeral: true });
       }
