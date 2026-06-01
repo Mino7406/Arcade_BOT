@@ -360,13 +360,13 @@ async function handleNaejeonButton(interaction) {
     const role = roleName && interaction.guild
       ? interaction.guild.roles.cache.find(r => r.name === roleName)
       : null;
+    getPending(interaction.client).delete(interaction.user.id);
     const msg = await interaction.channel.send({
       content: role ? `<@&${role.id}>` : '',
       embeds: [buildPublicEmbed(data, participants)],
       components: buildPublicComponents(participants, maxPlayers),
     });
     getMatches(interaction.client).set(msg.id, { data, participants, message: msg, closed: false, teams: null });
-    getPending(interaction.client).delete(interaction.user.id);
     await interaction.update({ content: '✅ 채널에 공개 게시되었습니다!', embeds: [], components: [] });
     return;
   }
