@@ -81,4 +81,7 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
+process.on('SIGTERM', () => { client.destroy(); process.exit(0); });
+process.on('SIGINT',  () => { client.destroy(); process.exit(0); });
+
 client.login(process.env.TOKEN);
