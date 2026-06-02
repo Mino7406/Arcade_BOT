@@ -219,10 +219,16 @@ function buildCancelComponents() {
 function buildManageMenu(match, matchMsgId) {
   const buttons = [
     ...(match.closed
-      ? [new ButtonBuilder()
-          .setCustomId(`naejeon:team_builder:${matchMsgId}`)
-          .setLabel('🎯 팀 만들기')
-          .setStyle(ButtonStyle.Primary)]
+      ? [
+          new ButtonBuilder()
+            .setCustomId(`naejeon:team_builder:${matchMsgId}`)
+            .setLabel('🎯 팀 만들기')
+            .setStyle(ButtonStyle.Primary),
+          new ButtonBuilder()
+            .setCustomId(`naejeon:match_reopen:${matchMsgId}`)
+            .setLabel('🔓 마감 해제')
+            .setStyle(ButtonStyle.Secondary),
+        ]
       : [new ButtonBuilder()
           .setCustomId(`naejeon:match_close:${matchMsgId}`)
           .setLabel('🔒 마감하기')
@@ -540,6 +546,27 @@ async function handleNaejeonButton(interaction) {
     });
     await interaction.update({
       content: '✅ **내전이 마감되었습니다.**',
+      components: [buildManageMenu(match, matchMsgId)],
+    });
+    return;
+  }
+
+  // ── 마감 해제 (주최자 전용) ──────────────────────────────────
+  if (customId.startsWith('naejeon:match_reopen:')) {
+    const matchMsgId = customId.slice('naejeon:match_reopen:'.length);
+    const match = getMatches(interaction.client).get(matchMsgId);
+    if (!match) {
+      await interaction.update({ content: '⚠️ 만료된 내전입니다.', components: [] });
+      return;
+    }
+    match.closed = false;
+    const maxPlayers = parseInt(match.data.players) || 0;
+    await match.message.edit({
+      embeds: [buildPublicEmbed(match.data, match.participants, false, match.teams)],
+      components: buildPublicComponents(match.participants, maxPlayers, false),
+    });
+    await interaction.update({
+      content: '🔓 **내전 마감이 해제되었습니다.**',
       components: [buildManageMenu(match, matchMsgId)],
     });
     return;

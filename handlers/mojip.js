@@ -186,12 +186,16 @@ function buildCancelComponents() {
 
 function buildManageMenu(closed, msgId) {
   const buttons = [
-    ...(closed ? [] : [
-      new ButtonBuilder()
-        .setCustomId(`mojip:match_close:${msgId}`)
-        .setLabel('🔒 마감하기')
-        .setStyle(ButtonStyle.Primary),
-    ]),
+    ...(closed
+      ? [new ButtonBuilder()
+          .setCustomId(`mojip:match_reopen:${msgId}`)
+          .setLabel('🔓 마감 해제')
+          .setStyle(ButtonStyle.Secondary)]
+      : [new ButtonBuilder()
+          .setCustomId(`mojip:match_close:${msgId}`)
+          .setLabel('🔒 마감하기')
+          .setStyle(ButtonStyle.Primary)]
+    ),
     new ButtonBuilder()
       .setCustomId(`mojip:match_edit:${msgId}`)
       .setLabel('✏️ 모집 수정')
@@ -414,6 +418,27 @@ async function handleMojipButton(interaction) {
     await interaction.update({
       content: '✅ **모집이 마감되었습니다.**',
       components: [buildManageMenu(true, msgId)],
+    });
+    return;
+  }
+
+  // ── 마감 해제 ──────────────────────────────────────────────────
+  if (customId.startsWith('mojip:match_reopen:')) {
+    const msgId = customId.slice('mojip:match_reopen:'.length);
+    const match = getMojips(interaction.client).get(msgId);
+    if (!match) {
+      await interaction.update({ content: '⚠️ 만료된 모집입니다.', components: [] });
+      return;
+    }
+    match.closed = false;
+    const maxPlayers = parseInt(match.data.players) || 0;
+    await match.message.edit({
+      embeds: [buildPublicEmbed(match.data, match.participants, false)],
+      components: buildPublicComponents(match.participants, maxPlayers, false),
+    });
+    await interaction.update({
+      content: '🔓 **모집 마감이 해제되었습니다.**',
+      components: [buildManageMenu(false, msgId)],
     });
     return;
   }
