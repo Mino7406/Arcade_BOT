@@ -26,18 +26,18 @@ const ROLE_NAMES = {
 
 function buildModal(game, data = {}) {
   const gameInfo = GAMES[game];
+  const isCustom = game === 'custom';
 
   const modal = new ModalBuilder()
     .setCustomId(`naejeon:modal:${game}`)
     .setTitle(`${gameInfo.emoji} ${gameInfo.name} 내전 생성`);
 
-  const isCustom = game === 'custom';
   const titleInput = new TextInputBuilder()
     .setCustomId('title')
-    .setLabel(isCustom ? '제목' : '제목 (비워두면 기본값 사용)')
+    .setLabel('제목 (비워두면 기본값 사용)')
     .setStyle(TextInputStyle.Short)
-    .setPlaceholder(isCustom ? '내전 제목을 입력하세요' : `${gameInfo.name} 내전`)
-    .setRequired(isCustom)
+    .setPlaceholder(isCustom ? '내전 제목을 입력하세요 (선택사항)' : `${gameInfo.name} 내전`)
+    .setRequired(false)
     .setMaxLength(50);
 
   const datetimeInput = new TextInputBuilder()
@@ -70,12 +70,32 @@ function buildModal(game, data = {}) {
   else if (gameInfo.defaultPlayers) playersInput.setValue(String(gameInfo.defaultPlayers));
   if (data.description) descInput.setValue(data.description);
 
-  modal.addComponents(
-    new ActionRowBuilder().addComponents(titleInput),
-    new ActionRowBuilder().addComponents(datetimeInput),
-    new ActionRowBuilder().addComponents(playersInput),
-    new ActionRowBuilder().addComponents(descInput),
-  );
+  if (isCustom) {
+    const gameNameInput = new TextInputBuilder()
+      .setCustomId('game_name')
+      .setLabel('게임 이름')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('예: 마인크래프트, 철권 8 ...')
+      .setRequired(true)
+      .setMaxLength(50);
+    if (data.gameInfo && data.gameInfo.name !== '직접 입력') {
+      gameNameInput.setValue(data.gameInfo.name);
+    }
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(gameNameInput),
+      new ActionRowBuilder().addComponents(titleInput),
+      new ActionRowBuilder().addComponents(datetimeInput),
+      new ActionRowBuilder().addComponents(playersInput),
+      new ActionRowBuilder().addComponents(descInput),
+    );
+  } else {
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(titleInput),
+      new ActionRowBuilder().addComponents(datetimeInput),
+      new ActionRowBuilder().addComponents(playersInput),
+      new ActionRowBuilder().addComponents(descInput),
+    );
+  }
 
   return modal;
 }
@@ -294,7 +314,10 @@ async function handleGameSelect(interaction) {
 
 async function handleNaejeonModal(interaction) {
   const game        = interaction.customId.split(':')[2];
-  const gameInfo    = GAMES[game];
+  const baseGameInfo = GAMES[game];
+  const isCustom    = game === 'custom';
+  const gameName    = isCustom ? interaction.fields.getTextInputValue('game_name') : null;
+  const gameInfo    = gameName ? { ...baseGameInfo, name: gameName } : baseGameInfo;
   const title       = interaction.fields.getTextInputValue('title') || `${gameInfo.name} 내전`;
   const datetime    = interaction.fields.getTextInputValue('datetime');
   const players     = interaction.fields.getTextInputValue('players');
@@ -366,7 +389,7 @@ async function handleNaejeonButton(interaction) {
       embeds: [buildPublicEmbed(data, participants)],
       components: buildPublicComponents(participants, maxPlayers),
     });
-    getMatches(interaction.client).set(msg.id, { data, participants, message: msg, closed: false, teams: null });
+    getMatches(interaction.client).set(msg.id, { data, participants, message: msg, closed: false, teams: null, createdAt: Date.now() });
     await interaction.update({ content: '✅ 채널에 공개 게시되었습니다!', embeds: [], components: [] });
     return;
   }
@@ -707,7 +730,10 @@ async function handleNaejeonMatchEditModal(interaction) {
   const parts = interaction.customId.split(':');
   const game        = parts[3];
   const matchMsgId  = parts[4];
-  const gameInfo    = GAMES[game];
+  const baseGameInfo = GAMES[game];
+  const isCustom    = game === 'custom';
+  const gameName    = isCustom ? interaction.fields.getTextInputValue('game_name') : null;
+  const gameInfo    = gameName ? { ...baseGameInfo, name: gameName } : baseGameInfo;
 
   const match = getMatches(interaction.client).get(matchMsgId);
   if (!match) {
@@ -725,7 +751,7 @@ async function handleNaejeonMatchEditModal(interaction) {
     return;
   }
 
-  match.data = { ...match.data, title, datetime, players, description };
+  match.data = { ...match.data, gameInfo, title, datetime, players, description };
   const maxPlayers  = parseInt(players) || 0;
 
   await match.message.edit({

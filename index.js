@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { handleGameSelect, handleNaejeonModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleTeamAssign } = require('./handlers/naejeon');
 const { handleMojipGameSelect, handleMojipModal, handleMojipButton, handleMojipMatchEditModal } = require('./handlers/mojip');
+const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/team');
 
 const client = new Client({
   intents: [
@@ -51,6 +52,10 @@ client.on('interactionCreate', async (interaction) => {
         await handleTeamAssign(interaction);
       } else if (interaction.customId === 'mojip:game_select') {
         await handleMojipGameSelect(interaction);
+      } else if (interaction.customId === 'team:match_select') {
+        await handleTeamMatchSelect(interaction);
+      } else if (interaction.customId.startsWith('team:assign_setup:') || interaction.customId.startsWith('team:pub_assign:')) {
+        await handleTeamAssignSelect(interaction);
       }
 
     } else if (interaction.isModalSubmit()) {
@@ -69,6 +74,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleNaejeonButton(interaction);
       } else if (interaction.customId.startsWith('mojip:')) {
         await handleMojipButton(interaction);
+      } else if (interaction.customId.startsWith('team:')) {
+        await handleTeamButton(interaction);
       }
     }
   } catch (error) {

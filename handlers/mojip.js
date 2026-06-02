@@ -33,10 +33,10 @@ function buildModal(game, data = {}) {
 
   const titleInput = new TextInputBuilder()
     .setCustomId('title')
-    .setLabel(isCustom ? '제목' : '제목 (비워두면 기본값 사용)')
+    .setLabel('제목 (비워두면 기본값 사용)')
     .setStyle(TextInputStyle.Short)
-    .setPlaceholder(isCustom ? '모집 제목을 입력하세요' : `${gameInfo.name} 모집`)
-    .setRequired(isCustom)
+    .setPlaceholder(isCustom ? '모집 제목을 입력하세요 (선택사항)' : `${gameInfo.name} 모집`)
+    .setRequired(false)
     .setMaxLength(50);
 
   const datetimeInput = new TextInputBuilder()
@@ -69,12 +69,32 @@ function buildModal(game, data = {}) {
   else if (gameInfo.defaultPlayers) playersInput.setValue(String(gameInfo.defaultPlayers));
   if (data.description) descInput.setValue(data.description);
 
-  modal.addComponents(
-    new ActionRowBuilder().addComponents(titleInput),
-    new ActionRowBuilder().addComponents(datetimeInput),
-    new ActionRowBuilder().addComponents(playersInput),
-    new ActionRowBuilder().addComponents(descInput),
-  );
+  if (isCustom) {
+    const gameNameInput = new TextInputBuilder()
+      .setCustomId('game_name')
+      .setLabel('게임 이름')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('예: 마인크래프트, 철권 8 ...')
+      .setRequired(true)
+      .setMaxLength(50);
+    if (data.gameInfo && data.gameInfo.name !== '직접 입력') {
+      gameNameInput.setValue(data.gameInfo.name);
+    }
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(gameNameInput),
+      new ActionRowBuilder().addComponents(titleInput),
+      new ActionRowBuilder().addComponents(datetimeInput),
+      new ActionRowBuilder().addComponents(playersInput),
+      new ActionRowBuilder().addComponents(descInput),
+    );
+  } else {
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(titleInput),
+      new ActionRowBuilder().addComponents(datetimeInput),
+      new ActionRowBuilder().addComponents(playersInput),
+      new ActionRowBuilder().addComponents(descInput),
+    );
+  }
 
   return modal;
 }
@@ -203,7 +223,10 @@ async function handleMojipGameSelect(interaction) {
 
 async function handleMojipModal(interaction) {
   const game        = interaction.customId.split(':')[2];
-  const gameInfo    = GAMES[game];
+  const baseGameInfo = GAMES[game];
+  const isCustom    = game === 'custom';
+  const gameName    = isCustom ? interaction.fields.getTextInputValue('game_name') : null;
+  const gameInfo    = gameName ? { ...baseGameInfo, name: gameName } : baseGameInfo;
   const title       = interaction.fields.getTextInputValue('title') || `${gameInfo.name} 모집`;
   const datetime    = interaction.fields.getTextInputValue('datetime');
   const players     = interaction.fields.getTextInputValue('players');
@@ -526,7 +549,10 @@ async function handleMojipMatchEditModal(interaction) {
   const parts      = interaction.customId.split(':');
   const game       = parts[3];
   const msgId      = parts[4];
-  const gameInfo   = GAMES[game];
+  const baseGameInfo = GAMES[game];
+  const isCustom   = game === 'custom';
+  const gameName   = isCustom ? interaction.fields.getTextInputValue('game_name') : null;
+  const gameInfo   = gameName ? { ...baseGameInfo, name: gameName } : baseGameInfo;
 
   const match = getMojips(interaction.client).get(msgId);
   if (!match) {
@@ -544,7 +570,7 @@ async function handleMojipMatchEditModal(interaction) {
     return;
   }
 
-  match.data = { ...match.data, title, datetime, players, description };
+  match.data = { ...match.data, gameInfo, title, datetime, players, description };
   const maxPlayers = parseInt(players) || 0;
 
   await match.message.edit({
