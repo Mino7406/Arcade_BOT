@@ -89,7 +89,7 @@ function buildSetupBuilderComponents(match, matchMsgId) {
     .setCustomId(`team:assign_setup:${matchMsgId}`)
     .setPlaceholder('팀 1에 배정할 참가자를 선택하세요 (나머지는 팀 2)')
     .setMinValues(1)
-    .setMaxValues(Math.max(1, match.participants.length - 1))
+    .setMaxValues(match.participants.length - 1)
     .addOptions(match.participants.map(u => ({
       label: u.globalName || u.username,
       value: u.id,
@@ -110,7 +110,7 @@ function buildPublicBuilderComponents(match, matchMsgId) {
     .setCustomId(`team:pub_assign:${matchMsgId}`)
     .setPlaceholder('팀 1에 배정할 참가자를 선택하세요 (나머지는 팀 2)')
     .setMinValues(1)
-    .setMaxValues(Math.max(1, match.participants.length - 1))
+    .setMaxValues(match.participants.length - 1)
     .addOptions(match.participants.map(u => ({
       label: u.globalName || u.username,
       value: u.id,
@@ -149,9 +149,8 @@ async function handleTeamMatchSelect(interaction) {
     await interaction.update({ content: '⚠️ 만료된 내전입니다.', embeds: [], components: [] });
     return;
   }
-  // [TEST] 참가자 1명도 허용 (테스트용)
-  if (match.participants.length < 1) {
-    await interaction.update({ content: '⚠️ 참가자가 없습니다.', embeds: [], components: [] });
+  if (match.participants.length < 2) {
+    await interaction.update({ content: '⚠️ 팀을 나누려면 참가자가 2명 이상이어야 합니다.', embeds: [], components: [] });
     return;
   }
 
