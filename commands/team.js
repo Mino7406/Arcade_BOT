@@ -16,10 +16,11 @@ module.exports = {
       return;
     }
 
-    const validMatches = [...matches.entries()].filter(([, m]) => m.participants.length >= 2);
+    // [TEST] 참가자 1명도 허용
+    const validMatches = [...matches.entries()].filter(([, m]) => m.participants.length >= 1);
 
     if (validMatches.length === 0) {
-      await interaction.reply({ content: '⚠️ 참가자가 2명 이상인 내전이 없습니다.', ephemeral: true });
+      await interaction.reply({ content: '⚠️ 참가자가 있는 내전이 없습니다.', ephemeral: true });
       return;
     }
 
