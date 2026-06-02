@@ -728,8 +728,8 @@ async function handleNaejeonButton(interaction) {
 async function handleNaejeonMatchEditModal(interaction) {
   // customId: naejeon:match_edit_modal:{game}:{matchMsgId}
   const parts = interaction.customId.split(':');
-  const game        = parts[3];
-  const matchMsgId  = parts[4];
+  const game        = parts[2];
+  const matchMsgId  = parts[3];
   const baseGameInfo = GAMES[game];
   const isCustom    = game === 'custom';
   const gameName    = isCustom ? interaction.fields.getTextInputValue('game_name') : null;

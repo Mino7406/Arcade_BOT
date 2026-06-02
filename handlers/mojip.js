@@ -547,8 +547,8 @@ async function handleMojipButton(interaction) {
 async function handleMojipMatchEditModal(interaction) {
   // customId: mojip:match_edit_modal:{game}:{msgId}
   const parts      = interaction.customId.split(':');
-  const game       = parts[3];
-  const msgId      = parts[4];
+  const game       = parts[2];
+  const msgId      = parts[3];
   const baseGameInfo = GAMES[game];
   const isCustom   = game === 'custom';
   const gameName   = isCustom ? interaction.fields.getTextInputValue('game_name') : null;
