@@ -304,8 +304,8 @@ async function handleMojipButton(interaction) {
     match.participants.push(interaction.user);
     await interaction.deferUpdate();
     await match.message.edit({
-      embeds: [buildPublicEmbed(match.data, match.participants)],
-      components: buildPublicComponents(match.participants, maxPlayers),
+      embeds: [buildPublicEmbed(match.data, match.participants, match.closed)],
+      components: buildPublicComponents(match.participants, maxPlayers, match.closed),
     });
     await interaction.followUp({
       content: '✅ **참가 완료!** 명단에 등록되었습니다.\n취소하려면 아래 버튼을 눌러주세요.',
@@ -342,16 +342,15 @@ async function handleMojipButton(interaction) {
   if (customId === 'mojip:manage') {
     const msgId = interaction.message.id;
     const match = getMojips(interaction.client).get(msgId);
-    await interaction.deferUpdate();
     if (!match) {
-      await interaction.followUp({ content: '⚠️ 만료된 모집입니다.', ephemeral: true });
+      await interaction.reply({ content: '⚠️ 만료된 모집입니다.', ephemeral: true });
       return;
     }
     if (match.data.organizer.id !== interaction.user.id) {
-      await interaction.followUp({ content: '❌ 주최자만 사용할 수 있습니다.', ephemeral: true });
+      await interaction.reply({ content: '❌ 주최자만 사용할 수 있습니다.', ephemeral: true });
       return;
     }
-    await interaction.followUp({
+    await interaction.reply({
       content: '⚙️ **주최자 관리 메뉴**',
       components: [buildManageMenu(match.closed, msgId)],
       ephemeral: true,
