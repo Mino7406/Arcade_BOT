@@ -395,7 +395,7 @@ async function handleNaejeonButton(interaction) {
       embeds: [buildPublicEmbed(data, participants)],
       components: buildPublicComponents(participants, maxPlayers),
     });
-    getMatches(interaction.client).set(msg.id, { data, participants, message: msg, closed: false, teams: null, createdAt: Date.now() });
+    getMatches(interaction.client).set(msg.id, { data, participants, message: msg, closed: false, teams: null });
     await interaction.update({ content: '✅ 채널에 공개 게시되었습니다!', embeds: [], components: [] });
     return;
   }
