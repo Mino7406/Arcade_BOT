@@ -18,11 +18,9 @@ module.exports = {
             const kst = new Date(startedAt.getTime() + 9 * 60 * 60 * 1000);
             const MM = String(kst.getUTCMonth() + 1).padStart(2, '0');
             const DD = String(kst.getUTCDate()).padStart(2, '0');
-            const hours = kst.getUTCHours();
-            const ampm = hours < 12 ? '오전' : '오후';
-            const HH = String(hours % 12 || 12).padStart(2, '0');
+            const HH = String(kst.getUTCHours()).padStart(2, '0');
             const mm = String(kst.getUTCMinutes()).padStart(2, '0');
-            return `※ ${MM}.${DD} ${ampm} ${HH}:${mm}에 초기화 됨.`;
+            return `※ ${MM}.${DD} ${HH}:${mm}에 초기화 됨.`;
           })()
         : '봇 재시작 후 생성된 내전만 표시됩니다';
       await interaction.reply({ content: `⚠️ 활성화된 내전이 없습니다. (${dateStr})`, ephemeral: true });

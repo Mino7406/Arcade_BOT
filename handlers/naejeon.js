@@ -307,11 +307,9 @@ function getResetDateStr(client) {
   const kst = new Date(startedAt.getTime() + 9 * 60 * 60 * 1000);
   const MM = String(kst.getUTCMonth() + 1).padStart(2, '0');
   const DD = String(kst.getUTCDate()).padStart(2, '0');
-  const hours = kst.getUTCHours();
-  const ampm = hours < 12 ? '오전' : '오후';
-  const HH = String(hours % 12 || 12).padStart(2, '0');
+  const HH = String(kst.getUTCHours()).padStart(2, '0');
   const mm = String(kst.getUTCMinutes()).padStart(2, '0');
-  return `※ ${MM}.${DD} ${ampm} ${HH}:${mm}에 초기화 됨.`;
+  return `※ ${MM}.${DD} ${HH}:${mm}에 초기화 됨.`;
 }
 
 function getMatches(client) {
