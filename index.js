@@ -27,6 +27,7 @@ for (const file of commandFiles) {
 
 client.once('clientReady', (c) => {
   console.log(`✅ 봇 로그인 완료: ${c.user.tag}`);
+  c.startedAt = new Date();
 });
 
 client.on('interactionCreate', async (interaction) => {

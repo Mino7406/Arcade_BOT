@@ -12,7 +12,11 @@ module.exports = {
     const matches = interaction.client.naejeonMatches;
 
     if (!matches || matches.size === 0) {
-      await interaction.reply({ content: '⚠️ 활성화된 내전이 없습니다. (봇 재시작 후 생성된 내전만 표시됩니다)', ephemeral: true });
+      const startedAt = interaction.client.startedAt;
+      const dateStr = startedAt
+        ? `${startedAt.getFullYear()}.${String(startedAt.getMonth() + 1).padStart(2, '0')}.${String(startedAt.getDate()).padStart(2, '0')} ${String(startedAt.getHours()).padStart(2, '0')}:${String(startedAt.getMinutes()).padStart(2, '0')} 초기화`
+        : '봇 재시작 후 생성된 내전만 표시됩니다';
+      await interaction.reply({ content: `⚠️ 활성화된 내전이 없습니다. (${dateStr})`, ephemeral: true });
       return;
     }
 
