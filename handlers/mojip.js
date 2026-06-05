@@ -136,7 +136,7 @@ function buildPublicEmbed(data, participants, closed = false) {
   if (description) embed.addFields({ name: '📝 메모', value: description });
 
   const participantText = participants.length > 0
-    ? participants.map((u, i) => `${i + 1}. ${u.globalName || u.username}`).join('\n')
+    ? participants.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n')
     : '아직 참가자가 없습니다.';
   embed.addFields({ name: `👤 참가자 (${participants.length}/${max})`, value: participantText });
   return embed;
@@ -318,7 +318,7 @@ async function handleMojipButton(interaction) {
       await interaction.reply({ content: '❌ 모집 인원이 가득 찼습니다!', ephemeral: true });
       return;
     }
-    match.participants.push(interaction.user);
+    match.participants.push({ id: interaction.user.id, displayName: interaction.user.globalName || interaction.user.username });
     await interaction.deferUpdate();
     await match.message.edit({
       embeds: [buildPublicEmbed(match.data, match.participants, match.closed)],

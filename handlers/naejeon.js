@@ -149,7 +149,7 @@ function buildPublicEmbed(data, participants, closed = false, teams = null) {
     if (unassigned.length > 0) {
       embed.addFields({
         name: `👤 참가자 (${unassigned.length}명 미배정)`,
-        value: unassigned.map((u, i) => `${i + 1}. ${u.globalName || u.username}`).join('\n'),
+        value: unassigned.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n'),
       });
     }
 
@@ -157,16 +157,16 @@ function buildPublicEmbed(data, participants, closed = false, teams = null) {
     embed.addFields(
       {
         name: `🔵 팀 1 (${teams.team1.length}명)`,
-        value: teams.team1.map((u, i) => `${i + 1}. ${u.globalName || u.username}`).join('\n') || '없음',
+        value: teams.team1.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n') || '없음',
       },
       {
         name: `🔴 팀 2 (${teams.team2.length}명)`,
-        value: teams.team2.map((u, i) => `${i + 1}. ${u.globalName || u.username}`).join('\n') || '없음',
+        value: teams.team2.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n') || '없음',
       },
     );
   } else {
     const participantText = participants.length > 0
-      ? participants.map((u, i) => `${i + 1}. ${u.globalName || u.username}`).join('\n')
+      ? participants.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n')
       : '아직 참가자가 없습니다.';
     embed.addFields({ name: `👤 참가자 (${participants.length}/${max})`, value: participantText });
   }
@@ -254,7 +254,7 @@ function buildTeamBuilderComponents(match, matchMsgId) {
     .setMaxValues(match.participants.length - 1)
     .addOptions(
       match.participants.map(u => ({
-        label: u.globalName || u.username,
+        label: u.displayName,
         value: u.id,
       }))
     );
@@ -439,7 +439,7 @@ async function handleNaejeonButton(interaction) {
       await interaction.reply({ content: '❌ 모집 인원이 가득 찼습니다!', ephemeral: true });
       return;
     }
-    match.participants.push(interaction.user);
+    match.participants.push({ id: interaction.user.id, displayName: interaction.user.globalName || interaction.user.username });
     await interaction.deferUpdate();
     await match.message.edit({
       embeds: [buildPublicEmbed(match.data, match.participants, match.closed, match.teams)],

@@ -54,12 +54,12 @@ function buildTeamEmbed(data, teams) {
     .addFields(
       {
         name: `🔵 팀 1 (${teams.team1.length}명)`,
-        value: teams.team1.map((u, i) => `${i + 1}. ${u.globalName || u.username}`).join('\n') || '없음',
+        value: teams.team1.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n') || '없음',
         inline: true,
       },
       {
         name: `🔴 팀 2 (${teams.team2.length}명)`,
-        value: teams.team2.map((u, i) => `${i + 1}. ${u.globalName || u.username}`).join('\n') || '없음',
+        value: teams.team2.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n') || '없음',
         inline: true,
       },
     )
@@ -104,7 +104,7 @@ function buildSetupBuilderComponents(match, matchMsgId) {
     .setMinValues(1)
     .setMaxValues(match.participants.length - 1)
     .addOptions(match.participants.map(u => ({
-      label: u.globalName || u.username,
+      label: u.displayName,
       value: u.id,
     })));
   return [
@@ -125,7 +125,7 @@ function buildPublicBuilderComponents(match, matchMsgId) {
     .setMinValues(1)
     .setMaxValues(match.participants.length - 1)
     .addOptions(match.participants.map(u => ({
-      label: u.globalName || u.username,
+      label: u.displayName,
       value: u.id,
     })));
   return [
