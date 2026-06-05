@@ -301,6 +301,19 @@ function shuffleIntoTeams(participants) {
   return { team1: shuffled.slice(0, half), team2: shuffled.slice(half) };
 }
 
+function getResetDateStr(client) {
+  const startedAt = client.startedAt;
+  if (!startedAt) return '봇 재시작 후 생성된 내전만 표시됩니다';
+  const kst = new Date(startedAt.getTime() + 9 * 60 * 60 * 1000);
+  const MM = String(kst.getUTCMonth() + 1).padStart(2, '0');
+  const DD = String(kst.getUTCDate()).padStart(2, '0');
+  const hours = kst.getUTCHours();
+  const ampm = hours < 12 ? '오전' : '오후';
+  const HH = String(hours % 12 || 12).padStart(2, '0');
+  const mm = String(kst.getUTCMinutes()).padStart(2, '0');
+  return `${MM}.${DD} ${ampm} ${HH}:${mm}에 초기화 됨.`;
+}
+
 function getMatches(client) {
   if (!client.naejeonMatches) client.naejeonMatches = new Map();
   return client.naejeonMatches;
@@ -350,7 +363,7 @@ async function handleTeamAssign(interaction) {
   const matchMsgId = interaction.customId.slice('naejeon:team_assign:'.length);
   const match = getMatches(interaction.client).get(matchMsgId);
   if (!match) {
-    await interaction.update({ content: '⚠️ 만료된 내전입니다.', embeds: [], components: [] });
+    await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
     return;
   }
 
@@ -380,7 +393,7 @@ async function handleNaejeonButton(interaction) {
   if (customId === 'naejeon:publish') {
     const data = getPending(interaction.client).get(interaction.user.id);
     if (!data) {
-      await interaction.reply({ content: '⚠️ 데이터가 만료되었습니다. 다시 `/내전`을 실행해주세요.', ephemeral: true });
+      await interaction.reply({ content: `⚠️ 데이터가 만료되었습니다. 다시 \`/내전\`을 실행해주세요. (${getResetDateStr(interaction.client)})`, ephemeral: true });
       return;
     }
     const maxPlayers = parseInt(data.players) || 0;
@@ -404,7 +417,7 @@ async function handleNaejeonButton(interaction) {
   if (customId === 'naejeon:join') {
     const match = getMatches(interaction.client).get(interaction.message.id);
     if (!match) {
-      await interaction.reply({ content: '⚠️ 만료된 내전입니다.', ephemeral: true });
+      await interaction.reply({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, ephemeral: true });
       return;
     }
     if (match.closed) {
@@ -445,7 +458,7 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:leave:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: '⚠️ 만료된 내전입니다.', components: [] });
+      await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, components: [] });
       return;
     }
     const idx = match.participants.findIndex(u => u.id === interaction.user.id);
@@ -476,7 +489,7 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = interaction.message.id;
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.reply({ content: '⚠️ 만료된 내전입니다.', ephemeral: true });
+      await interaction.reply({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, ephemeral: true });
       return;
     }
     if (match.data.organizer.id !== interaction.user.id) {
@@ -496,7 +509,7 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:match_close:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: '⚠️ 만료된 내전입니다.', components: [] });
+      await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, components: [] });
       return;
     }
     const maxPlayers = parseInt(match.data.players) || 0;
@@ -535,7 +548,7 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:match_close_confirm:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: '⚠️ 만료된 내전입니다.', components: [] });
+      await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, components: [] });
       return;
     }
     match.closed = true;
@@ -556,7 +569,7 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:match_reopen:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: '⚠️ 만료된 내전입니다.', components: [] });
+      await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, components: [] });
       return;
     }
     match.closed = false;
@@ -577,7 +590,7 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:team_builder:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: '⚠️ 만료된 내전입니다.', embeds: [], components: [] });
+      await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
       return;
     }
     if (match.participants.length < 2) {
@@ -601,7 +614,7 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:team_shuffle:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: '⚠️ 만료된 내전입니다.', embeds: [], components: [] });
+      await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
       return;
     }
     if (match.participants.length < 2) {
@@ -631,7 +644,7 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:manage_back:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: '⚠️ 만료된 내전입니다.', embeds: [], components: [] });
+      await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
       return;
     }
     await interaction.update({
@@ -647,7 +660,7 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:match_edit:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: '⚠️ 만료된 내전입니다.', components: [] });
+      await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, components: [] });
       return;
     }
     const editModal = buildModal(match.data.game, match.data);
@@ -661,7 +674,7 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:match_cancel:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: '⚠️ 만료된 내전입니다.', components: [] });
+      await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, components: [] });
       return;
     }
     const confirmRow = new ActionRowBuilder().addComponents(
@@ -711,7 +724,7 @@ async function handleNaejeonButton(interaction) {
   if (customId === 'naejeon:edit') {
     const data = getPending(interaction.client).get(interaction.user.id);
     if (!data) {
-      await interaction.reply({ content: '⚠️ 데이터가 만료되었습니다. 다시 `/내전`을 실행해주세요.', ephemeral: true });
+      await interaction.reply({ content: `⚠️ 데이터가 만료되었습니다. 다시 \`/내전\`을 실행해주세요. (${getResetDateStr(interaction.client)})`, ephemeral: true });
       return;
     }
     await interaction.showModal(buildModal(data.game, data));
@@ -739,7 +752,7 @@ async function handleNaejeonButton(interaction) {
   if (customId === 'naejeon:cancel_back') {
     const data = getPending(interaction.client).get(interaction.user.id);
     if (!data) {
-      await interaction.update({ content: '⚠️ 데이터가 만료되었습니다. 다시 `/내전`을 실행해주세요.', embeds: [], components: [] });
+      await interaction.update({ content: `⚠️ 데이터가 만료되었습니다. 다시 \`/내전\`을 실행해주세요. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
       return;
     }
     await interaction.update({
@@ -763,7 +776,7 @@ async function handleNaejeonMatchEditModal(interaction) {
 
   const match = getMatches(interaction.client).get(matchMsgId);
   if (!match) {
-    await interaction.reply({ content: '⚠️ 만료된 내전입니다.', ephemeral: true });
+    await interaction.reply({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, ephemeral: true });
     return;
   }
 

@@ -8,6 +8,19 @@ const {
 
 const SIX_HOURS = 6 * 60 * 60 * 1000;
 
+function getResetDateStr(client) {
+  const startedAt = client.startedAt;
+  if (!startedAt) return '봇 재시작 후 생성된 내전만 표시됩니다';
+  const kst = new Date(startedAt.getTime() + 9 * 60 * 60 * 1000);
+  const MM = String(kst.getUTCMonth() + 1).padStart(2, '0');
+  const DD = String(kst.getUTCDate()).padStart(2, '0');
+  const hours = kst.getUTCHours();
+  const ampm = hours < 12 ? '오전' : '오후';
+  const HH = String(hours % 12 || 12).padStart(2, '0');
+  const mm = String(kst.getUTCMinutes()).padStart(2, '0');
+  return `${MM}.${DD} ${ampm} ${HH}:${mm}에 초기화 됨.`;
+}
+
 function getMatches(client) {
   if (!client.naejeonMatches) client.naejeonMatches = new Map();
   return client.naejeonMatches;
@@ -146,7 +159,7 @@ async function handleTeamMatchSelect(interaction) {
   const match = getMatches(interaction.client).get(matchMsgId);
 
   if (!match) {
-    await interaction.update({ content: '⚠️ 만료된 내전입니다.', embeds: [], components: [] });
+    await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
     return;
   }
   if (match.participants.length < 2) {
@@ -178,7 +191,7 @@ async function handleTeamButton(interaction) {
     const matchMsgId = customId.slice('team:builder:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: '⚠️ 만료된 내전입니다.', embeds: [], components: [] });
+      await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
       return;
     }
     await interaction.update({
@@ -194,7 +207,7 @@ async function handleTeamButton(interaction) {
     const matchMsgId = customId.slice('team:shuffle_start:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: '⚠️ 만료된 내전입니다.', embeds: [], components: [] });
+      await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
       return;
     }
     const teams = shuffleIntoTeams(match.participants);
@@ -211,7 +224,7 @@ async function handleTeamButton(interaction) {
     const matchMsgId = customId.slice('team:pub_builder:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: '⚠️ 만료된 내전입니다.', embeds: [], components: [] });
+      await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
       return;
     }
     await interaction.update({
@@ -227,7 +240,7 @@ async function handleTeamButton(interaction) {
     const matchMsgId = customId.slice('team:pub_shuffle:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: '⚠️ 만료된 내전입니다.', embeds: [], components: [] });
+      await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
       return;
     }
     const teams = shuffleIntoTeams(match.participants);
@@ -249,7 +262,7 @@ async function handleTeamAssignSelect(interaction) {
 
   const match = getMatches(interaction.client).get(matchMsgId);
   if (!match) {
-    await interaction.update({ content: '⚠️ 만료된 내전입니다.', embeds: [], components: [] });
+    await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
     return;
   }
 
