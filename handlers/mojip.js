@@ -136,7 +136,7 @@ function buildPublicEmbed(data, participants, closed = false) {
   if (description) embed.addFields({ name: '📝 메모', value: description });
 
   const participantText = participants.length > 0
-    ? participants.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n')
+    ? participants.map((u, i) => `${i + 1}. <@${u.id}>`).join('\n')
     : '아직 참가자가 없습니다.';
   embed.addFields({ name: `👤 참가자 (${participants.length}/${max})`, value: participantText });
   return embed;

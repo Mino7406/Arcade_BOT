@@ -149,7 +149,7 @@ function buildPublicEmbed(data, participants, closed = false, teams = null) {
     if (unassigned.length > 0) {
       embed.addFields({
         name: `👤 참가자 (${unassigned.length}명 미배정)`,
-        value: unassigned.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n'),
+        value: unassigned.map((u, i) => `${i + 1}. <@${u.id}>`).join('\n'),
       });
     }
 
@@ -157,16 +157,16 @@ function buildPublicEmbed(data, participants, closed = false, teams = null) {
     embed.addFields(
       {
         name: `🔵 팀 1 (${teams.team1.length}명)`,
-        value: teams.team1.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n') || '없음',
+        value: teams.team1.map((u, i) => `${i + 1}. <@${u.id}>`).join('\n') || '없음',
       },
       {
         name: `🔴 팀 2 (${teams.team2.length}명)`,
-        value: teams.team2.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n') || '없음',
+        value: teams.team2.map((u, i) => `${i + 1}. <@${u.id}>`).join('\n') || '없음',
       },
     );
   } else {
     const participantText = participants.length > 0
-      ? participants.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n')
+      ? participants.map((u, i) => `${i + 1}. <@${u.id}>`).join('\n')
       : '아직 참가자가 없습니다.';
     embed.addFields({ name: `👤 참가자 (${participants.length}/${max})`, value: participantText });
   }
