@@ -439,7 +439,7 @@ async function handleNaejeonButton(interaction) {
       await interaction.reply({ content: '❌ 모집 인원이 가득 찼습니다!', ephemeral: true });
       return;
     }
-    match.participants.push({ id: interaction.user.id, displayName: interaction.user.globalName || interaction.user.username });
+    match.participants.push({ id: interaction.user.id, displayName: interaction.member?.displayName || interaction.user.globalName || interaction.user.username });
     await interaction.deferUpdate();
     await match.message.edit({
       embeds: [buildPublicEmbed(match.data, match.participants, match.closed, match.teams)],
