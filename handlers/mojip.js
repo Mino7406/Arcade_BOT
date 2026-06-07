@@ -127,7 +127,7 @@ function buildPublicEmbed(data, participants, closed = false) {
   const max = parseInt(players) || 0;
   const isFull = participants.length >= max;
 
-  const statusText = closed ? '🔒 마감' : isFull ? '✅ 모집 완료' : '🟢 모집 중';
+  const statusText = closed ? '🔒 마감됨' : isFull ? '✅ 모집 완료' : '🟢 모집 중';
   const color = closed ? 0x57F287 : isFull ? 0x808080 : gameInfo.color;
 
   const lines = [
