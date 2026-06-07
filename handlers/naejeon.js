@@ -158,19 +158,19 @@ function buildPublicEmbed(data, participants, closed = false, teams = null) {
     if (unassigned.length > 0) {
       embed.addFields({
         name: `👤 미배정 (${unassigned.length}명)`,
-        value: unassigned.map((u, i) => `\`${i + 1}\` ${u.displayName}`).join('\n'),
+        value: unassigned.map((u, i) => `\`${i + 1}\` <@${u.id}>`).join('\n'),
       });
     }
 
     embed.addFields(
       {
         name: `🔵 팀 1 - ${teams.team1.length}명`,
-        value: teams.team1.map((u, i) => `\`${i + 1}\` ${u.displayName}`).join('\n') || '없음',
+        value: teams.team1.map((u, i) => `\`${i + 1}\` <@${u.id}>`).join('\n') || '없음',
         inline: true,
       },
       {
         name: `🔴 팀 2 - ${teams.team2.length}명`,
-        value: teams.team2.map((u, i) => `\`${i + 1}\` ${u.displayName}`).join('\n') || '없음',
+        value: teams.team2.map((u, i) => `\`${i + 1}\` <@${u.id}>`).join('\n') || '없음',
         inline: true,
       },
     );
@@ -241,38 +241,72 @@ function buildCancelComponents() {
 }
 
 function buildManageMenu(match, matchMsgId) {
-  const buttons = [
-    ...(match.closed
-      ? [
-          new ButtonBuilder()
-            .setCustomId(`naejeon:team_builder:${matchMsgId}`)
-            .setLabel('🛠️ 팀 만들기')
-            .setStyle(ButtonStyle.Primary),
-          new ButtonBuilder()
-            .setCustomId(`naejeon:match_reopen:${matchMsgId}`)
-            .setLabel('🔓 마감 해제')
-            .setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder()
-            .setCustomId(`naejeon:match_mention:${matchMsgId}`)
-            .setLabel('📣 참가자 멘션')
-            .setStyle(ButtonStyle.Success)
-            .setDisabled(!!match.mentionSent),
-        ]
-      : [new ButtonBuilder()
-          .setCustomId(`naejeon:match_close:${matchMsgId}`)
-          .setLabel('🔒 마감하기')
-          .setStyle(ButtonStyle.Primary)]
+  if (match.closed) {
+    return [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`naejeon:team_builder:${matchMsgId}`)
+          .setLabel('🛠️ 팀 만들기')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId(`naejeon:match_mention:${matchMsgId}`)
+          .setLabel('📣 참가자 멘션')
+          .setStyle(ButtonStyle.Success)
+          .setDisabled(!!match.mentionSent),
+      ),
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`naejeon:match_reopen:${matchMsgId}`)
+          .setLabel('🔓 마감 해제')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId(`naejeon:match_edit:${matchMsgId}`)
+          .setLabel('✏️ 내전 수정')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId(`naejeon:match_cancel:${matchMsgId}`)
+          .setLabel('❌ 내전 취소')
+          .setStyle(ButtonStyle.Danger),
+      ),
+    ];
+  }
+  return [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`naejeon:match_close:${matchMsgId}`)
+        .setLabel('🔒 마감하기')
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId(`naejeon:match_edit:${matchMsgId}`)
+        .setLabel('✏️ 내전 수정')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`naejeon:match_cancel:${matchMsgId}`)
+        .setLabel('❌ 내전 취소')
+        .setStyle(ButtonStyle.Danger),
     ),
-    new ButtonBuilder()
-      .setCustomId(`naejeon:match_edit:${matchMsgId}`)
-      .setLabel('✏️ 내전 수정')
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(`naejeon:match_cancel:${matchMsgId}`)
-      .setLabel('❌ 내전 취소')
-      .setStyle(ButtonStyle.Danger),
   ];
-  return new ActionRowBuilder().addComponents(...buttons);
+}
+
+function buildTeamResultEmbed(data, teams) {
+  const { gameInfo, title } = data;
+  return new EmbedBuilder()
+    .setColor(gameInfo.color)
+    .setTitle(`${gameInfo.emoji}  ${title} - 팀 배정 결과`)
+    .addFields(
+      {
+        name: `🔵 팀 1 - ${teams.team1.length}명`,
+        value: teams.team1.map((u, i) => `\`${i + 1}\` <@${u.id}>`).join('\n') || '없음',
+        inline: true,
+      },
+      {
+        name: `🔴 팀 2 - ${teams.team2.length}명`,
+        value: teams.team2.map((u, i) => `\`${i + 1}\` <@${u.id}>`).join('\n') || '없음',
+        inline: true,
+      },
+    )
+    .setFooter({ text: '✅ 팀이 배정되었습니다.' })
+    .setTimestamp();
 }
 
 function buildTeamBuilderComponents(match, matchMsgId) {
@@ -401,12 +435,8 @@ async function handleTeamAssign(interaction) {
   match.teams = { team1, team2 };
 
   await match.message.edit(buildPublicMessagePayload(match));
-
-  await interaction.update({
-    content: '✅ **팀 배정이 완료되었습니다.**',
-    embeds: [],
-    components: [buildTeamDoneRow(matchMsgId)],
-  });
+  await interaction.update({ content: '✅ **팀 배정이 완료되었습니다.**', embeds: [], components: [buildTeamDoneRow(matchMsgId)] });
+  await interaction.channel.send({ embeds: [buildTeamResultEmbed(match.data, match.teams)], allowedMentions: { parse: [] } });
 }
 
 async function handleNaejeonButton(interaction) {
@@ -516,7 +546,7 @@ async function handleNaejeonButton(interaction) {
     }
     await interaction.reply({
       content: '⚙️ **주최자 관리 메뉴**',
-      components: [buildManageMenu(match, matchMsgId)],
+      components: buildManageMenu(match, matchMsgId),
       ephemeral: true,
     });
     return;
@@ -553,7 +583,7 @@ async function handleNaejeonButton(interaction) {
     await match.message.edit(buildPublicMessagePayload(match));
     await interaction.update({
       content: '✅ **내전이 마감되었습니다.**',
-      components: [buildManageMenu(match, matchMsgId)],
+      components: buildManageMenu(match, matchMsgId),
     });
     return;
   }
@@ -570,7 +600,7 @@ async function handleNaejeonButton(interaction) {
     await match.message.edit(buildPublicMessagePayload(match));
     await interaction.update({
       content: '✅ **내전이 마감되었습니다.**',
-      components: [buildManageMenu(match, matchMsgId)],
+      components: buildManageMenu(match, matchMsgId),
     });
     return;
   }
@@ -587,7 +617,7 @@ async function handleNaejeonButton(interaction) {
     await match.message.edit(buildPublicMessagePayload(match));
     await interaction.update({
       content: '🔓 **내전 마감이 해제되었습니다.**',
-      components: [buildManageMenu(match, matchMsgId)],
+      components: buildManageMenu(match, matchMsgId),
     });
     return;
   }
@@ -600,11 +630,11 @@ async function handleNaejeonButton(interaction) {
       await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
       return;
     }
-    if (match.participants.length < 1) {
+    if (match.participants.length < 2) {
       await interaction.update({
-        content: '⚠️ 팀을 나누려면 참가자가 1명 이상이어야 합니다.',
+        content: '⚠️ 팀 만들기는 참가자가 2명 이상이어야 합니다.',
         embeds: [],
-        components: [buildManageMenu(match, matchMsgId)],
+        components: buildManageMenu(match, matchMsgId),
       });
       return;
     }
@@ -628,17 +658,14 @@ async function handleNaejeonButton(interaction) {
       await interaction.update({
         content: '⚠️ 팀을 나누려면 참가자가 1명 이상이어야 합니다.',
         embeds: [],
-        components: [buildManageMenu(match, matchMsgId)],
+        components: buildManageMenu(match, matchMsgId),
       });
       return;
     }
     match.teams = shuffleIntoTeams(match.participants);
     await match.message.edit(buildPublicMessagePayload(match));
-    await interaction.update({
-      content: '✅ **자동 팀 배정이 완료되었습니다.**',
-      embeds: [],
-      components: [buildTeamDoneRow(matchMsgId)],
-    });
+    await interaction.update({ content: '✅ **자동 팀 배정이 완료되었습니다.**', embeds: [], components: [buildTeamDoneRow(matchMsgId)] });
+    await interaction.channel.send({ embeds: [buildTeamResultEmbed(match.data, match.teams)], allowedMentions: { parse: [] } });
     return;
   }
 
@@ -653,7 +680,7 @@ async function handleNaejeonButton(interaction) {
     await interaction.update({
       content: '⚙️ **주최자 관리 메뉴**',
       embeds: [],
-      components: [buildManageMenu(match, matchMsgId)],
+      components: buildManageMenu(match, matchMsgId),
     });
     return;
   }
@@ -690,7 +717,7 @@ async function handleNaejeonButton(interaction) {
     });
     await interaction.update({
       content: '📣 **참가자에게 멘션을 보냈습니다.**',
-      components: [buildManageMenu(match, matchMsgId)],
+      components: buildManageMenu(match, matchMsgId),
     });
     return;
   }

@@ -53,12 +53,12 @@ function buildTeamEmbed(data, teams) {
     .addFields(
       {
         name: `🔵 팀 1 - ${teams.team1.length}명`,
-        value: teams.team1.map((u, i) => `\`${i + 1}\` ${u.displayName}`).join('\n') || '없음',
+        value: teams.team1.map((u, i) => `\`${i + 1}\` <@${u.id}>`).join('\n') || '없음',
         inline: true,
       },
       {
         name: `🔴 팀 2 - ${teams.team2.length}명`,
-        value: teams.team2.map((u, i) => `\`${i + 1}\` ${u.displayName}`).join('\n') || '없음',
+        value: teams.team2.map((u, i) => `\`${i + 1}\` <@${u.id}>`).join('\n') || '없음',
         inline: true,
       },
     )
@@ -211,6 +211,10 @@ async function handleTeamButton(interaction) {
       await interaction.reply({ content: '❌ 내전 주최자만 사용할 수 있습니다.', ephemeral: true });
       return;
     }
+    if (match.participants.length < 2) {
+      await interaction.reply({ content: '⚠️ 팀 만들기는 참가자가 2명 이상이어야 합니다.', ephemeral: true });
+      return;
+    }
     await interaction.update({
       content: '🛠️ **팀 만들기** - 팀 1에 배정할 참가자를 선택하세요.\n(나머지는 자동으로 팀 2가 됩니다.)',
       embeds: [],
@@ -234,11 +238,8 @@ async function handleTeamButton(interaction) {
     const teams = shuffleIntoTeams(match.participants);
     match.teams = teams;
     await match.message.edit(buildPublicMessagePayload(match));
-    await interaction.update({
-      content: '✅ **자동 팀 배정이 완료되었습니다.**',
-      embeds: [buildTeamEmbed(match.data, teams)],
-      components: [buildManageRow(matchMsgId)],
-    });
+    await interaction.update({ content: '✅ **자동 팀 배정이 완료되었습니다.**', embeds: [], components: [buildManageRow(matchMsgId)] });
+    await interaction.channel.send({ embeds: [buildTeamEmbed(match.data, teams)], allowedMentions: { parse: [] } });
     return;
   }
 
@@ -277,11 +278,8 @@ async function handleTeamButton(interaction) {
     const teams = shuffleIntoTeams(match.participants);
     match.teams = teams;
     await match.message.edit(buildPublicMessagePayload(match));
-    await interaction.update({
-      content: '✅ **자동 팀 배정이 완료되었습니다.**',
-      embeds: [buildTeamEmbed(match.data, teams)],
-      components: [buildPublicDoneRow(matchMsgId)],
-    });
+    await interaction.update({ content: '✅ **자동 팀 배정이 완료되었습니다.**', embeds: [], components: [buildPublicDoneRow(matchMsgId)] });
+    await interaction.channel.send({ embeds: [buildTeamEmbed(match.data, teams)], allowedMentions: { parse: [] } });
     return;
   }
 }
@@ -309,12 +307,8 @@ async function handleTeamAssignSelect(interaction) {
   const teams = { team1, team2 };
   match.teams = teams;
   await match.message.edit(buildPublicMessagePayload(match));
-
-  await interaction.update({
-    content: '✅ **팀 배정이 완료되었습니다.**',
-    embeds: [buildTeamEmbed(match.data, teams)],
-    components: [buildManageRow(matchMsgId)],
-  });
+  await interaction.update({ content: '✅ **팀 배정이 완료되었습니다.**', embeds: [], components: [buildManageRow(matchMsgId)] });
+  await interaction.channel.send({ embeds: [buildTeamEmbed(match.data, teams)], allowedMentions: { parse: [] } });
 }
 
 module.exports = {
