@@ -119,7 +119,7 @@ function buildPreviewEmbed({ gameInfo, title, datetime, players, description, or
 
   return embed
     .addFields({ name: `👥 참가자  0 / ${max}명`, value: '*아직 참가자가 없습니다.*' })
-    .setFooter({ text: '🔎 확정하기 전에 내용을 다시 확인해 주세요.' })
+    .setFooter({ text: '🔎 게시하기 전에 내용을 다시 확인해 주세요.' })
     .setTimestamp();
 }
 
