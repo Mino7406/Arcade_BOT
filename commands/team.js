@@ -23,14 +23,14 @@ module.exports = {
             return `※ ${MM}.${DD} ${HH}:${mm}에 초기화 됨`;
           })()
         : '봇 재시작 후 생성된 내전만 표시됩니다';
-      await interaction.reply({ content: `⚠️ 활성화된 내전이 없습니다. (${dateStr})`, ephemeral: true });
+      await interaction.reply({ content: `⚠️ **활성화된 내전이 없습니다.**\n(${dateStr})`, ephemeral: true });
       return;
     }
 
     const validMatches = [...matches.entries()].filter(([, m]) => m.participants.length >= 2);
 
     if (validMatches.length === 0) {
-      await interaction.reply({ content: '⚠️ 참가자가 2명 이상인 내전이 없습니다.', ephemeral: true });
+      await interaction.reply({ content: '⚠️ **참가자가 2명 이상인 내전이 없습니다.**', ephemeral: true });
       return;
     }
 
