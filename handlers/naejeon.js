@@ -104,23 +104,19 @@ function buildPreviewEmbed({ gameInfo, title, datetime, players, description, or
   const max = parseInt(players) || 0;
 
   const lines = [
-    `> 🎮 **게임** ${gameInfo.name}`,
-    `> 📅 **일시** ${datetime}`,
-    `> 👑 **주최자** ${organizer}`,
+    `> 🎮 **게임**　  ${gameInfo.name}`,
+    `> 📅 **일시**　  ${datetime}`,
+    `> 👑 **주최자**  ${organizer}`,
+    `> 📊 **상태**　  ⏳ 게시 전`,
   ];
-  if (description) lines.push(`> 📝 **메모** ${description}`);
-  lines.push(`> 📊 **상태** ⏳ 게시 전`);
 
   return new EmbedBuilder()
     .setColor(gameInfo.color)
     .setTitle(`${gameInfo.emoji}  ${title}`)
     .setDescription(lines.join('\n'))
     .addFields(
-      { name: '​', value: '─'.repeat(25) },
-      {
-        name: `👥 참가자  0 / ${max}명`,
-        value: '*아직 참가자가 없습니다.*',
-      },
+      ...(description ? [{ name: '📝 메모', value: description }] : []),
+      { name: `👥 참가자  0 / ${max}명`, value: '*아직 참가자가 없습니다.*' },
     )
     .setFooter({ text: '확정하기 전에 내용을 다시 확인해 주세요.' })
     .setTimestamp();
@@ -136,12 +132,11 @@ function buildPublicEmbed(data, participants, closed = false, teams = null) {
   const color = closed ? 0x57F287 : isFull ? 0x808080 : gameInfo.color;
 
   const lines = [
-    `> 🎮 **게임** ${gameInfo.name}`,
-    `> 📅 **일시** ${datetime}`,
-    `> 👑 **주최자** ${organizer}`,
+    `> 🎮 **게임**　  ${gameInfo.name}`,
+    `> 📅 **일시**　  ${datetime}`,
+    `> 👑 **주최자**  ${organizer}`,
+    `> 📊 **상태**　  ${statusText}`,
   ];
-  if (description) lines.push(`> 📝 **메모** ${description}`);
-  lines.push(`> 📊 **상태** ${statusText}`);
 
   const embed = new EmbedBuilder()
     .setColor(color)
@@ -150,7 +145,7 @@ function buildPublicEmbed(data, participants, closed = false, teams = null) {
     .setFooter({ text: closed ? '🔒 마감된 내전입니다.' : isFull ? '모집이 완료되었습니다.' : '✅ 버튼을 눌러 참가하세요!' })
     .setTimestamp();
 
-  embed.addFields({ name: '​', value: '─'.repeat(25) });
+  if (description) embed.addFields({ name: '📝 메모', value: description });
 
   if (teams) {
     const assignedIds = new Set([
@@ -690,7 +685,7 @@ async function handleNaejeonButton(interaction) {
     const mentionText = match.participants.map(u => `<@${u.id}>`).join(' ');
     await interaction.channel.send({
       content: `📣 **${match.data.title}**\n${mentionText}`,
-      allowedMentions: { users: match.participants.map(u => u.id) },
+      allowedMentions: { parse: ['users'] },
     });
     await interaction.update({
       content: '✅ **참가자에게 멘션을 보냈습니다.**',
@@ -755,18 +750,15 @@ async function handleNaejeonButton(interaction) {
       .setColor(0xED4245)
       .setTitle(`${match.data.gameInfo.emoji}  ${match.data.title}`)
       .setDescription([
-        `> 🎮 **게임** ${match.data.gameInfo.name}`,
-        `> 📅 **일시** ${match.data.datetime}`,
+        `> 🎮 **게임**　 ${match.data.gameInfo.name}`,
+        `> 📅 **일시**　 ${match.data.datetime}`,
         `> 👑 **주최자** ${match.data.organizer}`,
-        `> 📊 **상태** 🔴 취소됨`,
+        `> 📊 **상태**　  🔴 취소됨`,
       ].join('\n'))
-      .addFields(
-        { name: '​', value: '─'.repeat(25) },
-        {
-          name: `👥 참가자  ${match.participants.length} / ${cancelMax}명`,
-          value: cancelParticipantText,
-        },
-      )
+      .addFields({
+        name: `👥 참가자  ${match.participants.length} / ${cancelMax}명`,
+        value: cancelParticipantText,
+      })
       .setFooter({ text: '🔴 주최자에 의해 내전이 취소되었습니다.' })
       .setTimestamp();
 

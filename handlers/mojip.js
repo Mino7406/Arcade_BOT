@@ -99,24 +99,22 @@ function buildModal(game, data = {}) {
   return modal;
 }
 
-function makeProgressBar(current, max, length = 10) {
-  const filled = max > 0 ? Math.round((current / max) * length) : 0;
-  return '█'.repeat(filled) + '░'.repeat(length - filled);
-}
-
 function buildPreviewEmbed({ gameInfo, title, datetime, players, description, organizer }) {
   const lines = [
     `> 🎮 **게임**　　 ${gameInfo.name}`,
-    `> 📅 **일시** 　　 ${datetime}`,
+    `> 📅 **일시**　　 ${datetime}`,
     `> 👥 **모집 인원**  ${players}명`,
-    `> 👑 **주최자** 　 ${organizer}`,
+    `> 👑 **주최자**　 ${organizer}`,
   ];
-  if (description) lines.push(`> 📝 **메모** 　　 ${description}`);
 
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(gameInfo.color)
     .setTitle(`${gameInfo.emoji}  ${title}`)
-    .setDescription(lines.join('\n'))
+    .setDescription(lines.join('\n'));
+
+  if (description) embed.addFields({ name: '📝 메모', value: description });
+
+  return embed
     .setFooter({ text: '확정하기 전에 내용을 다시 확인해 주세요.' })
     .setTimestamp();
 }
@@ -128,28 +126,27 @@ function buildPublicEmbed(data, participants, closed = false) {
 
   const statusText = closed ? '🔒 마감' : isFull ? '✅ 모집 완료' : '🟢 모집 중';
   const color = closed ? 0x57F287 : isFull ? 0x808080 : gameInfo.color;
-  const bar = makeProgressBar(participants.length, max);
 
   const lines = [
-    `> 🎮 **게임**　　 ${gameInfo.name}`,
-    `> 📅 **일시** 　　 ${datetime}`,
-    `> 👑 **주최자** 　 ${organizer}`,
+    `> 🎮 **게임**　  ${gameInfo.name}`,
+    `> 📅 **일시**　  ${datetime}`,
+    `> 👑 **주최자**  ${organizer}`,
+    `> 📊 **상태**　  ${statusText}`,
   ];
-  if (description) lines.push(`> 📝 **메모** 　　 ${description}`);
-  lines.push(`> 📊 **상태** 　　 ${statusText}`);
 
   const participantText = participants.length > 0
     ? participants.map((u, i) => `\`${i + 1}\` <@${u.id}>`).join('\n')
     : '*아직 참가자가 없습니다.*';
 
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(color)
     .setTitle(`${gameInfo.emoji}  ${title}`)
-    .setDescription(lines.join('\n'))
-    .addFields({
-      name: `👥 참가자  ${participants.length} / ${max}명  \`${bar}\``,
-      value: participantText,
-    })
+    .setDescription(lines.join('\n'));
+
+  if (description) embed.addFields({ name: '📝 메모', value: description });
+
+  return embed
+    .addFields({ name: `👥 참가자  ${participants.length} / ${max}명`, value: participantText })
     .setFooter({ text: closed ? '🔒 마감된 모집입니다.' : isFull ? '모집이 완료되었습니다.' : '✅ 버튼을 눌러 참가하세요!' })
     .setTimestamp();
 }
@@ -329,6 +326,7 @@ async function handleMojipButton(interaction) {
       return;
     }
     match.participants.push({ id: interaction.user.id, displayName: interaction.member?.displayName || interaction.user.globalName || interaction.user.username });
+    if (match.participants.length >= maxPlayers) match.closed = true;
     await interaction.deferUpdate();
     await match.message.edit({
       embeds: [buildPublicEmbed(match.data, match.participants, match.closed)],
