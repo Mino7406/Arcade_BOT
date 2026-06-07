@@ -639,7 +639,7 @@ async function handleNaejeonButton(interaction) {
     }
     if (match.participants.length < 2) {
       await interaction.update({
-        content: '⚠️ 팀 만들기는 참가자가 2명 이상이어야 합니다.',
+        content: '⚠️ **팀 만들기는 참가자가 2명 이상이어야 합니다.**',
         embeds: [],
         components: buildManageMenu(match, matchMsgId),
       });
