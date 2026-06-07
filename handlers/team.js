@@ -187,14 +187,19 @@ async function handleTeamMatchSelect(interaction) {
     return;
   }
 
-  const { gameInfo, title, datetime } = match.data;
+  const { gameInfo, title, datetime, organizer } = match.data;
+  const statusText = match.closed ? '🔒 마감됨' : '🟢 모집 중';
+  const lines = [
+    `🎮 **게임**　  ${gameInfo.name}`,
+    `📅 **일시**　  ${datetime}`,
+    `👑 **주최자**  ${organizer}`,
+    `📊 **상태**　  ${statusText}`,
+  ];
   const infoEmbed = new EmbedBuilder()
     .setColor(gameInfo.color)
-    .setTitle(`${gameInfo.emoji} ${title}`)
-    .addFields(
-      { name: '📅 일시', value: datetime, inline: true },
-      { name: '👥 참가자', value: `${match.participants.length}명`, inline: true },
-    );
+    .setTitle(`${gameInfo.emoji}  ${title}`)
+    .setDescription(lines.join('\n'))
+    .addFields({ name: '👥 참가자', value: `${match.participants.length}명` });
 
   await interaction.update({
     content: '🎮 **팀 관리** - 방식을 선택하세요.',
