@@ -661,9 +661,9 @@ async function handleNaejeonButton(interaction) {
       await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
       return;
     }
-    if (match.participants.length < 1) {
+    if (match.participants.length < 2) {
       await interaction.update({
-        content: '⚠️ 팀을 나누려면 참가자가 1명 이상이어야 합니다.',
+        content: '⚠️ 팀을 나누려면 참가자가 2명 이상이어야 합니다.',
         embeds: [],
         components: buildManageMenu(match, matchMsgId),
       });

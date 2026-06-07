@@ -173,8 +173,8 @@ async function handleTeamMatchSelect(interaction) {
     await interaction.update({ content: '❌ 내전 주최자만 팀을 관리할 수 있습니다.', embeds: [], components: [] });
     return;
   }
-  if (match.participants.length < 1) {
-    await interaction.update({ content: '⚠️ 팀을 나누려면 참가자가 1명 이상이어야 합니다.', embeds: [], components: [] });
+  if (match.participants.length < 2) {
+    await interaction.update({ content: '⚠️ 팀을 나누려면 참가자가 2명 이상이어야 합니다.', embeds: [], components: [] });
     return;
   }
 
