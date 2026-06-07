@@ -101,23 +101,21 @@ function buildModal(game, data = {}) {
 }
 
 function buildPreviewEmbed({ gameInfo, title, datetime, players, description, organizer }) {
-  const max = parseInt(players) || 0;
-
   const lines = [
-    `> 🎮 **게임**　  ${gameInfo.name}`,
-    `> 📅 **일시**　  ${datetime}`,
-    `> 👑 **주최자**  ${organizer}`,
-    `> 📊 **상태**　  ⏳ 게시 전`,
+    `> 🎮 **게임**　　 ${gameInfo.name}`,
+    `> 📅 **일시**　　 ${datetime}`,
+    `> 👥 **모집 인원**  ${players}명`,
+    `> 👑 **주최자**　 ${organizer}`,
   ];
 
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(gameInfo.color)
     .setTitle(`${gameInfo.emoji}  ${title}`)
-    .setDescription(lines.join('\n'))
-    .addFields(
-      ...(description ? [{ name: '📝 메모', value: description }] : []),
-      { name: `👥 참가자  0 / ${max}명`, value: '*아직 참가자가 없습니다.*' },
-    )
+    .setDescription(lines.join('\n'));
+
+  if (description) embed.addFields({ name: '📝 메모', value: description });
+
+  return embed
     .setFooter({ text: '확정하기 전에 내용을 다시 확인해 주세요.' })
     .setTimestamp();
 }
@@ -175,7 +173,7 @@ function buildPublicEmbed(data, participants, closed = false, teams = null) {
     );
   } else {
     const participantText = participants.length > 0
-      ? participants.map((u, i) => `\`${i + 1}\` ${u.displayName}`).join('\n')
+      ? participants.map((u, i) => `\`${i + 1}\` <@${u.id}>`).join('\n')
       : '*아직 참가자가 없습니다.*';
     embed.addFields({
       name: `👥 참가자  ${participants.length} / ${max}명`,
