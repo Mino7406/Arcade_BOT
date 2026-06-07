@@ -777,10 +777,6 @@ async function handleNaejeonButton(interaction) {
       await interaction.update({ content: '⚠️ 이미 취소된 내전입니다.', components: [] });
       return;
     }
-    const cancelMax = parseInt(match.data.players) || 0;
-    const cancelParticipantText = match.participants.length > 0
-      ? match.participants.map((u, i) => `\`${i + 1}\` ${u.displayName}`).join('\n')
-      : '*아직 참가자가 없습니다.*';
     const cancelledEmbed = new EmbedBuilder()
       .setColor(0xED4245)
       .setTitle(`${match.data.gameInfo.emoji}  ${match.data.title}`)
@@ -790,10 +786,6 @@ async function handleNaejeonButton(interaction) {
         `👑 **주최자** ${match.data.organizer}`,
         `📊 **상태**　  🔴 취소됨`,
       ].join('\n'))
-      .addFields({
-        name: `👥 참가자  ${match.participants.length} / ${cancelMax}명`,
-        value: cancelParticipantText,
-      })
       .setFooter({ text: '🔴 주최자에 의해 내전이 취소되었습니다.' })
       .setTimestamp();
 
