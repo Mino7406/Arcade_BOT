@@ -99,21 +99,26 @@ function buildModal(game, data = {}) {
   return modal;
 }
 
-function buildPreviewEmbed({ gameInfo, title, datetime, players, description, organizer }) {
-  const embed = new EmbedBuilder()
-    .setColor(gameInfo.color)
-    .setTitle(`${gameInfo.emoji} ${title}`)
-    .addFields(
-      { name: '🎮 게임',      value: gameInfo.name,  inline: true },
-      { name: '👥 모집 인원', value: `${players}명`, inline: true },
-      { name: '📅 일시',      value: datetime,        inline: true },
-      { name: '👑 주최자',    value: `${organizer}`,  inline: true },
-    )
-    .setFooter({ text: '참여를 원하시면 아래 버튼을 눌러주세요!' })
-    .setTimestamp();
+function makeProgressBar(current, max, length = 10) {
+  const filled = max > 0 ? Math.round((current / max) * length) : 0;
+  return '█'.repeat(filled) + '░'.repeat(length - filled);
+}
 
-  if (description) embed.addFields({ name: '📝 메모', value: description });
-  return embed;
+function buildPreviewEmbed({ gameInfo, title, datetime, players, description, organizer }) {
+  const lines = [
+    `> 🎮 **게임**　　 ${gameInfo.name}`,
+    `> 📅 **일시** 　　 ${datetime}`,
+    `> 👥 **모집 인원**  ${players}명`,
+    `> 👑 **주최자** 　 ${organizer}`,
+  ];
+  if (description) lines.push(`> 📝 **메모** 　　 ${description}`);
+
+  return new EmbedBuilder()
+    .setColor(gameInfo.color)
+    .setTitle(`${gameInfo.emoji}  ${title}`)
+    .setDescription(lines.join('\n'))
+    .setFooter({ text: '확정하기 전에 내용을 다시 확인해 주세요.' })
+    .setTimestamp();
 }
 
 function buildPublicEmbed(data, participants, closed = false) {
@@ -121,25 +126,32 @@ function buildPublicEmbed(data, participants, closed = false) {
   const max = parseInt(players) || 0;
   const isFull = participants.length >= max;
 
-  const embed = new EmbedBuilder()
-    .setColor(closed ? 0x57F287 : (isFull ? 0x808080 : gameInfo.color))
-    .setTitle(`${gameInfo.emoji} ${title}`)
-    .addFields(
-      { name: '🎮 게임',      value: gameInfo.name,                      inline: true },
-      { name: '👥 모집 인원', value: `${participants.length} / ${max}명`, inline: true },
-      { name: '📅 일시',      value: datetime,                            inline: true },
-      { name: '👑 주최자',    value: `${organizer}`,                      inline: true },
-    )
-    .setFooter({ text: closed ? '🔒 마감된 모집입니다.' : (isFull ? '모집이 완료되었습니다.' : '✅ 버튼을 눌러 참가하세요!') })
-    .setTimestamp();
+  const statusText = closed ? '🔒 마감' : isFull ? '✅ 모집 완료' : '🟢 모집 중';
+  const color = closed ? 0x57F287 : isFull ? 0x808080 : gameInfo.color;
+  const bar = makeProgressBar(participants.length, max);
 
-  if (description) embed.addFields({ name: '📝 메모', value: description });
+  const lines = [
+    `> 🎮 **게임**　　 ${gameInfo.name}`,
+    `> 📅 **일시** 　　 ${datetime}`,
+    `> 👑 **주최자** 　 ${organizer}`,
+  ];
+  if (description) lines.push(`> 📝 **메모** 　　 ${description}`);
+  lines.push(`> 📊 **상태** 　　 ${statusText}`);
 
   const participantText = participants.length > 0
-    ? participants.map((u, i) => `${i + 1}. <@${u.id}>`).join('\n')
-    : '아직 참가자가 없습니다.';
-  embed.addFields({ name: `👤 참가자 (${participants.length}/${max})`, value: participantText });
-  return embed;
+    ? participants.map((u, i) => `\`${i + 1}\` <@${u.id}>`).join('\n')
+    : '*아직 참가자가 없습니다.*';
+
+  return new EmbedBuilder()
+    .setColor(color)
+    .setTitle(`${gameInfo.emoji}  ${title}`)
+    .setDescription(lines.join('\n'))
+    .addFields({
+      name: `👥 참가자  ${participants.length} / ${max}명  \`${bar}\``,
+      value: participantText,
+    })
+    .setFooter({ text: closed ? '🔒 마감된 모집입니다.' : isFull ? '모집이 완료되었습니다.' : '✅ 버튼을 눌러 참가하세요!' })
+    .setTimestamp();
 }
 
 function buildPublicComponents(participants, maxPlayers, closed = false) {
@@ -520,12 +532,13 @@ async function handleMojipButton(interaction) {
     }
     const cancelledEmbed = new EmbedBuilder()
       .setColor(0xED4245)
-      .setTitle(`❌ ${match.data.gameInfo.emoji} ${match.data.title} (취소됨)`)
-      .addFields(
-        { name: '🎮 게임',   value: match.data.gameInfo.name,   inline: true },
-        { name: '📅 일시',   value: match.data.datetime,         inline: true },
-        { name: '👑 주최자', value: `${match.data.organizer}`,   inline: true },
-      )
+      .setTitle(`${match.data.gameInfo.emoji}  ${match.data.title}`)
+      .setDescription([
+        `> 🎮 **게임**　　 ${match.data.gameInfo.name}`,
+        `> 📅 **일시** 　　 ${match.data.datetime}`,
+        `> 👑 **주최자** 　 ${match.data.organizer}`,
+        `> ❌ **상태** 　　 취소됨`,
+      ].join('\n'))
       .setFooter({ text: '주최자에 의해 모집이 취소되었습니다.' })
       .setTimestamp();
 

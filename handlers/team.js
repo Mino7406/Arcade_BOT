@@ -48,19 +48,20 @@ function buildTeamEmbed(data, teams) {
   const { gameInfo, title } = data;
   return new EmbedBuilder()
     .setColor(gameInfo.color)
-    .setTitle(`${gameInfo.emoji} ${title} — 팀 배정`)
+    .setTitle(`${gameInfo.emoji}  ${title} — 팀 배정`)
     .addFields(
       {
-        name: `🔵 팀 1 (${teams.team1.length}명)`,
-        value: teams.team1.map((u, i) => `${i + 1}. <@${u.id}>`).join('\n') || '없음',
+        name: `🔵 팀 1 — ${teams.team1.length}명`,
+        value: teams.team1.map((u, i) => `\`${i + 1}\` <@${u.id}>`).join('\n') || '없음',
         inline: true,
       },
       {
-        name: `🔴 팀 2 (${teams.team2.length}명)`,
-        value: teams.team2.map((u, i) => `${i + 1}. <@${u.id}>`).join('\n') || '없음',
+        name: `🔴 팀 2 — ${teams.team2.length}명`,
+        value: teams.team2.map((u, i) => `\`${i + 1}\` <@${u.id}>`).join('\n') || '없음',
         inline: true,
       },
     )
+    .setFooter({ text: '팀이 배정되었습니다.' })
     .setTimestamp();
 }
 

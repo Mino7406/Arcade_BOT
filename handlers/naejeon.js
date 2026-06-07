@@ -100,21 +100,26 @@ function buildModal(game, data = {}) {
   return modal;
 }
 
-function buildPreviewEmbed({ gameInfo, title, datetime, players, description, organizer }) {
-  const embed = new EmbedBuilder()
-    .setColor(gameInfo.color)
-    .setTitle(`${gameInfo.emoji} ${title}`)
-    .addFields(
-      { name: '🎮 게임',      value: gameInfo.name,  inline: true },
-      { name: '👥 모집 인원', value: `${players}명`, inline: true },
-      { name: '📅 일시',      value: datetime,        inline: true },
-      { name: '👑 주최자',    value: `${organizer}`,  inline: true },
-    )
-    .setFooter({ text: '참여를 원하시면 아래 버튼을 눌러주세요!' })
-    .setTimestamp();
+function makeProgressBar(current, max, length = 10) {
+  const filled = max > 0 ? Math.round((current / max) * length) : 0;
+  return '█'.repeat(filled) + '░'.repeat(length - filled);
+}
 
-  if (description) embed.addFields({ name: '📝 메모', value: description });
-  return embed;
+function buildPreviewEmbed({ gameInfo, title, datetime, players, description, organizer }) {
+  const lines = [
+    `> 🎮 **게임**　　 ${gameInfo.name}`,
+    `> 📅 **일시** 　　 ${datetime}`,
+    `> 👥 **모집 인원**  ${players}명`,
+    `> 👑 **주최자** 　 ${organizer}`,
+  ];
+  if (description) lines.push(`> 📝 **메모** 　　 ${description}`);
+
+  return new EmbedBuilder()
+    .setColor(gameInfo.color)
+    .setTitle(`${gameInfo.emoji}  ${title}`)
+    .setDescription(lines.join('\n'))
+    .setFooter({ text: '확정하기 전에 내용을 다시 확인해 주세요.' })
+    .setTimestamp();
 }
 
 // teams: null | { team1: User[], team2: User[] }
@@ -123,52 +128,59 @@ function buildPublicEmbed(data, participants, closed = false, teams = null) {
   const max = parseInt(players) || 0;
   const isFull = participants.length >= max;
 
+  const statusText = closed ? '🔒 마감' : isFull ? '✅ 모집 완료' : '🟢 모집 중';
+  const color = closed ? 0x57F287 : isFull ? 0x808080 : gameInfo.color;
+  const bar = makeProgressBar(participants.length, max);
+
+  const lines = [
+    `> 🎮 **게임**　　 ${gameInfo.name}`,
+    `> 📅 **일시** 　　 ${datetime}`,
+    `> 👑 **주최자** 　 ${organizer}`,
+  ];
+  if (description) lines.push(`> 📝 **메모** 　　 ${description}`);
+  lines.push(`> 📊 **상태** 　　 ${statusText}`);
+
   const embed = new EmbedBuilder()
-    .setColor(closed ? 0x57F287 : (isFull ? 0x808080 : gameInfo.color))
-    .setTitle(`${gameInfo.emoji} ${title}`)
-    .addFields(
-      { name: '🎮 게임',      value: gameInfo.name,                      inline: true },
-      { name: '👥 모집 인원', value: `${participants.length} / ${max}명`, inline: true },
-      { name: '📅 일시',      value: datetime,                            inline: true },
-      { name: '👑 주최자',    value: `${organizer}`,                      inline: true },
-    )
-    .setFooter({ text: closed ? '🔒 마감된 내전입니다.' : (isFull ? '모집이 완료되었습니다.' : '✅ 버튼을 눌러 참가하세요!') })
+    .setColor(color)
+    .setTitle(`${gameInfo.emoji}  ${title}`)
+    .setDescription(lines.join('\n'))
+    .setFooter({ text: closed ? '🔒 마감된 내전입니다.' : isFull ? '모집이 완료되었습니다.' : '✅ 버튼을 눌러 참가하세요!' })
     .setTimestamp();
 
-  if (description) embed.addFields({ name: '📝 메모', value: description });
-
   if (teams) {
-    // 팀에 배정된 ID 집합
     const assignedIds = new Set([
       ...teams.team1.map(u => u.id),
       ...teams.team2.map(u => u.id),
     ]);
     const unassigned = participants.filter(u => !assignedIds.has(u.id));
 
-    // 미배정 참가자가 있으면 표시
     if (unassigned.length > 0) {
       embed.addFields({
-        name: `👤 참가자 (${unassigned.length}명 미배정)`,
-        value: unassigned.map((u, i) => `${i + 1}. <@${u.id}>`).join('\n'),
+        name: `👤 미배정 (${unassigned.length}명)`,
+        value: unassigned.map((u, i) => `\`${i + 1}\` <@${u.id}>`).join('\n'),
       });
     }
 
-    // 팀 필드
     embed.addFields(
       {
-        name: `🔵 팀 1 (${teams.team1.length}명)`,
-        value: teams.team1.map((u, i) => `${i + 1}. <@${u.id}>`).join('\n') || '없음',
+        name: `🔵 팀 1 — ${teams.team1.length}명`,
+        value: teams.team1.map((u, i) => `\`${i + 1}\` <@${u.id}>`).join('\n') || '없음',
+        inline: true,
       },
       {
-        name: `🔴 팀 2 (${teams.team2.length}명)`,
-        value: teams.team2.map((u, i) => `${i + 1}. <@${u.id}>`).join('\n') || '없음',
+        name: `🔴 팀 2 — ${teams.team2.length}명`,
+        value: teams.team2.map((u, i) => `\`${i + 1}\` <@${u.id}>`).join('\n') || '없음',
+        inline: true,
       },
     );
   } else {
     const participantText = participants.length > 0
-      ? participants.map((u, i) => `${i + 1}. <@${u.id}>`).join('\n')
-      : '아직 참가자가 없습니다.';
-    embed.addFields({ name: `👤 참가자 (${participants.length}/${max})`, value: participantText });
+      ? participants.map((u, i) => `\`${i + 1}\` <@${u.id}>`).join('\n')
+      : '*아직 참가자가 없습니다.*';
+    embed.addFields({
+      name: `👥 참가자  ${participants.length} / ${max}명  \`${bar}\``,
+      value: participantText,
+    });
   }
 
   return embed;
@@ -703,13 +715,14 @@ async function handleNaejeonButton(interaction) {
     }
     const cancelledEmbed = new EmbedBuilder()
       .setColor(0xED4245)
-      .setTitle(`❌ ${match.data.gameInfo.emoji} ${match.data.title} (취소됨)`)
-      .addFields(
-        { name: '🎮 게임',   value: match.data.gameInfo.name,   inline: true },
-        { name: '📅 일시',   value: match.data.datetime,         inline: true },
-        { name: '👑 주최자', value: `${match.data.organizer}`,   inline: true },
-      )
-      .setFooter({ text: '❌ 주최자에 의해 내전이 취소되었습니다.' })
+      .setTitle(`${match.data.gameInfo.emoji}  ${match.data.title}`)
+      .setDescription([
+        `> 🎮 **게임**　　 ${match.data.gameInfo.name}`,
+        `> 📅 **일시** 　　 ${match.data.datetime}`,
+        `> 👑 **주최자** 　 ${match.data.organizer}`,
+        `> ❌ **상태** 　　 취소됨`,
+      ].join('\n'))
+      .setFooter({ text: '주최자에 의해 내전이 취소되었습니다.' })
       .setTimestamp();
 
     await match.message.edit({ embeds: [cancelledEmbed], components: [] });
