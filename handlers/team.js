@@ -166,15 +166,15 @@ async function handleTeamMatchSelect(interaction) {
   const match = getMatches(interaction.client).get(matchMsgId);
 
   if (!match) {
-    await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
+    await interaction.update({ content: `⚠️ **만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
     return;
   }
   if (match.data.organizer.id !== interaction.user.id) {
-    await interaction.update({ content: '❌ 내전 주최자만 팀을 관리할 수 있습니다.', embeds: [], components: [] });
+    await interaction.update({ content: '❌ **내전 주최자만 팀을 관리할 수 있습니다.**', embeds: [], components: [] });
     return;
   }
   if (match.participants.length < 2) {
-    await interaction.update({ content: '⚠️ 팀을 나누려면 참가자가 2명 이상이어야 합니다.', embeds: [], components: [] });
+    await interaction.update({ content: '⚠️ **팀을 나누려면 참가자가 2명 이상이어야 합니다.**', embeds: [], components: [] });
     return;
   }
 
@@ -216,15 +216,15 @@ async function handleTeamButton(interaction) {
     const matchMsgId = customId.slice('team:builder:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
+      await interaction.update({ content: `⚠️ **만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
       return;
     }
     if (match.data.organizer.id !== interaction.user.id) {
-      await interaction.reply({ content: '❌ 내전 주최자만 사용할 수 있습니다.', ephemeral: true });
+      await interaction.reply({ content: '❌ **내전 주최자만 사용할 수 있습니다.**', ephemeral: true });
       return;
     }
     if (match.participants.length < 2) {
-      await interaction.reply({ content: '⚠️ 팀 만들기는 참가자가 2명 이상이어야 합니다.', ephemeral: true });
+      await interaction.reply({ content: '⚠️ **팀 만들기는 참가자가 2명 이상이어야 합니다.**', ephemeral: true });
       return;
     }
     await interaction.update({
@@ -240,11 +240,11 @@ async function handleTeamButton(interaction) {
     const matchMsgId = customId.slice('team:shuffle_start:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
+      await interaction.update({ content: `⚠️ **만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
       return;
     }
     if (match.data.organizer.id !== interaction.user.id) {
-      await interaction.reply({ content: '❌ 내전 주최자만 사용할 수 있습니다.', ephemeral: true });
+      await interaction.reply({ content: '❌ **내전 주최자만 사용할 수 있습니다.**', ephemeral: true });
       return;
     }
     const teams = shuffleIntoTeams(match.participants);
@@ -260,11 +260,11 @@ async function handleTeamButton(interaction) {
     const matchMsgId = customId.slice('team:pub_builder:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.reply({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, ephemeral: true });
+      await interaction.reply({ content: `⚠️ **만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, ephemeral: true });
       return;
     }
     if (match.data.organizer.id !== interaction.user.id) {
-      await interaction.reply({ content: '❌ 내전 주최자만 사용할 수 있습니다.', ephemeral: true });
+      await interaction.reply({ content: '❌ **내전 주최자만 사용할 수 있습니다.**', ephemeral: true });
       return;
     }
     await interaction.update({
@@ -280,11 +280,11 @@ async function handleTeamButton(interaction) {
     const matchMsgId = customId.slice('team:pub_shuffle:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.reply({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, ephemeral: true });
+      await interaction.reply({ content: `⚠️ **만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, ephemeral: true });
       return;
     }
     if (match.data.organizer.id !== interaction.user.id) {
-      await interaction.reply({ content: '❌ 내전 주최자만 사용할 수 있습니다.', ephemeral: true });
+      await interaction.reply({ content: '❌ **내전 주최자만 사용할 수 있습니다.**', ephemeral: true });
       return;
     }
     const teams = shuffleIntoTeams(match.participants);
@@ -305,11 +305,11 @@ async function handleTeamAssignSelect(interaction) {
 
   const match = getMatches(interaction.client).get(matchMsgId);
   if (!match) {
-    await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
+    await interaction.update({ content: `⚠️ **만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
     return;
   }
   if (match.data.organizer.id !== interaction.user.id) {
-    await interaction.reply({ content: '❌ 내전 주최자만 사용할 수 있습니다.', ephemeral: true });
+    await interaction.reply({ content: '❌ **내전 주최자만 사용할 수 있습니다.**', ephemeral: true });
     return;
   }
 
