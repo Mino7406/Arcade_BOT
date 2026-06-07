@@ -517,7 +517,7 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:leave:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ 만료된 내전입니다.\n(${getResetDateStr(interaction.client)})`, components: [] });
+      await interaction.update({ content: `⚠️ **만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, components: [] });
       return;
     }
     const idx = match.participants.findIndex(u => u.id === interaction.user.id);
