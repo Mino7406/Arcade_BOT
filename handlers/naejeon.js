@@ -119,7 +119,7 @@ function buildPreviewEmbed({ gameInfo, title, datetime, players, description, or
 
   return embed
     .addFields({ name: `👥 참가자  0 / ${max}명`, value: '*아직 참가자가 없습니다.*' })
-    .setFooter({ text: '확정하기 전에 내용을 다시 확인해 주세요.' })
+    .setFooter({ text: '🔎 확정하기 전에 내용을 다시 확인해 주세요.' })
     .setTimestamp();
 }
 
@@ -143,7 +143,7 @@ function buildPublicEmbed(data, participants, closed = false, teams = null) {
     .setColor(color)
     .setTitle(`${gameInfo.emoji}  ${title}`)
     .setDescription(lines.join('\n'))
-    .setFooter({ text: closed ? '🔒 마감된 내전입니다.' : isFull ? '모집이 완료되었습니다.' : '✅ 버튼을 눌러 참가하세요!' })
+    .setFooter({ text: closed ? '🔒 마감된 내전입니다.' : isFull ? '✅ 모집이 완료되었습니다.' : '✅ 버튼을 눌러 참가하세요!' })
     .setTimestamp();
 
   if (description) embed.addFields({ name: '📝 메모', value: description });
@@ -786,7 +786,7 @@ async function handleNaejeonButton(interaction) {
         `👑 **주최자** ${match.data.organizer}`,
         `📊 **상태**　  🔴 취소됨`,
       ].join('\n'))
-      .setFooter({ text: '주최자에 의해 내전이 취소되었습니다.' })
+      .setFooter({ text: '❌ 주최자에 의해 내전이 취소되었습니다.' })
       .setTimestamp();
 
     await match.message.edit({ content: '', embeds: [cancelledEmbed], components: [], allowedMentions: { parse: [] } });

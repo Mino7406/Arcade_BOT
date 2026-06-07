@@ -118,7 +118,7 @@ function buildPreviewEmbed({ gameInfo, title, datetime, players, description, or
 
   return embed
     .addFields({ name: `👥 참가자  0 / ${max}명`, value: '*아직 참가자가 없습니다.*' })
-    .setFooter({ text: '확정하기 전에 내용을 다시 확인해 주세요.' })
+    .setFooter({ text: '🔎 확정하기 전에 내용을 다시 확인해 주세요.' })
     .setTimestamp();
 }
 
@@ -150,7 +150,7 @@ function buildPublicEmbed(data, participants, closed = false) {
 
   return embed
     .addFields({ name: `👥 참가자  ${participants.length} / ${max}명`, value: participantText })
-    .setFooter({ text: closed ? '🔒 마감된 모집입니다.' : isFull ? '모집이 완료되었습니다.' : '✅ 버튼을 눌러 참가하세요!' })
+    .setFooter({ text: closed ? '🔒 마감된 모집입니다.' : isFull ? '✅ 모집이 완료되었습니다.' : '✅ 버튼을 눌러 참가하세요!' })
     .setTimestamp();
 }
 
@@ -540,7 +540,7 @@ async function handleMojipButton(interaction) {
         `👑 **주최자**  ${match.data.organizer}`,
         `📊 **상태**　  🔴 취소됨`,
       ].join('\n'))
-      .setFooter({ text: '주최자에 의해 모집이 취소되었습니다.' })
+      .setFooter({ text: '❌ 주최자에 의해 모집이 취소되었습니다.' })
       .setTimestamp();
 
     await match.message.edit({ embeds: [cancelledEmbed], components: [] });
