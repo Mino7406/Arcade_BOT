@@ -246,7 +246,7 @@ function buildManageMenu(match, matchMsgId) {
       ? [
           new ButtonBuilder()
             .setCustomId(`naejeon:team_builder:${matchMsgId}`)
-            .setLabel('🎯 팀 만들기')
+            .setLabel('🛠️ 팀 만들기')
             .setStyle(ButtonStyle.Primary),
           new ButtonBuilder()
             .setCustomId(`naejeon:match_reopen:${matchMsgId}`)
@@ -254,8 +254,8 @@ function buildManageMenu(match, matchMsgId) {
             .setStyle(ButtonStyle.Secondary),
           new ButtonBuilder()
             .setCustomId(`naejeon:match_mention:${matchMsgId}`)
-            .setLabel('참가자 멘션')
-            .setStyle(match.mentionSent ? ButtonStyle.Secondary : ButtonStyle.Success)
+            .setLabel('📣 참가자 멘션')
+            .setStyle(ButtonStyle.Success)
             .setDisabled(!!match.mentionSent),
         ]
       : [new ButtonBuilder()
@@ -600,9 +600,9 @@ async function handleNaejeonButton(interaction) {
       await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
       return;
     }
-    if (match.participants.length < 2) {
+    if (match.participants.length < 1) {
       await interaction.update({
-        content: '⚠️ 팀을 나누려면 참가자가 2명 이상이어야 합니다.',
+        content: '⚠️ 팀을 나누려면 참가자가 1명 이상이어야 합니다.',
         embeds: [],
         components: [buildManageMenu(match, matchMsgId)],
       });
@@ -624,9 +624,9 @@ async function handleNaejeonButton(interaction) {
       await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
       return;
     }
-    if (match.participants.length < 2) {
+    if (match.participants.length < 1) {
       await interaction.update({
-        content: '⚠️ 팀을 나누려면 참가자가 2명 이상이어야 합니다.',
+        content: '⚠️ 팀을 나누려면 참가자가 1명 이상이어야 합니다.',
         embeds: [],
         components: [buildManageMenu(match, matchMsgId)],
       });
@@ -689,7 +689,7 @@ async function handleNaejeonButton(interaction) {
       allowedMentions: { parse: ['users'] },
     });
     await interaction.update({
-      content: '✅ **참가자에게 멘션을 보냈습니다.**',
+      content: '📣 **참가자에게 멘션을 보냈습니다.**',
       components: [buildManageMenu(match, matchMsgId)],
     });
     return;
