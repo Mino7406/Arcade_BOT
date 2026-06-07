@@ -104,10 +104,10 @@ function buildPreviewEmbed({ gameInfo, title, datetime, players, description, or
   const max = parseInt(players) || 0;
 
   const lines = [
-    `> 🎮 **게임**　  ${gameInfo.name}`,
-    `> 📅 **일시**　  ${datetime}`,
-    `> 👑 **주최자**  ${organizer}`,
-    `> 📊 **상태**　  ⏳ 게시 전`,
+    `🎮 **게임**　  ${gameInfo.name}`,
+    `📅 **일시**　  ${datetime}`,
+    `👑 **주최자**  ${organizer}`,
+    `📊 **상태**　  ⏳ 게시 전`,
   ];
 
   const embed = new EmbedBuilder()
@@ -133,10 +133,10 @@ function buildPublicEmbed(data, participants, closed = false, teams = null) {
   const color = closed ? 0x57F287 : isFull ? 0x808080 : gameInfo.color;
 
   const lines = [
-    `> 🎮 **게임**　  ${gameInfo.name}`,
-    `> 📅 **일시**　  ${datetime}`,
-    `> 👑 **주최자**  ${organizer}`,
-    `> 📊 **상태**　  ${statusText}`,
+    `🎮 **게임**　  ${gameInfo.name}`,
+    `📅 **일시**　  ${datetime}`,
+    `👑 **주최자**  ${organizer}`,
+    `📊 **상태**　  ${statusText}`,
   ];
 
   const embed = new EmbedBuilder()
@@ -751,10 +751,10 @@ async function handleNaejeonButton(interaction) {
       .setColor(0xED4245)
       .setTitle(`${match.data.gameInfo.emoji}  ${match.data.title}`)
       .setDescription([
-        `> 🎮 **게임**　 ${match.data.gameInfo.name}`,
-        `> 📅 **일시**　 ${match.data.datetime}`,
-        `> 👑 **주최자** ${match.data.organizer}`,
-        `> 📊 **상태**　  🔴 취소됨`,
+        `🎮 **게임**　 ${match.data.gameInfo.name}`,
+        `📅 **일시**　 ${match.data.datetime}`,
+        `👑 **주최자** ${match.data.organizer}`,
+        `📊 **상태**　  🔴 취소됨`,
       ].join('\n'))
       .addFields({
         name: `👥 참가자  ${match.participants.length} / ${cancelMax}명`,
