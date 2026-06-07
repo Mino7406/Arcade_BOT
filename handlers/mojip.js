@@ -538,7 +538,7 @@ async function handleMojipButton(interaction) {
         `🎮 **게임**　  ${match.data.gameInfo.name}`,
         `📅 **일시**　  ${match.data.datetime}`,
         `👑 **주최자**  ${match.data.organizer}`,
-        `❌ **상태**　  취소됨`,
+        `❌ **상태**　  🔴 취소됨`,
       ].join('\n'))
       .setFooter({ text: '주최자에 의해 모집이 취소되었습니다.' })
       .setTimestamp();
