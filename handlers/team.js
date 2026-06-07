@@ -46,10 +46,17 @@ function shuffleIntoTeams(participants) {
 }
 
 function buildTeamEmbed(data, teams) {
-  const { gameInfo, title } = data;
+  const { gameInfo, title, datetime, organizer } = data;
+  const lines = [
+    `🎮 **게임**　  ${gameInfo.name}`,
+    `📅 **일시**　  ${datetime}`,
+    `👑 **주최자**  ${organizer}`,
+    `📊 **상태**　  🔒 마감됨`,
+  ];
   return new EmbedBuilder()
     .setColor(gameInfo.color)
     .setTitle(`${gameInfo.emoji}  ${title} - 팀 배정`)
+    .setDescription(lines.join('\n'))
     .addFields(
       {
         name: `🔵 팀 1 - ${teams.team1.length}명`,

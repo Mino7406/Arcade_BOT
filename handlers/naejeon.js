@@ -158,19 +158,19 @@ function buildPublicEmbed(data, participants, closed = false, teams = null) {
     if (unassigned.length > 0) {
       embed.addFields({
         name: `👤 미배정 (${unassigned.length}명)`,
-        value: unassigned.map((u, i) => `\`${i + 1}\` <@${u.id}>`).join('\n'),
+        value: unassigned.map((u, i) => `\`${i + 1}\` ${u.displayName}`).join('\n'),
       });
     }
 
     embed.addFields(
       {
         name: `🔵 팀 1 - ${teams.team1.length}명`,
-        value: teams.team1.map((u, i) => `\`${i + 1}\` <@${u.id}>`).join('\n') || '없음',
+        value: teams.team1.map((u, i) => `\`${i + 1}\` ${u.displayName}`).join('\n') || '없음',
         inline: true,
       },
       {
         name: `🔴 팀 2 - ${teams.team2.length}명`,
-        value: teams.team2.map((u, i) => `\`${i + 1}\` <@${u.id}>`).join('\n') || '없음',
+        value: teams.team2.map((u, i) => `\`${i + 1}\` ${u.displayName}`).join('\n') || '없음',
         inline: true,
       },
     );
@@ -289,10 +289,17 @@ function buildManageMenu(match, matchMsgId) {
 }
 
 function buildTeamResultEmbed(data, teams) {
-  const { gameInfo, title } = data;
+  const { gameInfo, title, datetime, organizer } = data;
+  const lines = [
+    `🎮 **게임**　  ${gameInfo.name}`,
+    `📅 **일시**　  ${datetime}`,
+    `👑 **주최자**  ${organizer}`,
+    `📊 **상태**　  🔒 마감됨`,
+  ];
   return new EmbedBuilder()
     .setColor(gameInfo.color)
-    .setTitle(`${gameInfo.emoji}  ${title} - 팀 배정 결과`)
+    .setTitle(`${gameInfo.emoji}  ${title} - 팀 배정`)
+    .setDescription(lines.join('\n'))
     .addFields(
       {
         name: `🔵 팀 1 - ${teams.team1.length}명`,
