@@ -5,6 +5,7 @@ const {
   ButtonStyle,
   StringSelectMenuBuilder,
 } = require('discord.js');
+const { buildPublicMessagePayload } = require('./naejeon');
 
 const SIX_HOURS = 6 * 60 * 60 * 1000;
 
@@ -16,7 +17,7 @@ function getResetDateStr(client) {
   const DD = String(kst.getUTCDate()).padStart(2, '0');
   const HH = String(kst.getUTCHours()).padStart(2, '0');
   const mm = String(kst.getUTCMinutes()).padStart(2, '0');
-  return `※ ${MM}.${DD} ${HH}:${mm}에 초기화 됨.`;
+  return `※ ${MM}.${DD} ${HH}:${mm}에 초기화 됨`;
 }
 
 function getMatches(client) {
@@ -48,20 +49,20 @@ function buildTeamEmbed(data, teams) {
   const { gameInfo, title } = data;
   return new EmbedBuilder()
     .setColor(gameInfo.color)
-    .setTitle(`${gameInfo.emoji}  ${title} — 팀 배정`)
+    .setTitle(`${gameInfo.emoji}  ${title} - 팀 배정`)
     .addFields(
       {
-        name: `🔵 팀 1 — ${teams.team1.length}명`,
-        value: teams.team1.map((u, i) => `\`${i + 1}\` <@${u.id}>`).join('\n') || '없음',
+        name: `🔵 팀 1 - ${teams.team1.length}명`,
+        value: teams.team1.map((u, i) => `\`${i + 1}\` ${u.displayName}`).join('\n') || '없음',
         inline: true,
       },
       {
-        name: `🔴 팀 2 — ${teams.team2.length}명`,
-        value: teams.team2.map((u, i) => `\`${i + 1}\` <@${u.id}>`).join('\n') || '없음',
+        name: `🔴 팀 2 - ${teams.team2.length}명`,
+        value: teams.team2.map((u, i) => `\`${i + 1}\` ${u.displayName}`).join('\n') || '없음',
         inline: true,
       },
     )
-    .setFooter({ text: '팀이 배정되었습니다.' })
+    .setFooter({ text: '✅ 팀이 배정되었습니다.' })
     .setTimestamp();
 }
 
@@ -161,8 +162,21 @@ async function handleTeamMatchSelect(interaction) {
     await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
     return;
   }
+  if (match.data.organizer.id !== interaction.user.id) {
+    await interaction.update({ content: '❌ 내전 주최자만 팀을 관리할 수 있습니다.', embeds: [], components: [] });
+    return;
+  }
   if (match.participants.length < 2) {
     await interaction.update({ content: '⚠️ 팀을 나누려면 참가자가 2명 이상이어야 합니다.', embeds: [], components: [] });
+    return;
+  }
+
+  if (match.teams) {
+    await interaction.update({
+      content: '🎮 **팀 관리** - 이미 배정된 팀이 있습니다.',
+      embeds: [buildTeamEmbed(match.data, match.teams)],
+      components: [buildManageRow(matchMsgId)],
+    });
     return;
   }
 
@@ -176,7 +190,7 @@ async function handleTeamMatchSelect(interaction) {
     );
 
   await interaction.update({
-    content: '**팀 관리** — 방식을 선택하세요.',
+    content: '🎮 **팀 관리** - 방식을 선택하세요.',
     embeds: [infoEmbed],
     components: [buildManageRow(matchMsgId)],
   });
@@ -193,15 +207,19 @@ async function handleTeamButton(interaction) {
       await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
       return;
     }
+    if (match.data.organizer.id !== interaction.user.id) {
+      await interaction.reply({ content: '❌ 내전 주최자만 사용할 수 있습니다.', ephemeral: true });
+      return;
+    }
     await interaction.update({
-      content: '🎯 **팀 만들기** — 팀 1에 배정할 참가자를 선택하세요.\n(나머지는 자동으로 팀 2가 됩니다.)',
+      content: '🛠️ **팀 만들기** - 팀 1에 배정할 참가자를 선택하세요.\n(나머지는 자동으로 팀 2가 됩니다.)',
       embeds: [],
       components: buildSetupBuilderComponents(match, matchMsgId),
     });
     return;
   }
 
-  // ── 자동 배정 (셋업 단계 → 채널 공개) ────────────────────
+  // ── 자동 배정 ─────────────────────────────────────────────
   if (customId.startsWith('team:shuffle_start:')) {
     const matchMsgId = customId.slice('team:shuffle_start:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
@@ -209,42 +227,58 @@ async function handleTeamButton(interaction) {
       await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
       return;
     }
+    if (match.data.organizer.id !== interaction.user.id) {
+      await interaction.reply({ content: '❌ 내전 주최자만 사용할 수 있습니다.', ephemeral: true });
+      return;
+    }
     const teams = shuffleIntoTeams(match.participants);
-    await interaction.update({ content: '✅ 채널에 팀 배정 결과를 게시했습니다.', embeds: [], components: [] });
-    await interaction.channel.send({
+    match.teams = teams;
+    await match.message.edit(buildPublicMessagePayload(match));
+    await interaction.update({
+      content: '✅ **자동 팀 배정이 완료되었습니다.**',
       embeds: [buildTeamEmbed(match.data, teams)],
-      components: [buildPublicDoneRow(matchMsgId)],
+      components: [buildManageRow(matchMsgId)],
     });
     return;
   }
 
-  // ── 다시 배정 (공개 메시지 → 수동 선택) ──────────────────
+  // ── 다시 배정 (수동 선택) ────────────────────────────────
   if (customId.startsWith('team:pub_builder:')) {
     const matchMsgId = customId.slice('team:pub_builder:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
+      await interaction.reply({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, ephemeral: true });
+      return;
+    }
+    if (match.data.organizer.id !== interaction.user.id) {
+      await interaction.reply({ content: '❌ 내전 주최자만 사용할 수 있습니다.', ephemeral: true });
       return;
     }
     await interaction.update({
-      content: '🎯 **팀 만들기** — 팀 1에 배정할 참가자를 선택하세요.\n(나머지는 자동으로 팀 2가 됩니다.)',
+      content: '🛠️ **팀 만들기** - 팀 1에 배정할 참가자를 선택하세요.\n(나머지는 자동으로 팀 2가 됩니다.)',
       embeds: [],
       components: buildPublicBuilderComponents(match, matchMsgId),
     });
     return;
   }
 
-  // ── 자동 배정 (공개 메시지 인플레이스 업데이트) ───────────
+  // ── 자동 재배정 ───────────────────────────────────────────
   if (customId.startsWith('team:pub_shuffle:')) {
     const matchMsgId = customId.slice('team:pub_shuffle:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
+      await interaction.reply({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, ephemeral: true });
+      return;
+    }
+    if (match.data.organizer.id !== interaction.user.id) {
+      await interaction.reply({ content: '❌ 내전 주최자만 사용할 수 있습니다.', ephemeral: true });
       return;
     }
     const teams = shuffleIntoTeams(match.participants);
+    match.teams = teams;
+    await match.message.edit(buildPublicMessagePayload(match));
     await interaction.update({
-      content: '',
+      content: '✅ **자동 팀 배정이 완료되었습니다.**',
       embeds: [buildTeamEmbed(match.data, teams)],
       components: [buildPublicDoneRow(matchMsgId)],
     });
@@ -264,25 +298,23 @@ async function handleTeamAssignSelect(interaction) {
     await interaction.update({ content: `⚠️ 만료된 내전입니다. (${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
     return;
   }
+  if (match.data.organizer.id !== interaction.user.id) {
+    await interaction.reply({ content: '❌ 내전 주최자만 사용할 수 있습니다.', ephemeral: true });
+    return;
+  }
 
   const team1Ids = new Set(interaction.values);
   const team1 = match.participants.filter(u => team1Ids.has(u.id));
   const team2 = match.participants.filter(u => !team1Ids.has(u.id));
   const teams = { team1, team2 };
+  match.teams = teams;
+  await match.message.edit(buildPublicMessagePayload(match));
 
-  if (isSetup) {
-    await interaction.update({ content: '✅ 채널에 팀 배정 결과를 게시했습니다.', embeds: [], components: [] });
-    await interaction.channel.send({
-      embeds: [buildTeamEmbed(match.data, teams)],
-      components: [buildPublicDoneRow(matchMsgId)],
-    });
-  } else {
-    await interaction.update({
-      content: '',
-      embeds: [buildTeamEmbed(match.data, teams)],
-      components: [buildPublicDoneRow(matchMsgId)],
-    });
-  }
+  await interaction.update({
+    content: '✅ **팀 배정이 완료되었습니다.**',
+    embeds: [buildTeamEmbed(match.data, teams)],
+    components: [buildManageRow(matchMsgId)],
+  });
 }
 
 module.exports = {

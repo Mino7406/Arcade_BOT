@@ -268,7 +268,7 @@ async function handleMojipModal(interaction) {
   getPending(interaction.client).set(interaction.user.id, data);
 
   await interaction.reply({
-    content: '**미리보기** — 이 내용이 채널에 게시됩니다.',
+    content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
     embeds: [buildPreviewEmbed(data)],
     components: [buildPreviewComponents()],
     ephemeral: true,
@@ -584,7 +584,7 @@ async function handleMojipButton(interaction) {
       return;
     }
     await interaction.update({
-      content: '**미리보기** — 이 내용이 채널에 게시됩니다.',
+      content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
       embeds: [buildPreviewEmbed(data)],
       components: [buildPreviewComponents()],
     });

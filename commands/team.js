@@ -20,7 +20,7 @@ module.exports = {
             const DD = String(kst.getUTCDate()).padStart(2, '0');
             const HH = String(kst.getUTCHours()).padStart(2, '0');
             const mm = String(kst.getUTCMinutes()).padStart(2, '0');
-            return `※ ${MM}.${DD} ${HH}:${mm}에 초기화 됨.`;
+            return `※ ${MM}.${DD} ${HH}:${mm}에 초기화 됨`;
           })()
         : '봇 재시작 후 생성된 내전만 표시됩니다';
       await interaction.reply({ content: `⚠️ 활성화된 내전이 없습니다. (${dateStr})`, ephemeral: true });
@@ -35,7 +35,7 @@ module.exports = {
     }
 
     await interaction.reply({
-      content: '🎮 **팀 관리** — 어느 내전의 팀을 관리할까요?',
+      content: '🎮 **팀 관리** - 어느 내전의 팀을 관리할까요?',
       components: [new ActionRowBuilder().addComponents(buildMatchSelectMenu(validMatches))],
       ephemeral: true,
     });
