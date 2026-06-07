@@ -786,7 +786,7 @@ async function handleNaejeonButton(interaction) {
         `👑 **주최자** ${match.data.organizer}`,
         `📊 **상태**　  🔴 취소됨`,
       ].join('\n'))
-      .setFooter({ text: '🔴 주최자에 의해 내전이 취소되었습니다.' })
+      .setFooter({ text: '주최자에 의해 내전이 취소되었습니다.' })
       .setTimestamp();
 
     await match.message.edit({ content: '', embeds: [cancelledEmbed], components: [], allowedMentions: { parse: [] } });
