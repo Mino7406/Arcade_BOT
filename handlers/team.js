@@ -50,7 +50,7 @@ function buildTeamEmbed(data, teams) {
   const lines = [
     `🎮 **게임**　  ${gameInfo.name}`,
     `📅 **일시**　  ${datetime}`,
-    `👑 **주최자**  ${organizer}`,
+    `👑 **주최자**  ${organizer.displayName}`,
     `📊 **상태**　  🔒 마감됨`,
   ];
   return new EmbedBuilder()
@@ -60,12 +60,12 @@ function buildTeamEmbed(data, teams) {
     .addFields(
       {
         name: `🔵 팀 1 - ${teams.team1.length}명`,
-        value: teams.team1.map((u, i) => `\`${i + 1}\` <@${u.id}>`).join('\n') || '없음',
+        value: teams.team1.map((u, i) => `\`${i + 1}\` ${u.displayName}`).join('\n') || '없음',
         inline: true,
       },
       {
         name: `🔴 팀 2 - ${teams.team2.length}명`,
-        value: teams.team2.map((u, i) => `\`${i + 1}\` <@${u.id}>`).join('\n') || '없음',
+        value: teams.team2.map((u, i) => `\`${i + 1}\` ${u.displayName}`).join('\n') || '없음',
         inline: true,
       },
     )
@@ -192,7 +192,7 @@ async function handleTeamMatchSelect(interaction) {
   const lines = [
     `🎮 **게임**　  ${gameInfo.name}`,
     `📅 **일시**　  ${datetime}`,
-    `👑 **주최자**  ${organizer}`,
+    `👑 **주최자**  ${organizer.displayName}`,
     `📊 **상태**　  ${statusText}`,
   ];
   const infoEmbed = new EmbedBuilder()

@@ -104,7 +104,7 @@ function buildPreviewEmbed({ gameInfo, title, datetime, players, description, or
   const lines = [
     `🎮 **게임**　  ${gameInfo.name}`,
     `📅 **일시**　  ${datetime}`,
-    `👑 **주최자**  ${organizer}`,
+    `👑 **주최자**  ${organizer.displayName}`,
     `📊 **상태**　  ⏳ 게시 전`,
   ];
 
@@ -132,12 +132,12 @@ function buildPublicEmbed(data, participants, closed = false) {
   const lines = [
     `🎮 **게임**　  ${gameInfo.name}`,
     `📅 **일시**　  ${datetime}`,
-    `👑 **주최자**  ${organizer}`,
+    `👑 **주최자**  ${organizer.displayName}`,
     `📊 **상태**　  ${statusText}`,
   ];
 
   const participantText = participants.length > 0
-    ? participants.map((u, i) => `\`${i + 1}\` <@${u.id}>`).join('\n')
+    ? participants.map((u, i) => `\`${i + 1}\` ${u.displayName}`).join('\n')
     : '*아직 참가자가 없습니다.*';
 
   const embed = new EmbedBuilder()
@@ -272,7 +272,7 @@ async function handleMojipModal(interaction) {
     return;
   }
 
-  const data = { game, gameInfo, title, datetime, players, description, organizer: interaction.user, _previewInteraction: interaction };
+  const data = { game, gameInfo, title, datetime, players, description, organizer: { id: interaction.user.id, displayName: interaction.member?.displayName || interaction.user.globalName || interaction.user.username }, _previewInteraction: interaction };
   getPending(interaction.client).set(interaction.user.id, data);
 
   await interaction.reply({
@@ -580,7 +580,7 @@ async function handleMojipButton(interaction) {
       .setDescription([
         `🎮 **게임**　  ${match.data.gameInfo.name}`,
         `📅 **일시**　  ${match.data.datetime}`,
-        `👑 **주최자**  ${match.data.organizer}`,
+        `👑 **주최자**  ${match.data.organizer.displayName}`,
         `📊 **상태**　  🔴 취소됨`,
       ].join('\n'))
       .setFooter({ text: '❌ 주최자에 의해 모집이 취소되었습니다.' })
