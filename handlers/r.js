@@ -10,8 +10,9 @@ async function handleRMatchSelect(interaction) {
     return;
   }
 
-  // 새 메시지로 임베드 + 버튼 재게시
-  const newMsg = await interaction.channel.send(buildPublicMessagePayload(match));
+  // 새 메시지로 임베드 + 버튼 재게시 (역할 멘션 제외)
+  const payload = buildPublicMessagePayload(match);
+  const newMsg = await interaction.channel.send({ ...payload, content: '' });
 
   // 기존 메시지 버튼 비활성화 (조용히 실패해도 무방)
   match.message.edit({ components: [] }).catch(() => {});
