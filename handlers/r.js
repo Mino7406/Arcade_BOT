@@ -1,4 +1,3 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { buildPublicMessagePayload } = require('./naejeon');
 
 async function handleRMatchSelect(interaction) {
@@ -11,18 +10,18 @@ async function handleRMatchSelect(interaction) {
     return;
   }
 
-  const payload = buildPublicMessagePayload(match);
-  const linkButton = new ButtonBuilder()
-    .setLabel('📌 메시지로 이동')
-    .setURL(match.message.url)
-    .setStyle(ButtonStyle.Link);
+  // 새 메시지로 임베드 + 버튼 재게시
+  const newMsg = await interaction.channel.send(buildPublicMessagePayload(match));
 
-  await interaction.update({
-    content: '',
-    embeds: payload.embeds,
-    components: [new ActionRowBuilder().addComponents(linkButton)],
-    allowedMentions: { parse: [] },
-  });
+  // 기존 메시지 버튼 비활성화 (조용히 실패해도 무방)
+  match.message.edit({ components: [] }).catch(() => {});
+
+  // 매치 참조를 새 메시지로 교체
+  matches.delete(matchMsgId);
+  match.message = newMsg;
+  matches.set(newMsg.id, match);
+
+  await interaction.update({ content: '✅ **내전 임베드가 다시 게시되었습니다.**', embeds: [], components: [] });
 }
 
 module.exports = { handleRMatchSelect };

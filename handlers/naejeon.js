@@ -105,7 +105,7 @@ function buildPreviewEmbed({ gameInfo, title, datetime, players, description, or
   const lines = [
     `🎮 **게임**　  ${gameInfo.name}`,
     `📅 **일시**　  ${datetime}`,
-    `👑 **주최자**  ${organizer.displayName}`,
+    `👑 **주최자**  **${organizer.displayName}**`,
     `📊 **상태**　  ⏳ 게시 전`,
   ];
 
@@ -134,7 +134,7 @@ function buildPublicEmbed(data, participants, closed = false, teams = null) {
   const lines = [
     `🎮 **게임**　  ${gameInfo.name}`,
     `📅 **일시**　  ${datetime}`,
-    `👑 **주최자**  ${organizer.displayName}`,
+    `👑 **주최자**  **${organizer.displayName}**`,
     `📊 **상태**　  ${statusText}`,
   ];
 
@@ -157,25 +157,25 @@ function buildPublicEmbed(data, participants, closed = false, teams = null) {
     if (unassigned.length > 0) {
       embed.addFields({
         name: `👤 미배정 (${unassigned.length}명)`,
-        value: unassigned.map((u, i) => `\`${i + 1}\` ${u.displayName}`).join('\n'),
+        value: unassigned.map((u, i) => `\`${i + 1}\` **${u.displayName}**`).join('\n'),
       });
     }
 
     embed.addFields(
       {
         name: `🔵 팀 1 - ${teams.team1.length}명`,
-        value: teams.team1.map((u, i) => `\`${i + 1}\` ${u.displayName}`).join('\n') || '없음',
+        value: teams.team1.map((u, i) => `\`${i + 1}\` **${u.displayName}**`).join('\n') || '없음',
         inline: true,
       },
       {
         name: `🔴 팀 2 - ${teams.team2.length}명`,
-        value: teams.team2.map((u, i) => `\`${i + 1}\` ${u.displayName}`).join('\n') || '없음',
+        value: teams.team2.map((u, i) => `\`${i + 1}\` **${u.displayName}**`).join('\n') || '없음',
         inline: true,
       },
     );
   } else {
     const participantText = participants.length > 0
-      ? participants.map((u, i) => `\`${i + 1}\` ${u.displayName}`).join('\n')
+      ? participants.map((u, i) => `\`${i + 1}\` **${u.displayName}**`).join('\n')
       : '*아직 참가자가 없습니다.*';
     embed.addFields({
       name: `👥 참가자  ${participants.length} / ${max}명`,
@@ -300,7 +300,7 @@ function buildTeamResultEmbed(data, teams) {
   const lines = [
     `🎮 **게임**　  ${gameInfo.name}`,
     `📅 **일시**　  ${datetime}`,
-    `👑 **주최자**  ${organizer.displayName}`,
+    `👑 **주최자**  **${organizer.displayName}**`,
     `📊 **상태**　  🔒 마감됨`,
   ];
   return new EmbedBuilder()
@@ -310,12 +310,12 @@ function buildTeamResultEmbed(data, teams) {
     .addFields(
       {
         name: `🔵 팀 1 - ${teams.team1.length}명`,
-        value: teams.team1.map((u, i) => `\`${i + 1}\` ${u.displayName}`).join('\n') || '없음',
+        value: teams.team1.map((u, i) => `\`${i + 1}\` **${u.displayName}**`).join('\n') || '없음',
         inline: true,
       },
       {
         name: `🔴 팀 2 - ${teams.team2.length}명`,
-        value: teams.team2.map((u, i) => `\`${i + 1}\` ${u.displayName}`).join('\n') || '없음',
+        value: teams.team2.map((u, i) => `\`${i + 1}\` **${u.displayName}**`).join('\n') || '없음',
         inline: true,
       },
     )
@@ -827,7 +827,7 @@ async function handleNaejeonButton(interaction) {
       .setDescription([
         `🎮 **게임**　 ${match.data.gameInfo.name}`,
         `📅 **일시**　 ${match.data.datetime}`,
-        `👑 **주최자** ${match.data.organizer.displayName}`,
+        `👑 **주최자** **${match.data.organizer.displayName}**`,
         `📊 **상태**　  🔴 취소됨`,
       ].join('\n'))
       .setFooter({ text: '❌ 주최자에 의해 내전이 취소되었습니다.' })
