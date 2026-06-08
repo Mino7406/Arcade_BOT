@@ -206,9 +206,8 @@ function buildPublicComponents(participants, maxPlayers, closed = false) {
 
 function buildPublicMessagePayload(match) {
   const maxPlayers = parseInt(match.data.players) || 0;
-  const mentionContent = match.participants.map(u => `<@${u.id}>`).join('  ');
   return {
-    content: mentionContent || '',
+    content: '',
     embeds: [buildPublicEmbed(match.data, match.participants, match.closed, match.teams)],
     components: buildPublicComponents(match.participants, maxPlayers, match.closed),
     allowedMentions: { parse: [] },
