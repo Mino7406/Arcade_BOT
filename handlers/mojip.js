@@ -318,7 +318,7 @@ async function handleMojipButton(interaction) {
 
     if (alreadyIn) {
       await interaction.reply({
-        content: '**이미 참가 중입니다. 취소하려면 아래 버튼을 눌러주세요.**',
+        content: '**이미 참가 중입니다.**\n취소하려면 아래 버튼을 눌러주세요.',
         components: [buildLeaveButton(interaction.message.id)],
         ephemeral: true,
       });
