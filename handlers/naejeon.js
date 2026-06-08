@@ -207,7 +207,7 @@ function buildPublicComponents(participants, maxPlayers, closed = false) {
 function buildPublicMessagePayload(match) {
   const maxPlayers = parseInt(match.data.players) || 0;
   return {
-    content: '',
+    content: match.roleContent || '',
     embeds: [buildPublicEmbed(match.data, match.participants, match.closed, match.teams)],
     components: buildPublicComponents(match.participants, maxPlayers, match.closed),
     allowedMentions: { parse: [] },
@@ -506,13 +506,14 @@ async function handleNaejeonButton(interaction) {
       ? interaction.guild.roles.cache.find(r => r.name === roleName)
       : null;
     getPending(interaction.client).delete(interaction.user.id);
+    const roleContent = role ? `<@&${role.id}>` : '';
     const msg = await interaction.channel.send({
-      content: role ? `<@&${role.id}>` : '',
+      content: roleContent,
       embeds: [buildPublicEmbed(data, participants)],
       components: buildPublicComponents(participants, maxPlayers),
       allowedMentions: { roles: role ? [role.id] : [], users: [] },
     });
-    getMatches(interaction.client).set(msg.id, { data, participants, message: msg, closed: false, teams: null, mentionSent: false });
+    getMatches(interaction.client).set(msg.id, { data, participants, message: msg, closed: false, teams: null, mentionSent: false, roleContent });
     await interaction.update({ content: '✅ **채널에 공개 게시되었습니다!**', embeds: [], components: [] });
     return;
   }
@@ -521,7 +522,7 @@ async function handleNaejeonButton(interaction) {
   if (customId === 'naejeon:join') {
     const match = getMatches(interaction.client).get(interaction.message.id);
     if (!match) {
-      await interaction.reply({ content: `⚠️ **만료된 내전입니다.** (${getResetDateStr(interaction.client)})`, ephemeral: true });
+      await interaction.reply({ content: `⚠️ **만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, ephemeral: true });
       return;
     }
     if (match.closed) {
