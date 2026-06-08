@@ -2,7 +2,7 @@ require('dotenv').config({ path: './env' });
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const { handleGameSelect, handleNaejeonModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleTeamAssign } = require('./handlers/naejeon');
+const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleTeamAssign } = require('./handlers/naejeon');
 const { handleMojipGameSelect, handleMojipModal, handleMojipButton, handleMojipMatchEditModal } = require('./handlers/mojip');
 const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/team');
 
@@ -62,6 +62,8 @@ client.on('interactionCreate', async (interaction) => {
     } else if (interaction.isModalSubmit()) {
       if (interaction.customId.startsWith('naejeon:modal:')) {
         await handleNaejeonModal(interaction);
+      } else if (interaction.customId.startsWith('naejeon:modal_edit:')) {
+        await handleNaejeonEditModal(interaction);
       } else if (interaction.customId.startsWith('naejeon:match_edit_modal:')) {
         await handleNaejeonMatchEditModal(interaction);
       } else if (interaction.customId.startsWith('mojip:modal:')) {
