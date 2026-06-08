@@ -14,7 +14,6 @@ module.exports = {
         { label: '발로란트',         value: 'valorant',  emoji: { id: '1510933698349109268' } },
         { label: '오버워치',         value: 'overwatch', emoji: { id: '1510933569554612324' } },
         { label: '배틀그라운드',     value: 'pubg',      emoji: { id: '1510933567646203964' } },
-        { label: '스팀',             value: 'steam',     emoji: { id: '1510954746012242021' } },
         { label: '직접 입력',        value: 'custom',    emoji: '✏️' },
       ]);
 

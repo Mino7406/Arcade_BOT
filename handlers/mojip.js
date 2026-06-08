@@ -13,12 +13,11 @@ const GAMES = {
   valorant:  { name: '발로란트',         emoji: '<:Val:1510933698349109268>',    defaultPlayers: 5,   color: 0xFF4655 },
   overwatch: { name: '오버워치',         emoji: '<:Over:1510933569554612324>',   defaultPlayers: 5,   color: 0xF99E1A },
   pubg:      { name: '배틀그라운드',     emoji: '<:PUBG:1510933567646203964>',   defaultPlayers: 4,    color: 0xC8A96E },
-  steam:     { name: '스팀',             emoji: '<:Steam:1510954746012242021>',  defaultPlayers: null, color: 0x1B2838 },
   custom:    { name: '직접 입력',        emoji: '🎮',                            defaultPlayers: null, color: 0x5865F2 },
 };
 
 const ROLE_NAMES = {
-  lol: '롤', valorant: '발로란트', overwatch: '오버워치', pubg: '배그', steam: '스팀',
+  lol: '롤', valorant: '발로란트', overwatch: '오버워치', pubg: '배그',
 };
 
 // ─── 빌더 헬퍼 ────────────────────────────────────────────────
@@ -181,12 +180,20 @@ function buildLeaveButton(msgId) {
   );
 }
 
-function buildPreviewComponents() {
-  return new ActionRowBuilder().addComponents(
+function buildPreviewComponents(data = null) {
+  const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('mojip:publish').setLabel('📢 채널에 공개 게시').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('mojip:edit').setLabel('✏️ 수정').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('mojip:cancel').setLabel('❌ 취소').setStyle(ButtonStyle.Danger),
   );
+  if (data && data.game === 'custom') {
+    const steamToggle = new ButtonBuilder()
+      .setCustomId('mojip:toggle_steam')
+      .setLabel(data.mentionSteam ? '🟢 @스팀 멘션 ON' : '⚫ @스팀 멘션 OFF')
+      .setStyle(data.mentionSteam ? ButtonStyle.Success : ButtonStyle.Secondary);
+    return [row1, new ActionRowBuilder().addComponents(steamToggle)];
+  }
+  return [row1];
 }
 
 function buildCancelComponents() {
@@ -264,15 +271,50 @@ async function handleMojipModal(interaction) {
     return;
   }
 
-  const data = { game, gameInfo, title, datetime, players, description, organizer: interaction.user };
+  const data = { game, gameInfo, title, datetime, players, description, organizer: interaction.user, _previewInteraction: interaction };
   getPending(interaction.client).set(interaction.user.id, data);
 
   await interaction.reply({
     content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
     embeds: [buildPreviewEmbed(data)],
-    components: [buildPreviewComponents()],
+    components: buildPreviewComponents(data),
     ephemeral: true,
   });
+}
+
+async function handleMojipEditModal(interaction) {
+  const game        = interaction.customId.split(':')[2];
+  const baseGameInfo = GAMES[game];
+  const isCustom    = game === 'custom';
+  const gameName    = isCustom ? interaction.fields.getTextInputValue('game_name') : null;
+  const gameInfo    = gameName ? { ...baseGameInfo, name: gameName } : baseGameInfo;
+  const title       = interaction.fields.getTextInputValue('title') || `${gameInfo.name} 모집`;
+  const datetime    = interaction.fields.getTextInputValue('datetime');
+  const players     = interaction.fields.getTextInputValue('players');
+  const description = interaction.fields.getTextInputValue('description');
+
+  if (isNaN(parseInt(players)) || parseInt(players) < 1) {
+    await interaction.reply({ content: '⚠️ **모집 인원은 1 이상의 숫자만 입력해주세요.**', ephemeral: true });
+    return;
+  }
+
+  const data = getPending(interaction.client).get(interaction.user.id);
+  if (!data || !data._previewInteraction) {
+    await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/모집\`을 실행해주세요. (${getResetDateStr(interaction.client)})`, ephemeral: true });
+    return;
+  }
+
+  Object.assign(data, { gameInfo, title, datetime, players, description });
+
+  await data._previewInteraction.editReply({
+    content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
+    embeds: [buildPreviewEmbed(data)],
+    components: buildPreviewComponents(data),
+  });
+
+  // 모달 인터랙션을 조용히 마무리 (새 메시지 생성 없이)
+  await interaction.deferReply({ ephemeral: true });
+  await interaction.deleteReply();
 }
 
 async function handleMojipButton(interaction) {
@@ -287,7 +329,7 @@ async function handleMojipButton(interaction) {
     }
     const maxPlayers = parseInt(data.players) || 0;
     const participants = [];
-    const roleName = ROLE_NAMES[data.game];
+    const roleName = ROLE_NAMES[data.game] || (data.mentionSteam ? '스팀' : null);
     const role = roleName && interaction.guild
       ? interaction.guild.roles.cache.find(r => r.name === roleName)
       : null;
@@ -549,6 +591,22 @@ async function handleMojipButton(interaction) {
     return;
   }
 
+  // ── 스팀 멘션 토글 (직접 입력 전용) ──────────────────────────
+  if (customId === 'mojip:toggle_steam') {
+    const data = getPending(interaction.client).get(interaction.user.id);
+    if (!data) {
+      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/모집\`을 실행해주세요. (${getResetDateStr(interaction.client)})`, ephemeral: true });
+      return;
+    }
+    data.mentionSteam = !data.mentionSteam;
+    await interaction.update({
+      content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
+      embeds: [buildPreviewEmbed(data)],
+      components: buildPreviewComponents(data),
+    });
+    return;
+  }
+
   // ── 수정 (미리보기) ────────────────────────────────────────────
   if (customId === 'mojip:edit') {
     const data = getPending(interaction.client).get(interaction.user.id);
@@ -556,7 +614,9 @@ async function handleMojipButton(interaction) {
       await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/모집\`을 실행해주세요. (${getResetDateStr(interaction.client)})`, ephemeral: true });
       return;
     }
-    await interaction.showModal(buildModal(data.game, data));
+    const editModal = buildModal(data.game, data);
+    editModal.setCustomId(`mojip:modal_edit:${data.game}`);
+    await interaction.showModal(editModal);
     return;
   }
 
@@ -587,7 +647,7 @@ async function handleMojipButton(interaction) {
     await interaction.update({
       content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
       embeds: [buildPreviewEmbed(data)],
-      components: [buildPreviewComponents()],
+      components: buildPreviewComponents(data),
     });
     return;
   }
@@ -630,4 +690,4 @@ async function handleMojipMatchEditModal(interaction) {
   await interaction.reply({ content: '✅ **모집 정보가 수정되었습니다.**', ephemeral: true });
 }
 
-module.exports = { handleMojipGameSelect, handleMojipModal, handleMojipButton, handleMojipMatchEditModal };
+module.exports = { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal };

@@ -3,7 +3,7 @@ const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleTeamAssign } = require('./handlers/naejeon');
-const { handleMojipGameSelect, handleMojipModal, handleMojipButton, handleMojipMatchEditModal } = require('./handlers/mojip');
+const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal } = require('./handlers/mojip');
 const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/team');
 
 const client = new Client({
@@ -68,6 +68,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleNaejeonMatchEditModal(interaction);
       } else if (interaction.customId.startsWith('mojip:modal:')) {
         await handleMojipModal(interaction);
+      } else if (interaction.customId.startsWith('mojip:modal_edit:')) {
+        await handleMojipEditModal(interaction);
       } else if (interaction.customId.startsWith('mojip:match_edit_modal:')) {
         await handleMojipMatchEditModal(interaction);
       }
