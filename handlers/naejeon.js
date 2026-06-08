@@ -233,7 +233,8 @@ function buildPreviewComponents(data = null) {
   if (data && data.game === 'custom') {
     const steamToggle = new ButtonBuilder()
       .setCustomId('naejeon:toggle_steam')
-      .setLabel(data.mentionSteam ? '🟢 @스팀 멘션 ON' : '⚫ @스팀 멘션 OFF')
+      .setEmoji({ id: '1510954746012242021', name: 'Steam' })
+      .setLabel(data.mentionSteam ? '멘션 ON' : '멘션 OFF')
       .setStyle(data.mentionSteam ? ButtonStyle.Success : ButtonStyle.Secondary);
     return [row1, new ActionRowBuilder().addComponents(steamToggle)];
   }
