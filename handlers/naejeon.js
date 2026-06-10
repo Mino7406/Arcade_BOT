@@ -936,11 +936,11 @@ async function handleNaejeonButton(interaction) {
     }
     const sel = new UserSelectMenuBuilder()
       .setCustomId(`naejeon:member_add_select:${matchMsgId}`)
-      .setPlaceholder('추가할 참가자를 선택하세요')
+      .setPlaceholder('참가자 선택')
       .setMinValues(1)
       .setMaxValues(10);
     await interaction.update({
-      content: '➕ **참가자 추가**',
+      content: '➕ **참가자 추가** - 추가할 멤버를 선택하세요.',
       embeds: [],
       components: [
         new ActionRowBuilder().addComponents(sel),
@@ -969,12 +969,12 @@ async function handleNaejeonButton(interaction) {
     }
     const sel = new StringSelectMenuBuilder()
       .setCustomId(`naejeon:member_remove_select:${matchMsgId}`)
-      .setPlaceholder('제거할 참가자를 선택하세요')
+      .setPlaceholder('참가자 선택')
       .setMinValues(1)
       .setMaxValues(match.participants.length)
       .addOptions(match.participants.map(u => ({ label: u.displayName, value: u.id })));
     await interaction.update({
-      content: '➖ **참가자 제거**',
+      content: '➖ **참가자 제거** - 제거할 멤버를 선택하세요.',
       embeds: [],
       components: [
         new ActionRowBuilder().addComponents(sel),
