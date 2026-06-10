@@ -940,7 +940,7 @@ async function handleNaejeonButton(interaction) {
       .setMinValues(1)
       .setMaxValues(10);
     await interaction.update({
-      content: '➕ **참가자 추가** - 추가할 멤버를 선택하세요.',
+      content: '➕ **참가자 추가**',
       embeds: [],
       components: [
         new ActionRowBuilder().addComponents(sel),
@@ -974,7 +974,7 @@ async function handleNaejeonButton(interaction) {
       .setMaxValues(match.participants.length)
       .addOptions(match.participants.map(u => ({ label: u.displayName, value: u.id })));
     await interaction.update({
-      content: '➖ **참가자 제거** - 제거할 멤버를 선택하세요.',
+      content: '➖ **참가자 제거**',
       embeds: [],
       components: [
         new ActionRowBuilder().addComponents(sel),
