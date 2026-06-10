@@ -7,7 +7,10 @@ const {
   ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
+  UserSelectMenuBuilder,
 } = require('discord.js');
+
+const ADMIN_ID = '457437911869161472';
 
 const GAMES = {
   lol:       { name: '리그 오브 레전드', emoji: '<:Lol:1510933684750913626>',    defaultPlayers: 10,   color: 0xC89B3C },
@@ -105,7 +108,7 @@ function buildPreviewEmbed({ gameInfo, title, datetime, players, description, or
   const lines = [
     `🎮 **게임**　  ${gameInfo.name}`,
     `📅 **일시**　  ${datetime}`,
-    `👑 **주최자**  **${organizer.displayName}**`,
+    `👑 **주최자**  ${organizer.displayName}`,
     `📊 **상태**　  ⏳ 게시 전`,
   ];
 
@@ -134,7 +137,7 @@ function buildPublicEmbed(data, participants, closed = false, teams = null) {
   const lines = [
     `🎮 **게임**　  ${gameInfo.name}`,
     `📅 **일시**　  ${datetime}`,
-    `👑 **주최자**  **${organizer.displayName}**`,
+    `👑 **주최자**  ${organizer.displayName}`,
     `📊 **상태**　  ${statusText}`,
   ];
 
@@ -157,25 +160,25 @@ function buildPublicEmbed(data, participants, closed = false, teams = null) {
     if (unassigned.length > 0) {
       embed.addFields({
         name: `👤 미배정 (${unassigned.length}명)`,
-        value: unassigned.map((u, i) => `\`${i + 1}\` **${u.displayName}**`).join('\n'),
+        value: `\`\`\`\n${unassigned.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n')}\n\`\`\``,
       });
     }
 
     embed.addFields(
       {
         name: `🔵 팀 1 - ${teams.team1.length}명`,
-        value: teams.team1.map((u, i) => `\`${i + 1}\` **${u.displayName}**`).join('\n') || '없음',
+        value: teams.team1.length > 0 ? `\`\`\`\n${teams.team1.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n')}\n\`\`\`` : '없음',
         inline: true,
       },
       {
         name: `🔴 팀 2 - ${teams.team2.length}명`,
-        value: teams.team2.map((u, i) => `\`${i + 1}\` **${u.displayName}**`).join('\n') || '없음',
+        value: teams.team2.length > 0 ? `\`\`\`\n${teams.team2.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n')}\n\`\`\`` : '없음',
         inline: true,
       },
     );
   } else {
     const participantText = participants.length > 0
-      ? participants.map((u, i) => `\`${i + 1}\` **${u.displayName}**`).join('\n')
+      ? `\`\`\`\n${participants.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n')}\n\`\`\``
       : '*아직 참가자가 없습니다.*';
     embed.addFields({
       name: `👥 참가자  ${participants.length} / ${max}명`,
@@ -189,19 +192,28 @@ function buildPublicEmbed(data, participants, closed = false, teams = null) {
 function buildPublicComponents(participants, maxPlayers, closed = false) {
   const isFull = participants.length >= maxPlayers;
   const joinDisabled = closed || isFull;
-  return [
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('naejeon:join')
-        .setLabel(closed ? '🔒 마감됨' : (isFull ? '🔒 모집 완료' : '✅ 참가하기'))
-        .setStyle(joinDisabled ? ButtonStyle.Secondary : ButtonStyle.Success)
-        .setDisabled(joinDisabled),
-      new ButtonBuilder()
-        .setCustomId('naejeon:manage')
-        .setLabel('⚙️ 관리')
-        .setStyle(ButtonStyle.Secondary),
-    ),
+  const buttons = [
+    new ButtonBuilder()
+      .setCustomId('naejeon:join')
+      .setLabel(closed ? '🔒 마감됨' : (isFull ? '🔒 모집 완료' : '✅ 참가하기'))
+      .setStyle(joinDisabled ? ButtonStyle.Secondary : ButtonStyle.Success)
+      .setDisabled(joinDisabled),
   ];
+  if (closed) {
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId('naejeon:leave_request')
+        .setLabel('❌ 참가 취소')
+        .setStyle(ButtonStyle.Danger),
+    );
+  }
+  buttons.push(
+    new ButtonBuilder()
+      .setCustomId('naejeon:manage')
+      .setLabel('⚙️ 관리')
+      .setStyle(ButtonStyle.Secondary),
+  );
+  return [new ActionRowBuilder().addComponents(...buttons)];
 }
 
 function buildPublicMessagePayload(match) {
@@ -248,6 +260,7 @@ function buildCancelComponents() {
 }
 
 function buildManageMenu(match, matchMsgId) {
+  const hasParticipants = match.participants.length > 0;
   if (match.closed) {
     return [
       new ActionRowBuilder().addComponents(
@@ -260,6 +273,15 @@ function buildManageMenu(match, matchMsgId) {
           .setLabel('📣 참가자 멘션')
           .setStyle(ButtonStyle.Success)
           .setDisabled(!!match.mentionSent),
+        new ButtonBuilder()
+          .setCustomId(`naejeon:add_member:${matchMsgId}`)
+          .setLabel('👤 참가자 추가')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId(`naejeon:remove_member:${matchMsgId}`)
+          .setLabel('🗑️ 참가자 제거')
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(!hasParticipants),
       ),
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
@@ -284,6 +306,15 @@ function buildManageMenu(match, matchMsgId) {
         .setLabel('🔒 마감하기')
         .setStyle(ButtonStyle.Primary),
       new ButtonBuilder()
+        .setCustomId(`naejeon:add_member:${matchMsgId}`)
+        .setLabel('👤 참가자 추가')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`naejeon:remove_member:${matchMsgId}`)
+        .setLabel('🗑️ 참가자 제거')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(!hasParticipants),
+      new ButtonBuilder()
         .setCustomId(`naejeon:match_edit:${matchMsgId}`)
         .setLabel('✏️ 내전 수정')
         .setStyle(ButtonStyle.Secondary),
@@ -300,7 +331,7 @@ function buildTeamResultEmbed(data, teams) {
   const lines = [
     `🎮 **게임**　  ${gameInfo.name}`,
     `📅 **일시**　  ${datetime}`,
-    `👑 **주최자**  **${organizer.displayName}**`,
+    `👑 **주최자**  ${organizer.displayName}`,
     `📊 **상태**　  🔒 마감됨`,
   ];
   return new EmbedBuilder()
@@ -310,12 +341,12 @@ function buildTeamResultEmbed(data, teams) {
     .addFields(
       {
         name: `🔵 팀 1 - ${teams.team1.length}명`,
-        value: teams.team1.map((u, i) => `\`${i + 1}\` **${u.displayName}**`).join('\n') || '없음',
+        value: teams.team1.length > 0 ? `\`\`\`\n${teams.team1.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n')}\n\`\`\`` : '없음',
         inline: true,
       },
       {
         name: `🔴 팀 2 - ${teams.team2.length}명`,
-        value: teams.team2.map((u, i) => `\`${i + 1}\` **${u.displayName}**`).join('\n') || '없음',
+        value: teams.team2.length > 0 ? `\`\`\`\n${teams.team2.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n')}\n\`\`\`` : '없음',
         inline: true,
       },
     )
@@ -591,7 +622,7 @@ async function handleNaejeonButton(interaction) {
       await interaction.reply({ content: `⚠️ **만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, ephemeral: true });
       return;
     }
-    if (match.data.organizer.id !== interaction.user.id) {
+    if (match.data.organizer.id !== interaction.user.id && interaction.user.id !== ADMIN_ID) {
       await interaction.reply({ content: '❌ **주최자만 사용할 수 있습니다.**', ephemeral: true });
       return;
     }
@@ -744,7 +775,7 @@ async function handleNaejeonButton(interaction) {
       await interaction.update({ content: `**⚠️ 만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, components: [] });
       return;
     }
-    if (match.data.organizer.id !== interaction.user.id) {
+    if (match.data.organizer.id !== interaction.user.id && interaction.user.id !== ADMIN_ID) {
       await interaction.reply({ content: '❌ **주최자만 사용할 수 있습니다.**', ephemeral: true });
       return;
     }
@@ -836,6 +867,129 @@ async function handleNaejeonButton(interaction) {
     await match.message.edit({ content: '', embeds: [cancelledEmbed], components: [], allowedMentions: { parse: [] } });
     getMatches(interaction.client).delete(matchMsgId);
     await interaction.update({ content: '✅ **내전이 취소되었습니다.**', components: [] });
+    return;
+  }
+
+  // ── 마감 후 참가 취소 요청 (공개 임베드) ──────────────────────
+  if (customId === 'naejeon:leave_request') {
+    const matchMsgId = interaction.message.id;
+    const match = getMatches(interaction.client).get(matchMsgId);
+    if (!match) {
+      await interaction.reply({ content: `⚠️ **만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, ephemeral: true });
+      return;
+    }
+    const inMatch = match.participants.some(u => u.id === interaction.user.id);
+    if (!inMatch) {
+      await interaction.reply({ content: '⚠️ **참가자가 아닙니다.**', ephemeral: true });
+      return;
+    }
+    await interaction.reply({
+      content: '⚠️ **정말 참가를 취소하시겠습니까?**\n내전이 마감된 상태입니다. 취소 후에는 다시 참가할 수 없습니다.',
+      components: [new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`naejeon:leave_do:${matchMsgId}`)
+          .setLabel('✅ 확인')
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId('naejeon:leave_back')
+          .setLabel('↩️ 돌아가기')
+          .setStyle(ButtonStyle.Secondary),
+      )],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  // ── 마감 후 참가 취소 확정 ────────────────────────────────────
+  if (customId.startsWith('naejeon:leave_do:')) {
+    const matchMsgId = customId.slice('naejeon:leave_do:'.length);
+    const match = getMatches(interaction.client).get(matchMsgId);
+    if (!match) {
+      await interaction.update({ content: `⚠️ **만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, components: [] });
+      return;
+    }
+    const idx = match.participants.findIndex(u => u.id === interaction.user.id);
+    if (idx === -1) {
+      await interaction.update({ content: '⚠️ **이미 참가 취소된 상태입니다.**', components: [] });
+      return;
+    }
+    match.participants.splice(idx, 1);
+    if (match.teams) {
+      match.teams.team1 = match.teams.team1.filter(u => u.id !== interaction.user.id);
+      match.teams.team2 = match.teams.team2.filter(u => u.id !== interaction.user.id);
+      if (match.teams.team1.length === 0 && match.teams.team2.length === 0) match.teams = null;
+    }
+    await match.message.edit(buildPublicMessagePayload(match));
+    await interaction.update({ content: '❌ **참가가 취소되었습니다.**', components: [] });
+    return;
+  }
+
+  // ── 마감 후 참가 취소 돌아가기 ───────────────────────────────
+  if (customId === 'naejeon:leave_back') {
+    await interaction.update({ content: '↩️ **취소되었습니다.**', components: [] });
+    return;
+  }
+
+  // ── 참가자 추가 (주최자/관리자 전용) ─────────────────────────
+  if (customId.startsWith('naejeon:add_member:')) {
+    const matchMsgId = customId.slice('naejeon:add_member:'.length);
+    const match = getMatches(interaction.client).get(matchMsgId);
+    if (!match) {
+      await interaction.update({ content: `⚠️ **만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
+      return;
+    }
+    const sel = new UserSelectMenuBuilder()
+      .setCustomId(`naejeon:member_add_select:${matchMsgId}`)
+      .setPlaceholder('추가할 참가자를 선택하세요')
+      .setMinValues(1)
+      .setMaxValues(10);
+    await interaction.update({
+      content: '👤 **참가자 추가** - 추가할 멤버를 선택하세요.',
+      embeds: [],
+      components: [
+        new ActionRowBuilder().addComponents(sel),
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`naejeon:manage_back:${matchMsgId}`)
+            .setLabel('↩️ 관리로')
+            .setStyle(ButtonStyle.Secondary),
+        ),
+      ],
+    });
+    return;
+  }
+
+  // ── 참가자 제거 (주최자/관리자 전용) ─────────────────────────
+  if (customId.startsWith('naejeon:remove_member:')) {
+    const matchMsgId = customId.slice('naejeon:remove_member:'.length);
+    const match = getMatches(interaction.client).get(matchMsgId);
+    if (!match) {
+      await interaction.update({ content: `⚠️ **만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
+      return;
+    }
+    if (match.participants.length === 0) {
+      await interaction.update({ content: '⚠️ **참가자가 없습니다.**', embeds: [], components: buildManageMenu(match, matchMsgId) });
+      return;
+    }
+    const sel = new StringSelectMenuBuilder()
+      .setCustomId(`naejeon:member_remove_select:${matchMsgId}`)
+      .setPlaceholder('제거할 참가자를 선택하세요')
+      .setMinValues(1)
+      .setMaxValues(match.participants.length)
+      .addOptions(match.participants.map(u => ({ label: u.displayName, value: u.id })));
+    await interaction.update({
+      content: '🗑️ **참가자 제거** - 제거할 멤버를 선택하세요.',
+      embeds: [],
+      components: [
+        new ActionRowBuilder().addComponents(sel),
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`naejeon:manage_back:${matchMsgId}`)
+            .setLabel('↩️ 관리로')
+            .setStyle(ButtonStyle.Secondary),
+        ),
+      ],
+    });
     return;
   }
 
@@ -934,4 +1088,55 @@ async function handleNaejeonMatchEditModal(interaction) {
   await interaction.reply({ content: '✅ **내전 정보가 수정되었습니다.**', ephemeral: true });
 }
 
-module.exports = { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleTeamAssign, buildPublicMessagePayload };
+async function handleNaejeonMemberAdd(interaction) {
+  const matchMsgId = interaction.customId.slice('naejeon:member_add_select:'.length);
+  const match = getMatches(interaction.client).get(matchMsgId);
+  if (!match) {
+    await interaction.update({ content: `⚠️ **만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
+    return;
+  }
+  const added = [];
+  const skipped = [];
+  for (const userId of interaction.values) {
+    if (match.participants.some(u => u.id === userId)) {
+      const user = interaction.users.get(userId);
+      skipped.push(user?.globalName || user?.username || userId);
+      continue;
+    }
+    const member = interaction.members.get(userId);
+    const user = interaction.users.get(userId);
+    const displayName = member?.displayName || member?.nick || user?.globalName || user?.username || userId;
+    match.participants.push({ id: userId, displayName });
+    added.push(displayName);
+  }
+  await match.message.edit(buildPublicMessagePayload(match));
+  const lines = [];
+  if (added.length > 0)   lines.push(`✅ 추가됨: ${added.map(n => `**${n}**`).join(', ')}`);
+  if (skipped.length > 0) lines.push(`⚠️ 이미 참가 중: ${skipped.map(n => `**${n}**`).join(', ')}`);
+  await interaction.update({ content: lines.join('\n') || '완료', embeds: [], components: buildManageMenu(match, matchMsgId) });
+}
+
+async function handleNaejeonMemberRemove(interaction) {
+  const matchMsgId = interaction.customId.slice('naejeon:member_remove_select:'.length);
+  const match = getMatches(interaction.client).get(matchMsgId);
+  if (!match) {
+    await interaction.update({ content: `⚠️ **만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
+    return;
+  }
+  const removeIds = new Set(interaction.values);
+  const removed = match.participants.filter(u => removeIds.has(u.id)).map(u => u.displayName);
+  match.participants = match.participants.filter(u => !removeIds.has(u.id));
+  if (match.teams) {
+    match.teams.team1 = match.teams.team1.filter(u => !removeIds.has(u.id));
+    match.teams.team2 = match.teams.team2.filter(u => !removeIds.has(u.id));
+    if (match.teams.team1.length === 0 && match.teams.team2.length === 0) match.teams = null;
+  }
+  await match.message.edit(buildPublicMessagePayload(match));
+  await interaction.update({
+    content: `🗑️ 제거됨: ${removed.map(n => `**${n}**`).join(', ')}`,
+    embeds: [],
+    components: buildManageMenu(match, matchMsgId),
+  });
+}
+
+module.exports = { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload };

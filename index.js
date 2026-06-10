@@ -2,8 +2,8 @@ require('dotenv').config({ path: './env' });
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleTeamAssign } = require('./handlers/naejeon');
-const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal } = require('./handlers/mojip');
+const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove } = require('./handlers/naejeon');
+const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipMemberAdd, handleMojipMemberRemove } = require('./handlers/mojip');
 const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/team');
 const { handleRMatchSelect } = require('./handlers/r');
 
@@ -47,13 +47,24 @@ client.on('interactionCreate', async (interaction) => {
       if (!command) return;
       await command.execute(interaction);
 
+    } else if (interaction.isUserSelectMenu()) {
+      if (interaction.customId.startsWith('naejeon:member_add_select:')) {
+        await handleNaejeonMemberAdd(interaction);
+      } else if (interaction.customId.startsWith('mojip:member_add_select:')) {
+        await handleMojipMemberAdd(interaction);
+      }
+
     } else if (interaction.isStringSelectMenu()) {
       if (interaction.customId === 'naejeon:game_select') {
         await handleGameSelect(interaction);
       } else if (interaction.customId.startsWith('naejeon:team_assign:')) {
         await handleTeamAssign(interaction);
+      } else if (interaction.customId.startsWith('naejeon:member_remove_select:')) {
+        await handleNaejeonMemberRemove(interaction);
       } else if (interaction.customId === 'mojip:game_select') {
         await handleMojipGameSelect(interaction);
+      } else if (interaction.customId.startsWith('mojip:member_remove_select:')) {
+        await handleMojipMemberRemove(interaction);
       } else if (interaction.customId === 'team:match_select') {
         await handleTeamMatchSelect(interaction);
       } else if (interaction.customId.startsWith('team:assign_setup:') || interaction.customId.startsWith('team:pub_assign:')) {
