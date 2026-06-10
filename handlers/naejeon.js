@@ -108,7 +108,7 @@ function buildPreviewEmbed({ gameInfo, title, datetime, players, description, or
   const lines = [
     `🎮 **게임**　　${gameInfo.name}`,
     `📅 **일시**　　${datetime}`,
-    `👑 **주최자**　\`${organizer.displayName}\``,
+    `👑 **주최자**　**\`${organizer.displayName}\`**`,
     `📊 **상태**　　⏳ 게시 전`,
   ];
 
@@ -137,7 +137,7 @@ function buildPublicEmbed(data, participants, closed = false, teams = null) {
   const lines = [
     `🎮 **게임**　　${gameInfo.name}`,
     `📅 **일시**　　${datetime}`,
-    `👑 **주최자**　\`${organizer.displayName}\``,
+    `👑 **주최자**　**\`${organizer.displayName}\`**`,
     `📊 **상태**　　${statusText}`,
   ];
 
@@ -326,7 +326,7 @@ function buildTeamResultEmbed(data, teams) {
   const lines = [
     `🎮 **게임**　　${gameInfo.name}`,
     `📅 **일시**　　${datetime}`,
-    `👑 **주최자**　\`${organizer.displayName}\``,
+    `👑 **주최자**　**\`${organizer.displayName}\`**`,
     `📊 **상태**　　🔒 마감됨`,
   ];
   return new EmbedBuilder()
@@ -853,7 +853,7 @@ async function handleNaejeonButton(interaction) {
       .setDescription([
         `🎮 **게임**　　${match.data.gameInfo.name}`,
         `📅 **일시**　　${match.data.datetime}`,
-        `👑 **주최자**　\`${match.data.organizer.displayName}\``,
+        `👑 **주최자**　**\`${match.data.organizer.displayName}\`**`,
         `📊 **상태**　　🔴 취소됨`,
       ].join('\n'))
       .setFooter({ text: '❌ 주최자에 의해 내전이 취소되었습니다.' })

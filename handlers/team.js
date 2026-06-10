@@ -52,7 +52,7 @@ function buildTeamEmbed(data, teams) {
   const lines = [
     `🎮 **게임**　　${gameInfo.name}`,
     `📅 **일시**　　${datetime}`,
-    `👑 **주최자**　\`${organizer.displayName}\``,
+    `👑 **주최자**　**\`${organizer.displayName}\`**`,
     `📊 **상태**　　🔒 마감됨`,
   ];
   return new EmbedBuilder()
@@ -194,7 +194,7 @@ async function handleTeamMatchSelect(interaction) {
   const lines = [
     `🎮 **게임**　　${gameInfo.name}`,
     `📅 **일시**　　${datetime}`,
-    `👑 **주최자**　\`${organizer.displayName}\``,
+    `👑 **주최자**　**\`${organizer.displayName}\`**`,
     `📊 **상태**　　${statusText}`,
   ];
   const infoEmbed = new EmbedBuilder()
