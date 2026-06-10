@@ -50,10 +50,10 @@ function shuffleIntoTeams(participants) {
 function buildTeamEmbed(data, teams) {
   const { gameInfo, title, datetime, organizer } = data;
   const lines = [
-    `🎮 **게임**　  ${gameInfo.name}`,
-    `📅 **일시**　  ${datetime}`,
-    `👑 **주최자**  ${organizer.displayName}`,
-    `📊 **상태**　  🔒 마감됨`,
+    `🎮 **게임**　   ${gameInfo.name}`,
+    `📅 **일시**　   ${datetime}`,
+    `👑 **주최자**   **${organizer.displayName}**`,
+    `📊 **상태**　   🔒 마감됨`,
   ];
   return new EmbedBuilder()
     .setColor(gameInfo.color)
@@ -192,10 +192,10 @@ async function handleTeamMatchSelect(interaction) {
   const { gameInfo, title, datetime, organizer } = match.data;
   const statusText = match.closed ? '🔒 마감됨' : '🟢 모집 중';
   const lines = [
-    `🎮 **게임**　  ${gameInfo.name}`,
-    `📅 **일시**　  ${datetime}`,
-    `👑 **주최자**  ${organizer.displayName}`,
-    `📊 **상태**　  ${statusText}`,
+    `🎮 **게임**　   ${gameInfo.name}`,
+    `📅 **일시**　   ${datetime}`,
+    `👑 **주최자**   **${organizer.displayName}**`,
+    `📊 **상태**　   ${statusText}`,
   ];
   const infoEmbed = new EmbedBuilder()
     .setColor(gameInfo.color)
