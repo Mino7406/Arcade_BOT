@@ -106,10 +106,10 @@ function buildPreviewEmbed({ gameInfo, title, datetime, players, description, or
   const max = parseInt(players) || 0;
 
   const lines = [
-    `🎮 **게임**　   ${gameInfo.name}`,
-    `📅 **일시**　   ${datetime}`,
-    `👑 **주최자**   **${organizer.displayName}**`,
-    `📊 **상태**　   ⏳ 게시 전`,
+    `🎮 **게임**　　${gameInfo.name}`,
+    `📅 **일시**　　${datetime}`,
+    `👑 **주최자**　\`${organizer.displayName}\``,
+    `📊 **상태**　　⏳ 게시 전`,
   ];
 
   const embed = new EmbedBuilder()
@@ -134,10 +134,10 @@ function buildPublicEmbed(data, participants, closed = false) {
   const color = closed ? 0x57F287 : isFull ? 0x808080 : gameInfo.color;
 
   const lines = [
-    `🎮 **게임**　   ${gameInfo.name}`,
-    `📅 **일시**　   ${datetime}`,
-    `👑 **주최자**   **${organizer.displayName}**`,
-    `📊 **상태**　   ${statusText}`,
+    `🎮 **게임**　　${gameInfo.name}`,
+    `📅 **일시**　　${datetime}`,
+    `👑 **주최자**　\`${organizer.displayName}\``,
+    `📊 **상태**　　${statusText}`,
   ];
 
   const participantText = participants.length > 0
@@ -604,10 +604,10 @@ async function handleMojipButton(interaction) {
       .setColor(0xED4245)
       .setTitle(`${match.data.gameInfo.emoji}  ${match.data.title}`)
       .setDescription([
-        `🎮 **게임**　   ${match.data.gameInfo.name}`,
-        `📅 **일시**　   ${match.data.datetime}`,
-        `👑 **주최자**   **${match.data.organizer.displayName}**`,
-        `📊 **상태**　   🔴 취소됨`,
+        `🎮 **게임**　　${match.data.gameInfo.name}`,
+        `📅 **일시**　　${match.data.datetime}`,
+        `👑 **주최자**　\`${match.data.organizer.displayName}\``,
+        `📊 **상태**　　🔴 취소됨`,
       ].join('\n'))
       .setFooter({ text: '❌ 주최자에 의해 모집이 취소되었습니다.' })
       .setTimestamp();

@@ -106,10 +106,10 @@ function buildPreviewEmbed({ gameInfo, title, datetime, players, description, or
   const max = parseInt(players) || 0;
 
   const lines = [
-    `🎮 **게임**　   ${gameInfo.name}`,
-    `📅 **일시**　   ${datetime}`,
-    `👑 **주최자**   **${organizer.displayName}**`,
-    `📊 **상태**　   ⏳ 게시 전`,
+    `🎮 **게임**　　${gameInfo.name}`,
+    `📅 **일시**　　${datetime}`,
+    `👑 **주최자**　\`${organizer.displayName}\``,
+    `📊 **상태**　　⏳ 게시 전`,
   ];
 
   const embed = new EmbedBuilder()
@@ -135,10 +135,10 @@ function buildPublicEmbed(data, participants, closed = false, teams = null) {
   const color = closed ? 0x57F287 : isFull ? 0x808080 : gameInfo.color;
 
   const lines = [
-    `🎮 **게임**　   ${gameInfo.name}`,
-    `📅 **일시**　   ${datetime}`,
-    `👑 **주최자**   **${organizer.displayName}**`,
-    `📊 **상태**　   ${statusText}`,
+    `🎮 **게임**　　${gameInfo.name}`,
+    `📅 **일시**　　${datetime}`,
+    `👑 **주최자**　\`${organizer.displayName}\``,
+    `📊 **상태**　　${statusText}`,
   ];
 
   const embed = new EmbedBuilder()
@@ -261,7 +261,7 @@ function buildCancelComponents() {
 
 function buildManageMenu(match, matchMsgId) {
   const hasParticipants = match.participants.length > 0;
-  const row2 = new ActionRowBuilder().addComponents(
+  const addRemoveRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`naejeon:add_member:${matchMsgId}`)
       .setLabel('➕ 참가자 추가')
@@ -284,6 +284,8 @@ function buildManageMenu(match, matchMsgId) {
           .setLabel('📣 참가자 멘션')
           .setStyle(ButtonStyle.Success)
           .setDisabled(!!match.mentionSent),
+      ),
+      new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`naejeon:match_reopen:${matchMsgId}`)
           .setLabel('🔓 마감 해제')
@@ -297,7 +299,7 @@ function buildManageMenu(match, matchMsgId) {
           .setLabel('❌ 내전 취소')
           .setStyle(ButtonStyle.Danger),
       ),
-      row2,
+      addRemoveRow,
     ];
   }
   return [
@@ -315,17 +317,17 @@ function buildManageMenu(match, matchMsgId) {
         .setLabel('❌ 내전 취소')
         .setStyle(ButtonStyle.Danger),
     ),
-    row2,
+    addRemoveRow,
   ];
 }
 
 function buildTeamResultEmbed(data, teams) {
   const { gameInfo, title, datetime, organizer } = data;
   const lines = [
-    `🎮 **게임**　   ${gameInfo.name}`,
-    `📅 **일시**　   ${datetime}`,
-    `👑 **주최자**   **${organizer.displayName}**`,
-    `📊 **상태**　   🔒 마감됨`,
+    `🎮 **게임**　　${gameInfo.name}`,
+    `📅 **일시**　　${datetime}`,
+    `👑 **주최자**　\`${organizer.displayName}\``,
+    `📊 **상태**　　🔒 마감됨`,
   ];
   return new EmbedBuilder()
     .setColor(gameInfo.color)
@@ -849,10 +851,10 @@ async function handleNaejeonButton(interaction) {
       .setColor(0xED4245)
       .setTitle(`${match.data.gameInfo.emoji}  ${match.data.title}`)
       .setDescription([
-        `🎮 **게임**　   ${match.data.gameInfo.name}`,
-        `📅 **일시**　   ${match.data.datetime}`,
-        `👑 **주최자**   **${match.data.organizer.displayName}**`,
-        `📊 **상태**　   🔴 취소됨`,
+        `🎮 **게임**　　${match.data.gameInfo.name}`,
+        `📅 **일시**　　${match.data.datetime}`,
+        `👑 **주최자**　\`${match.data.organizer.displayName}\``,
+        `📊 **상태**　　🔴 취소됨`,
       ].join('\n'))
       .setFooter({ text: '❌ 주최자에 의해 내전이 취소되었습니다.' })
       .setTimestamp();
@@ -919,7 +921,8 @@ async function handleNaejeonButton(interaction) {
 
   // ── 마감 후 참가 취소 돌아가기 ───────────────────────────────
   if (customId === 'naejeon:leave_back') {
-    await interaction.update({ content: '❌ **참가가 취소되었습니다.**', components: [] });
+    await interaction.deferUpdate();
+    await interaction.deleteReply();
     return;
   }
 
