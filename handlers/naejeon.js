@@ -603,6 +603,9 @@ async function handleNaejeonButton(interaction) {
         match.teams = null;
       }
     }
+    const maxPlayers = parseInt(match.data.players) || 0;
+    const reopened = match.closed && match.participants.length < maxPlayers;
+    if (reopened) match.closed = false;
     await match.message.edit(buildPublicMessagePayload(match));
     await interaction.update({ content: '❌ **참가가 취소되었습니다.**', components: [] });
     return;
@@ -913,6 +916,9 @@ async function handleNaejeonButton(interaction) {
       match.teams.team2 = match.teams.team2.filter(u => u.id !== interaction.user.id);
       if (match.teams.team1.length === 0 && match.teams.team2.length === 0) match.teams = null;
     }
+    const maxPlayers = parseInt(match.data.players) || 0;
+    const reopened = match.closed && match.participants.length < maxPlayers;
+    if (reopened) match.closed = false;
     await match.message.edit(buildPublicMessagePayload(match));
     await interaction.update({ content: '❌ **참가가 취소되었습니다.**', components: [] });
     return;
@@ -1114,6 +1120,7 @@ async function handleNaejeonMemberAdd(interaction) {
     match.participants.push({ id: userId, displayName });
     added.push(displayName);
   }
+  if (!match.closed && match.participants.length >= maxPlayers) match.closed = true;
   await match.message.edit(buildPublicMessagePayload(match));
   const lines = [];
   if (added.length > 0)   lines.push(`✅ 추가됨: ${added.map(n => `**${n}**`).join(', ')}`);
