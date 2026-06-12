@@ -247,6 +247,11 @@ function buildManageMenu(match, msgId) {
           .setLabel('🔓 마감 해제')
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
+          .setCustomId(`mojip:match_mention:${msgId}`)
+          .setLabel('📣 참가자 멘션')
+          .setStyle(ButtonStyle.Success)
+          .setDisabled(!!match.mentionSent),
+        new ButtonBuilder()
           .setCustomId(`mojip:match_edit:${msgId}`)
           .setLabel('✏️ 모집 수정')
           .setStyle(ButtonStyle.Secondary),
@@ -254,13 +259,6 @@ function buildManageMenu(match, msgId) {
           .setCustomId(`mojip:match_cancel:${msgId}`)
           .setLabel('❌ 모집 취소')
           .setStyle(ButtonStyle.Danger),
-      ),
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`mojip:match_mention:${msgId}`)
-          .setLabel('📣 참가자 멘션')
-          .setStyle(ButtonStyle.Success)
-          .setDisabled(!!match.mentionSent),
       ),
       addRemoveRow,
     ];
