@@ -160,19 +160,27 @@ function buildPublicEmbed(data, participants, closed = false) {
 function buildPublicComponents(participants, maxPlayers, closed = false) {
   const isFull = participants.length >= maxPlayers;
   const joinDisabled = closed || isFull;
-  return [
-    new ActionRowBuilder().addComponents(
+  const row1 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('mojip:join')
+      .setLabel(closed ? '🔒 마감됨' : (isFull ? '🔒 모집 완료' : '✅ 참가하기'))
+      .setStyle(joinDisabled ? ButtonStyle.Secondary : ButtonStyle.Success)
+      .setDisabled(joinDisabled),
+    new ButtonBuilder()
+      .setCustomId('mojip:manage')
+      .setLabel('⚙️ 관리')
+      .setStyle(ButtonStyle.Secondary),
+  );
+  if (closed) {
+    const row2 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId('mojip:join')
-        .setLabel(closed ? '🔒 마감됨' : (isFull ? '🔒 모집 완료' : '✅ 참가하기'))
-        .setStyle(joinDisabled ? ButtonStyle.Secondary : ButtonStyle.Success)
-        .setDisabled(joinDisabled),
-      new ButtonBuilder()
-        .setCustomId('mojip:manage')
-        .setLabel('⚙️ 관리')
-        .setStyle(ButtonStyle.Secondary),
-    ),
-  ];
+        .setCustomId('mojip:leave_request')
+        .setLabel('❌ 참가 취소')
+        .setStyle(ButtonStyle.Danger),
+    );
+    return [row1, row2];
+  }
+  return [row1];
 }
 
 function buildMojipMessagePayload(match) {
@@ -412,7 +420,7 @@ async function handleMojipButton(interaction) {
     return;
   }
 
-  // ── 참가 취소 ─────────────────────────────────────────────
+  // ── 참가 취소 (에페메럴 버튼) ────────────────────────────
   if (customId.startsWith('mojip:leave:')) {
     const msgId = customId.slice('mojip:leave:'.length);
     const match = getMojips(interaction.client).get(msgId);
@@ -432,6 +440,66 @@ async function handleMojipButton(interaction) {
       components: buildPublicComponents(match.participants, maxPlayers, match.closed),
     });
     await interaction.update({ content: '❌ **참가가 취소되었습니다.**', components: [] });
+    return;
+  }
+
+  // ── 마감 후 참가 취소 요청 (공개 임베드) ──────────────────────
+  if (customId === 'mojip:leave_request') {
+    const msgId = interaction.message.id;
+    const match = getMojips(interaction.client).get(msgId);
+    if (!match) {
+      await interaction.reply({ content: `⚠️ **만료된 모집입니다.**\n(${getResetDateStr(interaction.client)})`, ephemeral: true });
+      return;
+    }
+    const inMatch = match.participants.some(u => u.id === interaction.user.id);
+    if (!inMatch) {
+      await interaction.reply({ content: '⚠️ **참가자가 아닙니다.**', ephemeral: true });
+      return;
+    }
+    await interaction.reply({
+      content: '⚠️ **정말 참가를 취소하시겠습니까?**\n모집이 마감된 상태입니다.',
+      components: [new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`mojip:leave_do:${msgId}`)
+          .setLabel('✅ 확인')
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId('mojip:leave_back')
+          .setLabel('↩️ 돌아가기')
+          .setStyle(ButtonStyle.Secondary),
+      )],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  // ── 마감 후 참가 취소 확정 ────────────────────────────────────
+  if (customId.startsWith('mojip:leave_do:')) {
+    const msgId = customId.slice('mojip:leave_do:'.length);
+    const match = getMojips(interaction.client).get(msgId);
+    if (!match) {
+      await interaction.update({ content: `⚠️ **만료된 모집입니다.**\n(${getResetDateStr(interaction.client)})`, components: [] });
+      return;
+    }
+    const idx = match.participants.findIndex(u => u.id === interaction.user.id);
+    if (idx === -1) {
+      await interaction.update({ content: '⚠️ **이미 참가 취소된 상태입니다.**', components: [] });
+      return;
+    }
+    match.participants.splice(idx, 1);
+    const maxPlayers = parseInt(match.data.players) || 0;
+    await match.message.edit({
+      embeds: [buildPublicEmbed(match.data, match.participants, match.closed)],
+      components: buildPublicComponents(match.participants, maxPlayers, match.closed),
+    });
+    await interaction.update({ content: '❌ **참가가 취소되었습니다.**', components: [] });
+    return;
+  }
+
+  // ── 마감 후 참가 취소 돌아가기 ───────────────────────────────
+  if (customId === 'mojip:leave_back') {
+    await interaction.deferUpdate();
+    await interaction.deleteReply();
     return;
   }
 
