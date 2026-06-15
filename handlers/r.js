@@ -17,7 +17,7 @@ async function handleRButton(interaction) {
       const emoji = cm ? { id: cm[2], name: cm[1] } : emojiStr;
       return {
         label: m.data.title.slice(0, 100),
-        description: `참가자 ${m.participants.length}명 · ${m.data.datetime}`.slice(0, 100),
+        description: `${m.data.organizer.displayName} · 참가자 ${m.participants.length}명 · ${m.data.datetime}`.slice(0, 100),
         value: id,
         emoji,
       };
@@ -45,7 +45,7 @@ async function handleRButton(interaction) {
       const emoji = cm ? { id: cm[2], name: cm[1] } : emojiStr;
       return {
         label: m.data.title.slice(0, 100),
-        description: `참가자 ${m.participants.length}명 · ${m.data.datetime}`.slice(0, 100),
+        description: `${m.data.organizer.displayName} · 참가자 ${m.participants.length}명 · ${m.data.datetime}`.slice(0, 100),
         value: id,
         emoji,
       };
