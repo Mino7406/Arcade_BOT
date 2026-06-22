@@ -921,7 +921,7 @@ async function handleNaejeonButton(interaction) {
     const reopened = match.closed && match.participants.length < maxPlayers;
     if (reopened) match.closed = false;
     await match.message.edit(buildPublicMessagePayload(match));
-    await interaction.update({ content: '🚪 **내전에서 나갔습니다.**', components: [] });
+    await interaction.update({ content: '🚪 **내전에서 이탈하였습니다.**', components: [] });
     return;
   }
 

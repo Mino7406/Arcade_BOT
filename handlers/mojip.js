@@ -520,7 +520,7 @@ async function handleMojipButton(interaction) {
       embeds: [buildPublicEmbed(match.data, match.participants, match.closed)],
       components: buildPublicComponents(match.participants, maxPlayers, match.closed),
     });
-    await interaction.update({ content: '🚪 **모집에서 나갔습니다.**', components: [] });
+    await interaction.update({ content: '🚪 **모집에서 이탈하였습니다.**', components: [] });
     return;
   }
 
