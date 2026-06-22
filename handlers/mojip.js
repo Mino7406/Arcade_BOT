@@ -244,14 +244,16 @@ function buildManageMenu(match, msgId) {
     return [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-          .setCustomId(`mojip:match_reopen:${msgId}`)
-          .setLabel('🔓 마감 해제')
-          .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
           .setCustomId(`mojip:match_mention:${msgId}`)
           .setLabel('📣 참가자 멘션')
           .setStyle(ButtonStyle.Success)
           .setDisabled(!!match.mentionSent),
+      ),
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`mojip:match_reopen:${msgId}`)
+          .setLabel('🔓 마감 해제')
+          .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId(`mojip:match_edit:${msgId}`)
           .setLabel('✏️ 모집 수정')
@@ -482,16 +484,20 @@ async function handleMojipButton(interaction) {
     }
     await interaction.reply({
       content: '⚠️ **정말 모집에서 나가시겠습니까?**\n모집이 마감된 상태입니다. 취소 후에는 다시 참가할 수 없습니다.',
-      components: [new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`mojip:leave_do:${msgId}`)
-          .setLabel('✅ 확인')
-          .setStyle(ButtonStyle.Danger),
-        new ButtonBuilder()
-          .setCustomId('mojip:leave_back')
-          .setLabel('↩️ 돌아가기')
-          .setStyle(ButtonStyle.Secondary),
-      )],
+      components: [
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`mojip:leave_do:${msgId}`)
+            .setLabel('⚠️ 나가기')
+            .setStyle(ButtonStyle.Danger),
+        ),
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId('mojip:leave_back')
+            .setLabel('↩️ 돌아가기')
+            .setStyle(ButtonStyle.Secondary),
+        ),
+      ],
       ephemeral: true,
     });
     return;
