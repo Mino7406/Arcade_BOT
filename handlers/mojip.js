@@ -173,16 +173,15 @@ function buildPublicComponents(participants, maxPlayers, closed = false) {
       .setLabel('⚙️ 관리')
       .setStyle(ButtonStyle.Secondary),
   );
-  const rows = [new ActionRowBuilder().addComponents(...buttons)];
   if (closed) {
-    rows.push(new ActionRowBuilder().addComponents(
+    buttons.push(
       new ButtonBuilder()
         .setCustomId('mojip:leave_request')
-        .setLabel('⚠️ 나가기')
+        .setLabel('⚠️ 모집 나가기')
         .setStyle(ButtonStyle.Danger),
-    ));
+    );
   }
-  return rows;
+  return [new ActionRowBuilder().addComponents(...buttons)];
 }
 
 function buildMojipMessagePayload(match) {
