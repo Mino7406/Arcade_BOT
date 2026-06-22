@@ -199,21 +199,22 @@ function buildPublicComponents(participants, maxPlayers, closed = false) {
       .setStyle(joinDisabled ? ButtonStyle.Secondary : ButtonStyle.Success)
       .setDisabled(joinDisabled),
   ];
-  if (closed) {
-    buttons.push(
-      new ButtonBuilder()
-        .setCustomId('naejeon:leave_request')
-        .setLabel('⚠️ 나가기')
-        .setStyle(ButtonStyle.Danger),
-    );
-  }
   buttons.push(
     new ButtonBuilder()
       .setCustomId('naejeon:manage')
       .setLabel('⚙️ 관리')
       .setStyle(ButtonStyle.Secondary),
   );
-  return [new ActionRowBuilder().addComponents(...buttons)];
+  const rows = [new ActionRowBuilder().addComponents(...buttons)];
+  if (closed) {
+    rows.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('naejeon:leave_request')
+        .setLabel('⚠️ 내전 나가기')
+        .setStyle(ButtonStyle.Danger),
+    ));
+  }
+  return rows;
 }
 
 function buildPublicMessagePayload(match) {
