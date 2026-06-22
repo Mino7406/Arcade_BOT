@@ -167,6 +167,12 @@ function buildPublicComponents(participants, maxPlayers, closed = false) {
       .setStyle(joinDisabled ? ButtonStyle.Secondary : ButtonStyle.Success)
       .setDisabled(joinDisabled),
   ];
+  buttons.push(
+    new ButtonBuilder()
+      .setCustomId('mojip:manage')
+      .setLabel('⚙️ 관리')
+      .setStyle(ButtonStyle.Secondary),
+  );
   if (closed) {
     buttons.push(
       new ButtonBuilder()
@@ -175,12 +181,6 @@ function buildPublicComponents(participants, maxPlayers, closed = false) {
         .setStyle(ButtonStyle.Danger),
     );
   }
-  buttons.push(
-    new ButtonBuilder()
-      .setCustomId('mojip:manage')
-      .setLabel('⚙️ 관리')
-      .setStyle(ButtonStyle.Secondary),
-  );
   return [new ActionRowBuilder().addComponents(...buttons)];
 }
 
@@ -481,7 +481,7 @@ async function handleMojipButton(interaction) {
       return;
     }
     await interaction.reply({
-      content: '⚠️ **정말 참가를 취소하시겠습니까?**\n모집이 마감된 상태입니다.',
+      content: '⚠️ **정말 모집에서 나가시겠습니까?**\n모집이 마감된 상태입니다. 취소 후에는 다시 참가할 수 없습니다.',
       components: [new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`mojip:leave_do:${msgId}`)
