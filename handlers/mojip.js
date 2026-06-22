@@ -167,20 +167,20 @@ function buildPublicComponents(participants, maxPlayers, closed = false) {
       .setStyle(joinDisabled ? ButtonStyle.Secondary : ButtonStyle.Success)
       .setDisabled(joinDisabled),
   ];
+  if (closed) {
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId('mojip:leave_request')
+        .setLabel('🚪 나가기')
+        .setStyle(ButtonStyle.Danger),
+    );
+  }
   buttons.push(
     new ButtonBuilder()
       .setCustomId('mojip:manage')
       .setLabel('⚙️ 관리')
       .setStyle(ButtonStyle.Secondary),
   );
-  if (closed) {
-    buttons.push(
-      new ButtonBuilder()
-        .setCustomId('mojip:leave_request')
-        .setLabel('🚪 모집 나가기')
-        .setStyle(ButtonStyle.Danger),
-    );
-  }
   return [new ActionRowBuilder().addComponents(...buttons)];
 }
 

@@ -199,20 +199,20 @@ function buildPublicComponents(participants, maxPlayers, closed = false) {
       .setStyle(joinDisabled ? ButtonStyle.Secondary : ButtonStyle.Success)
       .setDisabled(joinDisabled),
   ];
+  if (closed) {
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId('naejeon:leave_request')
+        .setLabel('🚪 나가기')
+        .setStyle(ButtonStyle.Danger),
+    );
+  }
   buttons.push(
     new ButtonBuilder()
       .setCustomId('naejeon:manage')
       .setLabel('⚙️ 관리')
       .setStyle(ButtonStyle.Secondary),
   );
-  if (closed) {
-    buttons.push(
-      new ButtonBuilder()
-        .setCustomId('naejeon:leave_request')
-        .setLabel('🚪 내전 나가기')
-        .setStyle(ButtonStyle.Danger),
-    );
-  }
   return [new ActionRowBuilder().addComponents(...buttons)];
 }
 
