@@ -210,7 +210,7 @@ function buildPublicComponents(participants, maxPlayers, closed = false) {
     rows.push(new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('naejeon:leave_request')
-        .setLabel('⚠️ 내전 나가기')
+        .setLabel('⚠️ 나가기')
         .setStyle(ButtonStyle.Danger),
     ));
   }
@@ -922,7 +922,7 @@ async function handleNaejeonButton(interaction) {
     const reopened = match.closed && match.participants.length < maxPlayers;
     if (reopened) match.closed = false;
     await match.message.edit(buildPublicMessagePayload(match));
-    await interaction.update({ content: '❌ **참가가 취소되었습니다.**', components: [] });
+    await interaction.update({ content: '🚪 **내전에서 나갔습니다.**', components: [] });
     return;
   }
 

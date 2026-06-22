@@ -178,7 +178,7 @@ function buildPublicComponents(participants, maxPlayers, closed = false) {
     rows.push(new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('mojip:leave_request')
-        .setLabel('⚠️ 모집 나가기')
+        .setLabel('⚠️ 나가기')
         .setStyle(ButtonStyle.Danger),
     ));
   }
@@ -521,7 +521,7 @@ async function handleMojipButton(interaction) {
       embeds: [buildPublicEmbed(match.data, match.participants, match.closed)],
       components: buildPublicComponents(match.participants, maxPlayers, match.closed),
     });
-    await interaction.update({ content: '❌ **참가가 취소되었습니다.**', components: [] });
+    await interaction.update({ content: '🚪 **모집에서 나갔습니다.**', components: [] });
     return;
   }
 
@@ -772,6 +772,7 @@ async function handleMojipButton(interaction) {
         new ActionRowBuilder().addComponents(sel),
         new ActionRowBuilder().addComponents(
           new ButtonBuilder()
+
             .setCustomId(`mojip:manage_back:${msgId}`)
             .setLabel('↩️ 관리로')
             .setStyle(ButtonStyle.Secondary),
