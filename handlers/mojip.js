@@ -484,20 +484,16 @@ async function handleMojipButton(interaction) {
     }
     await interaction.reply({
       content: '⚠️ **정말 모집에서 나가시겠습니까?**\n모집이 마감된 상태입니다. 취소 후에는 다시 참가할 수 없습니다.',
-      components: [
-        new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`mojip:leave_do:${msgId}`)
-            .setLabel('⚠️ 나가기')
-            .setStyle(ButtonStyle.Danger),
-        ),
-        new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId('mojip:leave_back')
-            .setLabel('↩️ 돌아가기')
-            .setStyle(ButtonStyle.Secondary),
-        ),
-      ],
+      components: [new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`mojip:leave_do:${msgId}`)
+          .setLabel('✅ 확인')
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId('mojip:leave_back')
+          .setLabel('↩️ 돌아가기')
+          .setStyle(ButtonStyle.Secondary),
+      )],
       ephemeral: true,
     });
     return;

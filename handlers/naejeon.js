@@ -199,20 +199,20 @@ function buildPublicComponents(participants, maxPlayers, closed = false) {
       .setStyle(joinDisabled ? ButtonStyle.Secondary : ButtonStyle.Success)
       .setDisabled(joinDisabled),
   ];
+  if (closed) {
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId('naejeon:leave_request')
+        .setLabel('⚠️ 나가기')
+        .setStyle(ButtonStyle.Danger),
+    );
+  }
   buttons.push(
     new ButtonBuilder()
       .setCustomId('naejeon:manage')
       .setLabel('⚙️ 관리')
       .setStyle(ButtonStyle.Secondary),
   );
-  if (closed) {
-    buttons.push(
-      new ButtonBuilder()
-        .setCustomId('naejeon:leave_request')
-        .setLabel('🚪 내전 나가기')
-        .setStyle(ButtonStyle.Danger),
-    );
-  }
   return [new ActionRowBuilder().addComponents(...buttons)];
 }
 
@@ -883,20 +883,16 @@ async function handleNaejeonButton(interaction) {
     }
     await interaction.reply({
       content: '⚠️ **정말 내전에서 나가시겠습니까?**\n내전이 마감된 상태입니다. 취소 후에는 다시 참가할 수 없습니다.',
-      components: [
-        new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`naejeon:leave_do:${matchMsgId}`)
-            .setLabel('⚠️ 나가기')
-            .setStyle(ButtonStyle.Danger),
-        ),
-        new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId('naejeon:leave_back')
-            .setLabel('↩️ 돌아가기')
-            .setStyle(ButtonStyle.Secondary),
-        ),
-      ],
+      components: [new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`naejeon:leave_do:${matchMsgId}`)
+          .setLabel('✅ 확인')
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId('naejeon:leave_back')
+          .setLabel('↩️ 돌아가기')
+          .setStyle(ButtonStyle.Secondary),
+      )],
       ephemeral: true,
     });
     return;
