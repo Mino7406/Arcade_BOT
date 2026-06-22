@@ -192,27 +192,28 @@ function buildPublicEmbed(data, participants, closed = false, teams = null) {
 function buildPublicComponents(participants, maxPlayers, closed = false) {
   const isFull = participants.length >= maxPlayers;
   const joinDisabled = closed || isFull;
-  const row1 = new ActionRowBuilder().addComponents(
+  const buttons = [
     new ButtonBuilder()
       .setCustomId('naejeon:join')
       .setLabel(closed ? '🔒 마감됨' : (isFull ? '🔒 모집 완료' : '✅ 참가하기'))
       .setStyle(joinDisabled ? ButtonStyle.Secondary : ButtonStyle.Success)
       .setDisabled(joinDisabled),
+  ];
+  if (closed) {
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId('naejeon:leave_request')
+        .setLabel('🚪 내전 나가기')
+        .setStyle(ButtonStyle.Danger),
+    );
+  }
+  buttons.push(
     new ButtonBuilder()
       .setCustomId('naejeon:manage')
       .setLabel('⚙️ 관리')
       .setStyle(ButtonStyle.Secondary),
   );
-  if (closed) {
-    const row2 = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('naejeon:leave_request')
-        .setLabel('❌ 참가 취소')
-        .setStyle(ButtonStyle.Danger),
-    );
-    return [row1, row2];
-  }
-  return [row1];
+  return [new ActionRowBuilder().addComponents(...buttons)];
 }
 
 function buildPublicMessagePayload(match) {

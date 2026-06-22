@@ -160,27 +160,28 @@ function buildPublicEmbed(data, participants, closed = false) {
 function buildPublicComponents(participants, maxPlayers, closed = false) {
   const isFull = participants.length >= maxPlayers;
   const joinDisabled = closed || isFull;
-  const row1 = new ActionRowBuilder().addComponents(
+  const buttons = [
     new ButtonBuilder()
       .setCustomId('mojip:join')
       .setLabel(closed ? '🔒 마감됨' : (isFull ? '🔒 모집 완료' : '✅ 참가하기'))
       .setStyle(joinDisabled ? ButtonStyle.Secondary : ButtonStyle.Success)
       .setDisabled(joinDisabled),
+  ];
+  if (closed) {
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId('mojip:leave_request')
+        .setLabel('🚪 모집 나가기')
+        .setStyle(ButtonStyle.Danger),
+    );
+  }
+  buttons.push(
     new ButtonBuilder()
       .setCustomId('mojip:manage')
       .setLabel('⚙️ 관리')
       .setStyle(ButtonStyle.Secondary),
   );
-  if (closed) {
-    const row2 = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('mojip:leave_request')
-        .setLabel('❌ 참가 취소')
-        .setStyle(ButtonStyle.Danger),
-    );
-    return [row1, row2];
-  }
-  return [row1];
+  return [new ActionRowBuilder().addComponents(...buttons)];
 }
 
 function buildMojipMessagePayload(match) {
