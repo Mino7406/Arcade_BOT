@@ -209,7 +209,7 @@ function buildPublicComponents(participants, maxPlayers, closed = false) {
     buttons.push(
       new ButtonBuilder()
         .setCustomId('naejeon:leave_request')
-        .setLabel('⚠️ 내전 나가기')
+        .setLabel('🚪 내전 나가기')
         .setStyle(ButtonStyle.Danger),
     );
   }

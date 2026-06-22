@@ -177,7 +177,7 @@ function buildPublicComponents(participants, maxPlayers, closed = false) {
     buttons.push(
       new ButtonBuilder()
         .setCustomId('mojip:leave_request')
-        .setLabel('⚠️ 모집 나가기')
+        .setLabel('🚪 모집 나가기')
         .setStyle(ButtonStyle.Danger),
     );
   }
