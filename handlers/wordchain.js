@@ -8,7 +8,7 @@ const {
   TextInputStyle,
 } = require('discord.js');
 
-const TURN_MS  = 30_000;
+const TURN_MS  = 10_000;
 const JOIN_MS  = 90_000;
 const KOREAN   = /^[가-힣]+$/;
 
@@ -33,7 +33,7 @@ function buildWaitingEmbed(game) {
       value:
         '• 이전 단어의 **마지막 글자**로 시작하는 단어를 입력하세요.\n' +
         '• 이미 사용된 단어는 사용할 수 없습니다.\n' +
-        '• **30초** 내에 입력하지 않으면 탈락합니다.',
+        '• **10초** 내에 입력하지 않으면 탈락합니다.',
     })
     .setFooter({ text: '최소 2명이 참가해야 시작할 수 있습니다.' });
 }
@@ -53,7 +53,7 @@ function buildPlayingEmbed(game) {
   return new EmbedBuilder()
     .setColor(0x57F287)
     .setTitle('🔤 끝말잇기 진행 중')
-    .setDescription(`${wordLine}\n\n⏱️ **<@${currentId}>의 차례** (30초)`)
+    .setDescription(`${wordLine}\n\n⏱️ **<@${currentId}>의 차례** (10초)`)
     .addFields(
       { name: '👥 순서', value: playerList, inline: true },
       { name: '📝 최근 단어', value: recentWords, inline: true },
