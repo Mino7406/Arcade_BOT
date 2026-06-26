@@ -9,8 +9,6 @@ const { buildPublicMessagePayload } = require('./naejeon');
 
 const ADMIN_ID = '457437911869161472';
 
-const SIX_HOURS = 6 * 60 * 60 * 1000;
-
 function getResetDateStr(client) {
   const startedAt = client.startedAt;
   if (!startedAt) return '봇 재시작 후 생성된 내전만 표시됩니다';
@@ -25,16 +23,6 @@ function getResetDateStr(client) {
 function getMatches(client) {
   if (!client.naejeonMatches) client.naejeonMatches = new Map();
   return client.naejeonMatches;
-}
-
-function pruneStaleMatches(client) {
-  const matches = getMatches(client);
-  const now = Date.now();
-  for (const [id, match] of matches) {
-    if (match.createdAt && now - match.createdAt > SIX_HOURS) {
-      matches.delete(id);
-    }
-  }
 }
 
 function shuffleIntoTeams(participants) {
@@ -80,9 +68,13 @@ function buildMatchSelectMenu(matches) {
     const emojiStr = m.data.gameInfo.emoji;
     const cm = emojiStr.match(/^<a?:(\w+):(\d+)>$/);
     const emoji = cm ? { id: cm[2], name: cm[1] } : emojiStr;
+    const max = parseInt(m.data.players) || 0;
+    const isFull = m.participants.length >= max;
+    const statusIcon = m.closed ? '🔒' : isFull ? '✅' : '🟢';
+    const teamIcon = m.teams ? ' · ⚔️ 팀배정' : '';
     return {
       label: m.data.title.slice(0, 100),
-      description: `참가자 ${m.participants.length}명 · ${m.data.datetime}`.slice(0, 100),
+      description: `${statusIcon} ${m.participants.length}/${max}명${teamIcon} · ${m.data.datetime}`.slice(0, 100),
       value: id,
       emoji,
     };
@@ -269,6 +261,10 @@ async function handleTeamButton(interaction) {
       await interaction.reply({ content: '❌ **내전 주최자만 사용할 수 있습니다.**', ephemeral: true });
       return;
     }
+    if (match.participants.length < 2) {
+      await interaction.reply({ content: '⚠️ **팀 만들기는 참가자가 2명 이상이어야 합니다.**', ephemeral: true });
+      return;
+    }
     await interaction.update({
       content: '🛠️ **팀 만들기** - 팀 1에 배정할 참가자를 선택하세요.\n(나머지는 자동으로 팀 2가 됩니다.)',
       embeds: [],
@@ -287,6 +283,10 @@ async function handleTeamButton(interaction) {
     }
     if (match.data.organizer.id !== interaction.user.id && interaction.user.id !== ADMIN_ID) {
       await interaction.reply({ content: '❌ **내전 주최자만 사용할 수 있습니다.**', ephemeral: true });
+      return;
+    }
+    if (match.participants.length < 2) {
+      await interaction.reply({ content: '⚠️ **팀을 나누려면 참가자가 2명 이상이어야 합니다.**', ephemeral: true });
       return;
     }
     const teams = shuffleIntoTeams(match.participants);
@@ -321,12 +321,11 @@ async function handleTeamAssignSelect(interaction) {
   const teams = { team1, team2 };
   match.teams = teams;
   await match.message.edit(buildPublicMessagePayload(match));
-  await interaction.update({ content: '✅ **팀 배정이 완료되었습니다.**', embeds: [], components: [buildManageRow(matchMsgId)] });
+  await interaction.update({ content: '✅ **팀 배정이 완료되었습니다.**', embeds: [], components: [isSetup ? buildManageRow(matchMsgId) : buildPublicDoneRow(matchMsgId)] });
   await interaction.channel.send({ embeds: [buildTeamEmbed(match.data, teams)], allowedMentions: { parse: [] } });
 }
 
 module.exports = {
-  pruneStaleMatches,
   buildMatchSelectMenu,
   handleTeamMatchSelect,
   handleTeamButton,

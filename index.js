@@ -6,6 +6,8 @@ const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaej
 const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipMemberAdd, handleMojipMemberRemove } = require('./handlers/mojip');
 const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/team');
 const { handleRButton, handleRMatchSelect } = require('./handlers/r');
+const { handleTttButton } = require('./handlers/tictactoe');
+const { handleWcButton, handleWcModal } = require('./handlers/wordchain');
 
 const client = new Client({
   intents: [
@@ -74,7 +76,9 @@ client.on('interactionCreate', async (interaction) => {
       }
 
     } else if (interaction.isModalSubmit()) {
-      if (interaction.customId.startsWith('naejeon:modal:')) {
+      if (interaction.customId.startsWith('wc:word:')) {
+        await handleWcModal(interaction);
+      } else if (interaction.customId.startsWith('naejeon:modal:')) {
         await handleNaejeonModal(interaction);
       } else if (interaction.customId.startsWith('naejeon:modal_edit:')) {
         await handleNaejeonEditModal(interaction);
@@ -97,6 +101,10 @@ client.on('interactionCreate', async (interaction) => {
         await handleTeamButton(interaction);
       } else if (interaction.customId.startsWith('불러오기:')) {
         await handleRButton(interaction);
+      } else if (interaction.customId.startsWith('ttt:')) {
+        await handleTttButton(interaction);
+      } else if (interaction.customId.startsWith('wc:')) {
+        await handleWcButton(interaction);
       }
     }
   } catch (error) {

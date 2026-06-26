@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, ActionRowBuilder } = require('discord.js');
-const { pruneStaleMatches, buildMatchSelectMenu } = require('../handlers/team');
+const { buildMatchSelectMenu } = require('../handlers/team');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -7,8 +7,6 @@ module.exports = {
     .setDescription('내전 팀을 관리합니다.'),
 
   async execute(interaction) {
-    pruneStaleMatches(interaction.client);
-
     const matches = interaction.client.naejeonMatches;
 
     if (!matches || matches.size === 0) {
