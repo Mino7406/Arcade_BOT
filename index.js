@@ -35,13 +35,20 @@ client.once('clientReady', (c) => {
 
 client.on('interactionCreate', async (interaction) => {
   try {
-    const allowedChannel = process.env.ALLOWED_CHANNEL_ID;
-    const allowedChannels = allowedChannel ? allowedChannel.split(',').map(id => id.trim()) : [];
-    if (allowedChannels.length > 0 && !allowedChannels.includes(interaction.channelId)) {
-      if (interaction.isRepliable()) {
-        await interaction.reply({ content: '❌ 이 채널에서는 사용할 수 없습니다.', ephemeral: true });
+    const isMiniGame =
+      (interaction.isChatInputCommand() && ['틱택토', '끝말잇기'].includes(interaction.commandName)) ||
+      interaction.customId?.startsWith('ttt:') ||
+      interaction.customId?.startsWith('wc:');
+
+    if (!isMiniGame) {
+      const allowedChannel = process.env.ALLOWED_CHANNEL_ID;
+      const allowedChannels = allowedChannel ? allowedChannel.split(',').map(id => id.trim()) : [];
+      if (allowedChannels.length > 0 && !allowedChannels.includes(interaction.channelId)) {
+        if (interaction.isRepliable()) {
+          await interaction.reply({ content: '❌ 이 채널에서는 사용할 수 없습니다.', ephemeral: true });
+        }
+        return;
       }
-      return;
     }
 
     if (interaction.isChatInputCommand()) {
