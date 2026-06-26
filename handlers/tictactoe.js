@@ -93,23 +93,22 @@ function buildBoard(game) {
     for (let c = 0; c < 3; c++) {
       const idx = r * 3 + c;
       const cell = game.board[idx];
-      let label = '　';
       let style = ButtonStyle.Secondary;
       let disabled = game.status === 'finished';
 
+      const btn = new ButtonBuilder()
+        .setCustomId(`ttt:move:${game.id}:${idx}`)
+        .setDisabled(disabled);
+
       if (cell === 'X') {
-        label = '❌'; style = ButtonStyle.Primary; disabled = true;
+        btn.setLabel('❌').setStyle(ButtonStyle.Primary).setDisabled(true);
       } else if (cell === 'O') {
-        label = '⭕'; style = ButtonStyle.Danger; disabled = true;
+        btn.setLabel('⭕').setStyle(ButtonStyle.Danger).setDisabled(true);
+      } else {
+        btn.setEmoji('⬜').setStyle(style);
       }
 
-      btns.push(
-        new ButtonBuilder()
-          .setCustomId(`ttt:move:${game.id}:${idx}`)
-          .setLabel(label)
-          .setStyle(style)
-          .setDisabled(disabled),
-      );
+      btns.push(btn);
     }
     rows.push(new ActionRowBuilder().addComponents(...btns));
   }
