@@ -17,11 +17,15 @@ function getGames(client) {
   return client.wcGames;
 }
 
+function getDisplayName(interaction) {
+  return interaction.member?.displayName || interaction.user.globalName || interaction.user.username;
+}
+
 // ── 임베드 빌더 ────────────────────────────────────────────────
 
 function buildWaitingEmbed(game) {
   const list = game.players
-    .map((id, i) => `${i + 1}. <@${id}>${id === game.hostId ? '  👑' : ''}`)
+    .map((p, i) => `${i + 1}. \`${p.name}\`${p.id === game.hostId ? '  👑' : ''}`)
     .join('\n');
 
   return new EmbedBuilder()
@@ -39,7 +43,7 @@ function buildWaitingEmbed(game) {
 }
 
 function buildPlayingEmbed(game) {
-  const currentId = game.players[game.currentIdx];
+  const currentPlayer = game.players[game.currentIdx];
   const recentWords = game.history.slice(-8).join(' → ') || '(없음)';
 
   const wordLine = game.lastWord
@@ -47,13 +51,13 @@ function buildPlayingEmbed(game) {
     : '**첫 번째 단어를 입력하세요!** (아무 한국어 단어)';
 
   const playerList = game.players
-    .map((id, i) => `${i === game.currentIdx ? '▶️' : '　'} <@${id}>`)
+    .map((p, i) => `${i === game.currentIdx ? '▶️' : '　'} \`${p.name}\``)
     .join('\n');
 
   return new EmbedBuilder()
     .setColor(0x57F287)
     .setTitle('🔤 끝말잇기 진행 중')
-    .setDescription(`${wordLine}\n\n⏱️ **<@${currentId}>의 차례** (10초)`)
+    .setDescription(`${wordLine}\n\n⏱️ **\`${currentPlayer.name}\`의 차례** (10초)`)
     .addFields(
       { name: '👥 순서', value: playerList, inline: true },
       { name: '📝 최근 단어', value: recentWords, inline: true },
@@ -62,8 +66,11 @@ function buildPlayingEmbed(game) {
 }
 
 function buildFinishedEmbed(game) {
+  const loserPlayer = game.players.find(p => p.id === game.loser);
+  const loserName = loserPlayer?.name ?? '알 수 없음';
+
   const REASONS = {
-    timeout:     `⏰ 30초 내에 단어를 입력하지 못했습니다.`,
+    timeout:     `⏰ 10초 내에 단어를 입력하지 못했습니다.`,
     wrong_start: `❌ \`${game.failWord}\`은(는) \`${game.lastChar}\`(으)로 시작하지 않습니다.`,
     duplicate:   `🔁 \`${game.failWord}\`은(는) 이미 사용된 단어입니다.`,
     not_korean:  `🚫 \`${game.failWord}\`은(는) 한국어 단어가 아닙니다.`,
@@ -77,7 +84,7 @@ function buildFinishedEmbed(game) {
     .setColor(0xED4245)
     .setTitle('🔤 끝말잇기 종료')
     .setDescription(
-      `**탈락** : <@${game.loser}>\n**이유** : ${REASONS[game.endReason] || '게임 종료'}\n\n` +
+      `**탈락** : \`${loserName}\`\n**이유** : ${REASONS[game.endReason] || '게임 종료'}\n\n` +
       `총 **${game.history.length}개** 단어 사용`,
     )
     .addFields({ name: '📝 마지막 단어들', value: recent })
@@ -125,8 +132,8 @@ function buildPlayingComponents(game) {
 
 function endGame(game, games, loserId, reason, failWord = null) {
   clearTimeout(game.timeoutId);
-  game.status   = 'finished';
-  game.loser    = loserId;
+  game.status    = 'finished';
+  game.loser     = loserId;
   game.endReason = reason;
   game.failWord  = failWord;
   games.delete(game.id);
@@ -138,7 +145,7 @@ function startTurn(game, games) {
   game.timeoutId = setTimeout(() => {
     const g = games.get(game.id);
     if (!g || g.status !== 'playing') return;
-    endGame(g, games, g.players[g.currentIdx], 'timeout');
+    endGame(g, games, g.players[g.currentIdx].id, 'timeout');
   }, TURN_MS);
 }
 
@@ -151,7 +158,7 @@ async function startWcCommand(interaction) {
   const game = {
     id: gameId,
     hostId: interaction.user.id,
-    players: [interaction.user.id],
+    players: [{ id: interaction.user.id, name: getDisplayName(interaction) }],
     currentIdx: 0,
     used: new Set(),
     history: [],
@@ -195,11 +202,11 @@ async function handleWcButton(interaction) {
       await interaction.reply({ content: '⚠️ **참가할 수 없는 게임입니다.**', ephemeral: true });
       return;
     }
-    if (game.players.includes(interaction.user.id)) {
+    if (game.players.some(p => p.id === interaction.user.id)) {
       await interaction.reply({ content: '⚠️ **이미 참가 중입니다.**', ephemeral: true });
       return;
     }
-    game.players.push(interaction.user.id);
+    game.players.push({ id: interaction.user.id, name: getDisplayName(interaction) });
     await interaction.update({ embeds: [buildWaitingEmbed(game)], components: buildWaitingComponents(game) });
     return;
   }
@@ -266,9 +273,9 @@ async function handleWcButton(interaction) {
       await interaction.reply({ content: '⚠️ **진행 중인 게임이 아닙니다.**', ephemeral: true });
       return;
     }
-    const currentId = game.players[game.currentIdx];
-    if (interaction.user.id !== currentId) {
-      await interaction.reply({ content: `⚠️ **지금은 <@${currentId}>의 차례입니다.**`, ephemeral: true });
+    const currentPlayer = game.players[game.currentIdx];
+    if (interaction.user.id !== currentPlayer.id) {
+      await interaction.reply({ content: `⚠️ **지금은 \`${currentPlayer.name}\`의 차례입니다.**`, ephemeral: true });
       return;
     }
 
@@ -303,13 +310,13 @@ async function handleWcButton(interaction) {
       await interaction.reply({ content: '⚠️ **진행 중인 게임이 아닙니다.**', ephemeral: true });
       return;
     }
-    const currentId = game.players[game.currentIdx];
-    if (interaction.user.id !== currentId) {
-      await interaction.reply({ content: `⚠️ **지금은 <@${currentId}>의 차례입니다.**`, ephemeral: true });
+    const currentPlayer = game.players[game.currentIdx];
+    if (interaction.user.id !== currentPlayer.id) {
+      await interaction.reply({ content: `⚠️ **지금은 \`${currentPlayer.name}\`의 차례입니다.**`, ephemeral: true });
       return;
     }
     await interaction.deferUpdate();
-    endGame(game, games, currentId, 'gave_up');
+    endGame(game, games, currentPlayer.id, 'gave_up');
     return;
   }
 }
@@ -327,8 +334,8 @@ async function handleWcModal(interaction) {
     return;
   }
 
-  const currentId = game.players[game.currentIdx];
-  if (interaction.user.id !== currentId) {
+  const currentPlayer = game.players[game.currentIdx];
+  if (interaction.user.id !== currentPlayer.id) {
     await interaction.reply({ content: '⚠️ **지금은 당신의 차례가 아닙니다.**', ephemeral: true });
     return;
   }
@@ -339,7 +346,7 @@ async function handleWcModal(interaction) {
   if (!KOREAN.test(word)) {
     await interaction.deferReply({ ephemeral: true });
     await interaction.deleteReply().catch(() => {});
-    endGame(game, games, currentId, 'not_korean', word);
+    endGame(game, games, currentPlayer.id, 'not_korean', word);
     return;
   }
 
@@ -347,7 +354,7 @@ async function handleWcModal(interaction) {
   if (game.lastChar && word[0] !== game.lastChar) {
     await interaction.deferReply({ ephemeral: true });
     await interaction.deleteReply().catch(() => {});
-    endGame(game, games, currentId, 'wrong_start', word);
+    endGame(game, games, currentPlayer.id, 'wrong_start', word);
     return;
   }
 
@@ -355,7 +362,7 @@ async function handleWcModal(interaction) {
   if (game.used.has(word)) {
     await interaction.deferReply({ ephemeral: true });
     await interaction.deleteReply().catch(() => {});
-    endGame(game, games, currentId, 'duplicate', word);
+    endGame(game, games, currentPlayer.id, 'duplicate', word);
     return;
   }
 
