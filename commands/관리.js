@@ -28,14 +28,14 @@ module.exports = {
     for (const [msgId, match] of naejeons) {
       options.push({
         label:       `[내전] ${match.data.title}`.slice(0, 100),
-        description: `${match.data.organizer?.displayName ?? '?'} | ${match.data.datetime} | ${match.closed ? '🔒 마감' : '🟢 모집중'}`.slice(0, 100),
+        description: `${match.data.organizer?.displayName ?? '?'} · ${match.data.datetime} · ${match.closed ? '🔒 마감' : '🟢 모집중'}`.slice(0, 100),
         value:       `naejeon:${msgId}`,
       });
     }
     for (const [msgId, match] of mojips) {
       options.push({
         label:       `[모집] ${match.data.title}`.slice(0, 100),
-        description: `${match.data.organizer?.displayName ?? '?'} | ${match.data.datetime} | ${match.closed ? '🔒 마감' : '🟢 모집중'}`.slice(0, 100),
+        description: `${match.data.organizer?.displayName ?? '?'} · ${match.data.datetime} · ${match.closed ? '🔒 마감' : '🟢 모집중'}`.slice(0, 100),
         value:       `mojip:${msgId}`,
       });
     }
