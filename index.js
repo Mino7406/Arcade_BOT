@@ -7,6 +7,7 @@ const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMoj
 const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/team');
 const { handleRButton, handleRMatchSelect } = require('./handlers/r');
 const { handleWcButton, handleWcModal } = require('./handlers/wordchain');
+const { saveAll, loadRows } = require('./db'); // ⬅️ 추가: SQLite 저장 모듈
 
 const client = new Client({
   intents: [
@@ -27,10 +28,44 @@ for (const file of commandFiles) {
   }
 }
 
-client.once('clientReady', (c) => {
+// ─── DB에서 내전/모집 복원 ────────────────────────────────────
+// 봇이 켜질 때 data.db에 저장돼 있던 내전/모집을 다시 메모리로 불러옵니다.
+async function restoreMatches(c) {
+  if (!c.naejeonMatches) c.naejeonMatches = new Map();
+  if (!c.mojipMatches)   c.mojipMatches   = new Map();
+
+  let ok = 0, dropped = 0;
+  for (const row of loadRows()) {
+    try {
+      const match = JSON.parse(row.data);
+      // 저장 못 했던 '살아있는 메시지'를 디스코드에서 다시 가져와 연결합니다.
+      const channel = await c.channels.fetch(row.channel_id);
+      match.message = await channel.messages.fetch(row.message_id);
+
+      const map = row.type === 'naejeon' ? c.naejeonMatches : c.mojipMatches;
+      map.set(row.message_id, match);
+      ok++;
+    } catch {
+      // 메시지가 삭제됐거나 채널 접근 불가 → 그 항목은 버립니다.
+      dropped++;
+    }
+  }
+  console.log(`♻️  복원 완료: ${ok}건 복원 / ${dropped}건 누락`);
+}
+
+// ─── 봇 준비 완료 시 ──────────────────────────────────────────
+// discord.js 버전에 따라 이벤트 이름이 'clientReady' 또는 'ready'라서 둘 다 등록.
+// _readyDone 플래그로 한 번만 실행되게 막습니다.
+let _readyDone = false;
+async function onReady(c) {
+  if (_readyDone) return;
+  _readyDone = true;
   console.log(`✅ 봇 로그인 완료: ${c.user.tag}`);
   c.startedAt = new Date();
-});
+  await restoreMatches(c); // ⬅️ 추가: 저장된 내전/모집 복원
+}
+client.once('clientReady', onReady);
+client.once('ready', onReady);
 
 client.on('interactionCreate', async (interaction) => {
   try {
@@ -121,7 +156,19 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-process.on('SIGTERM', () => { client.destroy(); process.exit(0); });
-process.on('SIGINT',  () => { client.destroy(); process.exit(0); });
+// ─── 자동 저장 (30초마다) ─────────────────────────────────────
+// 봇이 갑자기 죽어도(크래시) 최대 30초 전 상태까지는 보존됩니다.
+setInterval(() => {
+  try { saveAll(client); } catch (e) { console.error('자동 저장 실패:', e); }
+}, 30_000);
+
+// ─── 종료 시 마지막으로 한 번 더 저장 ─────────────────────────
+function shutdown() {
+  try { saveAll(client); } catch (e) { console.error('종료 저장 실패:', e); }
+  client.destroy();
+  process.exit(0);
+}
+process.on('SIGTERM', shutdown);
+process.on('SIGINT',  shutdown);
 
 client.login(process.env.TOKEN);
