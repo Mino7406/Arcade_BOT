@@ -6,7 +6,6 @@ const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaej
 const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipMemberAdd, handleMojipMemberRemove } = require('./handlers/mojip');
 const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/team');
 const { handleRButton, handleRMatchSelect } = require('./handlers/r');
-const { handleTttButton } = require('./handlers/tictactoe');
 const { handleWcButton, handleWcModal } = require('./handlers/wordchain');
 
 const client = new Client({
@@ -36,8 +35,7 @@ client.once('clientReady', (c) => {
 client.on('interactionCreate', async (interaction) => {
   try {
     const isMiniGame =
-      (interaction.isChatInputCommand() && ['틱택토', '끝말잇기'].includes(interaction.commandName)) ||
-      interaction.customId?.startsWith('ttt:') ||
+      (interaction.isChatInputCommand() && interaction.commandName === '끝말잇기') ||
       interaction.customId?.startsWith('wc:');
 
     if (!isMiniGame) {
@@ -108,8 +106,6 @@ client.on('interactionCreate', async (interaction) => {
         await handleTeamButton(interaction);
       } else if (interaction.customId.startsWith('불러오기:')) {
         await handleRButton(interaction);
-      } else if (interaction.customId.startsWith('ttt:')) {
-        await handleTttButton(interaction);
       } else if (interaction.customId.startsWith('wc:')) {
         await handleWcButton(interaction);
       }
