@@ -8,9 +8,39 @@ const {
   TextInputStyle,
 } = require('discord.js');
 
-const TURN_MS  = 10_000;
-const JOIN_MS  = 90_000;
-const KOREAN   = /^[가-힣]+$/;
+const TURN_MS = 10_000;
+const JOIN_MS = 90_000;
+const KOREAN  = /^[가-힣]+$/;
+
+// ── 봇 단어 사전 ───────────────────────────────────────────────
+const BOT_WORDS = [
+  '가방', '가수', '가을', '가족', '가구', '가위', '가게', '가스', '가면', '각도',
+  '간식', '갈비', '감자', '강물', '강아지', '거북이', '거울', '겨울', '고구마', '고기',
+  '고래', '고양이', '고추', '공부', '공원', '공항', '과자', '교실', '교육', '구름',
+  '국수', '기린', '기차', '김치', '나라', '나무', '나비', '나팔', '낙타', '냉면',
+  '너구리', '노래', '노을', '눈물', '눈송이', '다람쥐', '다리', '단풍', '달팽이', '당근',
+  '대나무', '도깨비', '도서관', '도시', '독수리', '동물', '동생', '두부', '딸기', '라디오',
+  '라면', '로봇', '마늘', '마음', '마을', '마차', '만두', '매미', '모기', '모자',
+  '목소리', '무지개', '문어', '물고기', '미역', '바나나', '바다', '바람', '바위', '방학',
+  '배추', '백조', '뱀', '버스', '벌꿀', '벚꽃', '보름달', '볼펜', '봄비', '부채',
+  '비행기', '사과', '사람', '사랑', '사막', '사슴', '사자', '삼각형', '새벽', '서울',
+  '소나기', '소나무', '소금', '소리', '소방차', '손가락', '수박', '수영장', '숙제', '시계',
+  '신발', '아기', '아버지', '아이', '아침', '아파트', '악어', '앵무새', '야구', '양말',
+  '어머니', '연필', '염소', '영화', '오리', '오징어', '온도', '우산', '우유', '유리',
+  '이불', '일기', '자동차', '자연', '자유', '자전거', '전기', '전철', '전화', '젓가락',
+  '지갑', '지구', '지하철', '진달래', '책상', '천둥', '청소', '초록', '축구', '치킨',
+  '카메라', '코끼리', '코알라', '크레용', '타조', '태양', '토끼', '토마토', '파도',
+  '파랑새', '포도', '포크', '피아노', '하늘', '하루', '하마', '학교', '해바라기',
+  '햄버거', '호랑이', '호수', '호박', '화분', '황소',
+];
+
+function findBotWord(game) {
+  const available = BOT_WORDS.filter(
+    w => !game.used.has(w) && (!game.lastChar || w[0] === game.lastChar),
+  );
+  if (!available.length) return null;
+  return available[Math.floor(Math.random() * available.length)];
+}
 
 function getGames(client) {
   if (!client.wcGames) client.wcGames = new Map();
@@ -57,7 +87,7 @@ function buildPlayingEmbed(game) {
   return new EmbedBuilder()
     .setColor(0x57F287)
     .setTitle('🔤 끝말잇기 진행 중')
-    .setDescription(`${wordLine}\n\n⏱️ **\`${currentPlayer.name}\`의 차례** (10초)`)
+    .setDescription(`${wordLine}\n\n⏱️ **\`${currentPlayer.name}\`의 차례** (${currentPlayer.id === 'BOT' ? '자동' : '10초'})`)
     .addFields(
       { name: '👥 순서', value: playerList, inline: true },
       { name: '📝 최근 단어', value: recentWords, inline: true },
@@ -74,7 +104,7 @@ function buildFinishedEmbed(game) {
     wrong_start: `❌ \`${game.failWord}\`은(는) \`${game.lastChar}\`(으)로 시작하지 않습니다.`,
     duplicate:   `🔁 \`${game.failWord}\`은(는) 이미 사용된 단어입니다.`,
     not_korean:  `🚫 \`${game.failWord}\`은(는) 한국어 단어가 아닙니다.`,
-    gave_up:     `🏳️ 포기했습니다.`,
+    gave_up:     `🏳️ 단어를 이을 수 없어 포기했습니다.`,
     cancelled:   `❌ 방장이 게임을 취소했습니다.`,
   };
 
@@ -94,6 +124,7 @@ function buildFinishedEmbed(game) {
 // ── 컴포넌트 빌더 ──────────────────────────────────────────────
 
 function buildWaitingComponents(game) {
+  const hasBot = game.players.some(p => p.id === 'BOT');
   return [
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -105,6 +136,11 @@ function buildWaitingComponents(game) {
         .setLabel('▶️ 게임 시작')
         .setStyle(ButtonStyle.Primary)
         .setDisabled(game.players.length < 2),
+      new ButtonBuilder()
+        .setCustomId(`wc:bot_start:${game.id}`)
+        .setLabel('🤖 봇과 시작')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(hasBot),
       new ButtonBuilder()
         .setCustomId(`wc:cancel:${game.id}`)
         .setLabel('❌ 취소')
@@ -140,8 +176,39 @@ function endGame(game, games, loserId, reason, failWord = null) {
   game.message.edit({ embeds: [buildFinishedEmbed(game)], components: [] }).catch(() => {});
 }
 
+async function botPlay(game, games) {
+  const g = games.get(game.id);
+  if (!g || g.status !== 'playing') return;
+
+  const word = findBotWord(g);
+  if (!word) {
+    endGame(g, games, 'BOT', 'gave_up');
+    return;
+  }
+
+  g.used.add(word);
+  g.history.push(word);
+  g.lastWord = word;
+  g.lastChar = word[word.length - 1];
+  g.currentIdx = (g.currentIdx + 1) % g.players.length;
+
+  await g.message.edit({
+    embeds: [buildPlayingEmbed(g)],
+    components: buildPlayingComponents(g),
+  }).catch(() => {});
+
+  startTurn(g, games);
+}
+
 function startTurn(game, games) {
   clearTimeout(game.timeoutId);
+
+  const currentPlayer = game.players[game.currentIdx];
+  if (currentPlayer.id === 'BOT') {
+    game.timeoutId = setTimeout(() => botPlay(game, games), 2000);
+    return;
+  }
+
   game.timeoutId = setTimeout(() => {
     const g = games.get(game.id);
     if (!g || g.status !== 'playing') return;
@@ -179,7 +246,6 @@ async function startWcCommand(interaction) {
   });
   game.message = await interaction.fetchReply();
 
-  // 대기 시간 초과 시 자동 취소
   game.timeoutId = setTimeout(async () => {
     const g = games.get(gameId);
     if (!g || g.status !== 'waiting') return;
@@ -228,15 +294,41 @@ async function handleWcButton(interaction) {
       return;
     }
     clearTimeout(game.timeoutId);
-
-    // 참가자 순서 무작위 섞기
     for (let i = game.players.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [game.players[i], game.players[j]] = [game.players[j], game.players[i]];
     }
     game.status = 'playing';
     game.currentIdx = 0;
+    await interaction.update({ embeds: [buildPlayingEmbed(game)], components: buildPlayingComponents(game) });
+    startTurn(game, games);
+    return;
+  }
 
+  // ── 봇과 시작 ─────────────────────────────────────────────
+  if (customId.startsWith('wc:bot_start:')) {
+    const gameId = customId.slice('wc:bot_start:'.length);
+    const game = games.get(gameId);
+    if (!game || game.status !== 'waiting') {
+      await interaction.reply({ content: '⚠️ **게임을 시작할 수 없습니다.**', ephemeral: true });
+      return;
+    }
+    if (interaction.user.id !== game.hostId) {
+      await interaction.reply({ content: '⚠️ **방장만 사용할 수 있습니다.**', ephemeral: true });
+      return;
+    }
+    if (game.players.some(p => p.id === 'BOT')) {
+      await interaction.reply({ content: '⚠️ **봇은 이미 참가 중입니다.**', ephemeral: true });
+      return;
+    }
+    clearTimeout(game.timeoutId);
+    game.players.push({ id: 'BOT', name: '🤖 봇' });
+    for (let i = game.players.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [game.players[i], game.players[j]] = [game.players[j], game.players[i]];
+    }
+    game.status = 'playing';
+    game.currentIdx = 0;
     await interaction.update({ embeds: [buildPlayingEmbed(game)], components: buildPlayingComponents(game) });
     startTurn(game, games);
     return;
@@ -274,7 +366,7 @@ async function handleWcButton(interaction) {
       return;
     }
     const currentPlayer = game.players[game.currentIdx];
-    if (interaction.user.id !== currentPlayer.id) {
+    if (currentPlayer.id === 'BOT' || interaction.user.id !== currentPlayer.id) {
       await interaction.reply({ content: `⚠️ **지금은 \`${currentPlayer.name}\`의 차례입니다.**`, ephemeral: true });
       return;
     }
@@ -311,7 +403,7 @@ async function handleWcButton(interaction) {
       return;
     }
     const currentPlayer = game.players[game.currentIdx];
-    if (interaction.user.id !== currentPlayer.id) {
+    if (currentPlayer.id === 'BOT' || interaction.user.id !== currentPlayer.id) {
       await interaction.reply({ content: `⚠️ **지금은 \`${currentPlayer.name}\`의 차례입니다.**`, ephemeral: true });
       return;
     }
@@ -328,7 +420,6 @@ async function handleWcModal(interaction) {
   const games  = getGames(interaction.client);
   const game   = games.get(gameId);
 
-  // 게임이 이미 끝났거나 없는 경우 (타임아웃 등)
   if (!game || game.status !== 'playing') {
     await interaction.reply({ content: '⚠️ **이미 종료된 게임입니다.**', ephemeral: true });
     return;
@@ -342,7 +433,6 @@ async function handleWcModal(interaction) {
 
   const word = interaction.fields.getTextInputValue('word').trim();
 
-  // 한국어 검사
   if (!KOREAN.test(word)) {
     await interaction.deferReply({ ephemeral: true });
     await interaction.deleteReply().catch(() => {});
@@ -350,7 +440,6 @@ async function handleWcModal(interaction) {
     return;
   }
 
-  // 시작 글자 검사
   if (game.lastChar && word[0] !== game.lastChar) {
     await interaction.deferReply({ ephemeral: true });
     await interaction.deleteReply().catch(() => {});
@@ -358,7 +447,6 @@ async function handleWcModal(interaction) {
     return;
   }
 
-  // 중복 검사
   if (game.used.has(word)) {
     await interaction.deferReply({ ephemeral: true });
     await interaction.deleteReply().catch(() => {});
@@ -366,7 +454,6 @@ async function handleWcModal(interaction) {
     return;
   }
 
-  // 유효한 단어 처리
   game.used.add(word);
   game.history.push(word);
   game.lastWord = word;
