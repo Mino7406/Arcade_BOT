@@ -180,10 +180,6 @@ function buildPublicComponents(participants, maxPlayers, closed = false) {
       .setCustomId('mojip:manage')
       .setLabel('⚙️ 관리')
       .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId('mojip:admin_menu')
-      .setEmoji('🔧')
-      .setStyle(ButtonStyle.Secondary),
   );
   return [new ActionRowBuilder().addComponents(...buttons)];
 }
@@ -752,113 +748,6 @@ async function handleMojipButton(interaction) {
     await match.message.edit({ content: '', embeds: [cancelledEmbed], components: [], allowedMentions: { parse: [] } });
     getMojips(interaction.client).delete(msgId);
     await interaction.update({ content: '✅ **모집이 취소되었습니다.**', components: [] });
-    return;
-  }
-
-  // ── 관리자 전용 메뉴 ────────────────────────────────────────────
-  if (customId === 'mojip:admin_menu') {
-    if (interaction.user.id !== ADMIN_ID) {
-      await interaction.reply({ content: '❌ **관리자 전용 기능입니다.**', ephemeral: true });
-      return;
-    }
-    const msgId = interaction.message.id;
-    const match = getMojips(interaction.client).get(msgId);
-    if (!match) {
-      await interaction.reply({ content: `⚠️ **만료된 모집입니다.**`, ephemeral: true });
-      return;
-    }
-    await interaction.reply({
-      content: '🔧 **관리자 메뉴**',
-      components: [
-        new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`mojip:match_delete:${msgId}`)
-            .setLabel('🗑️ 모집 삭제')
-            .setStyle(ButtonStyle.Danger),
-          new ButtonBuilder()
-            .setCustomId('mojip:admin_close')
-            .setLabel('↩️ 닫기')
-            .setStyle(ButtonStyle.Secondary),
-        ),
-      ],
-      ephemeral: true,
-    });
-    return;
-  }
-
-  if (customId === 'mojip:admin_close') {
-    await interaction.update({ content: '닫힘', components: [] });
-    return;
-  }
-
-  // ── 관리자 모집 삭제 ────────────────────────────────────────────
-  if (customId.startsWith('mojip:match_delete:')) {
-    if (interaction.user.id !== ADMIN_ID) {
-      await interaction.reply({ content: '❌ **관리자 전용 기능입니다.**', ephemeral: true });
-      return;
-    }
-    const msgId = customId.slice('mojip:match_delete:'.length);
-    const match = getMojips(interaction.client).get(msgId);
-    if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, components: [] });
-      return;
-    }
-    await interaction.update({
-      content: `⚠️ **"${match.data.title}" 모집 메시지를 삭제하시겠습니까?**\n메시지가 완전히 삭제되고 복구할 수 없습니다.`,
-      components: [
-        new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`mojip:match_delete_confirm:${msgId}`)
-            .setLabel('✅ 삭제 확정')
-            .setStyle(ButtonStyle.Danger),
-          new ButtonBuilder()
-            .setCustomId(`mojip:admin_menu_back:${msgId}`)
-            .setLabel('↩️ 돌아가기')
-            .setStyle(ButtonStyle.Secondary),
-        ),
-      ],
-    });
-    return;
-  }
-
-  if (customId.startsWith('mojip:admin_menu_back:')) {
-    if (interaction.user.id !== ADMIN_ID) {
-      await interaction.reply({ content: '❌ **관리자 전용 기능입니다.**', ephemeral: true });
-      return;
-    }
-    const msgId = customId.slice('mojip:admin_menu_back:'.length);
-    await interaction.update({
-      content: '🔧 **관리자 메뉴**',
-      components: [
-        new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`mojip:match_delete:${msgId}`)
-            .setLabel('🗑️ 모집 삭제')
-            .setStyle(ButtonStyle.Danger),
-          new ButtonBuilder()
-            .setCustomId('mojip:admin_close')
-            .setLabel('↩️ 닫기')
-            .setStyle(ButtonStyle.Secondary),
-        ),
-      ],
-    });
-    return;
-  }
-
-  if (customId.startsWith('mojip:match_delete_confirm:')) {
-    if (interaction.user.id !== ADMIN_ID) {
-      await interaction.reply({ content: '❌ **관리자 전용 기능입니다.**', ephemeral: true });
-      return;
-    }
-    const msgId = customId.slice('mojip:match_delete_confirm:'.length);
-    const match = getMojips(interaction.client).get(msgId);
-    if (!match) {
-      await interaction.update({ content: '⚠️ **이미 삭제된 모집입니다.**', components: [] });
-      return;
-    }
-    await match.message.delete().catch(() => match.message.edit({ content: '', embeds: [], components: [] }));
-    getMojips(interaction.client).delete(msgId);
-    await interaction.update({ content: '✅ **모집이 삭제되었습니다.**', components: [] });
     return;
   }
 

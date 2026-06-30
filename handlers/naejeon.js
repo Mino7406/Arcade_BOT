@@ -212,10 +212,6 @@ function buildPublicComponents(participants, maxPlayers, closed = false) {
       .setCustomId('naejeon:manage')
       .setLabel('⚙️ 관리')
       .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId('naejeon:admin_menu')
-      .setEmoji('🔧')
-      .setStyle(ButtonStyle.Secondary),
   );
   return [new ActionRowBuilder().addComponents(...buttons)];
 }
@@ -869,113 +865,6 @@ async function handleNaejeonButton(interaction) {
     await match.message.edit({ content: '', embeds: [cancelledEmbed], components: [], allowedMentions: { parse: [] } });
     getMatches(interaction.client).delete(matchMsgId);
     await interaction.update({ content: '✅ **내전이 취소되었습니다.**', components: [] });
-    return;
-  }
-
-  // ── 관리자 전용 메뉴 ────────────────────────────────────────────
-  if (customId === 'naejeon:admin_menu') {
-    if (interaction.user.id !== ADMIN_ID) {
-      await interaction.reply({ content: '❌ **관리자 전용 기능입니다.**', ephemeral: true });
-      return;
-    }
-    const matchMsgId = interaction.message.id;
-    const match = getMatches(interaction.client).get(matchMsgId);
-    if (!match) {
-      await interaction.reply({ content: `⚠️ **만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, ephemeral: true });
-      return;
-    }
-    await interaction.reply({
-      content: '🔧 **관리자 메뉴**',
-      components: [
-        new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`naejeon:match_delete:${matchMsgId}`)
-            .setLabel('🗑️ 내전 삭제')
-            .setStyle(ButtonStyle.Danger),
-          new ButtonBuilder()
-            .setCustomId('naejeon:admin_close')
-            .setLabel('↩️ 닫기')
-            .setStyle(ButtonStyle.Secondary),
-        ),
-      ],
-      ephemeral: true,
-    });
-    return;
-  }
-
-  if (customId === 'naejeon:admin_close') {
-    await interaction.update({ content: '닫힘', components: [] });
-    return;
-  }
-
-  // ── 관리자 내전 삭제 ────────────────────────────────────────────
-  if (customId.startsWith('naejeon:match_delete:')) {
-    if (interaction.user.id !== ADMIN_ID) {
-      await interaction.reply({ content: '❌ **관리자 전용 기능입니다.**', ephemeral: true });
-      return;
-    }
-    const matchMsgId = customId.slice('naejeon:match_delete:'.length);
-    const match = getMatches(interaction.client).get(matchMsgId);
-    if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, components: [] });
-      return;
-    }
-    await interaction.update({
-      content: `⚠️ **"${match.data.title}" 내전 메시지를 삭제하시겠습니까?**\n메시지가 완전히 삭제되고 복구할 수 없습니다.`,
-      components: [
-        new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`naejeon:match_delete_confirm:${matchMsgId}`)
-            .setLabel('✅ 삭제 확정')
-            .setStyle(ButtonStyle.Danger),
-          new ButtonBuilder()
-            .setCustomId(`naejeon:admin_menu_back:${matchMsgId}`)
-            .setLabel('↩️ 돌아가기')
-            .setStyle(ButtonStyle.Secondary),
-        ),
-      ],
-    });
-    return;
-  }
-
-  if (customId.startsWith('naejeon:admin_menu_back:')) {
-    if (interaction.user.id !== ADMIN_ID) {
-      await interaction.reply({ content: '❌ **관리자 전용 기능입니다.**', ephemeral: true });
-      return;
-    }
-    const matchMsgId = customId.slice('naejeon:admin_menu_back:'.length);
-    await interaction.update({
-      content: '🔧 **관리자 메뉴**',
-      components: [
-        new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`naejeon:match_delete:${matchMsgId}`)
-            .setLabel('🗑️ 내전 삭제')
-            .setStyle(ButtonStyle.Danger),
-          new ButtonBuilder()
-            .setCustomId('naejeon:admin_close')
-            .setLabel('↩️ 닫기')
-            .setStyle(ButtonStyle.Secondary),
-        ),
-      ],
-    });
-    return;
-  }
-
-  if (customId.startsWith('naejeon:match_delete_confirm:')) {
-    if (interaction.user.id !== ADMIN_ID) {
-      await interaction.reply({ content: '❌ **관리자 전용 기능입니다.**', ephemeral: true });
-      return;
-    }
-    const matchMsgId = customId.slice('naejeon:match_delete_confirm:'.length);
-    const match = getMatches(interaction.client).get(matchMsgId);
-    if (!match) {
-      await interaction.update({ content: '⚠️ **이미 삭제된 내전입니다.**', components: [] });
-      return;
-    }
-    await match.message.delete().catch(() => match.message.edit({ content: '', embeds: [], components: [] }));
-    getMatches(interaction.client).delete(matchMsgId);
-    await interaction.update({ content: '✅ **내전이 삭제되었습니다.**', components: [] });
     return;
   }
 

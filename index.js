@@ -7,6 +7,7 @@ const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMoj
 const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/team');
 const { handleRButton, handleRMatchSelect } = require('./handlers/r');
 const { handleWcButton, handleWcModal } = require('./handlers/wordchain');
+const { handleAdminSelect, handleAdminButton } = require('./commands/관리');
 const { saveAll, loadRows } = require('./db'); // ⬅️ 추가: SQLite 저장 모듈
 
 const client = new Client({
@@ -97,7 +98,9 @@ client.on('interactionCreate', async (interaction) => {
       }
 
     } else if (interaction.isStringSelectMenu()) {
-      if (interaction.customId === 'naejeon:game_select') {
+      if (interaction.customId === 'admin:select') {
+        await handleAdminSelect(interaction);
+      } else if (interaction.customId === 'naejeon:game_select') {
         await handleGameSelect(interaction);
       } else if (interaction.customId.startsWith('naejeon:team_assign:')) {
         await handleTeamAssign(interaction);
@@ -143,6 +146,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleRButton(interaction);
       } else if (interaction.customId.startsWith('wc:')) {
         await handleWcButton(interaction);
+      } else if (interaction.customId.startsWith('admin:')) {
+        await handleAdminButton(interaction);
       }
     }
   } catch (error) {
