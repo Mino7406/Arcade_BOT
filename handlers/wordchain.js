@@ -55,7 +55,7 @@ function getDisplayName(interaction) {
 
 function buildWaitingEmbed(game) {
   const list = game.players
-    .map((p, i) => `${i + 1}. \`${p.name}\`${p.id === game.hostId ? '  👑' : ''}`)
+    .map((p, i) => `${i + 1}. **\`${p.name}\`**${p.id === game.hostId ? '  👑' : ''}`)
     .join('\n');
 
   return new EmbedBuilder()
@@ -81,7 +81,7 @@ function buildPlayingEmbed(game) {
     : '**첫 번째 단어를 입력하세요!** (아무 한국어 단어)';
 
   const playerList = game.players
-    .map((p, i) => `${i === game.currentIdx ? '▶️' : '　'} \`${p.name}\``)
+    .map((p, i) => `${i === game.currentIdx ? '▶️' : '　'} **\`${p.name}\`**`)
     .join('\n');
 
   return new EmbedBuilder()
