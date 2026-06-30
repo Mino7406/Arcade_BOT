@@ -173,7 +173,7 @@ function endGame(game, games, loserId, reason, failWord = null) {
   game.endReason = reason;
   game.failWord  = failWord;
   games.delete(game.id);
-  game.message.edit({ embeds: [buildFinishedEmbed(game)], components: [] }).catch(() => {});
+  game.message?.edit({ embeds: [buildFinishedEmbed(game)], components: [] }).catch(() => {});
 }
 
 async function botPlay(game, games) {
@@ -192,7 +192,7 @@ async function botPlay(game, games) {
   g.lastChar = word[word.length - 1];
   g.currentIdx = (g.currentIdx + 1) % g.players.length;
 
-  await g.message.edit({
+  await g.message?.edit({
     embeds: [buildPlayingEmbed(g)],
     components: buildPlayingComponents(g),
   }).catch(() => {});
@@ -244,13 +244,18 @@ async function startWcCommand(interaction) {
     embeds: [buildWaitingEmbed(game)],
     components: buildWaitingComponents(game),
   });
-  game.message = await interaction.fetchReply();
+  try {
+    game.message = await interaction.fetchReply();
+  } catch {
+    games.delete(gameId);
+    return;
+  }
 
   game.timeoutId = setTimeout(async () => {
     const g = games.get(gameId);
     if (!g || g.status !== 'waiting') return;
     games.delete(gameId);
-    await game.message.edit({ content: '⏰ **참가자가 없어 게임이 취소되었습니다.**', embeds: [], components: [] }).catch(() => {});
+    await game.message?.edit({ content: '⏰ **참가자가 없어 게임이 취소되었습니다.**', embeds: [], components: [] }).catch(() => {});
   }, JOIN_MS);
 }
 
