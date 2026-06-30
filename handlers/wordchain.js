@@ -8,7 +8,7 @@ const {
   TextInputStyle,
 } = require('discord.js');
 
-const TURN_MS = 10_000;
+const TURN_MS = 20_000;
 const JOIN_MS = 90_000;
 const KOREAN  = /^[가-힣]+$/;
 
