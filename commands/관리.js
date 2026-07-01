@@ -139,7 +139,7 @@ async function handleAdminButton(interaction) {
         `🎮 **게임**　　${match.data.gameInfo.name}`,
         `📅 **일시**　　${match.data.datetime}`,
         `👑 **주최자**　**\`${match.data.organizer.displayName}\`**`,
-        `📊 **상태**　　🛑 종료됨`,
+        `📊 **상태**　　⚫ 종료됨`,
       ].join('\n'))
       .setFooter({ text: `${label}이 종료되었습니다.` })
       .setTimestamp();
