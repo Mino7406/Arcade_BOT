@@ -149,7 +149,7 @@ async function handleAdminButton(interaction) {
 
     endedEmbed
       .addFields({ name: `👥 참가자  ${match.participants.length} / ${max}명`, value: participantText })
-      .setFooter({ text: `✔️ ${label}이 종료되었습니다.` })
+      .setFooter({ text: `🗑️ ${label}이 종료되었습니다.` })
       .setTimestamp();
 
     await match.message.edit({ content: '', embeds: [endedEmbed], components: [], allowedMentions: { parse: [] } });
