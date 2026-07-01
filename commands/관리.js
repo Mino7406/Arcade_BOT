@@ -5,6 +5,7 @@ const {
   StringSelectMenuBuilder,
   ButtonBuilder,
   ButtonStyle,
+  EmbedBuilder,
 } = require('discord.js');
 
 const ADMIN_ID = '457437911869161472';
@@ -46,7 +47,7 @@ module.exports = {
     }
 
     await interaction.reply({
-      content: '🔧 **관리자 메뉴** — 삭제할 내전/모집을 선택하세요.',
+      content: '🔧 **관리자 메뉴** — 종료할 내전/모집을 선택하세요.',
       components: [
         new ActionRowBuilder().addComponents(
           new StringSelectMenuBuilder()
@@ -84,12 +85,12 @@ async function handleAdminSelect(interaction) {
 
   const label = type === 'naejeon' ? '내전' : '모집';
   await interaction.update({
-    content: `⚠️ **"${match.data.title}" ${label}을 삭제하시겠습니까?**\n메시지가 완전히 삭제되고 복구할 수 없습니다.`,
+    content: `⚠️ **"${match.data.title}" ${label}을 종료하시겠습니까?**\n임베드가 종료됨으로 표시되고 버튼이 제거됩니다.`,
     components: [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-          .setCustomId(`admin:delete_confirm:${value}`)
-          .setLabel('✅ 삭제 확정')
+          .setCustomId(`admin:end_confirm:${value}`)
+          .setLabel('✅ 종료 확정')
           .setStyle(ButtonStyle.Danger),
         new ButtonBuilder()
           .setCustomId('admin:cancel')
@@ -114,8 +115,8 @@ async function handleAdminButton(interaction) {
     return;
   }
 
-  if (customId.startsWith('admin:delete_confirm:')) {
-    const value    = customId.slice('admin:delete_confirm:'.length);
+  if (customId.startsWith('admin:end_confirm:')) {
+    const value    = customId.slice('admin:end_confirm:'.length);
     const colonIdx = value.indexOf(':');
     const type     = value.slice(0, colonIdx);
     const msgId    = value.slice(colonIdx + 1);
@@ -126,15 +127,26 @@ async function handleAdminButton(interaction) {
     const match = map?.get(msgId);
 
     if (!match) {
-      await interaction.update({ content: '⚠️ **이미 삭제된 내전/모집입니다.**', components: [] });
+      await interaction.update({ content: '⚠️ **이미 종료된 내전/모집입니다.**', components: [] });
       return;
     }
 
-    await match.message.delete().catch(() =>
-      match.message.edit({ content: '', embeds: [], components: [] }),
-    );
+    const label = type === 'naejeon' ? '내전' : '모집';
+    const endedEmbed = new EmbedBuilder()
+      .setColor(0x808080)
+      .setTitle(`${match.data.gameInfo.emoji}  ${match.data.title}`)
+      .setDescription([
+        `🎮 **게임**　　${match.data.gameInfo.name}`,
+        `📅 **일시**　　${match.data.datetime}`,
+        `👑 **주최자**　**\`${match.data.organizer.displayName}\`**`,
+        `📊 **상태**　　⏹️ 종료됨`,
+      ].join('\n'))
+      .setFooter({ text: `🛑 관리자에 의해 ${label}이 종료되었습니다.` })
+      .setTimestamp();
+
+    await match.message.edit({ content: '', embeds: [endedEmbed], components: [], allowedMentions: { parse: [] } });
     map.delete(msgId);
-    await interaction.update({ content: '✅ **삭제되었습니다.**', components: [] });
+    await interaction.update({ content: '✅ **종료 처리되었습니다.**', components: [] });
   }
 }
 
