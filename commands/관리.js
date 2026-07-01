@@ -1,6 +1,5 @@
 const {
   SlashCommandBuilder,
-  PermissionFlagsBits,
   ActionRowBuilder,
   StringSelectMenuBuilder,
   ButtonBuilder,
@@ -13,8 +12,7 @@ const ADMIN_ID = '457437911869161472';
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('관리')
-    .setDescription('[관리자 전용] 내전/모집을 관리합니다.')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    .setDescription('[관리자 전용] 내전/모집을 관리합니다.'),
 
   async execute(interaction) {
     if (interaction.user.id !== ADMIN_ID) {
