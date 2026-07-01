@@ -130,6 +130,11 @@ async function handleAdminButton(interaction) {
     }
 
     const label = type === 'naejeon' ? '내전' : '모집';
+    const max = parseInt(match.data.players) || 0;
+    const participantText = match.participants.length > 0
+      ? `\`\`\`\n${match.participants.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n')}\n\`\`\``
+      : '*참가자가 없습니다.*';
+
     const endedEmbed = new EmbedBuilder()
       .setColor(0x808080)
       .setTitle(`${match.data.gameInfo.emoji}  ${match.data.title}`)
@@ -138,7 +143,12 @@ async function handleAdminButton(interaction) {
         `📅 **일시**　　${match.data.datetime}`,
         `👑 **주최자**　**\`${match.data.organizer.displayName}\`**`,
         `📊 **상태**　　⚫ 종료됨`,
-      ].join('\n'))
+      ].join('\n'));
+
+    if (match.data.description) endedEmbed.addFields({ name: '📝 메모', value: match.data.description });
+
+    endedEmbed
+      .addFields({ name: `👥 참가자  ${match.participants.length} / ${max}명`, value: participantText })
       .setFooter({ text: `✔️ ${label}이 종료되었습니다.` })
       .setTimestamp();
 
