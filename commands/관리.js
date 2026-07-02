@@ -40,12 +40,12 @@ module.exports = {
     }
 
     if (options.length === 0) {
-      await interaction.reply({ content: '⚠️ **활성 내전/모집이 없습니다.**', ephemeral: true });
+      await interaction.reply({ content: '⚠️ **활성된 내전/모집이 없습니다.**', ephemeral: true });
       return;
     }
 
     await interaction.reply({
-      content: '🔧 **관리자 메뉴** — 종료할 내전/모집을 선택하세요.',
+      content: '🔧 **관리자 메뉴** — 관리할 내전/모집을 선택하세요.',
       components: [
         new ActionRowBuilder().addComponents(
           new StringSelectMenuBuilder()
@@ -83,13 +83,13 @@ async function handleAdminSelect(interaction) {
 
   const label = type === 'naejeon' ? '내전' : '모집';
   await interaction.update({
-    content: `⚠️ **"${match.data.title}" ${label}을 어떻게 처리하시겠습니까?**\n종료: 임베드가 종료됨으로 표시되고 버튼이 제거됩니다.\n삭제: 종료 처리 후 임베드가 채널에서 삭제됩니다.`,
+    content: `⚠️ **"${match.data.title}" ${label}을 어떻게 처리하시겠습니까?**`,
     components: [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`admin:end_confirm:${value}`)
-          .setLabel('✅ 종료')
-          .setStyle(ButtonStyle.Danger),
+          .setLabel('⌛ 종료')
+          .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId(`admin:end_delete:${value}`)
           .setLabel('🗑️ 삭제')
@@ -166,7 +166,7 @@ async function handleAdminButton(interaction) {
 
     endedEmbed
       .addFields({ name: `👥 참가자  ${match.participants.length} / ${max}명`, value: participantText })
-      .setFooter({ text: `🗑️ ${label}이 종료되었습니다.` })
+      .setFooter({ text: `⌛ ${label}이 종료되었습니다.` })
       .setTimestamp();
 
     await match.message.edit({ content: '', embeds: [endedEmbed], components: [], allowedMentions: { parse: [] } });
