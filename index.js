@@ -6,7 +6,7 @@ const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaej
 const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipMemberAdd, handleMojipMemberRemove } = require('./handlers/mojip');
 const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/team');
 const { handleRButton, handleRMatchSelect } = require('./handlers/r');
-const { handleWcButton, handleWcModal } = require('./handlers/wordchain');
+const { handleWcButton, handleWcMessage } = require('./handlers/wordchain');
 const { handleAdminSelect, handleAdminButton } = require('./commands/관리');
 const { saveAll, loadRows } = require('./db'); // ⬅️ 추가: SQLite 저장 모듈
 
@@ -14,6 +14,7 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
   ],
 });
 
@@ -119,9 +120,7 @@ client.on('interactionCreate', async (interaction) => {
       }
 
     } else if (interaction.isModalSubmit()) {
-      if (interaction.customId.startsWith('wc:word:')) {
-        await handleWcModal(interaction);
-      } else if (interaction.customId.startsWith('naejeon:modal:')) {
+      if (interaction.customId.startsWith('naejeon:modal:')) {
         await handleNaejeonModal(interaction);
       } else if (interaction.customId.startsWith('naejeon:modal_edit:')) {
         await handleNaejeonEditModal(interaction);
@@ -158,6 +157,14 @@ client.on('interactionCreate', async (interaction) => {
     } else {
       await interaction.reply(msg).catch(() => {});
     }
+  }
+});
+
+client.on('messageCreate', async (message) => {
+  try {
+    await handleWcMessage(message);
+  } catch (error) {
+    console.error(error);
   }
 });
 
