@@ -10,6 +10,39 @@ const TURN_SEC = TURN_MS / 1000;
 const JOIN_MS  = 90_000;
 const KOREAN   = /^[가-힣]+$/;
 
+// ── 두음법칙 변환 ─────────────────────────────────────────────────
+// 단어 첫머리의 'ㄹ/ㄴ' 초성은 뒤따르는 모음에 따라 'ㄴ' 또는 'ㅇ'으로
+// 바뀌어 표기됩니다 (예: 력 → 역, 로 → 노). 끝말잇기에서는 이전 단어가
+// 이런 글자로 끝나면, 다음 단어는 원래 글자 또는 두음법칙 변환형
+// 둘 중 하나로 시작해도 인정해야 합니다.
+const DUEUM_YA_VOWELS = new Set([2, 6, 7, 12, 17, 20]); // ㅑㅕㅖㅛㅠㅣ
+const DUEUM_A_VOWELS  = new Set([0, 1, 8, 11, 13, 18]); // ㅏㅐㅗㅚㅜㅡ
+
+function dueumConvert(char) {
+  const code = char.charCodeAt(0) - 0xAC00;
+  if (code < 0 || code > 11171) return null;
+
+  const initial = Math.floor(code / (21 * 28));
+  const medial = Math.floor((code % (21 * 28)) / 28);
+  const final = code % 28;
+
+  let newInitial = null;
+  if (initial === 5) { // ㄹ
+    if (DUEUM_YA_VOWELS.has(medial)) newInitial = 11; // ㅇ
+    else if (DUEUM_A_VOWELS.has(medial)) newInitial = 2; // ㄴ
+  } else if (initial === 2 && DUEUM_YA_VOWELS.has(medial)) { // ㄴ
+    newInitial = 11; // ㅇ
+  }
+
+  if (newInitial === null) return null;
+  return String.fromCharCode(0xAC00 + newInitial * 21 * 28 + medial * 28 + final);
+}
+
+function getAcceptableStarts(lastChar) {
+  const converted = dueumConvert(lastChar);
+  return converted ? [lastChar, converted] : [lastChar];
+}
+
 // ── 한국어기초사전 API 검증 ──────────────────────────────────────
 // 키가 없거나 API 호출이 실패하면 통과 처리(fail-open)하여
 // 인프라 문제로 게임이 부당하게 끝나지 않도록 합니다.
@@ -58,11 +91,15 @@ async function fetchWordsStartingWith(prefix) {
 }
 
 async function findBotWord(game) {
-  const prefix = game.lastChar || KO_SEED_SYLLABLES[Math.floor(Math.random() * KO_SEED_SYLLABLES.length)];
-  const candidates = await fetchWordsStartingWith(prefix);
-  if (!candidates) return null;
+  const prefixes = game.lastChar
+    ? getAcceptableStarts(game.lastChar)
+    : [KO_SEED_SYLLABLES[Math.floor(Math.random() * KO_SEED_SYLLABLES.length)]];
 
-  const unused = candidates.filter(w => !game.used.has(w));
+  const results = await Promise.all(prefixes.map(fetchWordsStartingWith));
+  if (results.every(r => !r)) return null; // 전부 API 실패
+
+  const candidates = results.flat().filter(Boolean);
+  const unused = [...new Set(candidates)].filter(w => !game.used.has(w));
   if (!unused.length) return null;
   return unused[Math.floor(Math.random() * unused.length)];
 }
@@ -93,6 +130,7 @@ function buildWaitingEmbed(game) {
         name: '📋 규칙',
         value:
           '• 이전 단어의 **마지막 글자**로 시작하는 단어를 입력하세요.\n' +
+          '• 두음법칙 변환형(예: 력→역, 로→노)도 인정됩니다.\n' +
           '• 실제 사전에 있는 단어만 인정됩니다. (2글자 이상)\n' +
           '• 이미 사용된 단어는 사용할 수 없습니다.\n' +
           `• **${TURN_SEC}초** 내에 입력하지 않으면 탈락합니다.`,
@@ -106,7 +144,7 @@ function buildPlayingEmbed(game) {
   const recentWords = game.history.slice(-8).join(' → ') || '(없음)';
 
   const wordLine = game.lastWord
-    ? `**마지막 단어** : \`${game.lastWord}\`　**시작 글자** : \`${game.lastChar}\``
+    ? `**마지막 단어** : \`${game.lastWord}\`　**시작 글자** : \`${getAcceptableStarts(game.lastChar).join('`/`')}\``
     : '**첫 번째 단어를 입력하세요!** (아무 한국어 단어)';
 
   const participantText = `\`\`\`\n${game.players.map((p, i) => `${i + 1}. ${p.name}${i === game.currentIdx ? ' ▶️' : ''}`).join('\n')}\n\`\`\``;
@@ -128,7 +166,7 @@ function buildFinishedEmbed(game) {
 
   const REASONS = {
     timeout:     `⏰ ${TURN_SEC}초 내에 단어를 입력하지 못했습니다.`,
-    wrong_start: `❌ \`${game.failWord}\`은(는) \`${game.lastChar}\`(으)로 시작하지 않습니다.`,
+    wrong_start: `❌ \`${game.failWord}\`은(는) \`${getAcceptableStarts(game.lastChar).join('\`/\`')}\`(으)로 시작하지 않습니다.`,
     duplicate:   `🔁 \`${game.failWord}\`은(는) 이미 사용된 단어입니다.`,
     not_korean:  `🚫 \`${game.failWord}\`은(는) 한국어 단어가 아닙니다.`,
     too_short:   `🚫 한 글자 단어(\`${game.failWord}\`)는 사용할 수 없습니다.`,
@@ -358,7 +396,7 @@ async function handleWcButton(interaction) {
       return;
     }
     clearTimeout(game.timeoutId);
-    game.players.push({ id: 'BOT', name: '🤖 봇' });
+    game.players.push({ id: 'BOT', name: '봇' });
     for (let i = game.players.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [game.players[i], game.players[j]] = [game.players[j], game.players[i]];
@@ -440,7 +478,7 @@ async function handleWcMessage(message) {
       return;
     }
 
-    if (game.lastChar && word[0] !== game.lastChar) {
+    if (game.lastChar && !getAcceptableStarts(game.lastChar).includes(word[0])) {
       await message.react('❌').catch(() => {});
       endGame(game, games, currentPlayer.id, 'wrong_start', word);
       return;
