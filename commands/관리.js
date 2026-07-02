@@ -7,7 +7,7 @@ const {
   EmbedBuilder,
 } = require('discord.js');
 
-const ADMIN_ID = '457437911869161472';
+const ADMIN_IDS = ['457437911869161472', '1043750483522752512', '685917435601092643'];
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -15,7 +15,7 @@ module.exports = {
     .setDescription('[관리자 전용] 내전/모집을 관리합니다.'),
 
   async execute(interaction) {
-    if (interaction.user.id !== ADMIN_ID) {
+    if (!ADMIN_IDS.includes(interaction.user.id)) {
       await interaction.reply({ content: '❌ **권한이 없습니다.**', ephemeral: true });
       return;
     }
@@ -61,7 +61,7 @@ module.exports = {
 
 // ── 셀렉트 메뉴 처리 ────────────────────────────────────────────
 async function handleAdminSelect(interaction) {
-  if (interaction.user.id !== ADMIN_ID) {
+  if (!ADMIN_IDS.includes(interaction.user.id)) {
     await interaction.reply({ content: '❌ **권한이 없습니다.**', ephemeral: true });
     return;
   }
@@ -83,16 +83,16 @@ async function handleAdminSelect(interaction) {
 
   const label = type === 'naejeon' ? '내전' : '모집';
   await interaction.update({
-    content: `⚠️ **"${match.data.title}" ${label}을 종료하시겠습니까?**\n임베드가 종료됨으로 표시되고 버튼이 제거됩니다.`,
+    content: `⚠️ **"${match.data.title}" ${label}을 어떻게 처리하시겠습니까?**\n종료: 임베드가 종료됨으로 표시되고 버튼이 제거됩니다.\n삭제: 종료 처리 후 임베드가 채널에서 삭제됩니다.`,
     components: [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`admin:end_confirm:${value}`)
-          .setLabel('✅ 종료 확정')
+          .setLabel('✅ 종료')
           .setStyle(ButtonStyle.Danger),
         new ButtonBuilder()
-          .setCustomId('admin:cancel')
-          .setLabel('↩️ 취소')
+          .setCustomId(`admin:end_delete:${value}`)
+          .setLabel('🗑️ 삭제')
           .setStyle(ButtonStyle.Secondary),
       ),
     ],
@@ -101,15 +101,32 @@ async function handleAdminSelect(interaction) {
 
 // ── 버튼 처리 ────────────────────────────────────────────────────
 async function handleAdminButton(interaction) {
-  if (interaction.user.id !== ADMIN_ID) {
+  if (!ADMIN_IDS.includes(interaction.user.id)) {
     await interaction.reply({ content: '❌ **권한이 없습니다.**', ephemeral: true });
     return;
   }
 
   const { customId } = interaction;
 
-  if (customId === 'admin:cancel') {
-    await interaction.update({ content: '취소되었습니다.', components: [] });
+  if (customId.startsWith('admin:end_delete:')) {
+    const value    = customId.slice('admin:end_delete:'.length);
+    const colonIdx = value.indexOf(':');
+    const type     = value.slice(0, colonIdx);
+    const msgId    = value.slice(colonIdx + 1);
+
+    const map   = type === 'naejeon'
+      ? interaction.client.naejeonMatches
+      : interaction.client.mojipMatches;
+    const match = map?.get(msgId);
+
+    if (!match) {
+      await interaction.update({ content: '⚠️ **이미 종료된 내전/모집입니다.**', components: [] });
+      return;
+    }
+
+    map.delete(msgId);
+    await match.message.delete();
+    await interaction.update({ content: '✅ **종료 처리 후 삭제되었습니다.**', components: [] });
     return;
   }
 

@@ -7,7 +7,7 @@ const {
 } = require('discord.js');
 const { buildPublicMessagePayload } = require('./naejeon');
 
-const ADMIN_ID = '457437911869161472';
+const ADMIN_IDS = ['457437911869161472', '1043750483522752512', '685917435601092643'];
 
 function getResetDateStr(client) {
   const startedAt = client.startedAt;
@@ -163,7 +163,7 @@ async function handleTeamMatchSelect(interaction) {
     await interaction.update({ content: `⚠️ **만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
     return;
   }
-  if (match.data.organizer.id !== interaction.user.id && interaction.user.id !== ADMIN_ID) {
+  if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
     await interaction.update({ content: '❌ **내전 주최자만 팀을 관리할 수 있습니다.**', embeds: [], components: [] });
     return;
   }
@@ -213,7 +213,7 @@ async function handleTeamButton(interaction) {
       await interaction.update({ content: `⚠️ **만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
       return;
     }
-    if (match.data.organizer.id !== interaction.user.id && interaction.user.id !== ADMIN_ID) {
+    if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
       await interaction.reply({ content: '❌ **내전 주최자만 사용할 수 있습니다.**', ephemeral: true });
       return;
     }
@@ -237,7 +237,7 @@ async function handleTeamButton(interaction) {
       await interaction.update({ content: `⚠️ **만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
       return;
     }
-    if (match.data.organizer.id !== interaction.user.id && interaction.user.id !== ADMIN_ID) {
+    if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
       await interaction.reply({ content: '❌ **내전 주최자만 사용할 수 있습니다.**', ephemeral: true });
       return;
     }
@@ -257,7 +257,7 @@ async function handleTeamButton(interaction) {
       await interaction.reply({ content: `⚠️ **만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, ephemeral: true });
       return;
     }
-    if (match.data.organizer.id !== interaction.user.id && interaction.user.id !== ADMIN_ID) {
+    if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
       await interaction.reply({ content: '❌ **내전 주최자만 사용할 수 있습니다.**', ephemeral: true });
       return;
     }
@@ -281,7 +281,7 @@ async function handleTeamButton(interaction) {
       await interaction.reply({ content: `⚠️ **만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, ephemeral: true });
       return;
     }
-    if (match.data.organizer.id !== interaction.user.id && interaction.user.id !== ADMIN_ID) {
+    if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
       await interaction.reply({ content: '❌ **내전 주최자만 사용할 수 있습니다.**', ephemeral: true });
       return;
     }
@@ -310,7 +310,7 @@ async function handleTeamAssignSelect(interaction) {
     await interaction.update({ content: `⚠️ **만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, embeds: [], components: [] });
     return;
   }
-  if (match.data.organizer.id !== interaction.user.id && interaction.user.id !== ADMIN_ID) {
+  if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
     await interaction.reply({ content: '❌ **내전 주최자만 사용할 수 있습니다.**', ephemeral: true });
     return;
   }

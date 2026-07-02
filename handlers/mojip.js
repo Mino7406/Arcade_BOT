@@ -10,7 +10,7 @@ const {
   UserSelectMenuBuilder,
 } = require('discord.js');
 
-const ADMIN_ID = '457437911869161472';
+const ADMIN_IDS = ['457437911869161472', '1043750483522752512', '685917435601092643'];
 
 const GAMES = {
   lol:       { name: '리그 오브 레전드', emoji: '<:Lol:1510933684750913626>',    defaultPlayers: 5,   color: 0xC89B3C },
@@ -539,7 +539,7 @@ async function handleMojipButton(interaction) {
       await interaction.reply({ content: `⚠️ **만료된 모집입니다.**\n(${getResetDateStr(interaction.client)})`, ephemeral: true });
       return;
     }
-    if (match.data.organizer.id !== interaction.user.id && interaction.user.id !== ADMIN_ID) {
+    if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
       await interaction.reply({ content: '❌ **주최자만 사용할 수 있습니다.**', ephemeral: true });
       return;
     }
@@ -640,7 +640,7 @@ async function handleMojipButton(interaction) {
       await interaction.update({ content: `⚠️ **만료된 모집입니다.**\n(${getResetDateStr(interaction.client)})`, components: [] });
       return;
     }
-    if (match.data.organizer.id !== interaction.user.id && interaction.user.id !== ADMIN_ID) {
+    if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
       await interaction.reply({ content: '❌ **주최자만 사용할 수 있습니다.**', ephemeral: true });
       return;
     }
