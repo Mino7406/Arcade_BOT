@@ -10,6 +10,26 @@ const TURN_SEC = TURN_MS / 1000;
 const JOIN_MS  = 90_000;
 const KOREAN   = /^[가-힣]+$/;
 
+// ── 한국어기초사전 API 검증 ──────────────────────────────────────
+// 키가 없거나 API 호출이 실패하면 통과 처리(fail-open)하여
+// 인프라 문제로 게임이 부당하게 끝나지 않도록 합니다.
+async function checkWordExists(word) {
+  const apiKey = process.env.KRDICT_API_KEY;
+  if (!apiKey) return true;
+
+  try {
+    const url = `https://krdict.korean.go.kr/api/search?key=${apiKey}&q=${encodeURIComponent(word)}&method=exact`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) return true;
+
+    const xml = await res.text();
+    const match = xml.match(/<total>(\d+)<\/total>/);
+    return match ? Number(match[1]) > 0 : true;
+  } catch {
+    return true;
+  }
+}
+
 // ── 봇 단어 사전 ───────────────────────────────────────────────
 const BOT_WORDS = [
   '가방', '가수', '가을', '가족', '가구', '가위', '가게', '가스', '가면', '각도',
@@ -120,21 +140,25 @@ function getDisplayName(interaction) {
 // ── 임베드 빌더 ────────────────────────────────────────────────
 
 function buildWaitingEmbed(game) {
-  const list = game.players
-    .map((p, i) => `${i + 1}. **\`${p.name}\`**${p.id === game.hostId ? '  👑' : ''}`)
-    .join('\n');
+  const participantText = game.players.length > 0
+    ? `\`\`\`\n${game.players.map((p, i) => `${i + 1}. ${p.name}${p.id === game.hostId ? ' 👑' : ''}`).join('\n')}\n\`\`\``
+    : '*아직 참가자가 없습니다.*';
 
   return new EmbedBuilder()
     .setColor(0x5865F2)
     .setTitle('🔤 끝말잇기')
-    .setDescription(`참가자를 기다리는 중 **(${game.players.length}명)**\n\n${list}`)
-    .addFields({
-      name: '📋 규칙',
-      value:
-        '• 이전 단어의 **마지막 글자**로 시작하는 단어를 입력하세요.\n' +
-        '• 이미 사용된 단어는 사용할 수 없습니다.\n' +
-        `• **${TURN_SEC}초** 내에 입력하지 않으면 탈락합니다.`,
-    })
+    .setDescription('참가자를 기다리는 중입니다.')
+    .addFields(
+      { name: `👥 참가자  ${game.players.length}명`, value: participantText },
+      {
+        name: '📋 규칙',
+        value:
+          '• 이전 단어의 **마지막 글자**로 시작하는 단어를 입력하세요.\n' +
+          '• 실제 사전에 있는 단어만 인정됩니다. (2글자 이상)\n' +
+          '• 이미 사용된 단어는 사용할 수 없습니다.\n' +
+          `• **${TURN_SEC}초** 내에 입력하지 않으면 탈락합니다.`,
+      },
+    )
     .setFooter({ text: '최소 2명이 참가해야 시작할 수 있습니다.' });
 }
 
@@ -146,16 +170,14 @@ function buildPlayingEmbed(game) {
     ? `**마지막 단어** : \`${game.lastWord}\`　**시작 글자** : \`${game.lastChar}\``
     : '**첫 번째 단어를 입력하세요!** (아무 한국어 단어)';
 
-  const playerList = game.players
-    .map((p, i) => `${i === game.currentIdx ? '▶️' : '　'} **\`${p.name}\`**`)
-    .join('\n');
+  const participantText = `\`\`\`\n${game.players.map((p, i) => `${i + 1}. ${p.name}${i === game.currentIdx ? ' ▶️' : ''}`).join('\n')}\n\`\`\``;
 
   return new EmbedBuilder()
     .setColor(0x57F287)
     .setTitle('🔤 끝말잇기 진행 중')
     .setDescription(`${wordLine}\n\n💬 **\`${currentPlayer.name}\`의 차례** — 채팅에 단어를 입력하세요! (${currentPlayer.id === 'BOT' ? '자동' : `${TURN_SEC}초`})`)
     .addFields(
-      { name: '👥 순서', value: playerList, inline: true },
+      { name: `👥 참가자  ${game.players.length}명`, value: participantText, inline: true },
       { name: '📝 최근 단어', value: recentWords, inline: true },
     )
     .setTimestamp();
@@ -171,6 +193,7 @@ function buildFinishedEmbed(game) {
     duplicate:   `🔁 \`${game.failWord}\`은(는) 이미 사용된 단어입니다.`,
     not_korean:  `🚫 \`${game.failWord}\`은(는) 한국어 단어가 아닙니다.`,
     too_short:   `🚫 한 글자 단어(\`${game.failWord}\`)는 사용할 수 없습니다.`,
+    not_in_dict: `📖 \`${game.failWord}\`은(는) 사전에 없는 단어입니다.`,
     gave_up:     `🏳️ 단어를 이을 수 없어 포기했습니다.`,
     cancelled:   `❌ 방장이 게임을 취소했습니다.`,
   };
@@ -486,6 +509,14 @@ async function handleWcMessage(message) {
     if (game.used.has(word)) {
       await message.react('❌').catch(() => {});
       endGame(game, games, currentPlayer.id, 'duplicate', word);
+      return;
+    }
+
+    const exists = await checkWordExists(word);
+    if (games.get(game.id) !== game || game.status !== 'playing') return; // 검증 대기 중 타임아웃 등으로 이미 종료됨
+    if (!exists) {
+      await message.react('❌').catch(() => {});
+      endGame(game, games, currentPlayer.id, 'not_in_dict', word);
       return;
     }
 
