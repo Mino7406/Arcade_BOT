@@ -75,7 +75,7 @@ async function handleRMatchSelect(interaction) {
     }
     const payload = buildPublicMessagePayload(match);
     const newMsg = await interaction.channel.send({ ...payload, content: '' });
-    match.message.edit({ components: [] }).catch(() => {});
+    match.message.edit({ content: '', embeds: [], components: [] }).catch(() => {});
     match.roleContent = '';
     matches.delete(matchMsgId);
     match.message = newMsg;
@@ -94,7 +94,7 @@ async function handleRMatchSelect(interaction) {
     }
     const payload = buildMojipMessagePayload(match);
     const newMsg = await interaction.channel.send({ ...payload, content: '' });
-    match.message.edit({ components: [] }).catch(() => {});
+    match.message.edit({ content: '', embeds: [], components: [] }).catch(() => {});
     matches.delete(msgId);
     match.message = newMsg;
     matches.set(newMsg.id, match);
