@@ -7,7 +7,7 @@ const {
   EmbedBuilder,
 } = require('discord.js');
 
-const ADMIN_IDS = ['457437911869161472', '1043750483522752512', '685917435601092643'];
+const { ADMIN_IDS } = require('../handlers/shared');
 
 module.exports = {
   data: new SlashCommandBuilder()

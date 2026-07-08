@@ -10,7 +10,7 @@ const {
   UserSelectMenuBuilder,
 } = require('discord.js');
 
-const ADMIN_IDS = ['457437911869161472', '1043750483522752512', '685917435601092643'];
+const { ADMIN_IDS, getResetDateStr: getResetDateStrBase } = require('./shared');
 
 const GAMES = {
   lol:       { name: '리그 오브 레전드', emoji: '<:Lol:1510933684750913626>',    defaultPlayers: 5,   color: 0xC89B3C },
@@ -286,14 +286,7 @@ function buildManageMenu(match, msgId) {
 }
 
 function getResetDateStr(client) {
-  const startedAt = client.startedAt;
-  if (!startedAt) return '봇 재시작 후 생성된 모집만 표시됩니다';
-  const kst = new Date(startedAt.getTime() + 9 * 60 * 60 * 1000);
-  const MM = String(kst.getUTCMonth() + 1).padStart(2, '0');
-  const DD = String(kst.getUTCDate()).padStart(2, '0');
-  const HH = String(kst.getUTCHours()).padStart(2, '0');
-  const mm = String(kst.getUTCMinutes()).padStart(2, '0');
-  return `※ ${MM}.${DD} ${HH}:${mm}에 초기화 됨`;
+  return getResetDateStrBase(client, '모집');
 }
 
 function getMojips(client) {

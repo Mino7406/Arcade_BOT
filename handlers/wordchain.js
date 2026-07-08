@@ -8,6 +8,7 @@ const {
 const TURN_MS  = 20_000;
 const TURN_SEC = TURN_MS / 1000;
 const JOIN_MS  = 90_000;
+const REMATCH_EXPIRY_MS = 5 * 60_000; // 종료된 게임은 5분간 재대결 버튼으로 이어할 수 있음
 const KOREAN   = /^[가-힣]+$/;
 
 // ── 두음법칙 변환 ─────────────────────────────────────────────────
@@ -64,9 +65,6 @@ async function checkWordExists(word) {
 }
 
 // ── 봇 단어 선택 (API 기반) ───────────────────────────────────────
-// 하드코딩 사전 없이, 매 턴 한국어기초사전 API에서 이어질 글자로
-// 시작하는 명사를 검색해 그중 미사용 단어를 무작위로 고릅니다.
-// 시작 글자가 없는 경우(봇이 첫 턴)에는 무작위 음절로 검색을 시작합니다.
 const KO_SEED_SYLLABLES = [
   '가', '나', '다', '라', '마', '바', '사', '아', '자', '차', '카', '타', '파', '하',
   '거', '너', '더', '러', '머', '버', '서', '어', '저', '처', '커', '터', '퍼', '허',
@@ -227,6 +225,17 @@ function buildPlayingComponents(game) {
   ];
 }
 
+function buildFinishedComponents(game) {
+  return [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`wc:rematch:${game.id}`)
+        .setLabel('🔁 재대결')
+        .setStyle(ButtonStyle.Primary),
+    ),
+  ];
+}
+
 // ── 게임 종료 ──────────────────────────────────────────────────
 
 function endGame(game, games, loserId, reason, failWord = null) {
@@ -235,8 +244,9 @@ function endGame(game, games, loserId, reason, failWord = null) {
   game.loser     = loserId;
   game.endReason = reason;
   game.failWord  = failWord;
-  games.delete(game.id);
-  game.message?.edit({ embeds: [buildFinishedEmbed(game)], components: [] }).catch(() => {});
+  // 즉시 지우지 않고 잠시 남겨둬서 '재대결' 버튼이 원래 참가자 명단을 찾을 수 있게 함
+  setTimeout(() => games.delete(game.id), REMATCH_EXPIRY_MS);
+  game.message?.edit({ embeds: [buildFinishedEmbed(game)], components: buildFinishedComponents(game) }).catch(() => {});
 }
 
 async function botPlay(game, games) {
@@ -282,15 +292,15 @@ function startTurn(game, games) {
 
 // ── 커맨드 진입 ────────────────────────────────────────────────
 
-async function startWcCommand(interaction) {
+async function createLobby(interaction, initialPlayers, hostId) {
   const games = getGames(interaction.client);
   const gameId = interaction.id;
 
   const game = {
     id: gameId,
-    hostId: interaction.user.id,
+    hostId,
     channelId: interaction.channelId,
-    players: [{ id: interaction.user.id, name: getDisplayName(interaction) }],
+    players: initialPlayers,
     currentIdx: 0,
     used: new Set(),
     history: [],
@@ -322,6 +332,14 @@ async function startWcCommand(interaction) {
     games.delete(gameId);
     await game.message?.edit({ content: '⏰ **참가자가 없어 게임이 취소되었습니다.**', embeds: [], components: [] }).catch(() => {});
   }, JOIN_MS);
+}
+
+async function startWcCommand(interaction) {
+  await createLobby(
+    interaction,
+    [{ id: interaction.user.id, name: getDisplayName(interaction) }],
+    interaction.user.id,
+  );
 }
 
 // ── 버튼 핸들러 ────────────────────────────────────────────────
@@ -446,6 +464,26 @@ async function handleWcButton(interaction) {
     }
     await interaction.deferUpdate();
     endGame(game, games, currentPlayer.id, 'gave_up');
+    return;
+  }
+
+  // ── 재대결 ────────────────────────────────────────────────
+  if (customId.startsWith('wc:rematch:')) {
+    const oldGameId = customId.slice('wc:rematch:'.length);
+    const oldGame = games.get(oldGameId);
+    if (!oldGame || oldGame.status !== 'finished') {
+      await interaction.reply({ content: '⚠️ **재대결을 시작할 수 없습니다.** `/끝말잇기`로 새로 시작해주세요.', ephemeral: true });
+      return;
+    }
+    if (!oldGame.players.some(p => p.id === interaction.user.id)) {
+      await interaction.reply({ content: '⚠️ **이전 게임 참가자만 재대결을 시작할 수 있습니다.**', ephemeral: true });
+      return;
+    }
+    const rematchPlayers = oldGame.players
+      .filter(p => p.id !== 'BOT')
+      .map(p => ({ id: p.id, name: p.name }));
+    await createLobby(interaction, rematchPlayers, interaction.user.id);
+    await oldGame.message?.edit({ components: [] }).catch(() => {});
     return;
   }
 }
