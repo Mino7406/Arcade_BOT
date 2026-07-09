@@ -114,7 +114,7 @@ function buildPreviewEmbed({ game, gameInfo, title, datetime, players, descripti
 
   const embed = new EmbedBuilder()
     .setColor(gameInfo.color)
-    .setDescription(`# ${title}\n​\n${lines.join('\n')}`);
+    .setDescription(`# ${title}\n${lines.join('\n')}`);
   applyThumbnail(embed, game);
 
   if (description) embed.addFields({ name: '📝 메모', value: description });
@@ -146,7 +146,7 @@ function buildPublicEmbed(data, participants, closed = false) {
 
   const embed = new EmbedBuilder()
     .setColor(color)
-    .setDescription(`# ${title}\n​\n${lines.join('\n')}`);
+    .setDescription(`# ${title}\n${lines.join('\n')}`);
   applyThumbnail(embed, game);
 
   if (description) embed.addFields({ name: '📝 메모', value: description });
@@ -742,7 +742,7 @@ async function handleMojipButton(interaction) {
       .setFooter({ text: '❌ 주최자에 의해 모집이 취소되었습니다.' })
       .setTimestamp();
 
-    await match.message.edit({ content: '', embeds: [cancelledEmbed], components: [], allowedMentions: { parse: [] } });
+    await match.message.edit({ content: '', embeds: [cancelledEmbed], components: [], attachments: [], allowedMentions: { parse: [] } });
     getMojips(interaction.client).delete(msgId);
     await interaction.update({ content: '✅ **모집이 취소되었습니다.**', components: [] });
     return;

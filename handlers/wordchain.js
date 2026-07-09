@@ -122,7 +122,7 @@ function buildWaitingEmbed(game) {
 
   const embed = new EmbedBuilder()
     .setColor(0x5865F2)
-    .setDescription('# 끝말잇기\n​\n참가자를 기다리는 중입니다.');
+    .setDescription('# 끝말잇기\n참가자를 기다리는 중입니다.');
   applyThumbnail(embed);
   return embed
     .addFields(
@@ -152,7 +152,7 @@ function buildPlayingEmbed(game) {
 
   const embed = new EmbedBuilder()
     .setColor(0x57F287)
-    .setDescription(`# 끝말잇기 진행 중\n​\n${wordLine}\n\n💬 **\`${currentPlayer.name}\`의 차례** — 채팅에 단어를 입력하세요! (${currentPlayer.id === 'BOT' ? '자동' : `${TURN_SEC}초`})`);
+    .setDescription(`# 끝말잇기 진행 중\n${wordLine}\n\n💬 **\`${currentPlayer.name}\`의 차례** — 채팅에 단어를 입력하세요! (${currentPlayer.id === 'BOT' ? '자동' : `${TURN_SEC}초`})`);
   applyThumbnail(embed);
   return embed
     .addFields(
@@ -182,7 +182,7 @@ function buildFinishedEmbed(game) {
   const embed = new EmbedBuilder()
     .setColor(0xED4245)
     .setDescription(
-      `# 끝말잇기 종료\n​\n**탈락** : \`${loserName}\`\n**이유** : ${REASONS[game.endReason] || '게임 종료'}\n\n` +
+      `# 끝말잇기 종료\n**탈락** : \`${loserName}\`\n**이유** : ${REASONS[game.endReason] || '게임 종료'}\n\n` +
       `총 **${game.history.length}개** 단어 사용`,
     );
   applyThumbnail(embed);

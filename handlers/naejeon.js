@@ -114,7 +114,7 @@ function buildPreviewEmbed({ game, gameInfo, title, datetime, players, descripti
 
   const embed = new EmbedBuilder()
     .setColor(gameInfo.color)
-    .setDescription(`# ${title}\n​\n${lines.join('\n')}`);
+    .setDescription(`# ${title}\n${lines.join('\n')}`);
   applyThumbnail(embed, game);
 
   if (description) embed.addFields({ name: '📝 메모', value: description });
@@ -143,7 +143,7 @@ function buildPublicEmbed(data, participants, closed = false, teams = null) {
 
   const embed = new EmbedBuilder()
     .setColor(color)
-    .setDescription(`# ${title}\n​\n${lines.join('\n')}`)
+    .setDescription(`# ${title}\n${lines.join('\n')}`)
     .setFooter({ text: closed ? '🔒 마감된 내전입니다.' : isFull ? '✅ 모집이 완료되었습니다.' : '✅ 버튼을 눌러 참가하세요!' })
     .setTimestamp();
   applyThumbnail(embed, game);
@@ -812,7 +812,7 @@ async function handleNaejeonButton(interaction) {
       .setFooter({ text: '❌ 주최자에 의해 내전이 취소되었습니다.' })
       .setTimestamp();
 
-    await match.message.edit({ content: '', embeds: [cancelledEmbed], components: [], allowedMentions: { parse: [] } });
+    await match.message.edit({ content: '', embeds: [cancelledEmbed], components: [], attachments: [], allowedMentions: { parse: [] } });
     getMatches(interaction.client).delete(matchMsgId);
     await interaction.update({ content: '✅ **내전이 취소되었습니다.**', components: [] });
     return;
