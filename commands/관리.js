@@ -157,7 +157,7 @@ async function handleAdminButton(interaction) {
     const endedEmbed = new EmbedBuilder()
       .setColor(0x808080)
       .setDescription([
-        `# ${match.data.title}`,
+        `# ${match.data.gameInfo.emoji}  ${match.data.title}`,
         `🎮 **게임**　　${match.data.gameInfo.name}`,
         `📅 **일시**　　${match.data.datetime}`,
         `👑 **주최자**　**\`${match.data.organizer.displayName}\`**`,
@@ -171,7 +171,7 @@ async function handleAdminButton(interaction) {
       .setFooter({ text: `⌛ ${label}이 종료되었습니다.` })
       .setTimestamp();
 
-    await match.message.edit({ content: '', embeds: [endedEmbed], components: [], attachments: [], allowedMentions: { parse: [] } });
+    await match.message.edit({ content: '', embeds: [endedEmbed], components: [], allowedMentions: { parse: [] } });
     map.delete(msgId);
     await interaction.update({ content: '✅ **종료 처리되었습니다.**', components: [] });
   }

@@ -5,8 +5,6 @@ const {
   ButtonStyle,
 } = require('discord.js');
 
-const { applyThumbnail, getThumbnailFiles } = require('./shared');
-
 const TURN_MS  = 20_000;
 const TURN_SEC = TURN_MS / 1000;
 const JOIN_MS  = 90_000;
@@ -122,8 +120,7 @@ function buildWaitingEmbed(game) {
 
   const embed = new EmbedBuilder()
     .setColor(0x5865F2)
-    .setDescription('# 끝말잇기\n참가자를 기다리는 중입니다.');
-  applyThumbnail(embed);
+    .setDescription('# 🔤 끝말잇기\n참가자를 기다리는 중입니다.');
   return embed
     .addFields(
       { name: `👥 참가자  ${game.players.length}명`, value: participantText },
@@ -152,8 +149,7 @@ function buildPlayingEmbed(game) {
 
   const embed = new EmbedBuilder()
     .setColor(0x57F287)
-    .setDescription(`# 끝말잇기 진행 중\n${wordLine}\n\n💬 **\`${currentPlayer.name}\`의 차례** — 채팅에 단어를 입력하세요! (${currentPlayer.id === 'BOT' ? '자동' : `${TURN_SEC}초`})`);
-  applyThumbnail(embed);
+    .setDescription(`# 🔤 끝말잇기 진행 중\n${wordLine}\n\n💬 **\`${currentPlayer.name}\`의 차례** — 채팅에 단어를 입력하세요! (${currentPlayer.id === 'BOT' ? '자동' : `${TURN_SEC}초`})`);
   return embed
     .addFields(
       { name: `👥 참가자  ${game.players.length}명`, value: participantText, inline: true },
@@ -182,10 +178,9 @@ function buildFinishedEmbed(game) {
   const embed = new EmbedBuilder()
     .setColor(0xED4245)
     .setDescription(
-      `# 끝말잇기 종료\n**탈락** : \`${loserName}\`\n**이유** : ${REASONS[game.endReason] || '게임 종료'}\n\n` +
+      `# 🔤 끝말잇기 종료\n**탈락** : \`${loserName}\`\n**이유** : ${REASONS[game.endReason] || '게임 종료'}\n\n` +
       `총 **${game.history.length}개** 단어 사용`,
     );
-  applyThumbnail(embed);
   return embed
     .addFields({ name: '📝 마지막 단어들', value: recent })
     .setTimestamp();
@@ -323,7 +318,6 @@ async function createLobby(interaction, initialPlayers, hostId) {
   await interaction.reply({
     embeds: [buildWaitingEmbed(game)],
     components: buildWaitingComponents(game),
-    files: getThumbnailFiles(),
   });
   try {
     game.message = await interaction.fetchReply();
@@ -336,7 +330,7 @@ async function createLobby(interaction, initialPlayers, hostId) {
     const g = games.get(gameId);
     if (!g || g.status !== 'waiting') return;
     games.delete(gameId);
-    await game.message?.edit({ content: '⏰ **참가자가 없어 게임이 취소되었습니다.**', embeds: [], attachments: [], components: [] }).catch(() => {});
+    await game.message?.edit({ content: '⏰ **참가자가 없어 게임이 취소되었습니다.**', embeds: [], components: [] }).catch(() => {});
   }, JOIN_MS);
 }
 
@@ -450,7 +444,7 @@ async function handleWcButton(interaction) {
       await interaction.deferUpdate();
     } else {
       games.delete(gameId);
-      await interaction.update({ content: '❌ **게임이 취소되었습니다.**', embeds: [], attachments: [], components: [] });
+      await interaction.update({ content: '❌ **게임이 취소되었습니다.**', embeds: [], components: [] });
     }
     return;
   }
