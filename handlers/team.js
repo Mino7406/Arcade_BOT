@@ -129,7 +129,7 @@ async function handleTeamMatchSelect(interaction) {
       content: '🎮 **팀 관리** - 이미 배정된 팀이 있습니다.',
       embeds: [buildTeamEmbed(match.data, match.teams)],
       components: [buildManageRow(matchMsgId)],
-      files: getThumbnailFiles(),
+      files: getThumbnailFiles(match.data.game),
     });
     return;
   }
@@ -144,7 +144,7 @@ async function handleTeamMatchSelect(interaction) {
   ];
   const infoEmbed = new EmbedBuilder()
     .setColor(gameInfo.color)
-    .setTitle(`${gameInfo.emoji}  ${title}`)
+    .setTitle(title)
     .setDescription(lines.join('\n'))
     .addFields({ name: '👥 참가자', value: `${match.participants.length}명` });
 
@@ -198,7 +198,7 @@ async function handleTeamButton(interaction) {
     match.teams = teams;
     await match.message.edit(buildPublicMessagePayload(match));
     await interaction.update({ content: '✅ **자동 팀 배정이 완료되었습니다.**', embeds: [], components: [buildManageRow(matchMsgId)] });
-    await interaction.channel.send({ embeds: [buildTeamEmbed(match.data, teams)], files: getThumbnailFiles(), allowedMentions: { parse: [] } });
+    await interaction.channel.send({ embeds: [buildTeamEmbed(match.data, teams)], files: getThumbnailFiles(match.data.game), allowedMentions: { parse: [] } });
     return;
   }
 
@@ -246,7 +246,7 @@ async function handleTeamButton(interaction) {
     match.teams = teams;
     await match.message.edit(buildPublicMessagePayload(match));
     await interaction.update({ content: '✅ **자동 팀 배정이 완료되었습니다.**', embeds: [], components: [buildPublicDoneRow(matchMsgId)] });
-    await interaction.channel.send({ embeds: [buildTeamEmbed(match.data, teams)], files: getThumbnailFiles(), allowedMentions: { parse: [] } });
+    await interaction.channel.send({ embeds: [buildTeamEmbed(match.data, teams)], files: getThumbnailFiles(match.data.game), allowedMentions: { parse: [] } });
     return;
   }
 }
@@ -275,7 +275,7 @@ async function handleTeamAssignSelect(interaction) {
   match.teams = teams;
   await match.message.edit(buildPublicMessagePayload(match));
   await interaction.update({ content: '✅ **팀 배정이 완료되었습니다.**', embeds: [], components: [isSetup ? buildManageRow(matchMsgId) : buildPublicDoneRow(matchMsgId)] });
-  await interaction.channel.send({ embeds: [buildTeamEmbed(match.data, teams)], files: getThumbnailFiles(), allowedMentions: { parse: [] } });
+  await interaction.channel.send({ embeds: [buildTeamEmbed(match.data, teams)], files: getThumbnailFiles(match.data.game), allowedMentions: { parse: [] } });
 }
 
 module.exports = {

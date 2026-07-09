@@ -102,7 +102,7 @@ function buildModal(game, data = {}) {
   return modal;
 }
 
-function buildPreviewEmbed({ gameInfo, title, datetime, players, description, organizer }) {
+function buildPreviewEmbed({ game, gameInfo, title, datetime, players, description, organizer }) {
   const max = parseInt(players) || 0;
 
   const lines = [
@@ -114,9 +114,9 @@ function buildPreviewEmbed({ gameInfo, title, datetime, players, description, or
 
   const embed = new EmbedBuilder()
     .setColor(gameInfo.color)
-    .setTitle(`${gameInfo.emoji}  ${title}`)
+    .setTitle(title)
     .setDescription(lines.join('\n'));
-  applyThumbnail(embed);
+  applyThumbnail(embed, game);
 
   if (description) embed.addFields({ name: '📝 메모', value: description });
 
@@ -127,7 +127,7 @@ function buildPreviewEmbed({ gameInfo, title, datetime, players, description, or
 }
 
 function buildPublicEmbed(data, participants, closed = false) {
-  const { gameInfo, title, datetime, players, description, organizer } = data;
+  const { game, gameInfo, title, datetime, players, description, organizer } = data;
   const max = parseInt(players) || 0;
   const isFull = participants.length >= max;
 
@@ -147,9 +147,9 @@ function buildPublicEmbed(data, participants, closed = false) {
 
   const embed = new EmbedBuilder()
     .setColor(color)
-    .setTitle(`${gameInfo.emoji}  ${title}`)
+    .setTitle(title)
     .setDescription(lines.join('\n'));
-  applyThumbnail(embed);
+  applyThumbnail(embed, game);
 
   if (description) embed.addFields({ name: '📝 메모', value: description });
 
@@ -192,7 +192,7 @@ function buildMojipMessagePayload(match) {
     embeds: [buildPublicEmbed(match.data, match.participants, match.closed)],
     components: buildPublicComponents(match.participants, maxPlayers, match.closed),
     allowedMentions: { parse: [] },
-    files: getThumbnailFiles(),
+    files: getThumbnailFiles(match.data.game),
   };
 }
 
@@ -332,7 +332,7 @@ async function handleMojipModal(interaction) {
     content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
     embeds: [buildPreviewEmbed(data)],
     components: buildPreviewComponents(data),
-    files: getThumbnailFiles(),
+    files: getThumbnailFiles(data.game),
     ephemeral: true,
   });
 }
@@ -365,7 +365,7 @@ async function handleMojipEditModal(interaction) {
     content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
     embeds: [buildPreviewEmbed(data)],
     components: buildPreviewComponents(data),
-    files: getThumbnailFiles(),
+    files: getThumbnailFiles(data.game),
   });
 
   // 모달 인터랙션을 조용히 마무리 (새 메시지 생성 없이)
@@ -394,7 +394,7 @@ async function handleMojipButton(interaction) {
       content: role ? `<@&${role.id}>` : '',
       embeds: [buildPublicEmbed(data, participants)],
       components: buildPublicComponents(participants, maxPlayers),
-      files: getThumbnailFiles(),
+      files: getThumbnailFiles(data.game),
       allowedMentions: { roles: role ? [role.id] : [], users: [] },
     });
     getMojips(interaction.client).set(msg.id, { data, participants, message: msg, closed: false, mentionSent: false, guildId: interaction.guildId });
@@ -734,7 +734,7 @@ async function handleMojipButton(interaction) {
     }
     const cancelledEmbed = new EmbedBuilder()
       .setColor(0xED4245)
-      .setTitle(`${match.data.gameInfo.emoji}  ${match.data.title}`)
+      .setTitle(match.data.title)
       .setDescription([
         `🎮 **게임**　　${match.data.gameInfo.name}`,
         `📅 **일시**　　${match.data.datetime}`,
@@ -826,7 +826,7 @@ async function handleMojipButton(interaction) {
       content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
       embeds: [buildPreviewEmbed(data)],
       components: buildPreviewComponents(data),
-      files: getThumbnailFiles(),
+      files: getThumbnailFiles(data.game),
     });
     return;
   }
@@ -872,7 +872,7 @@ async function handleMojipButton(interaction) {
       content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
       embeds: [buildPreviewEmbed(data)],
       components: buildPreviewComponents(data),
-      files: getThumbnailFiles(),
+      files: getThumbnailFiles(data.game),
     });
     return;
   }

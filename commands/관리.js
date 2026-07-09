@@ -25,6 +25,7 @@ module.exports = {
 
     const options = [];
     for (const [msgId, match] of naejeons) {
+      if (match.guildId !== interaction.guildId) continue;
       options.push({
         label:       `[내전] ${match.data.title}`.slice(0, 100),
         description: `${match.data.organizer?.displayName ?? '?'} · ${match.data.datetime} · ${match.closed ? '🔒 마감됨' : '🟢 모집중'}`.slice(0, 100),
@@ -32,6 +33,7 @@ module.exports = {
       });
     }
     for (const [msgId, match] of mojips) {
+      if (match.guildId !== interaction.guildId) continue;
       options.push({
         label:       `[모집] ${match.data.title}`.slice(0, 100),
         description: `${match.data.organizer?.displayName ?? '?'} · ${match.data.datetime} · ${match.closed ? '🔒 마감됨' : '🟢 모집중'}`.slice(0, 100),
@@ -76,7 +78,7 @@ async function handleAdminSelect(interaction) {
     : interaction.client.mojipMatches;
   const match = map?.get(msgId);
 
-  if (!match) {
+  if (!match || match.guildId !== interaction.guildId) {
     await interaction.update({ content: '⚠️ **해당 내전/모집을 찾을 수 없습니다.**', components: [] });
     return;
   }
@@ -119,7 +121,7 @@ async function handleAdminButton(interaction) {
       : interaction.client.mojipMatches;
     const match = map?.get(msgId);
 
-    if (!match) {
+    if (!match || match.guildId !== interaction.guildId) {
       await interaction.update({ content: '⚠️ **이미 종료된 내전/모집입니다.**', components: [] });
       return;
     }
@@ -141,7 +143,7 @@ async function handleAdminButton(interaction) {
       : interaction.client.mojipMatches;
     const match = map?.get(msgId);
 
-    if (!match) {
+    if (!match || match.guildId !== interaction.guildId) {
       await interaction.update({ content: '⚠️ **이미 종료된 내전/모집입니다.**', components: [] });
       return;
     }
@@ -154,7 +156,7 @@ async function handleAdminButton(interaction) {
 
     const endedEmbed = new EmbedBuilder()
       .setColor(0x808080)
-      .setTitle(`${match.data.gameInfo.emoji}  ${match.data.title}`)
+      .setTitle(match.data.title)
       .setDescription([
         `🎮 **게임**　　${match.data.gameInfo.name}`,
         `📅 **일시**　　${match.data.datetime}`,

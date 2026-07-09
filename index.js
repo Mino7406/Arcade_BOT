@@ -5,7 +5,7 @@ const path = require('path');
 const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove } = require('./handlers/naejeon');
 const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipMemberAdd, handleMojipMemberRemove } = require('./handlers/mojip');
 const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/team');
-const { handleRButton, handleRMatchSelect } = require('./handlers/r');
+const { handleRMatchSelect } = require('./handlers/r');
 const { handleWcButton, handleWcMessage } = require('./handlers/wordchain');
 const { handleAdminSelect, handleAdminButton } = require('./commands/관리');
 const { saveAll, loadRows } = require('./db'); // ⬅️ 추가: SQLite 저장 모듈
@@ -117,7 +117,7 @@ client.on('interactionCreate', async (interaction) => {
         await handleTeamMatchSelect(interaction);
       } else if (interaction.customId.startsWith('team:assign_setup:') || interaction.customId.startsWith('team:pub_assign:')) {
         await handleTeamAssignSelect(interaction);
-      } else if (interaction.customId === '불러오기:naejeon_select' || interaction.customId === '불러오기:mojip_select') {
+      } else if (interaction.customId === '불러오기:select') {
         await handleRMatchSelect(interaction);
       }
 
@@ -143,8 +143,6 @@ client.on('interactionCreate', async (interaction) => {
         await handleMojipButton(interaction);
       } else if (interaction.customId.startsWith('team:')) {
         await handleTeamButton(interaction);
-      } else if (interaction.customId.startsWith('불러오기:')) {
-        await handleRButton(interaction);
       } else if (interaction.customId.startsWith('wc:')) {
         await handleWcButton(interaction);
       } else if (interaction.customId.startsWith('admin:')) {

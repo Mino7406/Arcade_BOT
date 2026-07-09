@@ -8,19 +8,33 @@ const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 
 const ADMIN_IDS = ['457437911869161472', '1043750483522752512', '685917435601092643'];
 
-// 임베드 오른쪽 상단에 표시할 공용 썸네일. assets/thumbnail.png 를 넣어두면
-// 자동으로 모든 임베드에 반영되고, 파일이 없으면 조용히 생략됩니다.
-const THUMBNAIL_PATH = path.join(__dirname, '..', 'assets', 'thumbnail.png');
-const THUMBNAIL_NAME = 'thumbnail.png';
-const THUMBNAIL_URL = `attachment://${THUMBNAIL_NAME}`;
+// 임베드 오른쪽 상단에 표시할 썸네일. 게임별 아이콘이 assets 폴더에 있으면
+// 그 게임 전용 이미지를, 없으면 공용 thumbnail.png를 사용합니다.
+// 파일이 아예 없으면 조용히 생략됩니다.
+const THUMBNAIL_DIR = path.join(__dirname, '..', 'assets');
+const DEFAULT_THUMBNAIL_NAME = 'thumbnail.png';
+const GAME_THUMBNAIL_NAMES = {
+  lol: 'league_of_legends.png',
+  valorant: 'valorant.png',
+  overwatch: 'overwatch.png',
+  pubg: 'pubg_helmet.png',
+};
 
-function applyThumbnail(embed) {
-  if (fs.existsSync(THUMBNAIL_PATH)) embed.setThumbnail(THUMBNAIL_URL);
+function resolveThumbnail(gameKey) {
+  const name = GAME_THUMBNAIL_NAMES[gameKey] || DEFAULT_THUMBNAIL_NAME;
+  const filePath = path.join(THUMBNAIL_DIR, name);
+  return fs.existsSync(filePath) ? { name, filePath } : null;
+}
+
+function applyThumbnail(embed, gameKey) {
+  const thumb = resolveThumbnail(gameKey);
+  if (thumb) embed.setThumbnail(`attachment://${thumb.name}`);
   return embed;
 }
 
-function getThumbnailFiles() {
-  return fs.existsSync(THUMBNAIL_PATH) ? [new AttachmentBuilder(THUMBNAIL_PATH, { name: THUMBNAIL_NAME })] : [];
+function getThumbnailFiles(gameKey) {
+  const thumb = resolveThumbnail(gameKey);
+  return thumb ? [new AttachmentBuilder(thumb.filePath, { name: thumb.name })] : [];
 }
 
 function getResetDateStr(client, label = '내전') {
@@ -50,7 +64,7 @@ function shuffleIntoTeams(participants) {
 }
 
 function buildTeamResultEmbed(data, teams) {
-  const { gameInfo, title, datetime, organizer } = data;
+  const { game, gameInfo, title, datetime, organizer } = data;
   const lines = [
     `🎮 **게임**　　${gameInfo.name}`,
     `📅 **일시**　　${datetime}`,
@@ -59,9 +73,9 @@ function buildTeamResultEmbed(data, teams) {
   ];
   const embed = new EmbedBuilder()
     .setColor(gameInfo.color)
-    .setTitle(`${gameInfo.emoji}  ${title} - 팀 배정`)
+    .setTitle(`${title} - 팀 배정`)
     .setDescription(lines.join('\n'));
-  applyThumbnail(embed);
+  applyThumbnail(embed, game);
   return embed
     .addFields(
       {
