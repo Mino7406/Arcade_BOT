@@ -336,7 +336,7 @@ async function createLobby(interaction, initialPlayers, hostId) {
     const g = games.get(gameId);
     if (!g || g.status !== 'waiting') return;
     games.delete(gameId);
-    await game.message?.edit({ content: '⏰ **참가자가 없어 게임이 취소되었습니다.**', embeds: [], components: [] }).catch(() => {});
+    await game.message?.edit({ content: '⏰ **참가자가 없어 게임이 취소되었습니다.**', embeds: [], attachments: [], components: [] }).catch(() => {});
   }, JOIN_MS);
 }
 
@@ -450,7 +450,7 @@ async function handleWcButton(interaction) {
       await interaction.deferUpdate();
     } else {
       games.delete(gameId);
-      await interaction.update({ content: '❌ **게임이 취소되었습니다.**', embeds: [], components: [] });
+      await interaction.update({ content: '❌ **게임이 취소되었습니다.**', embeds: [], attachments: [], components: [] });
     }
     return;
   }
