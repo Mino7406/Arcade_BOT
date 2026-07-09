@@ -171,7 +171,7 @@ async function handleAdminButton(interaction) {
       .setFooter({ text: `⌛ ${label}이 종료되었습니다.` })
       .setTimestamp();
 
-    await match.message.edit({ content: '', embeds: [endedEmbed], components: [], allowedMentions: { parse: [] } });
+    await match.message.edit({ content: '', embeds: [endedEmbed], components: [], attachments: [], allowedMentions: { parse: [] } });
     map.delete(msgId);
     await interaction.update({ content: '✅ **종료 처리되었습니다.**', components: [] });
   }

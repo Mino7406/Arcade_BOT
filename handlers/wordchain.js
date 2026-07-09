@@ -246,7 +246,7 @@ function endGame(game, games, loserId, reason, failWord = null) {
   game.failWord  = failWord;
   // 즉시 지우지 않고 잠시 남겨둬서 '재대결' 버튼이 원래 참가자 명단을 찾을 수 있게 함
   setTimeout(() => games.delete(game.id), REMATCH_EXPIRY_MS);
-  game.message?.edit({ embeds: [buildFinishedEmbed(game)], components: buildFinishedComponents(game) }).catch(() => {});
+  game.message?.edit({ embeds: [buildFinishedEmbed(game)], components: buildFinishedComponents(game), attachments: [] }).catch(() => {});
 }
 
 async function botPlay(game, games) {
@@ -269,6 +269,7 @@ async function botPlay(game, games) {
   await g.message?.edit({
     embeds: [buildPlayingEmbed(g)],
     components: buildPlayingComponents(g),
+    attachments: [],
   }).catch(() => {});
 
   startTurn(g, games);
@@ -318,6 +319,7 @@ async function createLobby(interaction, initialPlayers, hostId) {
   await interaction.reply({
     embeds: [buildWaitingEmbed(game)],
     components: buildWaitingComponents(game),
+    attachments: [],
   });
   try {
     game.message = await interaction.fetchReply();
@@ -330,7 +332,7 @@ async function createLobby(interaction, initialPlayers, hostId) {
     const g = games.get(gameId);
     if (!g || g.status !== 'waiting') return;
     games.delete(gameId);
-    await game.message?.edit({ content: '⏰ **참가자가 없어 게임이 취소되었습니다.**', embeds: [], components: [] }).catch(() => {});
+    await game.message?.edit({ content: '⏰ **참가자가 없어 게임이 취소되었습니다.**', embeds: [], components: [], attachments: [] }).catch(() => {});
   }, JOIN_MS);
 }
 
@@ -361,7 +363,7 @@ async function handleWcButton(interaction) {
       return;
     }
     game.players.push({ id: interaction.user.id, name: getDisplayName(interaction) });
-    await interaction.update({ embeds: [buildWaitingEmbed(game)], components: buildWaitingComponents(game) });
+    await interaction.update({ embeds: [buildWaitingEmbed(game)], components: buildWaitingComponents(game), attachments: [] });
     return;
   }
 
@@ -388,7 +390,7 @@ async function handleWcButton(interaction) {
     }
     game.status = 'playing';
     game.currentIdx = 0;
-    await interaction.update({ embeds: [buildPlayingEmbed(game)], components: buildPlayingComponents(game) });
+    await interaction.update({ embeds: [buildPlayingEmbed(game)], components: buildPlayingComponents(game), attachments: [] });
     startTurn(game, games);
     return;
   }
@@ -421,7 +423,7 @@ async function handleWcButton(interaction) {
     }
     game.status = 'playing';
     game.currentIdx = 0;
-    await interaction.update({ embeds: [buildPlayingEmbed(game)], components: buildPlayingComponents(game) });
+    await interaction.update({ embeds: [buildPlayingEmbed(game)], components: buildPlayingComponents(game), attachments: [] });
     startTurn(game, games);
     return;
   }
@@ -444,7 +446,7 @@ async function handleWcButton(interaction) {
       await interaction.deferUpdate();
     } else {
       games.delete(gameId);
-      await interaction.update({ content: '❌ **게임이 취소되었습니다.**', embeds: [], components: [] });
+      await interaction.update({ content: '❌ **게임이 취소되었습니다.**', embeds: [], components: [], attachments: [] });
     }
     return;
   }
@@ -546,6 +548,7 @@ async function handleWcMessage(message) {
     await game.message.edit({
       embeds: [buildPlayingEmbed(game)],
       components: buildPlayingComponents(game),
+      attachments: [],
     }).catch(() => {});
 
     startTurn(game, games);
