@@ -43,6 +43,8 @@ async function restoreMatches(c) {
       // 저장 못 했던 '살아있는 메시지'를 디스코드에서 다시 가져와 연결합니다.
       const channel = await c.channels.fetch(row.channel_id);
       match.message = await channel.messages.fetch(row.message_id);
+      // guildId가 없던 옛 데이터(업데이트 이전 생성분)도 실제 채널 기준으로 채워줍니다.
+      match.guildId = channel.guildId;
 
       const map = row.type === 'naejeon' ? c.naejeonMatches : c.mojipMatches;
       map.set(row.message_id, match);

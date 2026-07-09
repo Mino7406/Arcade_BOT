@@ -7,11 +7,12 @@ async function handleRButton(interaction) {
 
   if (customId === '불러오기:type:naejeon') {
     const matches = interaction.client.naejeonMatches;
-    if (!matches || matches.size === 0) {
+    const entries = matches ? [...matches.entries()].filter(([, m]) => m.guildId === interaction.guildId) : [];
+    if (entries.length === 0) {
       await interaction.update({ content: '⚠️ **현재 진행 중인 내전이 없습니다.**', components: [] });
       return;
     }
-    const options = [...matches.entries()].map(([id, m]) => {
+    const options = entries.map(([id, m]) => {
       const emojiStr = m.data.gameInfo.emoji;
       const cm = emojiStr.match(/^<a?:(\w+):(\d+)>$/);
       const emoji = cm ? { id: cm[2], name: cm[1] } : emojiStr;
@@ -35,11 +36,12 @@ async function handleRButton(interaction) {
 
   if (customId === '불러오기:type:mojip') {
     const matches = interaction.client.mojipMatches;
-    if (!matches || matches.size === 0) {
+    const entries = matches ? [...matches.entries()].filter(([, m]) => m.guildId === interaction.guildId) : [];
+    if (entries.length === 0) {
       await interaction.update({ content: '⚠️ **현재 진행 중인 모집이 없습니다.**', components: [] });
       return;
     }
-    const options = [...matches.entries()].map(([id, m]) => {
+    const options = entries.map(([id, m]) => {
       const emojiStr = m.data.gameInfo.emoji;
       const cm = emojiStr.match(/^<a?:(\w+):(\d+)>$/);
       const emoji = cm ? { id: cm[2], name: cm[1] } : emojiStr;
@@ -69,7 +71,7 @@ async function handleRMatchSelect(interaction) {
     const matchMsgId = interaction.values[0];
     const matches = interaction.client.naejeonMatches;
     const match = matches && matches.get(matchMsgId);
-    if (!match) {
+    if (!match || match.guildId !== interaction.guildId) {
       await interaction.update({ content: '⚠️ **만료된 내전입니다.**', embeds: [], components: [] });
       return;
     }
@@ -88,7 +90,7 @@ async function handleRMatchSelect(interaction) {
     const msgId = interaction.values[0];
     const matches = interaction.client.mojipMatches;
     const match = matches && matches.get(msgId);
-    if (!match) {
+    if (!match || match.guildId !== interaction.guildId) {
       await interaction.update({ content: '⚠️ **만료된 모집입니다.**', embeds: [], components: [] });
       return;
     }

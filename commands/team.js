@@ -25,7 +25,7 @@ module.exports = {
       return;
     }
 
-    const validMatches = [...matches.entries()].filter(([, m]) => m.participants.length >= 2);
+    const validMatches = [...matches.entries()].filter(([, m]) => m.guildId === interaction.guildId && m.participants.length >= 2);
 
     if (validMatches.length === 0) {
       await interaction.reply({ content: '⚠️ **참가자가 2명 이상인 내전이 없습니다.**', ephemeral: true });

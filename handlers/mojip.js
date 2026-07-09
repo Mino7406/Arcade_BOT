@@ -397,7 +397,7 @@ async function handleMojipButton(interaction) {
       files: getThumbnailFiles(),
       allowedMentions: { roles: role ? [role.id] : [], users: [] },
     });
-    getMojips(interaction.client).set(msg.id, { data, participants, message: msg, closed: false, mentionSent: false });
+    getMojips(interaction.client).set(msg.id, { data, participants, message: msg, closed: false, mentionSent: false, guildId: interaction.guildId });
     await interaction.update({ content: '✅ **채널에 공개 게시되었습니다!**', embeds: [], components: [] });
     return;
   }
