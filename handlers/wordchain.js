@@ -5,6 +5,8 @@ const {
   ButtonStyle,
 } = require('discord.js');
 
+const { applyThumbnail, getThumbnailFiles } = require('./shared');
+
 const TURN_MS  = 20_000;
 const TURN_SEC = TURN_MS / 1000;
 const JOIN_MS  = 90_000;
@@ -118,10 +120,12 @@ function buildWaitingEmbed(game) {
     ? `\`\`\`\n${game.players.map((p, i) => `${i + 1}. ${p.name}${p.id === game.hostId ? ' 👑' : ''}`).join('\n')}\n\`\`\``
     : '*아직 참가자가 없습니다.*';
 
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(0x5865F2)
     .setTitle('🔤 끝말잇기')
-    .setDescription('참가자를 기다리는 중입니다.')
+    .setDescription('참가자를 기다리는 중입니다.');
+  applyThumbnail(embed);
+  return embed
     .addFields(
       { name: `👥 참가자  ${game.players.length}명`, value: participantText },
       {
@@ -147,10 +151,12 @@ function buildPlayingEmbed(game) {
 
   const participantText = `\`\`\`\n${game.players.map((p, i) => `${i + 1}. ${p.name}${i === game.currentIdx ? ' ▶️' : ''}`).join('\n')}\n\`\`\``;
 
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(0x57F287)
     .setTitle('🔤 끝말잇기 진행 중')
-    .setDescription(`${wordLine}\n\n💬 **\`${currentPlayer.name}\`의 차례** — 채팅에 단어를 입력하세요! (${currentPlayer.id === 'BOT' ? '자동' : `${TURN_SEC}초`})`)
+    .setDescription(`${wordLine}\n\n💬 **\`${currentPlayer.name}\`의 차례** — 채팅에 단어를 입력하세요! (${currentPlayer.id === 'BOT' ? '자동' : `${TURN_SEC}초`})`);
+  applyThumbnail(embed);
+  return embed
     .addFields(
       { name: `👥 참가자  ${game.players.length}명`, value: participantText, inline: true },
       { name: '📝 최근 단어', value: recentWords, inline: true },
@@ -175,13 +181,15 @@ function buildFinishedEmbed(game) {
 
   const recent = game.history.slice(-10).join(' → ') || '(없음)';
 
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(0xED4245)
     .setTitle('🔤 끝말잇기 종료')
     .setDescription(
       `**탈락** : \`${loserName}\`\n**이유** : ${REASONS[game.endReason] || '게임 종료'}\n\n` +
       `총 **${game.history.length}개** 단어 사용`,
-    )
+    );
+  applyThumbnail(embed);
+  return embed
     .addFields({ name: '📝 마지막 단어들', value: recent })
     .setTimestamp();
 }
@@ -318,6 +326,7 @@ async function createLobby(interaction, initialPlayers, hostId) {
   await interaction.reply({
     embeds: [buildWaitingEmbed(game)],
     components: buildWaitingComponents(game),
+    files: getThumbnailFiles(),
   });
   try {
     game.message = await interaction.fetchReply();

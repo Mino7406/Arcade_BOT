@@ -10,7 +10,7 @@ const {
   UserSelectMenuBuilder,
 } = require('discord.js');
 
-const { ADMIN_IDS, getResetDateStr: getResetDateStrBase } = require('./shared');
+const { ADMIN_IDS, getResetDateStr: getResetDateStrBase, applyThumbnail, getThumbnailFiles } = require('./shared');
 
 const GAMES = {
   lol:       { name: '리그 오브 레전드', emoji: '<:Lol:1510933684750913626>',    defaultPlayers: 5,   color: 0xC89B3C },
@@ -116,6 +116,7 @@ function buildPreviewEmbed({ gameInfo, title, datetime, players, description, or
     .setColor(gameInfo.color)
     .setTitle(`${gameInfo.emoji}  ${title}`)
     .setDescription(lines.join('\n'));
+  applyThumbnail(embed);
 
   if (description) embed.addFields({ name: '📝 메모', value: description });
 
@@ -148,6 +149,7 @@ function buildPublicEmbed(data, participants, closed = false) {
     .setColor(color)
     .setTitle(`${gameInfo.emoji}  ${title}`)
     .setDescription(lines.join('\n'));
+  applyThumbnail(embed);
 
   if (description) embed.addFields({ name: '📝 메모', value: description });
 
@@ -190,6 +192,7 @@ function buildMojipMessagePayload(match) {
     embeds: [buildPublicEmbed(match.data, match.participants, match.closed)],
     components: buildPublicComponents(match.participants, maxPlayers, match.closed),
     allowedMentions: { parse: [] },
+    files: getThumbnailFiles(),
   };
 }
 
@@ -329,6 +332,7 @@ async function handleMojipModal(interaction) {
     content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
     embeds: [buildPreviewEmbed(data)],
     components: buildPreviewComponents(data),
+    files: getThumbnailFiles(),
     ephemeral: true,
   });
 }
@@ -361,6 +365,7 @@ async function handleMojipEditModal(interaction) {
     content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
     embeds: [buildPreviewEmbed(data)],
     components: buildPreviewComponents(data),
+    files: getThumbnailFiles(),
   });
 
   // 모달 인터랙션을 조용히 마무리 (새 메시지 생성 없이)
@@ -389,6 +394,7 @@ async function handleMojipButton(interaction) {
       content: role ? `<@&${role.id}>` : '',
       embeds: [buildPublicEmbed(data, participants)],
       components: buildPublicComponents(participants, maxPlayers),
+      files: getThumbnailFiles(),
       allowedMentions: { roles: role ? [role.id] : [], users: [] },
     });
     getMojips(interaction.client).set(msg.id, { data, participants, message: msg, closed: false, mentionSent: false });
@@ -820,6 +826,7 @@ async function handleMojipButton(interaction) {
       content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
       embeds: [buildPreviewEmbed(data)],
       components: buildPreviewComponents(data),
+      files: getThumbnailFiles(),
     });
     return;
   }
@@ -865,6 +872,7 @@ async function handleMojipButton(interaction) {
       content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
       embeds: [buildPreviewEmbed(data)],
       components: buildPreviewComponents(data),
+      files: getThumbnailFiles(),
     });
     return;
   }

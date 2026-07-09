@@ -2,9 +2,26 @@
 // 여러 파일에 흩어져 있던 동일 로직을 한 곳에 모아, 한쪽만 고치고
 // 다른 쪽은 안 고쳐서 동작이 갈라지는 것을 방지합니다.
 
-const { EmbedBuilder } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
+const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 
 const ADMIN_IDS = ['457437911869161472', '1043750483522752512', '685917435601092643'];
+
+// 임베드 오른쪽 상단에 표시할 공용 썸네일. assets/thumbnail.png 를 넣어두면
+// 자동으로 모든 임베드에 반영되고, 파일이 없으면 조용히 생략됩니다.
+const THUMBNAIL_PATH = path.join(__dirname, '..', 'assets', 'thumbnail.png');
+const THUMBNAIL_NAME = 'thumbnail.png';
+const THUMBNAIL_URL = `attachment://${THUMBNAIL_NAME}`;
+
+function applyThumbnail(embed) {
+  if (fs.existsSync(THUMBNAIL_PATH)) embed.setThumbnail(THUMBNAIL_URL);
+  return embed;
+}
+
+function getThumbnailFiles() {
+  return fs.existsSync(THUMBNAIL_PATH) ? [new AttachmentBuilder(THUMBNAIL_PATH, { name: THUMBNAIL_NAME })] : [];
+}
 
 function getResetDateStr(client, label = '내전') {
   const startedAt = client.startedAt;
@@ -40,10 +57,12 @@ function buildTeamResultEmbed(data, teams) {
     `👑 **주최자**　**\`${organizer.displayName}\`**`,
     `📊 **상태**　　🔒 마감됨`,
   ];
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(gameInfo.color)
     .setTitle(`${gameInfo.emoji}  ${title} - 팀 배정`)
-    .setDescription(lines.join('\n'))
+    .setDescription(lines.join('\n'));
+  applyThumbnail(embed);
+  return embed
     .addFields(
       {
         name: `🔵 팀 1 - ${teams.team1.length}명`,
@@ -66,4 +85,6 @@ module.exports = {
   getNaejeonMatches,
   shuffleIntoTeams,
   buildTeamResultEmbed,
+  applyThumbnail,
+  getThumbnailFiles,
 };

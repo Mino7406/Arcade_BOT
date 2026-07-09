@@ -10,7 +10,7 @@ const {
   UserSelectMenuBuilder,
 } = require('discord.js');
 
-const { ADMIN_IDS, getResetDateStr, getNaejeonMatches: getMatches, shuffleIntoTeams, buildTeamResultEmbed } = require('./shared');
+const { ADMIN_IDS, getResetDateStr, getNaejeonMatches: getMatches, shuffleIntoTeams, buildTeamResultEmbed, applyThumbnail, getThumbnailFiles } = require('./shared');
 
 const GAMES = {
   lol:       { name: '리그 오브 레전드', emoji: '<:Lol:1510933684750913626>',    defaultPlayers: 10,   color: 0xC89B3C },
@@ -116,6 +116,7 @@ function buildPreviewEmbed({ gameInfo, title, datetime, players, description, or
     .setColor(gameInfo.color)
     .setTitle(`${gameInfo.emoji}  ${title}`)
     .setDescription(lines.join('\n'));
+  applyThumbnail(embed);
 
   if (description) embed.addFields({ name: '📝 메모', value: description });
 
@@ -147,6 +148,7 @@ function buildPublicEmbed(data, participants, closed = false, teams = null) {
     .setDescription(lines.join('\n'))
     .setFooter({ text: closed ? '🔒 마감된 내전입니다.' : isFull ? '✅ 모집이 완료되었습니다.' : '✅ 버튼을 눌러 참가하세요!' })
     .setTimestamp();
+  applyThumbnail(embed);
 
   if (description) embed.addFields({ name: '📝 메모', value: description });
 
@@ -223,6 +225,7 @@ function buildPublicMessagePayload(match) {
     embeds: [buildPublicEmbed(match.data, match.participants, match.closed, match.teams)],
     components: buildPublicComponents(match.participants, maxPlayers, match.closed),
     allowedMentions: { parse: [] },
+    files: getThumbnailFiles(),
   };
 }
 
@@ -401,6 +404,7 @@ async function handleNaejeonModal(interaction) {
     content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
     embeds: [buildPreviewEmbed(data)],
     components: buildPreviewComponents(data),
+    files: getThumbnailFiles(),
     ephemeral: true,
   });
 }
@@ -434,6 +438,7 @@ async function handleNaejeonEditModal(interaction) {
     content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
     embeds: [buildPreviewEmbed(data)],
     components: buildPreviewComponents(data),
+    files: getThumbnailFiles(),
   });
 
   // 모달 인터랙션을 조용히 마무리 (새 메시지 생성 없이)
@@ -458,7 +463,7 @@ async function handleTeamAssign(interaction) {
 
   await match.message.edit(buildPublicMessagePayload(match));
   await interaction.update({ content: '✅ **팀 배정이 완료되었습니다.**', embeds: [], components: [buildTeamDoneRow(matchMsgId)] });
-  await interaction.channel.send({ embeds: [buildTeamResultEmbed(match.data, match.teams)], allowedMentions: { parse: [] } });
+  await interaction.channel.send({ embeds: [buildTeamResultEmbed(match.data, match.teams)], files: getThumbnailFiles(), allowedMentions: { parse: [] } });
 }
 
 async function handleNaejeonButton(interaction) {
@@ -483,6 +488,7 @@ async function handleNaejeonButton(interaction) {
       content: roleContent,
       embeds: [buildPublicEmbed(data, participants)],
       components: buildPublicComponents(participants, maxPlayers),
+      files: getThumbnailFiles(),
       allowedMentions: { roles: role ? [role.id] : [], users: [] },
     });
     getMatches(interaction.client).set(msg.id, { data, participants, message: msg, closed: false, teams: null, mentionSent: false, roleContent });
@@ -691,7 +697,7 @@ async function handleNaejeonButton(interaction) {
     match.teams = shuffleIntoTeams(match.participants);
     await match.message.edit(buildPublicMessagePayload(match));
     await interaction.update({ content: '✅ **자동 팀 배정이 완료되었습니다.**', embeds: [], components: [buildTeamDoneRow(matchMsgId)] });
-    await interaction.channel.send({ embeds: [buildTeamResultEmbed(match.data, match.teams)], allowedMentions: { parse: [] } });
+    await interaction.channel.send({ embeds: [buildTeamResultEmbed(match.data, match.teams)], files: getThumbnailFiles(), allowedMentions: { parse: [] } });
     return;
   }
 
@@ -953,6 +959,7 @@ async function handleNaejeonButton(interaction) {
       content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
       embeds: [buildPreviewEmbed(data)],
       components: buildPreviewComponents(data),
+      files: getThumbnailFiles(),
     });
     return;
   }
@@ -998,6 +1005,7 @@ async function handleNaejeonButton(interaction) {
       content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
       embeds: [buildPreviewEmbed(data)],
       components: buildPreviewComponents(data),
+      files: getThumbnailFiles(),
     });
     return;
   }
