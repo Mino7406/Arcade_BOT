@@ -114,8 +114,7 @@ function buildPreviewEmbed({ game, gameInfo, title, datetime, players, descripti
 
   const embed = new EmbedBuilder()
     .setColor(gameInfo.color)
-    .setTitle(title)
-    .setDescription(lines.join('\n'));
+    .setDescription(`# ${title}\n​\n${lines.join('\n')}`);
   applyThumbnail(embed, game);
 
   if (description) embed.addFields({ name: '📝 메모', value: description });
@@ -147,8 +146,7 @@ function buildPublicEmbed(data, participants, closed = false) {
 
   const embed = new EmbedBuilder()
     .setColor(color)
-    .setTitle(title)
-    .setDescription(lines.join('\n'));
+    .setDescription(`# ${title}\n​\n${lines.join('\n')}`);
   applyThumbnail(embed, game);
 
   if (description) embed.addFields({ name: '📝 메모', value: description });
@@ -734,8 +732,8 @@ async function handleMojipButton(interaction) {
     }
     const cancelledEmbed = new EmbedBuilder()
       .setColor(0xED4245)
-      .setTitle(match.data.title)
       .setDescription([
+        `# ${match.data.title}`,
         `🎮 **게임**　　${match.data.gameInfo.name}`,
         `📅 **일시**　　${match.data.datetime}`,
         `👑 **주최자**　**\`${match.data.organizer.displayName}\`**`,

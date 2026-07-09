@@ -114,8 +114,7 @@ function buildPreviewEmbed({ game, gameInfo, title, datetime, players, descripti
 
   const embed = new EmbedBuilder()
     .setColor(gameInfo.color)
-    .setTitle(title)
-    .setDescription(lines.join('\n'));
+    .setDescription(`# ${title}\n​\n${lines.join('\n')}`);
   applyThumbnail(embed, game);
 
   if (description) embed.addFields({ name: '📝 메모', value: description });
@@ -144,8 +143,7 @@ function buildPublicEmbed(data, participants, closed = false, teams = null) {
 
   const embed = new EmbedBuilder()
     .setColor(color)
-    .setTitle(title)
-    .setDescription(lines.join('\n'))
+    .setDescription(`# ${title}\n​\n${lines.join('\n')}`)
     .setFooter({ text: closed ? '🔒 마감된 내전입니다.' : isFull ? '✅ 모집이 완료되었습니다.' : '✅ 버튼을 눌러 참가하세요!' })
     .setTimestamp();
   applyThumbnail(embed, game);
@@ -804,8 +802,8 @@ async function handleNaejeonButton(interaction) {
     }
     const cancelledEmbed = new EmbedBuilder()
       .setColor(0xED4245)
-      .setTitle(match.data.title)
       .setDescription([
+        `# ${match.data.title}`,
         `🎮 **게임**　　${match.data.gameInfo.name}`,
         `📅 **일시**　　${match.data.datetime}`,
         `👑 **주최자**　**\`${match.data.organizer.displayName}\`**`,

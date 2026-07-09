@@ -73,8 +73,7 @@ function buildTeamResultEmbed(data, teams) {
   ];
   const embed = new EmbedBuilder()
     .setColor(gameInfo.color)
-    .setTitle(`${title} - 팀 배정`)
-    .setDescription(lines.join('\n'));
+    .setDescription(`# ${title} - 팀 배정\n​\n${lines.join('\n')}`);
   applyThumbnail(embed, game);
   return embed
     .addFields(

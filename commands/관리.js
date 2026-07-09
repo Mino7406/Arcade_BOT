@@ -156,8 +156,8 @@ async function handleAdminButton(interaction) {
 
     const endedEmbed = new EmbedBuilder()
       .setColor(0x808080)
-      .setTitle(match.data.title)
       .setDescription([
+        `# ${match.data.title}`,
         `🎮 **게임**　　${match.data.gameInfo.name}`,
         `📅 **일시**　　${match.data.datetime}`,
         `👑 **주최자**　**\`${match.data.organizer.displayName}\`**`,

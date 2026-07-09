@@ -144,8 +144,7 @@ async function handleTeamMatchSelect(interaction) {
   ];
   const infoEmbed = new EmbedBuilder()
     .setColor(gameInfo.color)
-    .setTitle(title)
-    .setDescription(lines.join('\n'))
+    .setDescription(`# ${title}\n${lines.join('\n')}`)
     .addFields({ name: '👥 참가자', value: `${match.participants.length}명` });
 
   await interaction.update({
