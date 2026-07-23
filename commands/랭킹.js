@@ -28,6 +28,6 @@ module.exports = {
       .setDescription(lines.join('\n'))
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed] });
+    await interaction.reply({ embeds: [embed], ephemeral: true }); // TODO: 테스트용 임시 처리, 테스트 끝나면 ephemeral 제거
   },
 };

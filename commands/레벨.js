@@ -8,7 +8,7 @@ function buildLevelEmbed(guildId, targetUser, displayName) {
 
   return new EmbedBuilder()
     .setColor(0x5865F2)
-    .setAuthor({ name: displayName })
+    .setAuthor({ name: `\`${displayName}\`` })
     .setThumbnail(targetUser.displayAvatarURL({ size: 256 }))
     .setDescription(
       `## LEVEL ${level}\n` +
