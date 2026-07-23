@@ -10,6 +10,9 @@ const COOLDOWN_MS = 60 * 1000;
 const XP_MIN = 15;
 const XP_MAX = 25;
 
+// 테스트 서버 등 레벨 시스템을 적용하지 않을 길드
+const EXCLUDED_GUILD_IDS = ['1282694117255548960'];
+
 let levels = {}; // { [guildId]: { [userId]: xp } }
 const cooldowns = new Map(); // `${guildId}:${userId}` → 마지막 XP 지급 시각
 
@@ -56,6 +59,7 @@ function getXp(guildId, userId) {
 function handleMessageXp(message) {
   if (message.author.bot || !message.guild) return null;
   const guildId = message.guildId;
+  if (EXCLUDED_GUILD_IDS.includes(guildId)) return null;
   const userId = message.author.id;
   const key = `${guildId}:${userId}`;
   const now = Date.now();
