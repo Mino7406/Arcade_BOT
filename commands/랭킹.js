@@ -1,34 +1,31 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { getLeaderboard, buildProgressBar } = require('../handlers/levels');
+const { getLeaderboard } = require('../handlers/levels');
 
 const DESCRIPTION_LIMIT = 4096; // Discord 임베드 description 최대 길이
 const HEADER = '## 🏆 서버 랭킹\n\n';
 const TRUNCATE_NOTICE = '\n\n*(목록이 길어 일부 순위는 생략되었습니다)*';
-const BAR_LENGTH = 10;
+const MEDALS = ['🥇', '🥈', '🥉'];
 
-// 순위마다 이름 길이가 달라 공백으로 줄을 맞추면 어긋나 보이므로,
-// 컬럼 정렬 대신 이름/진행바를 두 줄로 나눠 항상 깔끔하게 보이도록 한다.
 function formatEntry(entry, name) {
-  const bar = buildProgressBar(entry.currentLevelXp, entry.neededXp, BAR_LENGTH);
-  const heading = entry.rank <= 3 ? `### ${entry.rank}위 · ${name}` : `**${entry.rank}위 · ${name}**`;
-  return `${heading}\n-# Lv.${entry.level} ・ ${bar} ・ ${entry.xp} XP`;
+  const icon = MEDALS[entry.rank - 1] || `**${entry.rank}위**`;
+  return `> ${icon} ${name} ・ Lv.${entry.level} ・ ${entry.xp} XP`;
 }
 
 // 목록이 길어져도 Discord embed description 한도(4096자)를 넘지 않도록 안전하게 자른다.
 function buildDescription(lines) {
-  const full = HEADER + lines.join('\n\n');
+  const full = HEADER + lines.join('\n');
   if (full.length <= DESCRIPTION_LIMIT) return full;
 
   const budget = DESCRIPTION_LIMIT - HEADER.length - TRUNCATE_NOTICE.length;
   const kept = [];
   let used = 0;
   for (const line of lines) {
-    const add = kept.length === 0 ? line.length : line.length + 2; // '\n\n' 구분자 포함
+    const add = kept.length === 0 ? line.length : line.length + 1; // '\n' 구분자 포함
     if (used + add > budget) break;
     kept.push(line);
     used += add;
   }
-  return HEADER + kept.join('\n\n') + TRUNCATE_NOTICE;
+  return HEADER + kept.join('\n') + TRUNCATE_NOTICE;
 }
 
 module.exports = {
