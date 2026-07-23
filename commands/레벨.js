@@ -1,5 +1,31 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { getXp, levelFromXp, buildProgressBar } = require('../handlers/levels');
+
+function buildLevelEmbed(guildId, targetUser, displayName) {
+  const xp = getXp(guildId, targetUser.id);
+  const { level, currentLevelXp, neededXp } = levelFromXp(xp);
+  const bar = buildProgressBar(currentLevelXp, neededXp);
+
+  return new EmbedBuilder()
+    .setColor(0x5865F2)
+    .setAuthor({ name: displayName })
+    .setThumbnail(targetUser.displayAvatarURL({ size: 256 }))
+    .setDescription(
+      `## LEVEL ${level}\n` +
+      `${bar}\n` +
+      `**${currentLevelXp} / ${neededXp}** XP`,
+    )
+    .setTimestamp();
+}
+
+function buildShareRow(targetUserId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`level:share:${targetUserId}`)
+      .setLabel('📤 공유하기')
+      .setStyle(ButtonStyle.Secondary),
+  );
+}
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -14,21 +40,32 @@ module.exports = {
     const targetMember = interaction.options.getMember('유저') || interaction.member;
     const displayName = targetMember?.displayName || targetUser.globalName || targetUser.username;
 
-    const xp = getXp(interaction.guildId, targetUser.id);
-    const { level, currentLevelXp, neededXp } = levelFromXp(xp);
-    const bar = buildProgressBar(currentLevelXp, neededXp);
+    const embed = buildLevelEmbed(interaction.guildId, targetUser, displayName);
 
-    const embed = new EmbedBuilder()
-      .setColor(0x5865F2)
-      .setAuthor({ name: displayName, iconURL: targetUser.displayAvatarURL() })
-      .setThumbnail(targetUser.displayAvatarURL({ size: 256 }))
-      .setDescription(
-        `## LEVEL ${level}\n` +
-        `${bar}\n` +
-        `**${currentLevelXp} / ${neededXp}** XP`,
-      )
-      .setTimestamp();
-
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({
+      embeds: [embed],
+      components: [buildShareRow(targetUser.id)],
+      ephemeral: true,
+    });
   },
 };
+
+// ── 공유하기 버튼 처리 ──────────────────────────────────────────
+async function handleLevelShareButton(interaction) {
+  const targetUserId = interaction.customId.slice('level:share:'.length);
+  const targetMember = await interaction.guild.members.fetch(targetUserId).catch(() => null);
+  const targetUser = targetMember?.user || await interaction.client.users.fetch(targetUserId).catch(() => null);
+
+  if (!targetUser) {
+    await interaction.reply({ content: '⚠️ **유저를 찾을 수 없습니다.**', ephemeral: true });
+    return;
+  }
+
+  const displayName = targetMember?.displayName || targetUser.globalName || targetUser.username;
+  const embed = buildLevelEmbed(interaction.guildId, targetUser, displayName);
+
+  await interaction.channel.send({ embeds: [embed] });
+  await interaction.update({ components: [] });
+}
+
+module.exports.handleLevelShareButton = handleLevelShareButton;

@@ -8,6 +8,7 @@ const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = requ
 const { handleRMatchSelect } = require('./handlers/r');
 const { handleWcButton, handleWcMessage } = require('./handlers/wordchain');
 const { handleAdminSelect, handleAdminButton } = require('./commands/관리');
+const { handleLevelShareButton } = require('./commands/레벨');
 const { saveAll, loadRows } = require('./db'); // ⬅️ 추가: SQLite 저장 모듈
 const { loadLevels, saveLevels, handleMessageXp } = require('./handlers/levels');
 
@@ -78,7 +79,8 @@ client.on('interactionCreate', async (interaction) => {
     const isChannelExempt =
       (interaction.isChatInputCommand() && ['끝말잇기', '레벨', '랭킹', '관리'].includes(interaction.commandName)) ||
       interaction.customId?.startsWith('wc:') ||
-      interaction.customId?.startsWith('admin:');
+      interaction.customId?.startsWith('admin:') ||
+      interaction.customId?.startsWith('level:');
 
     if (!isChannelExempt) {
       const allowedChannel = process.env.ALLOWED_CHANNEL_ID;
@@ -150,6 +152,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleWcButton(interaction);
       } else if (interaction.customId.startsWith('admin:')) {
         await handleAdminButton(interaction);
+      } else if (interaction.customId.startsWith('level:share:')) {
+        await handleLevelShareButton(interaction);
       }
     }
   } catch (error) {
