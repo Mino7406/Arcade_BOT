@@ -10,7 +10,7 @@ function buildLevelEmbed(guildId, targetUser, displayName) {
     .setColor(0x5865F2)
     .setThumbnail(targetUser.displayAvatarURL({ size: 256 }))
     .setDescription(
-      `## ▪️ ${displayName}\n` +
+      `## ${displayName}\n` +
       `## LEVEL ${level}\n` +
       `${bar}\n` +
       `**${currentLevelXp} / ${neededXp}** XP`,
