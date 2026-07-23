@@ -35,7 +35,7 @@ function shuffleIntoTeams(participants) {
 
 // 직접 입력(custom)일 때는 제목에 게임 아이콘을 붙이지 않는다.
 function titleHeader(game, gameInfo, title) {
-  return game === 'custom' ? `# ${title}` : `# ${gameInfo.emoji}  ${title}`;
+  return game === 'custom' ? `## ${title}` : `## ${gameInfo.emoji}  ${title}`;
 }
 
 const AUTO_CLOSE_DELAY_MS = 24 * 60 * 60 * 1000;
