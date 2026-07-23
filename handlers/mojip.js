@@ -10,7 +10,7 @@ const {
   UserSelectMenuBuilder,
 } = require('discord.js');
 
-const { ADMIN_IDS, getResetDateStr: getResetDateStrBase, titleHeader, scheduleAutoClose } = require('./shared');
+const { ADMIN_IDS, getResetDateStr: getResetDateStrBase, titleHeader, scheduleAutoClose, announceMatchCompletionXp } = require('./shared');
 
 const GAMES = {
   lol:       { name: '리그 오브 레전드', emoji: '<:Lol:1510933684750913626>',    defaultPlayers: 5,   color: 0xC89B3C },
@@ -401,7 +401,10 @@ async function handleMojipButton(interaction) {
     });
     getMojips(interaction.client).set(msg.id, { data, participants, message: msg, closed: false, mentionSent: false, guildId: interaction.guildId });
     if (data.autoClose) {
-      scheduleAutoClose(getMojips(interaction.client), msg.id, match => match.message.edit(buildMojipMessagePayload(match)));
+      scheduleAutoClose(getMojips(interaction.client), msg.id, async match => {
+        await match.message.edit(buildMojipMessagePayload(match));
+        await announceMatchCompletionXp(match);
+      });
     }
     await interaction.update({ content: '✅ **채널에 공개 게시되었습니다!**', embeds: [], attachments: [], components: [] });
     return;
@@ -441,6 +444,7 @@ async function handleMojipButton(interaction) {
       components: buildPublicComponents(match.participants, maxPlayers, match.closed),
       attachments: [],
     });
+    if (match.closed) await announceMatchCompletionXp(match);
     await interaction.followUp({
       content: '✅ **참가 완료!** 명단에 등록되었습니다.\n취소하려면 아래 버튼을 눌러주세요.',
       components: [buildLeaveButton(interaction.message.id)],
@@ -591,6 +595,7 @@ async function handleMojipButton(interaction) {
       components: buildPublicComponents(match.participants, maxPlayers, true),
       attachments: [],
     });
+    await announceMatchCompletionXp(match);
     await interaction.update({
       content: '✅ **모집이 마감되었습니다.**',
       components: buildManageMenu(match, msgId),
@@ -613,6 +618,7 @@ async function handleMojipButton(interaction) {
       components: buildPublicComponents(match.participants, maxPlayers, true),
       attachments: [],
     });
+    await announceMatchCompletionXp(match);
     await interaction.update({
       content: '✅ **모집이 마감되었습니다.**',
       components: buildManageMenu(match, msgId),
@@ -975,12 +981,14 @@ async function handleMojipMemberAdd(interaction) {
     match.participants.push({ id: userId, displayName });
     added.push(displayName);
   }
-  if (!match.closed && match.participants.length >= maxPlayers) match.closed = true;
+  const justClosed = !match.closed && match.participants.length >= maxPlayers;
+  if (justClosed) match.closed = true;
   await match.message.edit({
     embeds: [buildPublicEmbed(match.data, match.participants, match.closed)],
     components: buildPublicComponents(match.participants, maxPlayers, match.closed),
     attachments: [],
   });
+  if (justClosed) await announceMatchCompletionXp(match);
   const lines = [];
   if (added.length > 0)   lines.push(`✅ 추가됨: ${added.map(n => `**${n}**`).join(', ')}`);
   if (skipped.length > 0) lines.push(`⚠️ 이미 참가 중: ${skipped.map(n => `**${n}**`).join(', ')}`);

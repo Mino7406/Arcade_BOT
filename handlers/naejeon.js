@@ -10,7 +10,7 @@ const {
   UserSelectMenuBuilder,
 } = require('discord.js');
 
-const { ADMIN_IDS, getResetDateStr, getNaejeonMatches: getMatches, shuffleIntoTeams, buildTeamResultEmbed, titleHeader, scheduleAutoClose } = require('./shared');
+const { ADMIN_IDS, getResetDateStr, getNaejeonMatches: getMatches, shuffleIntoTeams, buildTeamResultEmbed, titleHeader, scheduleAutoClose, announceMatchCompletionXp } = require('./shared');
 
 const GAMES = {
   lol:       { name: '리그 오브 레전드', emoji: '<:Lol:1510933684750913626>',    defaultPlayers: 10,   color: 0xC89B3C },
@@ -495,7 +495,10 @@ async function handleNaejeonButton(interaction) {
     });
     getMatches(interaction.client).set(msg.id, { data, participants, message: msg, closed: false, teams: null, mentionSent: false, roleContent, guildId: interaction.guildId });
     if (data.autoClose) {
-      scheduleAutoClose(getMatches(interaction.client), msg.id, match => match.message.edit(buildPublicMessagePayload(match)));
+      scheduleAutoClose(getMatches(interaction.client), msg.id, async match => {
+        await match.message.edit(buildPublicMessagePayload(match));
+        await announceMatchCompletionXp(match);
+      });
     }
     await interaction.update({ content: '✅ **채널에 공개 게시되었습니다!**', embeds: [], attachments: [], components: [] });
     return;
@@ -531,6 +534,7 @@ async function handleNaejeonButton(interaction) {
     if (match.participants.length >= maxPlayers) match.closed = true;
     await interaction.deferUpdate();
     await match.message.edit(buildPublicMessagePayload(match));
+    if (match.closed) await announceMatchCompletionXp(match);
     await interaction.followUp({
       content: `✅ **참가 완료!** 명단에 등록되었습니다.\n취소하려면 아래 버튼을 눌러주세요.`,
       components: [buildLeaveButton(interaction.message.id)],
@@ -618,6 +622,7 @@ async function handleNaejeonButton(interaction) {
     }
     match.closed = true;
     await match.message.edit(buildPublicMessagePayload(match));
+    await announceMatchCompletionXp(match);
     await interaction.update({
       content: '✅ **내전이 마감되었습니다.**',
       components: buildManageMenu(match, matchMsgId),
@@ -635,6 +640,7 @@ async function handleNaejeonButton(interaction) {
     }
     match.closed = true;
     await match.message.edit(buildPublicMessagePayload(match));
+    await announceMatchCompletionXp(match);
     await interaction.update({
       content: '✅ **내전이 마감되었습니다.**',
       components: buildManageMenu(match, matchMsgId),
@@ -1097,8 +1103,10 @@ async function handleNaejeonMemberAdd(interaction) {
     match.participants.push({ id: userId, displayName });
     added.push(displayName);
   }
-  if (!match.closed && match.participants.length >= maxPlayers) match.closed = true;
+  const justClosed = !match.closed && match.participants.length >= maxPlayers;
+  if (justClosed) match.closed = true;
   await match.message.edit(buildPublicMessagePayload(match));
+  if (justClosed) await announceMatchCompletionXp(match);
   const lines = [];
   if (added.length > 0)   lines.push(`✅ 추가됨: ${added.map(n => `**${n}**`).join(', ')}`);
   if (skipped.length > 0) lines.push(`⚠️ 이미 참가 중: ${skipped.map(n => `**${n}**`).join(', ')}`);
