@@ -469,7 +469,7 @@ async function handleMojipButton(interaction) {
     match.participants.splice(idx, 1);
     const maxPlayers = parseInt(match.data.players) || 0;
     const reopened = match.closed && match.participants.length < maxPlayers;
-    if (reopened) match.closed = false;
+    if (reopened) { match.closed = false; match.xpAwarded = false; }
     await match.message.edit({
       embeds: [buildPublicEmbed(match.data, match.participants, match.closed)],
       components: buildPublicComponents(match.participants, maxPlayers, match.closed),
@@ -525,7 +525,7 @@ async function handleMojipButton(interaction) {
     match.participants.splice(idx, 1);
     const maxPlayers = parseInt(match.data.players) || 0;
     const reopened = match.closed && match.participants.length < maxPlayers;
-    if (reopened) match.closed = false;
+    if (reopened) { match.closed = false; match.xpAwarded = false; }
     await match.message.edit({
       embeds: [buildPublicEmbed(match.data, match.participants, match.closed)],
       components: buildPublicComponents(match.participants, maxPlayers, match.closed),
@@ -635,6 +635,7 @@ async function handleMojipButton(interaction) {
       return;
     }
     match.closed = false;
+    match.xpAwarded = false;
     const maxPlayers = parseInt(match.data.players) || 0;
     await match.message.edit({
       embeds: [buildPublicEmbed(match.data, match.participants, false)],

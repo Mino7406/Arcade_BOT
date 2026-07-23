@@ -146,5 +146,6 @@ module.exports = {
   levelFromXp,
   getXp,
   getLeaderboard,
+  XP_CHANNEL_ID,
   buildProgressBar,
 };

@@ -567,7 +567,7 @@ async function handleNaejeonButton(interaction) {
     }
     const maxPlayers = parseInt(match.data.players) || 0;
     const reopened = match.closed && match.participants.length < maxPlayers;
-    if (reopened) match.closed = false;
+    if (reopened) { match.closed = false; match.xpAwarded = false; }
     await match.message.edit(buildPublicMessagePayload(match));
     await interaction.update({ content: '❌ **참가가 취소되었습니다.**', components: [] });
     return;
@@ -657,6 +657,7 @@ async function handleNaejeonButton(interaction) {
       return;
     }
     match.closed = false;
+    match.xpAwarded = false;
     await match.message.edit(buildPublicMessagePayload(match));
     await interaction.update({
       content: '🔓 **내전 마감이 해제되었습니다.**',
@@ -882,7 +883,7 @@ async function handleNaejeonButton(interaction) {
     }
     const maxPlayers = parseInt(match.data.players) || 0;
     const reopened = match.closed && match.participants.length < maxPlayers;
-    if (reopened) match.closed = false;
+    if (reopened) { match.closed = false; match.xpAwarded = false; }
     await match.message.edit(buildPublicMessagePayload(match));
     await interaction.update({ content: '🚪 **내전에서 이탈하였습니다.**', components: [] });
     return;

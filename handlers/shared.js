@@ -3,7 +3,7 @@
 // 다른 쪽은 안 고쳐서 동작이 갈라지는 것을 방지합니다.
 
 const { EmbedBuilder } = require('discord.js');
-const { awardMatchCompletionXp } = require('./levels');
+const { awardMatchCompletionXp, XP_CHANNEL_ID } = require('./levels');
 
 const ADMIN_IDS = ['457437911869161472', '1043750483522752512', '685917435601092643'];
 
@@ -54,10 +54,13 @@ function scheduleAutoClose(matchesMap, msgId, onClose, delayMs = AUTO_CLOSE_DELA
   }, delayMs);
 }
 
-// 내전/모집이 마감될 때마다 호출. 보너스 XP 지급 후 레벨업한 사람이 있으면 해당 채널에 알린다.
+// 내전/모집이 마감될 때마다 호출. 보너스 XP 지급 후 레벨업한 사람이 있으면 XP 채널에 알린다.
 async function announceMatchCompletionXp(match) {
   const leveledUp = awardMatchCompletionXp(match);
-  const channel = match?.message?.channel;
+  if (leveledUp.length === 0) return;
+  const client = match?.message?.client;
+  if (!client) return;
+  const channel = client.channels.cache.get(XP_CHANNEL_ID) || await client.channels.fetch(XP_CHANNEL_ID).catch(() => null);
   if (!channel) return;
   for (const { userId, newLevel } of leveledUp) {
     await channel.send({

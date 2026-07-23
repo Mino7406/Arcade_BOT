@@ -9,9 +9,9 @@ const BAR_LENGTH = 10;
 
 function formatEntry(entry, name) {
   const medal = MEDALS[entry.rank - 1];
-  const rankText = medal ? `${medal} ${entry.rank}위` : `**${entry.rank}위**`;
+  const rankText = medal ? `${medal} **${entry.rank}위**` : `**${entry.rank}위**`;
   const bar = buildProgressBar(entry.currentLevelXp, entry.neededXp, BAR_LENGTH);
-  return `> ${rankText} · ${name}\n> -# Lv.${entry.level} ・ ${bar} ・ ${entry.xp} XP`;
+  return `> ${rankText} · **${name}**\n> -# Lv.${entry.level} ・ ${bar} ・ ${entry.xp} XP`;
 }
 
 // 인용구(>) 줄 사이에 빈 줄을 넣어야 하나로 이어붙지 않고 유저마다 별도 블록으로 보인다.
@@ -55,6 +55,6 @@ module.exports = {
       .setDescription(buildDescription(lines))
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed], ephemeral: true }); // TODO: 테스트용 임시 처리, 테스트 끝나면 ephemeral 제거
+    await interaction.reply({ embeds: [embed] });
   },
 };
