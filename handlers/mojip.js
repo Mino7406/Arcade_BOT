@@ -10,7 +10,7 @@ const {
   UserSelectMenuBuilder,
 } = require('discord.js');
 
-const { ADMIN_IDS, getResetDateStr: getResetDateStrBase } = require('./shared');
+const { ADMIN_IDS, getResetDateStr: getResetDateStrBase, titleHeader, scheduleAutoClose } = require('./shared');
 
 const GAMES = {
   lol:       { name: '리그 오브 레전드', emoji: '<:Lol:1510933684750913626>',    defaultPlayers: 5,   color: 0xC89B3C },
@@ -102,7 +102,7 @@ function buildModal(game, data = {}) {
   return modal;
 }
 
-function buildPreviewEmbed({ gameInfo, title, datetime, players, description, organizer }) {
+function buildPreviewEmbed({ game, gameInfo, title, datetime, players, description, organizer, autoClose }) {
   const max = parseInt(players) || 0;
 
   const lines = [
@@ -111,10 +111,11 @@ function buildPreviewEmbed({ gameInfo, title, datetime, players, description, or
     `👑 **주최자**　**\`${organizer.displayName}\`**`,
     `📊 **상태**　　⏳ 게시 전`,
   ];
+  if (autoClose) lines.push('⏰ **자동 종료**　게시 후 24시간');
 
   const embed = new EmbedBuilder()
     .setColor(gameInfo.color)
-    .setDescription(`# ${gameInfo.emoji}  ${title}\n${lines.join('\n')}`);
+    .setDescription(`${titleHeader(game, gameInfo, title)}\n${lines.join('\n')}`);
 
   if (description) embed.addFields({ name: '📝 메모', value: description });
 
@@ -125,7 +126,7 @@ function buildPreviewEmbed({ gameInfo, title, datetime, players, description, or
 }
 
 function buildPublicEmbed(data, participants, closed = false) {
-  const { gameInfo, title, datetime, players, description, organizer } = data;
+  const { game, gameInfo, title, datetime, players, description, organizer, autoClose } = data;
   const max = parseInt(players) || 0;
   const isFull = participants.length >= max;
 
@@ -138,6 +139,7 @@ function buildPublicEmbed(data, participants, closed = false) {
     `👑 **주최자**　**\`${organizer.displayName}\`**`,
     `📊 **상태**　　${statusText}`,
   ];
+  if (autoClose && !closed) lines.push('⏰ **자동 종료**　게시 후 24시간');
 
   const participantText = participants.length > 0
     ? `\`\`\`\n${participants.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n')}\n\`\`\``
@@ -145,7 +147,7 @@ function buildPublicEmbed(data, participants, closed = false) {
 
   const embed = new EmbedBuilder()
     .setColor(color)
-    .setDescription(`# ${gameInfo.emoji}  ${title}\n${lines.join('\n')}`);
+    .setDescription(`${titleHeader(game, gameInfo, title)}\n${lines.join('\n')}`);
 
   if (description) embed.addFields({ name: '📝 메모', value: description });
 
@@ -207,15 +209,21 @@ function buildPreviewComponents(data = null) {
     new ButtonBuilder().setCustomId('mojip:edit').setLabel('✏️ 수정').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('mojip:cancel').setLabel('❌ 취소').setStyle(ButtonStyle.Danger),
   );
+  const autoCloseToggle = new ButtonBuilder()
+    .setCustomId('mojip:toggle_autoclose')
+    .setEmoji('⏰')
+    .setLabel(data && data.autoClose ? '24시간 후 자동 종료: ON' : '24시간 후 자동 종료: OFF')
+    .setStyle(data && data.autoClose ? ButtonStyle.Success : ButtonStyle.Secondary);
+  const rows = [row1, new ActionRowBuilder().addComponents(autoCloseToggle)];
   if (data && data.game === 'custom') {
     const steamToggle = new ButtonBuilder()
       .setCustomId('mojip:toggle_steam')
       .setEmoji({ id: '1510954746012242021', name: 'Steam' })
       .setLabel(data.mentionSteam ? '멘션 ON' : '멘션 OFF')
       .setStyle(data.mentionSteam ? ButtonStyle.Success : ButtonStyle.Secondary);
-    return [row1, new ActionRowBuilder().addComponents(steamToggle)];
+    rows.push(new ActionRowBuilder().addComponents(steamToggle));
   }
-  return [row1];
+  return rows;
 }
 
 function buildCancelComponents() {
@@ -394,6 +402,9 @@ async function handleMojipButton(interaction) {
       allowedMentions: { roles: role ? [role.id] : [], users: [] },
     });
     getMojips(interaction.client).set(msg.id, { data, participants, message: msg, closed: false, mentionSent: false, guildId: interaction.guildId });
+    if (data.autoClose) {
+      scheduleAutoClose(getMojips(interaction.client), msg.id, match => match.message.edit(buildMojipMessagePayload(match)));
+    }
     await interaction.update({ content: '✅ **채널에 공개 게시되었습니다!**', embeds: [], attachments: [], components: [] });
     return;
   }
@@ -737,7 +748,7 @@ async function handleMojipButton(interaction) {
     const cancelledEmbed = new EmbedBuilder()
       .setColor(0xED4245)
       .setDescription([
-        `# ${match.data.gameInfo.emoji}  ${match.data.title}`,
+        titleHeader(match.data.game, match.data.gameInfo, match.data.title),
         `🎮 **게임**　　${match.data.gameInfo.name}`,
         `📅 **일시**　　${match.data.datetime}`,
         `👑 **주최자**　**\`${match.data.organizer.displayName}\`**`,
@@ -812,6 +823,23 @@ async function handleMojipButton(interaction) {
             .setStyle(ButtonStyle.Secondary),
         ),
       ],
+    });
+    return;
+  }
+
+  // ── 24시간 후 자동 종료 토글 ───────────────────────────────
+  if (customId === 'mojip:toggle_autoclose') {
+    const data = getPending(interaction.client).get(interaction.user.id);
+    if (!data) {
+      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/모집\`을 실행해주세요. (${getResetDateStr(interaction.client)})`, ephemeral: true });
+      return;
+    }
+    data.autoClose = !data.autoClose;
+    await interaction.update({
+      content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
+      embeds: [buildPreviewEmbed(data)],
+      components: buildPreviewComponents(data),
+      attachments: [],
     });
     return;
   }

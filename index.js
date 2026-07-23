@@ -9,6 +9,7 @@ const { handleRMatchSelect } = require('./handlers/r');
 const { handleWcButton, handleWcMessage } = require('./handlers/wordchain');
 const { handleAdminSelect, handleAdminButton } = require('./commands/관리');
 const { saveAll, loadRows } = require('./db'); // ⬅️ 추가: SQLite 저장 모듈
+const { loadLevels, saveLevels, handleMessageXp } = require('./handlers/levels');
 
 const client = new Client({
   intents: [
@@ -31,7 +32,7 @@ for (const file of commandFiles) {
 }
 
 // ─── DB에서 내전/모집 복원 ────────────────────────────────────
-// 봇이 켜질 때 data.db에 저장돼 있던 내전/모집을 다시 메모리로 불러옵니다.
+// 봇이 켜질 때 data.json에 저장돼 있던 내전/모집을 다시 메모리로 불러옵니다.
 async function restoreMatches(c) {
   if (!c.naejeonMatches) c.naejeonMatches = new Map();
   if (!c.mojipMatches)   c.mojipMatches   = new Map();
@@ -67,6 +68,7 @@ async function onReady(c) {
   console.log(`✅ 봇 로그인 완료: ${c.user.tag}`);
   c.startedAt = new Date();
   await restoreMatches(c); // ⬅️ 추가: 저장된 내전/모집 복원
+  loadLevels(); // ⬅️ 추가: 저장된 레벨/XP 복원
 }
 client.once('clientReady', onReady);
 client.once('ready', onReady);
@@ -166,17 +168,31 @@ client.on('messageCreate', async (message) => {
   } catch (error) {
     console.error(error);
   }
+
+  try {
+    const result = handleMessageXp(message);
+    if (result?.leveledUp) {
+      await message.channel.send({
+        content: `<@${message.author.id}>님이 ${result.newLevel}레벨을 달성했어요. 🎉`,
+        allowedMentions: { users: [message.author.id] },
+      });
+    }
+  } catch (error) {
+    console.error(error);
+  }
 });
 
 // ─── 자동 저장 (30초마다) ─────────────────────────────────────
 // 봇이 갑자기 죽어도(크래시) 최대 30초 전 상태까지는 보존됩니다.
 setInterval(() => {
   try { saveAll(client); } catch (e) { console.error('자동 저장 실패:', e); }
+  try { saveLevels(); } catch (e) { console.error('레벨 자동 저장 실패:', e); }
 }, 30_000);
 
 // ─── 종료 시 마지막으로 한 번 더 저장 ─────────────────────────
 function shutdown() {
   try { saveAll(client); } catch (e) { console.error('종료 저장 실패:', e); }
+  try { saveLevels(); } catch (e) { console.error('레벨 종료 저장 실패:', e); }
   client.destroy();
   process.exit(0);
 }

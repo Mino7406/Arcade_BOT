@@ -7,7 +7,7 @@ const {
   EmbedBuilder,
 } = require('discord.js');
 
-const { ADMIN_IDS } = require('../handlers/shared');
+const { ADMIN_IDS, titleHeader } = require('../handlers/shared');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -157,7 +157,7 @@ async function handleAdminButton(interaction) {
     const endedEmbed = new EmbedBuilder()
       .setColor(0x808080)
       .setDescription([
-        `# ${match.data.gameInfo.emoji}  ${match.data.title}`,
+        titleHeader(match.data.game, match.data.gameInfo, match.data.title),
         `🎮 **게임**　　${match.data.gameInfo.name}`,
         `📅 **일시**　　${match.data.datetime}`,
         `👑 **주최자**　**\`${match.data.organizer.displayName}\`**`,

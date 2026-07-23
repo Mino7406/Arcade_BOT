@@ -12,6 +12,7 @@ const {
   getNaejeonMatches: getMatches,
   shuffleIntoTeams,
   buildTeamResultEmbed: buildTeamEmbed,
+  titleHeader,
 } = require('./shared');
 
 function buildMatchSelectMenu(matches) {
@@ -133,7 +134,7 @@ async function handleTeamMatchSelect(interaction) {
     return;
   }
 
-  const { gameInfo, title, datetime, organizer } = match.data;
+  const { game, gameInfo, title, datetime, organizer } = match.data;
   const statusText = match.closed ? '🔒 마감됨' : '🟢 모집 중';
   const lines = [
     `🎮 **게임**　　${gameInfo.name}`,
@@ -143,7 +144,7 @@ async function handleTeamMatchSelect(interaction) {
   ];
   const infoEmbed = new EmbedBuilder()
     .setColor(gameInfo.color)
-    .setDescription(`# ${gameInfo.emoji}  ${title}\n${lines.join('\n')}`)
+    .setDescription(`${titleHeader(game, gameInfo, title)}\n${lines.join('\n')}`)
     .addFields({ name: '👥 참가자', value: `${match.participants.length}명` });
 
   await interaction.update({

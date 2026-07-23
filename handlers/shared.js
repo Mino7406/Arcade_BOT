@@ -32,8 +32,29 @@ function shuffleIntoTeams(participants) {
   return { team1: shuffled.slice(0, half), team2: shuffled.slice(half) };
 }
 
+// 직접 입력(custom)일 때는 제목에 게임 아이콘을 붙이지 않는다.
+function titleHeader(game, gameInfo, title) {
+  return game === 'custom' ? `# ${title}` : `# ${gameInfo.emoji}  ${title}`;
+}
+
+const AUTO_CLOSE_DELAY_MS = 24 * 60 * 60 * 1000;
+
+// 게시 24시간 후 자동으로 마감 처리한다. 그 사이 수동으로 마감/취소되면 조용히 넘어간다.
+function scheduleAutoClose(matchesMap, msgId, onClose, delayMs = AUTO_CLOSE_DELAY_MS) {
+  return setTimeout(async () => {
+    const match = matchesMap.get(msgId);
+    if (!match || match.closed) return;
+    match.closed = true;
+    try {
+      await onClose(match);
+    } catch (err) {
+      console.error('자동 종료 처리 중 오류:', err);
+    }
+  }, delayMs);
+}
+
 function buildTeamResultEmbed(data, teams) {
-  const { gameInfo, title, datetime, organizer } = data;
+  const { game, gameInfo, title, datetime, organizer } = data;
   const lines = [
     `🎮 **게임**　　${gameInfo.name}`,
     `📅 **일시**　　${datetime}`,
@@ -42,7 +63,7 @@ function buildTeamResultEmbed(data, teams) {
   ];
   const embed = new EmbedBuilder()
     .setColor(gameInfo.color)
-    .setDescription(`# ${gameInfo.emoji}  ${title} - 팀 배정\n${lines.join('\n')}`);
+    .setDescription(`${titleHeader(game, gameInfo, title)} - 팀 배정\n${lines.join('\n')}`);
   return embed
     .addFields(
       {
@@ -66,4 +87,6 @@ module.exports = {
   getNaejeonMatches,
   shuffleIntoTeams,
   buildTeamResultEmbed,
+  titleHeader,
+  scheduleAutoClose,
 };
