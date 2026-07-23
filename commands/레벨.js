@@ -8,10 +8,10 @@ function buildLevelEmbed(guildId, targetUser, displayName) {
 
   return new EmbedBuilder()
     .setColor(0x5865F2)
-    .setAuthor({ name: `\`${displayName}\`` })
     .setThumbnail(targetUser.displayAvatarURL({ size: 256 }))
     .setDescription(
-      `## LEVEL ${level}\n` +
+      `# ${displayName}\n` +
+      `### LEVEL ${level}\n` +
       `${bar}\n` +
       `**${currentLevelXp} / ${neededXp}** XP`,
     )
@@ -23,7 +23,7 @@ function buildShareRow(targetUserId) {
     new ButtonBuilder()
       .setCustomId(`level:share:${targetUserId}`)
       .setLabel('📤 공유하기')
-      .setStyle(ButtonStyle.Secondary),
+      .setStyle(ButtonStyle.Primary),
   );
 }
 

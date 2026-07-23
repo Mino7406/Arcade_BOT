@@ -1,7 +1,26 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { getLeaderboard } = require('../handlers/levels');
 
-const MEDALS = ['🥇', '🥈', '🥉'];
+const DESCRIPTION_LIMIT = 4096; // Discord 임베드 description 최대 길이
+const HEADER = '# 🏆 서버 랭킹\n\n';
+const TRUNCATE_NOTICE = '\n\n*(목록이 길어 일부 순위는 생략되었습니다)*';
+
+// 목록이 길어져도 Discord embed description 한도(4096자)를 넘지 않도록 안전하게 자른다.
+function buildDescription(lines) {
+  const full = HEADER + lines.join('\n\n');
+  if (full.length <= DESCRIPTION_LIMIT) return full;
+
+  const budget = DESCRIPTION_LIMIT - HEADER.length - TRUNCATE_NOTICE.length;
+  const kept = [];
+  let used = 0;
+  for (const line of lines) {
+    const add = kept.length === 0 ? line.length : line.length + 2; // '\n\n' 구분자 포함
+    if (used + add > budget) break;
+    kept.push(line);
+    used += add;
+  }
+  return HEADER + kept.join('\n\n') + TRUNCATE_NOTICE;
+}
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -18,14 +37,12 @@ module.exports = {
     const lines = await Promise.all(top.map(async (entry) => {
       const member = await interaction.guild.members.fetch(entry.userId).catch(() => null);
       const name = member?.displayName || `알 수 없는 사용자 (${entry.userId})`;
-      const icon = MEDALS[entry.rank - 1] || `**${entry.rank}.**`;
-      return `${icon}　${name}　·　Lv.${entry.level}　·　${entry.xp} XP`;
+      return `**${entry.rank}.**　${name}　·　Lv.${entry.level}　·　${entry.xp} XP`;
     }));
 
     const embed = new EmbedBuilder()
       .setColor(0xFEE75C)
-      .setTitle('🏆 서버 랭킹')
-      .setDescription(lines.join('\n'))
+      .setDescription(buildDescription(lines))
       .setTimestamp();
 
     await interaction.reply({ embeds: [embed], ephemeral: true }); // TODO: 테스트용 임시 처리, 테스트 끝나면 ephemeral 제거
