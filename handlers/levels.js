@@ -97,7 +97,8 @@ function handleMessageXp(message) {
 }
 
 // 내전/모집이 성공적으로 마감됐을 때 주최자/참가자에게 1회성 보너스 XP를 지급한다.
-// match.xpAwardedUserIds(유저별 지급 이력)로 재마감돼도 이미 받은 사람은 또 받지 않게 막는다.
+// match.xpAwardedUserIds(유저별 지급 이력, 일반 객체 - JSON 저장/복원 가능)로
+// 재마감돼도 이미 받은 사람은 또 받지 않게 막는다.
 // 레벨업한 사람만 배열로 반환(호출부에서 축하 메시지를 보낼 수 있도록).
 function awardMatchCompletionXp(match) {
   if (!match) return [];
@@ -106,20 +107,20 @@ function awardMatchCompletionXp(match) {
   const guildId = match.guildId;
   if (!guildId || EXCLUDED_GUILD_IDS.includes(guildId)) return [];
 
-  if (!match.xpAwardedUserIds) match.xpAwardedUserIds = new Set();
+  if (!match.xpAwardedUserIds) match.xpAwardedUserIds = {};
 
   const results = [];
   const organizerId = match.data?.organizer?.id;
-  if (organizerId && !match.xpAwardedUserIds.has(organizerId)) {
-    match.xpAwardedUserIds.add(organizerId);
+  if (organizerId && !match.xpAwardedUserIds[organizerId]) {
+    match.xpAwardedUserIds[organizerId] = true;
     const gained = Math.round(randomBaseXp() * ORGANIZER_XP_MULTIPLIER);
     results.push({ userId: organizerId, ...applyXp(guildId, organizerId, gained) });
   }
 
   for (const participant of match.participants || []) {
     if (participant.id === organizerId) continue; // 주최자 중복 지급 방지
-    if (match.xpAwardedUserIds.has(participant.id)) continue; // 이미 지급받음
-    match.xpAwardedUserIds.add(participant.id);
+    if (match.xpAwardedUserIds[participant.id]) continue; // 이미 지급받음
+    match.xpAwardedUserIds[participant.id] = true;
     const gained = Math.round(randomBaseXp() * PARTICIPANT_XP_MULTIPLIER);
     results.push({ userId: participant.id, ...applyXp(guildId, participant.id, gained) });
   }
