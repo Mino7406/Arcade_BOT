@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { getXp, getRank, levelFromXp, buildProgressBar } = require('../handlers/levels');
+const { getXp, levelFromXp, buildProgressBar } = require('../handlers/levels');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -16,17 +16,16 @@ module.exports = {
 
     const xp = getXp(interaction.guildId, targetUser.id);
     const { level, currentLevelXp, neededXp } = levelFromXp(xp);
-    const { rank, total } = getRank(interaction.guildId, targetUser.id);
     const bar = buildProgressBar(currentLevelXp, neededXp);
 
     const embed = new EmbedBuilder()
       .setColor(0x5865F2)
       .setAuthor({ name: displayName, iconURL: targetUser.displayAvatarURL() })
+      .setThumbnail(targetUser.displayAvatarURL({ size: 256 }))
       .setDescription(
-        `🏆 **서버 순위**　${rank ? `${rank}위 / ${total}명` : '기록 없음'}\n` +
-        `⭐ **레벨**　${level}\n\n` +
+        `## LEVEL ${level}\n` +
         `${bar}\n` +
-        `${currentLevelXp} / ${neededXp} XP`,
+        `**${currentLevelXp} / ${neededXp}** XP`,
       )
       .setTimestamp();
 

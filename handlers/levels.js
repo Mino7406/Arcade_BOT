@@ -83,12 +83,6 @@ function handleMessageXp(message) {
   return { leveledUp: false };
 }
 
-function getRank(guildId, userId) {
-  const sorted = Object.entries(getGuildLevels(guildId)).sort((a, b) => b[1] - a[1]);
-  const idx = sorted.findIndex(([id]) => id === userId);
-  return { rank: idx === -1 ? null : idx + 1, total: sorted.length };
-}
-
 function getLeaderboard(guildId, limit = 10) {
   return Object.entries(getGuildLevels(guildId))
     .sort((a, b) => b[1] - a[1])
@@ -109,7 +103,6 @@ module.exports = {
   handleMessageXp,
   levelFromXp,
   getXp,
-  getRank,
   getLeaderboard,
   buildProgressBar,
 };

@@ -24,7 +24,7 @@ module.exports = {
 
     const embed = new EmbedBuilder()
       .setColor(0xFEE75C)
-      .setTitle('🏆 서버 레벨 순위')
+      .setTitle('🏆 서버 레벨 랭킹')
       .setDescription(lines.join('\n'))
       .setTimestamp();
 
