@@ -13,6 +13,9 @@ const XP_MAX = 25;
 // 테스트 서버 등 레벨 시스템을 적용하지 않을 길드
 const EXCLUDED_GUILD_IDS = ['1282694117255548960'];
 
+// XP 지급을 감지할 채널 (이 채널의 메시지만 XP로 인정)
+const XP_CHANNEL_ID = '1340523443413844048';
+
 let levels = {}; // { [guildId]: { [userId]: xp } }
 const cooldowns = new Map(); // `${guildId}:${userId}` → 마지막 XP 지급 시각
 
@@ -58,6 +61,7 @@ function getXp(guildId, userId) {
 // 메시지 하나에 대해 쿨다운을 확인하고 XP를 지급. 레벨업 여부를 반환.
 function handleMessageXp(message) {
   if (message.author.bot || !message.guild) return null;
+  if (message.channelId !== XP_CHANNEL_ID) return null;
   const guildId = message.guildId;
   if (EXCLUDED_GUILD_IDS.includes(guildId)) return null;
   const userId = message.author.id;
