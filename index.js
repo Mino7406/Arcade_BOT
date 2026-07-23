@@ -2,8 +2,8 @@ require('dotenv').config({ path: './env' });
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove } = require('./handlers/naejeon');
-const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipMemberAdd, handleMojipMemberRemove } = require('./handlers/mojip');
+const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload } = require('./handlers/naejeon');
+const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipMemberAdd, handleMojipMemberRemove, buildMojipMessagePayload } = require('./handlers/mojip');
 const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/team');
 const { handleRMatchSelect } = require('./handlers/r');
 const { handleWcButton, handleWcMessage } = require('./handlers/wordchain');
@@ -11,6 +11,7 @@ const { handleAdminSelect, handleAdminButton } = require('./commands/관리');
 const { handleLevelShareButton } = require('./commands/레벨');
 const { saveAll, loadRows } = require('./db'); // ⬅️ 추가: SQLite 저장 모듈
 const { loadLevels, saveLevels, handleMessageXp } = require('./handlers/levels');
+const { scheduleAutoClose, remainingAutoCloseMs, announceMatchCompletionXp } = require('./handlers/shared');
 
 const client = new Client({
   intents: [
@@ -50,6 +51,13 @@ async function restoreMatches(c) {
 
       const map = row.type === 'naejeon' ? c.naejeonMatches : c.mojipMatches;
       map.set(row.message_id, match);
+      // 재시작으로 사라진 24시간 자동 마감 타이머를, 원래 게시 시각 기준 남은 시간만큼 다시 건다.
+      if (match.data?.autoClose && !match.closed) {
+        scheduleAutoClose(map, row.message_id, async m => {
+          await m.message.edit(row.type === 'naejeon' ? buildPublicMessagePayload(m) : buildMojipMessagePayload(m));
+          await announceMatchCompletionXp(m);
+        }, remainingAutoCloseMs(match));
+      }
       ok++;
     } catch {
       // 메시지가 삭제됐거나 채널 접근 불가 → 그 항목은 버립니다.

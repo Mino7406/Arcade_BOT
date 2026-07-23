@@ -40,6 +40,14 @@ function titleHeader(game, gameInfo, title) {
 
 const AUTO_CLOSE_DELAY_MS = 24 * 60 * 60 * 1000;
 
+// 게시 후 남은 자동 마감까지의 시간(ms). match.postedAt이 없으면(레거시 데이터)
+// 방금 게시된 것으로 간주해 24시간을 그대로 준다. 봇 재시작 복원, 불러오기(재게시) 시
+// 새로 타이머를 걸 때 원래 게시 시각 기준 남은 시간만큼만 기다리도록 쓰인다.
+function remainingAutoCloseMs(match) {
+  const elapsed = Date.now() - (match.postedAt || Date.now());
+  return Math.max(0, AUTO_CLOSE_DELAY_MS - elapsed);
+}
+
 // 게시 24시간 후 자동으로 마감 처리한다. 그 사이 수동으로 마감/취소되면 조용히 넘어간다.
 function scheduleAutoClose(matchesMap, msgId, onClose, delayMs = AUTO_CLOSE_DELAY_MS) {
   return setTimeout(async () => {
@@ -106,5 +114,6 @@ module.exports = {
   buildTeamResultEmbed,
   titleHeader,
   scheduleAutoClose,
+  remainingAutoCloseMs,
   announceMatchCompletionXp,
 };

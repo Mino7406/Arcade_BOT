@@ -493,7 +493,7 @@ async function handleNaejeonButton(interaction) {
       attachments: [],
       allowedMentions: { roles: role ? [role.id] : [], users: [] },
     });
-    getMatches(interaction.client).set(msg.id, { data, participants, message: msg, closed: false, teams: null, mentionSent: false, roleContent, guildId: interaction.guildId });
+    getMatches(interaction.client).set(msg.id, { data, participants, message: msg, closed: false, teams: null, mentionSent: false, roleContent, guildId: interaction.guildId, postedAt: Date.now() });
     if (data.autoClose) {
       scheduleAutoClose(getMatches(interaction.client), msg.id, async match => {
         await match.message.edit(buildPublicMessagePayload(match));

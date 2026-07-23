@@ -399,7 +399,7 @@ async function handleMojipButton(interaction) {
       attachments: [],
       allowedMentions: { roles: role ? [role.id] : [], users: [] },
     });
-    getMojips(interaction.client).set(msg.id, { data, participants, message: msg, closed: false, mentionSent: false, guildId: interaction.guildId });
+    getMojips(interaction.client).set(msg.id, { data, participants, message: msg, closed: false, mentionSent: false, guildId: interaction.guildId, postedAt: Date.now() });
     if (data.autoClose) {
       scheduleAutoClose(getMojips(interaction.client), msg.id, async match => {
         await match.message.edit(buildMojipMessagePayload(match));
