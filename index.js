@@ -76,8 +76,9 @@ client.once('ready', onReady);
 client.on('interactionCreate', async (interaction) => {
   try {
     const isChannelExempt =
-      (interaction.isChatInputCommand() && ['끝말잇기', '레벨', '랭킹'].includes(interaction.commandName)) ||
-      interaction.customId?.startsWith('wc:');
+      (interaction.isChatInputCommand() && ['끝말잇기', '레벨', '랭킹', '관리'].includes(interaction.commandName)) ||
+      interaction.customId?.startsWith('wc:') ||
+      interaction.customId?.startsWith('admin:');
 
     if (!isChannelExempt) {
       const allowedChannel = process.env.ALLOWED_CHANNEL_ID;
