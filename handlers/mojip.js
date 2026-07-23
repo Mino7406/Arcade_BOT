@@ -102,7 +102,7 @@ function buildModal(game, data = {}) {
   return modal;
 }
 
-function buildPreviewEmbed({ game, gameInfo, title, datetime, players, description, organizer, autoClose }) {
+function buildPreviewEmbed({ game, gameInfo, title, datetime, players, description, organizer }) {
   const max = parseInt(players) || 0;
 
   const lines = [
@@ -111,7 +111,6 @@ function buildPreviewEmbed({ game, gameInfo, title, datetime, players, descripti
     `👑 **주최자**　**\`${organizer.displayName}\`**`,
     `📊 **상태**　　⏳ 게시 전`,
   ];
-  if (autoClose) lines.push('⏰ **자동 종료**　게시 후 24시간');
 
   const embed = new EmbedBuilder()
     .setColor(gameInfo.color)
@@ -126,7 +125,7 @@ function buildPreviewEmbed({ game, gameInfo, title, datetime, players, descripti
 }
 
 function buildPublicEmbed(data, participants, closed = false) {
-  const { game, gameInfo, title, datetime, players, description, organizer, autoClose } = data;
+  const { game, gameInfo, title, datetime, players, description, organizer } = data;
   const max = parseInt(players) || 0;
   const isFull = participants.length >= max;
 
@@ -139,7 +138,6 @@ function buildPublicEmbed(data, participants, closed = false) {
     `👑 **주최자**　**\`${organizer.displayName}\`**`,
     `📊 **상태**　　${statusText}`,
   ];
-  if (autoClose && !closed) lines.push('⏰ **자동 종료**　게시 후 24시간');
 
   const participantText = participants.length > 0
     ? `\`\`\`\n${participants.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n')}\n\`\`\``
@@ -212,18 +210,18 @@ function buildPreviewComponents(data = null) {
   const autoCloseToggle = new ButtonBuilder()
     .setCustomId('mojip:toggle_autoclose')
     .setEmoji('⏰')
-    .setLabel(data && data.autoClose ? '24시간 후 자동 종료: ON' : '24시간 후 자동 종료: OFF')
+    .setLabel(data && data.autoClose ? '자동 종료: ON' : '자동 종료: OFF')
     .setStyle(data && data.autoClose ? ButtonStyle.Success : ButtonStyle.Secondary);
-  const rows = [row1, new ActionRowBuilder().addComponents(autoCloseToggle)];
+
   if (data && data.game === 'custom') {
     const steamToggle = new ButtonBuilder()
       .setCustomId('mojip:toggle_steam')
       .setEmoji({ id: '1510954746012242021', name: 'Steam' })
       .setLabel(data.mentionSteam ? '멘션 ON' : '멘션 OFF')
       .setStyle(data.mentionSteam ? ButtonStyle.Success : ButtonStyle.Secondary);
-    rows.push(new ActionRowBuilder().addComponents(steamToggle));
+    return [row1, new ActionRowBuilder().addComponents(autoCloseToggle, steamToggle)];
   }
-  return rows;
+  return [row1, new ActionRowBuilder().addComponents(autoCloseToggle)];
 }
 
 function buildCancelComponents() {
@@ -329,7 +327,7 @@ async function handleMojipModal(interaction) {
     return;
   }
 
-  const data = { game, gameInfo, title, datetime, players, description, organizer: { id: interaction.user.id, displayName: interaction.member?.displayName || interaction.user.globalName || interaction.user.username }, _previewInteraction: interaction };
+  const data = { game, gameInfo, title, datetime, players, description, autoClose: true, organizer: { id: interaction.user.id, displayName: interaction.member?.displayName || interaction.user.globalName || interaction.user.username }, _previewInteraction: interaction };
   getPending(interaction.client).set(interaction.user.id, data);
 
   await interaction.reply({
