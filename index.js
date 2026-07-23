@@ -75,11 +75,11 @@ client.once('ready', onReady);
 
 client.on('interactionCreate', async (interaction) => {
   try {
-    const isMiniGame =
-      (interaction.isChatInputCommand() && interaction.commandName === '끝말잇기') ||
+    const isChannelExempt =
+      (interaction.isChatInputCommand() && ['끝말잇기', '레벨', '랭킹'].includes(interaction.commandName)) ||
       interaction.customId?.startsWith('wc:');
 
-    if (!isMiniGame) {
+    if (!isChannelExempt) {
       const allowedChannel = process.env.ALLOWED_CHANNEL_ID;
       const allowedChannels = allowedChannel ? allowedChannel.split(',').map(id => id.trim()) : [];
       if (allowedChannels.length > 0 && !allowedChannels.includes(interaction.channelId)) {
