@@ -67,7 +67,7 @@ async function handleLevelShareButton(interaction) {
   const embed = buildLevelEmbed(interaction.guildId, targetUser, displayName);
 
   await interaction.channel.send({ embeds: [embed] });
-  await interaction.deleteReply();
+  await interaction.editReply({ embeds: [embed], components: [buildShareRow(targetUser.id)] });
 }
 
 module.exports.handleLevelShareButton = handleLevelShareButton;

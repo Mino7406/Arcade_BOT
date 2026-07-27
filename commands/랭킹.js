@@ -110,6 +110,8 @@ async function handleRankingPageButton(interaction) {
 }
 
 // ── 공유하기 버튼 처리 ──────────────────────────────────────────
+// 내전/모집 게시 버튼처럼, 채널에 공개로 올리기만 하고 원래(비공개) 뷰는 그대로 유지한다.
+// (화살표/공유하기 버튼이 계속 남아있어 이어서 페이지를 넘기거나 다시 공유할 수 있다.)
 async function handleRankingShareButton(interaction) {
   await interaction.deferUpdate();
   const page = parseInt(interaction.customId.slice('ranking:share:'.length), 10) || 1;
@@ -120,7 +122,7 @@ async function handleRankingShareButton(interaction) {
   }
 
   await interaction.channel.send({ embeds: [view.embed] });
-  await interaction.deleteReply();
+  await interaction.editReply({ embeds: [view.embed], components: view.components });
 }
 
 module.exports.handleRankingPageButton = handleRankingPageButton;
