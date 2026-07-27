@@ -3,7 +3,7 @@
 // 다른 쪽은 안 고쳐서 동작이 갈라지는 것을 방지합니다.
 
 const { EmbedBuilder } = require('discord.js');
-const { awardMatchCompletionXp } = require('./levels');
+const { awardMatchCompletionXp, XP_CHANNEL_ID } = require('./levels');
 
 const ADMIN_IDS = ['457437911869161472', '1043750483522752512', '685917435601092643'];
 
@@ -35,7 +35,7 @@ function shuffleIntoTeams(participants) {
 
 // 직접 입력(custom)일 때는 제목에 게임 아이콘을 붙이지 않는다.
 function titleHeader(game, gameInfo, title) {
-  return game === 'custom' ? `# ${title}` : `# ${gameInfo.emoji}  ${title}`;
+  return game === 'custom' ? `## ${title}` : `## ${gameInfo.emoji}  ${title}`;
 }
 
 const AUTO_CLOSE_DELAY_MS = 24 * 60 * 60 * 1000;
@@ -127,10 +127,13 @@ async function endMatch(matchesMap, msgId, match, label) {
   matchesMap.delete(msgId);
 }
 
-// 내전/모집이 마감될 때마다 호출. 보너스 XP 지급 후 레벨업한 사람이 있으면 해당 채널에 알린다.
+// 내전/모집이 마감될 때마다 호출. 보너스 XP 지급 후 레벨업한 사람이 있으면 XP 채널에 알린다.
 async function announceMatchCompletionXp(match) {
   const leveledUp = awardMatchCompletionXp(match);
-  const channel = match?.message?.channel;
+  if (leveledUp.length === 0) return;
+  const client = match?.message?.client;
+  if (!client) return;
+  const channel = client.channels.cache.get(XP_CHANNEL_ID) || await client.channels.fetch(XP_CHANNEL_ID).catch(() => null);
   if (!channel) return;
   for (const { userId, newLevel } of leveledUp) {
     await channel.send({

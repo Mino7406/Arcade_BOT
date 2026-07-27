@@ -1,5 +1,6 @@
 const { buildPublicMessagePayload } = require('./naejeon');
 const { buildMojipMessagePayload } = require('./mojip');
+const { armAutoEnd, AUTO_CLOSE_DELAY_MS } = require('./shared');
 
 async function handleRMatchSelect(interaction) {
   const value = interaction.values[0];
@@ -22,6 +23,12 @@ async function handleRMatchSelect(interaction) {
   matches.delete(msgId);
   match.message = newMsg;
   matches.set(newMsg.id, match);
+  // 재게시로 옛 메시지 ID에 걸려있던 자동 종료 타이머가 무효화되므로, 새 ID로 남은 시간만큼 다시 건다.
+  // (마감 상태가 아니면 애초에 걸려있던 타이머가 없으므로 아무것도 하지 않는다.)
+  if (match.closed && match.data?.autoClose) {
+    const remaining = match.closedAt ? AUTO_CLOSE_DELAY_MS - (Date.now() - match.closedAt) : 0;
+    armAutoEnd(matches, newMsg.id, match, label, Math.max(0, remaining));
+  }
   await interaction.update({ content: `✅ **${label} 임베드가 다시 게시되었습니다.**`, embeds: [], attachments: [], components: [] });
 }
 
