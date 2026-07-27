@@ -96,28 +96,30 @@ module.exports = {
 };
 
 // ── 페이지 이동 버튼 처리 ────────────────────────────────────────
+// 3초 인터랙션 응답 제한을 넘기지 않도록, 멤버 조회 등 오래 걸릴 수 있는 작업 전에 먼저 ack한다.
 async function handleRankingPageButton(interaction) {
+  await interaction.deferUpdate();
   const page = parseInt(interaction.customId.slice('ranking:page:'.length), 10) || 1;
   const view = await buildRankingView(interaction.guild, page);
   if (!view) {
-    await interaction.update({ content: '📭 **아직 레벨 기록이 없습니다.**', embeds: [], components: [] });
+    await interaction.editReply({ content: '📭 **아직 레벨 기록이 없습니다.**', embeds: [], components: [] });
     return;
   }
 
-  await interaction.update({ embeds: [view.embed], components: view.components });
+  await interaction.editReply({ embeds: [view.embed], components: view.components });
 }
 
 // ── 공유하기 버튼 처리 ──────────────────────────────────────────
 async function handleRankingShareButton(interaction) {
+  await interaction.deferUpdate();
   const page = parseInt(interaction.customId.slice('ranking:share:'.length), 10) || 1;
   const view = await buildRankingView(interaction.guild, page);
   if (!view) {
-    await interaction.update({ content: '📭 **아직 레벨 기록이 없습니다.**', embeds: [], components: [] });
+    await interaction.editReply({ content: '📭 **아직 레벨 기록이 없습니다.**', embeds: [], components: [] });
     return;
   }
 
   await interaction.channel.send({ embeds: [view.embed] });
-  await interaction.deferUpdate();
   await interaction.deleteReply();
 }
 

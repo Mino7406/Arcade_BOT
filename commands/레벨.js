@@ -51,13 +51,15 @@ module.exports = {
 };
 
 // ── 공유하기 버튼 처리 ──────────────────────────────────────────
+// 3초 인터랙션 응답 제한을 넘기지 않도록, 멤버 조회 등 오래 걸릴 수 있는 작업 전에 먼저 ack한다.
 async function handleLevelShareButton(interaction) {
+  await interaction.deferUpdate();
   const targetUserId = interaction.customId.slice('level:share:'.length);
   const targetMember = await interaction.guild.members.fetch(targetUserId).catch(() => null);
   const targetUser = targetMember?.user || await interaction.client.users.fetch(targetUserId).catch(() => null);
 
   if (!targetUser) {
-    await interaction.reply({ content: '⚠️ **유저를 찾을 수 없습니다.**', ephemeral: true });
+    await interaction.editReply({ content: '⚠️ **유저를 찾을 수 없습니다.**', embeds: [], components: [] });
     return;
   }
 
@@ -65,7 +67,6 @@ async function handleLevelShareButton(interaction) {
   const embed = buildLevelEmbed(interaction.guildId, targetUser, displayName);
 
   await interaction.channel.send({ embeds: [embed] });
-  await interaction.deferUpdate();
   await interaction.deleteReply();
 }
 
