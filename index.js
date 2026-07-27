@@ -4,11 +4,13 @@ const fs = require('fs');
 const path = require('path');
 const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove } = require('./handlers/naejeon');
 const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipMemberAdd, handleMojipMemberRemove } = require('./handlers/mojip');
+const { armAutoEnd, endMatch, AUTO_CLOSE_DELAY_MS } = require('./handlers/shared');
 const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/team');
 const { handleRMatchSelect } = require('./handlers/r');
 const { handleWcButton, handleWcMessage } = require('./handlers/wordchain');
 const { handleAdminSelect, handleAdminButton } = require('./commands/관리');
 const { handleLevelShareButton } = require('./commands/레벨');
+const { handleRankingPageButton, handleRankingShareButton } = require('./commands/랭킹');
 const { saveAll, loadRows } = require('./db'); // ⬅️ 추가: SQLite 저장 모듈
 const { loadLevels, saveLevels, handleMessageXp } = require('./handlers/levels');
 
@@ -50,6 +52,20 @@ async function restoreMatches(c) {
 
       const map = row.type === 'naejeon' ? c.naejeonMatches : c.mojipMatches;
       map.set(row.message_id, match);
+
+      // 봇이 꺼져있던 동안 setTimeout이 소실되므로, 마감(closed) 시점을 기준으로
+      // 24시간 자동 종료를 다시 스케줄링합니다. 이미 24시간이 지났다면 즉시 종료 처리합니다.
+      // (closedAt이 없는 옛 데이터는 이미 마감 상태로 오래 방치돼 있었다는 뜻이므로 즉시 종료합니다.)
+      if (match.closed && match.data?.autoClose) {
+        const label = row.type === 'naejeon' ? '내전' : '모집';
+        const remaining = match.closedAt ? AUTO_CLOSE_DELAY_MS - (Date.now() - match.closedAt) : 0;
+        if (remaining <= 0) {
+          await endMatch(map, row.message_id, match, label).catch(err => console.error('복원 후 자동 종료 처리 중 오류:', err));
+        } else {
+          armAutoEnd(map, row.message_id, match, label, remaining);
+        }
+      }
+
       ok++;
     } catch {
       // 메시지가 삭제됐거나 채널 접근 불가 → 그 항목은 버립니다.
@@ -80,7 +96,8 @@ client.on('interactionCreate', async (interaction) => {
       (interaction.isChatInputCommand() && ['끝말잇기', '레벨', '랭킹', '관리'].includes(interaction.commandName)) ||
       interaction.customId?.startsWith('wc:') ||
       interaction.customId?.startsWith('admin:') ||
-      interaction.customId?.startsWith('level:');
+      interaction.customId?.startsWith('level:') ||
+      interaction.customId?.startsWith('ranking:');
 
     if (!isChannelExempt) {
       const allowedChannel = process.env.ALLOWED_CHANNEL_ID;
@@ -154,6 +171,10 @@ client.on('interactionCreate', async (interaction) => {
         await handleAdminButton(interaction);
       } else if (interaction.customId.startsWith('level:share:')) {
         await handleLevelShareButton(interaction);
+      } else if (interaction.customId.startsWith('ranking:page:')) {
+        await handleRankingPageButton(interaction);
+      } else if (interaction.customId.startsWith('ranking:share:')) {
+        await handleRankingShareButton(interaction);
       }
     }
   } catch (error) {

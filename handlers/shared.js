@@ -40,18 +40,91 @@ function titleHeader(game, gameInfo, title) {
 
 const AUTO_CLOSE_DELAY_MS = 24 * 60 * 60 * 1000;
 
-// 게시 24시간 후 자동으로 마감 처리한다. 그 사이 수동으로 마감/취소되면 조용히 넘어간다.
-function scheduleAutoClose(matchesMap, msgId, onClose, delayMs = AUTO_CLOSE_DELAY_MS) {
-  return setTimeout(async () => {
-    const match = matchesMap.get(msgId);
-    if (!match || match.closed) return;
-    match.closed = true;
+function clearAutoEndTimer(match) {
+  if (match._autoEndTimer) {
+    clearTimeout(match._autoEndTimer);
+    match._autoEndTimer = null;
+  }
+}
+
+// 마감(closed)된 시점부터 delayMs(기본 24시간) 후 자동으로 "종료" 처리를 예약한다.
+// autoClose 옵션이 꺼져있으면 아무것도 하지 않는다. 봇 재시작 후 복원할 때는
+// 이미 지난 시간만큼 뺀 delayMs를 넘겨 원래 마감 시각 기준을 유지한다.
+function armAutoEnd(matchesMap, msgId, match, label, delayMs = AUTO_CLOSE_DELAY_MS) {
+  clearAutoEndTimer(match);
+  if (!match.data?.autoClose) return;
+  match._autoEndTimer = setTimeout(async () => {
+    match._autoEndTimer = null;
+    const current = matchesMap.get(msgId);
+    if (!current || !current.closed) return;
     try {
-      await onClose(match);
+      await announceMatchCompletionXp(current);
+      await endMatch(matchesMap, msgId, current, label);
     } catch (err) {
       console.error('자동 종료 처리 중 오류:', err);
     }
   }, delayMs);
+}
+
+// 마감이 해제될 때 예약된 자동 종료 타이머를 취소한다.
+function disarmAutoEnd(match) {
+  clearAutoEndTimer(match);
+  match.closedAt = null;
+}
+
+// 마감(🔒 마감됨) 상태로 전환하면서 24시간 자동 종료 타이머를 건다.
+function markClosed(matchesMap, msgId, match, label) {
+  match.closed = true;
+  match.closedAt = Date.now();
+  armAutoEnd(matchesMap, msgId, match, label);
+}
+
+// 마감 해제(🔓) 상태로 전환하면서 예약돼 있던 자동 종료 타이머를 취소한다.
+function markReopened(match) {
+  match.closed = false;
+  disarmAutoEnd(match);
+}
+
+// /관리 의 "⌛ 종료"와 동일한 회색 "종료됨" 임베드를 만든다.
+function buildEndedEmbed(match, label) {
+  const { game, gameInfo, title, datetime, organizer, description } = match.data;
+  const max = parseInt(match.data.players) || 0;
+  const participantText = match.participants.length > 0
+    ? `\`\`\`\n${match.participants.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n')}\n\`\`\``
+    : '*참가자가 없습니다.*';
+
+  const embed = new EmbedBuilder()
+    .setColor(0x808080)
+    .setDescription([
+      titleHeader(game, gameInfo, title),
+      `🎮 **게임**　　${gameInfo.name}`,
+      `📅 **일시**　　${datetime}`,
+      `👑 **주최자**　**\`${organizer.displayName}\`**`,
+      `📊 **상태**　　⚫ 종료됨`,
+    ].join('\n'));
+
+  if (description) embed.addFields({ name: '📝 메모', value: description });
+
+  return embed
+    .addFields({ name: `👥 참가자  ${match.participants.length} / ${max}명`, value: participantText })
+    .setFooter({ text: `⌛ ${label}이 종료되었습니다.` })
+    .setTimestamp();
+}
+
+// 매치를 "종료됨" 상태로 만든다: 임베드/버튼을 종료 화면으로 교체하고 관리 목록에서 제거한다.
+// /관리 의 수동 종료와 24시간 자동 종료가 동일한 결과를 내도록 공유한다.
+async function endMatch(matchesMap, msgId, match, label) {
+  clearAutoEndTimer(match);
+  match.closed = true;
+  match.closedAt = null;
+  await match.message.edit({
+    content: '',
+    embeds: [buildEndedEmbed(match, label)],
+    components: [],
+    attachments: [],
+    allowedMentions: { parse: [] },
+  });
+  matchesMap.delete(msgId);
 }
 
 // 내전/모집이 마감될 때마다 호출. 보너스 XP 지급 후 레벨업한 사람이 있으면 해당 채널에 알린다.
@@ -97,11 +170,17 @@ function buildTeamResultEmbed(data, teams) {
 
 module.exports = {
   ADMIN_IDS,
+  AUTO_CLOSE_DELAY_MS,
   getResetDateStr,
   getNaejeonMatches,
   shuffleIntoTeams,
   buildTeamResultEmbed,
   titleHeader,
-  scheduleAutoClose,
+  armAutoEnd,
+  disarmAutoEnd,
+  markClosed,
+  markReopened,
+  buildEndedEmbed,
+  endMatch,
   announceMatchCompletionXp,
 };

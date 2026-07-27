@@ -124,11 +124,15 @@ function awardMatchCompletionXp(match) {
   return results.filter(r => r.leveledUp);
 }
 
-function getLeaderboard(guildId, limit = 10) {
+function getLeaderboard(guildId, limit = 10, offset = 0) {
   return Object.entries(getGuildLevels(guildId))
     .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
-    .map(([userId, xp], i) => ({ rank: i + 1, userId, xp, ...levelFromXp(xp) }));
+    .slice(offset, offset + limit)
+    .map(([userId, xp], i) => ({ rank: offset + i + 1, userId, xp, ...levelFromXp(xp) }));
+}
+
+function getLeaderboardSize(guildId) {
+  return Object.keys(getGuildLevels(guildId)).length;
 }
 
 // 진행바를 이모지/유니코드 블록으로 표현 (예: ■■■■■■□□□□)
@@ -146,5 +150,6 @@ module.exports = {
   levelFromXp,
   getXp,
   getLeaderboard,
+  getLeaderboardSize,
   buildProgressBar,
 };

@@ -4,10 +4,9 @@ const {
   StringSelectMenuBuilder,
   ButtonBuilder,
   ButtonStyle,
-  EmbedBuilder,
 } = require('discord.js');
 
-const { ADMIN_IDS, titleHeader } = require('../handlers/shared');
+const { ADMIN_IDS, endMatch } = require('../handlers/shared');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -149,30 +148,7 @@ async function handleAdminButton(interaction) {
     }
 
     const label = type === 'naejeon' ? '내전' : '모집';
-    const max = parseInt(match.data.players) || 0;
-    const participantText = match.participants.length > 0
-      ? `\`\`\`\n${match.participants.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n')}\n\`\`\``
-      : '*참가자가 없습니다.*';
-
-    const endedEmbed = new EmbedBuilder()
-      .setColor(0x808080)
-      .setDescription([
-        titleHeader(match.data.game, match.data.gameInfo, match.data.title),
-        `🎮 **게임**　　${match.data.gameInfo.name}`,
-        `📅 **일시**　　${match.data.datetime}`,
-        `👑 **주최자**　**\`${match.data.organizer.displayName}\`**`,
-        `📊 **상태**　　⚫ 종료됨`,
-      ].join('\n'));
-
-    if (match.data.description) endedEmbed.addFields({ name: '📝 메모', value: match.data.description });
-
-    endedEmbed
-      .addFields({ name: `👥 참가자  ${match.participants.length} / ${max}명`, value: participantText })
-      .setFooter({ text: `⌛ ${label}이 종료되었습니다.` })
-      .setTimestamp();
-
-    await match.message.edit({ content: '', embeds: [endedEmbed], components: [], attachments: [], allowedMentions: { parse: [] } });
-    map.delete(msgId);
+    await endMatch(map, msgId, match, label);
     await interaction.update({ content: '✅ **종료 처리되었습니다.**', components: [] });
   }
 }

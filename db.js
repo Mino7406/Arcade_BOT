@@ -8,7 +8,7 @@ const DB_PATH = path.join(__dirname, 'data.json');
 
 // match 객체 안의 직렬화 불가 객체(Discord 객체)를 제거하고 JSON 문자열로 변환
 function matchToJSON(match) {
-  const { message, data, ...rest } = match;
+  const { message, data, _autoEndTimer, ...rest } = match;
   const { _previewInteraction, ...cleanData } = data || {};
   return JSON.stringify({ ...rest, data: cleanData });
 }

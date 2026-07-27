@@ -10,7 +10,7 @@ const {
   UserSelectMenuBuilder,
 } = require('discord.js');
 
-const { ADMIN_IDS, getResetDateStr: getResetDateStrBase, titleHeader, scheduleAutoClose, announceMatchCompletionXp } = require('./shared');
+const { ADMIN_IDS, getResetDateStr: getResetDateStrBase, titleHeader, markClosed, markReopened, announceMatchCompletionXp } = require('./shared');
 
 const GAMES = {
   lol:       { name: '리그 오브 레전드', emoji: '<:Lol:1510933684750913626>',    defaultPlayers: 5,   color: 0xC89B3C },
@@ -157,28 +157,16 @@ function buildPublicEmbed(data, participants, closed = false) {
 
 function buildPublicComponents(participants, maxPlayers, closed = false) {
   const isFull = participants.length >= maxPlayers;
-  const joinDisabled = closed || isFull;
   const buttons = [
     new ButtonBuilder()
       .setCustomId('mojip:join')
-      .setLabel(closed ? '🔒 마감됨' : (isFull ? '🔒 모집 완료' : '✅ 참가하기'))
-      .setStyle(joinDisabled ? ButtonStyle.Secondary : ButtonStyle.Success)
-      .setDisabled(joinDisabled),
-  ];
-  if (closed) {
-    buttons.push(
-      new ButtonBuilder()
-        .setCustomId('mojip:leave_request')
-        .setLabel('🚪 나가기')
-        .setStyle(ButtonStyle.Danger),
-    );
-  }
-  buttons.push(
+      .setLabel(closed ? (isFull ? '🔒 모집 완료' : '🔒 마감됨') : '✅ 참가하기')
+      .setStyle(closed ? ButtonStyle.Secondary : ButtonStyle.Success),
     new ButtonBuilder()
       .setCustomId('mojip:manage')
       .setLabel('⚙️ 관리')
       .setStyle(ButtonStyle.Secondary),
-  );
+  ];
   return [new ActionRowBuilder().addComponents(...buttons)];
 }
 
@@ -399,13 +387,7 @@ async function handleMojipButton(interaction) {
       attachments: [],
       allowedMentions: { roles: role ? [role.id] : [], users: [] },
     });
-    getMojips(interaction.client).set(msg.id, { data, participants, message: msg, closed: false, mentionSent: false, guildId: interaction.guildId });
-    if (data.autoClose) {
-      scheduleAutoClose(getMojips(interaction.client), msg.id, async match => {
-        await match.message.edit(buildMojipMessagePayload(match));
-        await announceMatchCompletionXp(match);
-      });
-    }
+    getMojips(interaction.client).set(msg.id, { data, participants, message: msg, closed: false, closedAt: null, mentionSent: false, guildId: interaction.guildId });
     await interaction.update({ content: '✅ **채널에 공개 게시되었습니다!**', embeds: [], attachments: [], components: [] });
     return;
   }
@@ -418,7 +400,16 @@ async function handleMojipButton(interaction) {
       return;
     }
     if (match.closed) {
-      await interaction.reply({ content: '❌ **이미 마감된 모집입니다.**', ephemeral: true });
+      const inMatch = match.participants.some(u => u.id === interaction.user.id);
+      if (!inMatch) {
+        await interaction.reply({ content: '❌ **이미 마감된 모집입니다.**', ephemeral: true });
+        return;
+      }
+      await interaction.reply({
+        content: '**⚠️ 마감된 모집입니다.**\n나가려면 아래 버튼을 눌러주세요.',
+        components: [buildLeaveButton(interaction.message.id)],
+        ephemeral: true,
+      });
       return;
     }
     const maxPlayers = parseInt(match.data.players) || 0;
@@ -437,7 +428,7 @@ async function handleMojipButton(interaction) {
       return;
     }
     match.participants.push({ id: interaction.user.id, displayName: interaction.member?.displayName || interaction.user.globalName || interaction.user.username });
-    if (match.participants.length >= maxPlayers) match.closed = true;
+    if (match.participants.length >= maxPlayers) markClosed(getMojips(interaction.client), interaction.message.id, match, '모집');
     await interaction.deferUpdate();
     await match.message.edit({
       embeds: [buildPublicEmbed(match.data, match.participants, match.closed)],
@@ -469,7 +460,7 @@ async function handleMojipButton(interaction) {
     match.participants.splice(idx, 1);
     const maxPlayers = parseInt(match.data.players) || 0;
     const reopened = match.closed && match.participants.length < maxPlayers;
-    if (reopened) match.closed = false;
+    if (reopened) markReopened(match);
     await match.message.edit({
       embeds: [buildPublicEmbed(match.data, match.participants, match.closed)],
       components: buildPublicComponents(match.participants, maxPlayers, match.closed),
@@ -525,7 +516,7 @@ async function handleMojipButton(interaction) {
     match.participants.splice(idx, 1);
     const maxPlayers = parseInt(match.data.players) || 0;
     const reopened = match.closed && match.participants.length < maxPlayers;
-    if (reopened) match.closed = false;
+    if (reopened) markReopened(match);
     await match.message.edit({
       embeds: [buildPublicEmbed(match.data, match.participants, match.closed)],
       components: buildPublicComponents(match.participants, maxPlayers, match.closed),
@@ -589,7 +580,7 @@ async function handleMojipButton(interaction) {
       });
       return;
     }
-    match.closed = true;
+    markClosed(getMojips(interaction.client), msgId, match, '모집');
     await match.message.edit({
       embeds: [buildPublicEmbed(match.data, match.participants, true)],
       components: buildPublicComponents(match.participants, maxPlayers, true),
@@ -611,7 +602,7 @@ async function handleMojipButton(interaction) {
       await interaction.update({ content: `⚠️ **만료된 모집입니다.**\n(${getResetDateStr(interaction.client)})`, components: [] });
       return;
     }
-    match.closed = true;
+    markClosed(getMojips(interaction.client), msgId, match, '모집');
     const maxPlayers = parseInt(match.data.players) || 0;
     await match.message.edit({
       embeds: [buildPublicEmbed(match.data, match.participants, true)],
@@ -634,7 +625,7 @@ async function handleMojipButton(interaction) {
       await interaction.update({ content: `⚠️ **만료된 모집입니다.**\n(${getResetDateStr(interaction.client)})`, components: [] });
       return;
     }
-    match.closed = false;
+    markReopened(match);
     const maxPlayers = parseInt(match.data.players) || 0;
     await match.message.edit({
       embeds: [buildPublicEmbed(match.data, match.participants, false)],
@@ -982,7 +973,7 @@ async function handleMojipMemberAdd(interaction) {
     added.push(displayName);
   }
   const justClosed = !match.closed && match.participants.length >= maxPlayers;
-  if (justClosed) match.closed = true;
+  if (justClosed) markClosed(getMojips(interaction.client), msgId, match, '모집');
   await match.message.edit({
     embeds: [buildPublicEmbed(match.data, match.participants, match.closed)],
     components: buildPublicComponents(match.participants, maxPlayers, match.closed),
@@ -1007,7 +998,7 @@ async function handleMojipMemberRemove(interaction) {
   match.participants = match.participants.filter(u => !removeIds.has(u.id));
   const maxPlayers = parseInt(match.data.players) || 0;
   const reopened = match.closed && match.participants.length < maxPlayers;
-  if (reopened) match.closed = false;
+  if (reopened) markReopened(match);
   await match.message.edit({
     embeds: [buildPublicEmbed(match.data, match.participants, match.closed)],
     components: buildPublicComponents(match.participants, maxPlayers, match.closed),
