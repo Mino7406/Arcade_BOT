@@ -8,14 +8,55 @@ const {
 
 const { ADMIN_IDS, endMatch } = require('../handlers/shared');
 
+// 메시지 ID 또는 디스코드 메시지 링크에서 { channelId, messageId }를 추출한다.
+// channelId가 없으면(순수 ID만 입력) 명령어를 실행한 현재 채널을 사용한다.
+function parseMessageRef(input) {
+  const linkMatch = input.match(/channels\/\d+\/(\d+)\/(\d+)/);
+  if (linkMatch) return { channelId: linkMatch[1], messageId: linkMatch[2] };
+  if (/^\d{17,20}$/.test(input)) return { channelId: null, messageId: input };
+  return null;
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('관리')
-    .setDescription('[관리자 전용] 내전/모집을 관리합니다.'),
+    .setDescription('[관리자 전용] 내전/모집을 관리하거나 봇 메시지를 삭제합니다.')
+    .addStringOption(opt =>
+      opt.setName('메시지삭제')
+        .setDescription('삭제할 봇 메시지의 ID 또는 링크 (입력 시 바로 삭제, 비우면 내전/모집 관리 메뉴)')
+        .setRequired(false),
+    ),
 
   async execute(interaction) {
     if (!ADMIN_IDS.includes(interaction.user.id)) {
       await interaction.reply({ content: '❌ **권한이 없습니다.**', ephemeral: true });
+      return;
+    }
+
+    const messageInput = interaction.options.getString('메시지삭제');
+    if (messageInput) {
+      const ref = parseMessageRef(messageInput.trim());
+      if (!ref) {
+        await interaction.reply({ content: '⚠️ **올바른 메시지 ID 또는 링크가 아닙니다.**', ephemeral: true });
+        return;
+      }
+
+      const channel = ref.channelId
+        ? await interaction.client.channels.fetch(ref.channelId).catch(() => null)
+        : interaction.channel;
+      const message = channel ? await channel.messages.fetch(ref.messageId).catch(() => null) : null;
+
+      if (!message) {
+        await interaction.reply({ content: '⚠️ **메시지를 찾을 수 없습니다.**', ephemeral: true });
+        return;
+      }
+      if (message.author.id !== interaction.client.user.id) {
+        await interaction.reply({ content: '⚠️ **봇이 보낸 메시지만 삭제할 수 있습니다.**', ephemeral: true });
+        return;
+      }
+
+      await message.delete();
+      await interaction.reply({ content: '✅ **메시지를 삭제했습니다.**', ephemeral: true });
       return;
     }
 

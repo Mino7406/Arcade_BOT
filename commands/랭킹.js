@@ -117,7 +117,8 @@ async function handleRankingShareButton(interaction) {
   }
 
   await interaction.channel.send({ embeds: [view.embed] });
-  await interaction.update({ components: [] });
+  await interaction.deferUpdate();
+  await interaction.deleteReply();
 }
 
 module.exports.handleRankingPageButton = handleRankingPageButton;
