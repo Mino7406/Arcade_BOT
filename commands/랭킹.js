@@ -33,29 +33,33 @@ function buildDescription(lines) {
   return HEADER + kept.join('\n\n') + TRUNCATE_NOTICE;
 }
 
-function buildComponents(page, totalPages) {
-  return [
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`ranking:page:${page - 1}`)
-        .setLabel('◀')
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(page <= 1),
-      new ButtonBuilder()
-        .setCustomId(`ranking:page:${page + 1}`)
-        .setLabel('▶')
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(page >= totalPages),
+// includeShare: false면 공유하기 버튼을 뺀다 (이미 공개된 메시지에는 다시 공유할 이유가 없음).
+function buildComponents(page, totalPages, includeShare = true) {
+  const buttons = [
+    new ButtonBuilder()
+      .setCustomId(`ranking:page:${page - 1}`)
+      .setLabel('◀')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(page <= 1),
+    new ButtonBuilder()
+      .setCustomId(`ranking:page:${page + 1}`)
+      .setLabel('▶')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(page >= totalPages),
+  ];
+  if (includeShare) {
+    buttons.push(
       new ButtonBuilder()
         .setCustomId(`ranking:share:${page}`)
         .setLabel('📤 공유하기')
         .setStyle(ButtonStyle.Primary),
-    ),
-  ];
+    );
+  }
+  return [new ActionRowBuilder().addComponents(...buttons)];
 }
 
 // 반환값이 null이면 랭킹 기록이 없다는 뜻 (호출부에서 안내 메시지를 대신 보낸다).
-async function buildRankingView(guild, page) {
+async function buildRankingView(guild, page, includeShare = true) {
   const total = getLeaderboardSize(guild.id);
   if (total === 0) return null;
 
@@ -81,7 +85,7 @@ async function buildRankingView(guild, page) {
     .setFooter({ text: `${clampedPage} / ${totalPages} 페이지` })
     .setTimestamp();
 
-  return { embed, components: buildComponents(clampedPage, totalPages) };
+  return { embed, components: buildComponents(clampedPage, totalPages, includeShare) };
 }
 
 module.exports = {
@@ -120,7 +124,7 @@ async function handleRankingPageButton(interaction) {
 async function handleRankingShareButton(interaction) {
   await interaction.deferUpdate();
   const page = parseInt(interaction.customId.slice('ranking:share:'.length), 10) || 1;
-  const view = await buildRankingView(interaction.guild, page);
+  const view = await buildRankingView(interaction.guild, page, false);
   if (!view) {
     await interaction.editReply({ content: '📭 **아직 레벨 기록이 없습니다.**', embeds: [], components: [] });
     return;
