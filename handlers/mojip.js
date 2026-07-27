@@ -161,7 +161,7 @@ function buildPublicComponents(participants, maxPlayers, closed = false) {
     new ButtonBuilder()
       .setCustomId('mojip:join')
       .setLabel(closed ? (isFull ? '🔒 모집 완료' : '🔒 마감됨') : '✅ 참가하기')
-      .setStyle(closed ? ButtonStyle.Secondary : ButtonStyle.Success),
+      .setStyle(closed ? ButtonStyle.Primary : ButtonStyle.Success),
     new ButtonBuilder()
       .setCustomId('mojip:manage')
       .setLabel('⚙️ 관리')

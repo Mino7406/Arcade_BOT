@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { getLeaderboard, getLeaderboardSize, buildProgressBar } = require('../handlers/levels');
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 5;
 const DESCRIPTION_LIMIT = 4096; // Discord 임베드 description 최대 길이
 const HEADER = '## 🏆 서버 랭킹\n\n';
 const TRUNCATE_NOTICE = '\n\n*(목록이 길어 일부 순위는 생략되었습니다)*';
