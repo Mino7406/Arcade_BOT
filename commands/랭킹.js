@@ -64,11 +64,16 @@ async function buildRankingView(guild, page) {
   const offset = (clampedPage - 1) * PAGE_SIZE;
   const entries = getLeaderboard(guild.id, PAGE_SIZE, offset);
 
-  const lines = await Promise.all(entries.map(async (entry) => {
-    const member = await guild.members.fetch(entry.userId).catch(() => null);
+  // 유저마다 따로 fetch하면 페이지당 여러 번 API를 왕복해 느려지므로, ID를 한 번에 묶어서 조회한다.
+  const members = entries.length > 0
+    ? await guild.members.fetch({ user: entries.map(e => e.userId) }).catch(() => new Map())
+    : new Map();
+
+  const lines = entries.map((entry) => {
+    const member = members.get(entry.userId);
     const name = member?.displayName || `알 수 없는 사용자 (${entry.userId})`;
     return formatEntry(entry, name);
-  }));
+  });
 
   const embed = new EmbedBuilder()
     .setColor(0xFEE75C)
@@ -110,8 +115,8 @@ async function handleRankingPageButton(interaction) {
 }
 
 // ── 공유하기 버튼 처리 ──────────────────────────────────────────
-// 내전/모집 게시 버튼처럼, 채널에 공개로 올리기만 하고 원래(비공개) 뷰는 그대로 유지한다.
-// (화살표/공유하기 버튼이 계속 남아있어 이어서 페이지를 넘기거나 다시 공유할 수 있다.)
+// 채널에 공개로 올리는 메시지에도 페이지 이동 버튼을 그대로 붙여서 넘겨보게 하고,
+// 원래 나에게만 보이던 비공개 메시지는 공유하는 즉시 닫는다.
 async function handleRankingShareButton(interaction) {
   await interaction.deferUpdate();
   const page = parseInt(interaction.customId.slice('ranking:share:'.length), 10) || 1;
@@ -121,8 +126,8 @@ async function handleRankingShareButton(interaction) {
     return;
   }
 
-  await interaction.channel.send({ embeds: [view.embed] });
-  await interaction.editReply({ embeds: [view.embed], components: view.components });
+  await interaction.channel.send({ embeds: [view.embed], components: view.components });
+  await interaction.deleteReply();
 }
 
 module.exports.handleRankingPageButton = handleRankingPageButton;
