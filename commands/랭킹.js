@@ -109,7 +109,12 @@ module.exports = {
 async function handleRankingPageButton(interaction) {
   await interaction.deferUpdate();
   const page = parseInt(interaction.customId.slice('ranking:page:'.length), 10) || 1;
-  const view = await buildRankingView(interaction.guild, page);
+  // 지금 누른 메시지에 원래 공유하기 버튼이 있었는지 그대로 유지한다.
+  // (공개 채널 메시지는 공유하기 버튼이 없어야 하므로, 페이지를 넘겨도 다시 생기면 안 된다.)
+  const includeShare = interaction.message.components[0]?.components.some(
+    c => c.customId?.startsWith('ranking:share:'),
+  ) ?? true;
+  const view = await buildRankingView(interaction.guild, page, includeShare);
   if (!view) {
     await interaction.editReply({ content: '📭 **아직 레벨 기록이 없습니다.**', embeds: [], components: [] });
     return;
