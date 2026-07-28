@@ -20,9 +20,12 @@ const EXCLUDED_GUILD_IDS = ['1282694117255548960'];
 const XP_CHANNEL_ID = '1340523443413844048';
 
 // 기본 배율(1배)이 아닌 XP 배율을 적용할 채널
+// TTS 채널 0.06배 = 통화방 체류(수동) 시간당 평균(~24 XP)과 1:1로 맞춘 값.
+// 3분 쿨다운(TTS_CHANNEL_COOLDOWN_MS)을 딱딱 맞춰 쳐도 시간당 20회 × 평균 20 XP × 0.06 ≈ 24 XP로,
+// 아무리 열심히 타이핑해도 통화방에 그냥 앉아있는 것 이상으로 벌 수 없게 맞췄다.
 const XP_CHANNEL_MULTIPLIERS = {
-  '1374679502394884178': 0.3,
-  '1522575222589620254': 0.3,
+  '1374679502394884178': 0.06,
+  '1522575222589620254': 0.06,
 };
 
 // 내전/모집 완료 보너스 XP를 적용할 채널과 배율
@@ -112,7 +115,7 @@ function handleMessageXp(message) {
   const userId = message.author.id;
   const key = `${guildId}:${userId}`;
 
-  // TTS 채널(0.3배 채널)은 음성 통화방과 짝지어 쓰이는 채널이라,
+  // TTS 채널(0.06배 채널)은 음성 통화방과 짝지어 쓰이는 채널이라,
   // 음소거 없이 음성 틱 XP를 이미 받고 있는 유저에게는 텍스트 XP를 중복 지급하지 않는다.
   if (multiplier !== undefined && activeVoiceUsers.has(key)) return null;
 
