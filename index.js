@@ -54,7 +54,7 @@ async function restoreMatches(c) {
       map.set(row.message_id, match);
 
       // 봇이 꺼져있던 동안 setTimeout이 소실되므로, 마감(closed) 시점을 기준으로
-      // 24시간 자동 종료를 다시 스케줄링합니다. 이미 24시간이 지났다면 즉시 종료 처리합니다.
+      // 8시간 자동 종료를 다시 스케줄링합니다. 이미 8시간이 지났다면 즉시 종료 처리합니다.
       // (closedAt이 없는 옛 데이터는 이미 마감 상태로 오래 방치돼 있었다는 뜻이므로 즉시 종료합니다.)
       if (match.closed && match.data?.autoClose) {
         const label = row.type === 'naejeon' ? '내전' : '모집';

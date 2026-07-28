@@ -38,7 +38,7 @@ function titleHeader(game, gameInfo, title) {
   return game === 'custom' ? `## ${title}` : `## ${gameInfo.emoji}  ${title}`;
 }
 
-const AUTO_CLOSE_DELAY_MS = 24 * 60 * 60 * 1000;
+const AUTO_CLOSE_DELAY_MS = 8 * 60 * 60 * 1000;
 
 function clearAutoEndTimer(match) {
   if (match._autoEndTimer) {
@@ -47,7 +47,7 @@ function clearAutoEndTimer(match) {
   }
 }
 
-// 마감(closed)된 시점부터 delayMs(기본 24시간) 후 자동으로 "종료" 처리를 예약한다.
+// 마감(closed)된 시점부터 delayMs(기본 8시간) 후 자동으로 "종료" 처리를 예약한다.
 // autoClose 옵션이 꺼져있으면 아무것도 하지 않는다. 봇 재시작 후 복원할 때는
 // 이미 지난 시간만큼 뺀 delayMs를 넘겨 원래 마감 시각 기준을 유지한다.
 function armAutoEnd(matchesMap, msgId, match, label, delayMs = AUTO_CLOSE_DELAY_MS) {
@@ -72,7 +72,7 @@ function disarmAutoEnd(match) {
   match.closedAt = null;
 }
 
-// 마감(🔒 마감됨) 상태로 전환하면서 24시간 자동 종료 타이머를 건다.
+// 마감(🔒 마감됨) 상태로 전환하면서 8시간 자동 종료 타이머를 건다.
 function markClosed(matchesMap, msgId, match, label) {
   match.closed = true;
   match.closedAt = Date.now();
@@ -112,7 +112,7 @@ function buildEndedEmbed(match, label) {
 }
 
 // 매치를 "종료됨" 상태로 만든다: 임베드/버튼을 종료 화면으로 교체하고 관리 목록에서 제거한다.
-// /관리 의 수동 종료와 24시간 자동 종료가 동일한 결과를 내도록 공유한다.
+// /관리 의 수동 종료와 8시간 자동 종료가 동일한 결과를 내도록 공유한다.
 async function endMatch(matchesMap, msgId, match, label) {
   clearAutoEndTimer(match);
   match.closed = true;
