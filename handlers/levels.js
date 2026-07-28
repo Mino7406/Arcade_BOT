@@ -104,6 +104,11 @@ function handleMessageXp(message) {
   if (EXCLUDED_GUILD_IDS.includes(guildId)) return null;
   const userId = message.author.id;
   const key = `${guildId}:${userId}`;
+
+  // TTS 채널(0.8배 채널)은 음성 통화방과 짝지어 쓰이는 채널이라,
+  // 음소거 없이 음성 틱 XP를 이미 받고 있는 유저에게는 텍스트 XP를 중복 지급하지 않는다.
+  if (multiplier !== undefined && activeVoiceUsers.has(key)) return null;
+
   const now = Date.now();
   const last = cooldowns.get(key) || 0;
   if (now - last < COOLDOWN_MS) return null;
