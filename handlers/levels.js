@@ -28,12 +28,13 @@ const ORGANIZER_XP_MULTIPLIER = 1.3;
 const PARTICIPANT_XP_MULTIPLIER = 1.1;
 
 // 통화방(음성 채널) 체류 XP: 봇이 음성에 직접 참가하지 않고도
-// voiceStateUpdate 게이트웨이 이벤트만으로 1분마다 활동 중인 유저에게 XP를 지급한다.
+// voiceStateUpdate 게이트웨이 이벤트만으로 일정 주기마다 활동 중인 유저에게 XP를 지급한다.
 // 마이크만 켜놓으면 노력 없이 쌓이는 방치형 XP라 텍스트 채팅보다 낮은 배율을 사용.
-// 분당 배율 (15~25 XP * 1분 * 0.1 = 2~3 XP/틱).
-const VOICE_XP_TICK_MINUTES = 1;
+// 배율이 낮아 1분 주기로는 반올림 시 대부분 0이 되므로, 10분 주기로 묶어서 지급한다
+// (15~25 XP * 10분 * 0.02 = 3~5 XP/틱, 시간당 평균 ~24 XP).
+const VOICE_XP_TICK_MINUTES = 10;
 const VOICE_XP_TICK_MS = VOICE_XP_TICK_MINUTES * 60 * 1000;
-const VOICE_XP_MULTIPLIER = 0.1;
+const VOICE_XP_MULTIPLIER = 0.02;
 
 let levels = {}; // { [guildId]: { [userId]: xp } }
 const cooldowns = new Map(); // `${guildId}:${userId}` → 마지막 XP 지급 시각
@@ -187,7 +188,7 @@ function initVoiceStates(client) {
   }
 }
 
-// 1분마다 그 시점에 활동 중인 유저들에게 통화방 체류 XP를 지급한다.
+// 10분마다 그 시점에 활동 중인 유저들에게 통화방 체류 XP를 지급한다.
 // 레벨업한 유저는 메인 XP 채널에 축하 메시지를 보낸다.
 function startVoiceXpTicker(client) {
   setInterval(async () => {

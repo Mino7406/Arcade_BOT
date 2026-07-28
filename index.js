@@ -88,7 +88,7 @@ async function onReady(c) {
   await restoreMatches(c); // ⬅️ 추가: 저장된 내전/모집 복원
   loadLevels(); // ⬅️ 추가: 저장된 레벨/XP 복원
   initVoiceStates(c); // 재시작 전 이미 통화방에 있던 유저 추적 복원
-  startVoiceXpTicker(c); // 통화방 체류 XP 1분 틱 시작
+  startVoiceXpTicker(c); // 통화방 체류 XP 10분 틱 시작
 }
 client.once('clientReady', onReady);
 client.once('ready', onReady);
