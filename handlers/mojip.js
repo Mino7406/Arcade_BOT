@@ -401,11 +401,11 @@ async function handleMojipButton(interaction) {
     if (match.closed) {
       const inMatch = match.participants.some(u => u.id === interaction.user.id);
       if (!inMatch) {
-        await interaction.reply({ content: '❌ **이미 마감된 모집입니다.**', ephemeral: true });
+        await interaction.reply({ content: '🔒 **이미 마감된 모집입니다.**', ephemeral: true });
         return;
       }
       await interaction.reply({
-        content: '**⚠️ 마감된 모집입니다.**\n나가려면 아래 버튼을 눌러주세요.',
+        content: '**⚠️ 마감된 모집입니다.**\n취소하려면 아래 버튼을 눌러주세요.',
         components: [buildLeaveButton(interaction.message.id)],
         ephemeral: true,
       });
