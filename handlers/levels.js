@@ -24,8 +24,8 @@ const XP_CHANNEL_MULTIPLIERS = {
 
 // 내전/모집 완료 보너스 XP를 적용할 채널과 배율
 const MATCH_BONUS_CHANNEL_ID = '1343818387519963216';
-const ORGANIZER_XP_MULTIPLIER = 1.3;
-const PARTICIPANT_XP_MULTIPLIER = 1.1;
+const ORGANIZER_XP_MULTIPLIER = 1.5;
+const PARTICIPANT_XP_MULTIPLIER = 1.3;
 
 // 통화방(음성 채널) 체류 XP: 봇이 음성에 직접 참가하지 않고도
 // voiceStateUpdate 게이트웨이 이벤트만으로 1분마다 활동 중인 유저에게 XP를 지급한다.

@@ -156,11 +156,10 @@ function buildPublicEmbed(data, participants, closed = false) {
 }
 
 function buildPublicComponents(participants, maxPlayers, closed = false) {
-  const isFull = participants.length >= maxPlayers;
   const buttons = [
     new ButtonBuilder()
       .setCustomId('mojip:join')
-      .setLabel(closed ? (isFull ? '🔒 모집 완료' : '🔒 마감됨') : '✅ 참가하기')
+      .setLabel(closed ? '🔒 마감됨' : '✅ 참가하기')
       .setStyle(closed ? ButtonStyle.Primary : ButtonStyle.Success),
     new ButtonBuilder()
       .setCustomId('mojip:manage')
