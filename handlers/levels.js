@@ -18,8 +18,8 @@ const XP_CHANNEL_ID = '1340523443413844048';
 
 // 기본 배율(1배)이 아닌 XP 배율을 적용할 채널
 const XP_CHANNEL_MULTIPLIERS = {
-  '1374679502394884178': 0.5,
-  '1522575222589620254': 0.5,
+  '1374679502394884178': 0.2,
+  '1522575222589620254': 0.2,
 };
 
 // 내전/모집 완료 보너스 XP를 적용할 채널과 배율
@@ -109,7 +109,7 @@ function handleMessageXp(message) {
   const userId = message.author.id;
   const key = `${guildId}:${userId}`;
 
-  // TTS 채널(0.5배 채널)은 음성 통화방과 짝지어 쓰이는 채널이라,
+  // TTS 채널(0.2배 채널)은 음성 통화방과 짝지어 쓰이는 채널이라,
   // 음소거 없이 음성 틱 XP를 이미 받고 있는 유저에게는 텍스트 XP를 중복 지급하지 않는다.
   if (multiplier !== undefined && activeVoiceUsers.has(key)) return null;
 
