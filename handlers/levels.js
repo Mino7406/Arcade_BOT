@@ -7,6 +7,9 @@ const path = require('path');
 const LEVELS_PATH = path.join(__dirname, '..', 'levels.json');
 
 const COOLDOWN_MS = 60 * 1000;
+// TTS 채널(XP_CHANNEL_MULTIPLIERS 대상)은 음소거/미접속 상태로 텍스트만 계속 쳐도
+// 배율만으로는 파밍을 못 막으므로, 기본 쿨다운보다 훨씬 길게 따로 적용한다.
+const TTS_CHANNEL_COOLDOWN_MS = 3 * 60 * 1000;
 const XP_MIN = 15;
 const XP_MAX = 25;
 
@@ -18,8 +21,8 @@ const XP_CHANNEL_ID = '1340523443413844048';
 
 // 기본 배율(1배)이 아닌 XP 배율을 적용할 채널
 const XP_CHANNEL_MULTIPLIERS = {
-  '1374679502394884178': 0.15,
-  '1522575222589620254': 0.15,
+  '1374679502394884178': 0.3,
+  '1522575222589620254': 0.3,
 };
 
 // 내전/모집 완료 보너스 XP를 적용할 채널과 배율
@@ -109,13 +112,14 @@ function handleMessageXp(message) {
   const userId = message.author.id;
   const key = `${guildId}:${userId}`;
 
-  // TTS 채널(0.15배 채널)은 음성 통화방과 짝지어 쓰이는 채널이라,
+  // TTS 채널(0.3배 채널)은 음성 통화방과 짝지어 쓰이는 채널이라,
   // 음소거 없이 음성 틱 XP를 이미 받고 있는 유저에게는 텍스트 XP를 중복 지급하지 않는다.
   if (multiplier !== undefined && activeVoiceUsers.has(key)) return null;
 
   const now = Date.now();
   const last = cooldowns.get(key) || 0;
-  if (now - last < COOLDOWN_MS) return null;
+  const cooldownMs = multiplier !== undefined ? TTS_CHANNEL_COOLDOWN_MS : COOLDOWN_MS;
+  if (now - last < cooldownMs) return null;
   cooldowns.set(key, now);
 
   const baseXp = randomBaseXp();
