@@ -2,8 +2,8 @@ require('dotenv').config({ path: './env' });
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove } = require('./handlers/naejeon');
-const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipMemberAdd, handleMojipMemberRemove } = require('./handlers/mojip');
+const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload: buildNaejeonMessagePayload } = require('./handlers/naejeon');
+const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipMemberAdd, handleMojipMemberRemove, buildMojipMessagePayload } = require('./handlers/mojip');
 const { armAutoEnd, endMatch, AUTO_CLOSE_DELAY_MS } = require('./handlers/shared');
 const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/team');
 const { handleRMatchSelect } = require('./handlers/r');
@@ -53,6 +53,11 @@ async function restoreMatches(c) {
 
       const map = row.type === 'naejeon' ? c.naejeonMatches : c.mojipMatches;
       map.set(row.message_id, match);
+
+      // 봇이 꺼져있는 동안 임베드/버튼 코드가 바뀌었을 수 있으므로, 복원 시점에
+      // 최신 코드 기준으로 메시지를 다시 그려 옛 라벨(예: "모집 완료")이 남지 않게 합니다.
+      const buildPayload = row.type === 'naejeon' ? buildNaejeonMessagePayload : buildMojipMessagePayload;
+      await match.message.edit(buildPayload(match)).catch(err => console.error('복원 후 메시지 갱신 중 오류:', err));
 
       // 봇이 꺼져있던 동안 setTimeout이 소실되므로, 마감(closed) 시점을 기준으로
       // 8시간 자동 종료를 다시 스케줄링합니다. 이미 8시간이 지났다면 즉시 종료 처리합니다.
