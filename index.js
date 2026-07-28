@@ -12,13 +12,14 @@ const { handleAdminSelect, handleAdminButton } = require('./commands/관리');
 const { handleLevelShareButton } = require('./commands/레벨');
 const { handleRankingPageButton, handleRankingShareButton } = require('./commands/랭킹');
 const { saveAll, loadRows } = require('./db'); // ⬅️ 추가: SQLite 저장 모듈
-const { loadLevels, saveLevels, handleMessageXp } = require('./handlers/levels');
+const { loadLevels, saveLevels, handleMessageXp, trackVoiceStateUpdate, initVoiceStates, startVoiceXpTicker } = require('./handlers/levels');
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildVoiceStates,
   ],
 });
 
@@ -86,6 +87,8 @@ async function onReady(c) {
   c.startedAt = new Date();
   await restoreMatches(c); // ⬅️ 추가: 저장된 내전/모집 복원
   loadLevels(); // ⬅️ 추가: 저장된 레벨/XP 복원
+  initVoiceStates(c); // 재시작 전 이미 통화방에 있던 유저 추적 복원
+  startVoiceXpTicker(c); // 통화방 체류 XP 1분 틱 시작
 }
 client.once('clientReady', onReady);
 client.once('ready', onReady);
@@ -205,6 +208,14 @@ client.on('messageCreate', async (message) => {
     }
   } catch (error) {
     console.error(error);
+  }
+});
+
+client.on('voiceStateUpdate', (oldState, newState) => {
+  try {
+    trackVoiceStateUpdate(oldState, newState);
+  } catch (error) {
+    console.error('음성 상태 추적 실패:', error);
   }
 });
 

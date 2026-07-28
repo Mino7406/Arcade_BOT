@@ -16,13 +16,27 @@ const EXCLUDED_GUILD_IDS = ['1282694117255548960'];
 // XP 지급을 감지할 채널 (이 채널의 메시지만 XP로 인정)
 const XP_CHANNEL_ID = '1340523443413844048';
 
+// 기본 배율(1배)이 아닌 XP 배율을 적용할 채널
+const XP_CHANNEL_MULTIPLIERS = {
+  '1374679502394884178': 0.8,
+  '1522575222589620254': 0.8,
+};
+
 // 내전/모집 완료 보너스 XP를 적용할 채널과 배율
 const MATCH_BONUS_CHANNEL_ID = '1343818387519963216';
 const ORGANIZER_XP_MULTIPLIER = 1.3;
 const PARTICIPANT_XP_MULTIPLIER = 1.1;
 
+// 통화방(음성 채널) 체류 XP: 봇이 음성에 직접 참가하지 않고도
+// voiceStateUpdate 게이트웨이 이벤트만으로 1분마다 활동 중인 유저에게 XP를 지급한다.
+// 0.8배 채널과 비슷한 수준이 되도록 분당 배율을 맞춤 (15~25 XP * 1분 * 0.8 = 12~20 XP/틱).
+const VOICE_XP_TICK_MINUTES = 1;
+const VOICE_XP_TICK_MS = VOICE_XP_TICK_MINUTES * 60 * 1000;
+const VOICE_XP_MULTIPLIER = 0.8;
+
 let levels = {}; // { [guildId]: { [userId]: xp } }
 const cooldowns = new Map(); // `${guildId}:${userId}` → 마지막 XP 지급 시각
+const activeVoiceUsers = new Set(); // `${guildId}:${userId}` — 현재 음성 채널에서 음소거/헤드셋오프가 아닌 상태로 활동 중
 
 function loadLevels() {
   try {
@@ -83,7 +97,9 @@ function randomBaseXp() {
 // 메시지 하나에 대해 쿨다운을 확인하고 XP를 지급. 레벨업 여부를 반환.
 function handleMessageXp(message) {
   if (message.author.bot || !message.guild) return null;
-  if (message.channelId !== XP_CHANNEL_ID) return null;
+  const isMainChannel = message.channelId === XP_CHANNEL_ID;
+  const multiplier = XP_CHANNEL_MULTIPLIERS[message.channelId];
+  if (!isMainChannel && multiplier === undefined) return null;
   const guildId = message.guildId;
   if (EXCLUDED_GUILD_IDS.includes(guildId)) return null;
   const userId = message.author.id;
@@ -93,7 +109,9 @@ function handleMessageXp(message) {
   if (now - last < COOLDOWN_MS) return null;
   cooldowns.set(key, now);
 
-  return applyXp(guildId, userId, randomBaseXp());
+  const baseXp = randomBaseXp();
+  const gained = multiplier !== undefined ? Math.round(baseXp * multiplier) : baseXp;
+  return applyXp(guildId, userId, gained);
 }
 
 // 내전/모집이 성공적으로 마감됐을 때 주최자/참가자에게 1회성 보너스 XP를 지급한다.
@@ -128,6 +146,65 @@ function awardMatchCompletionXp(match) {
   return results.filter(r => r.leveledUp);
 }
 
+// 음성 상태가 "XP 지급 대상"인지 판단 (봇 제외, 채널에 있어야 하고, 음소거/헤드셋오프면 제외)
+function isVoiceStateActive(state) {
+  if (!state?.channelId) return false;
+  if (state.member?.user?.bot) return false;
+  if (state.selfMute || state.selfDeaf) return false;
+  return true;
+}
+
+// voiceStateUpdate 이벤트에서 호출: 유저의 활동 상태(입장/퇴장/음소거 전환)를 갱신한다.
+function trackVoiceStateUpdate(oldState, newState) {
+  const guildId = newState.guild?.id;
+  if (!guildId || EXCLUDED_GUILD_IDS.includes(guildId)) return;
+  const key = `${guildId}:${newState.id}`;
+  if (isVoiceStateActive(newState)) {
+    activeVoiceUsers.add(key);
+  } else {
+    activeVoiceUsers.delete(key);
+  }
+}
+
+// 봇 재시작 시 이미 음성 채널에 있던 유저들을 추적 대상에 다시 등록한다.
+function initVoiceStates(client) {
+  for (const guild of client.guilds.cache.values()) {
+    if (EXCLUDED_GUILD_IDS.includes(guild.id)) continue;
+    for (const state of guild.voiceStates.cache.values()) {
+      const key = `${guild.id}:${state.id}`;
+      if (isVoiceStateActive(state)) {
+        activeVoiceUsers.add(key);
+      } else {
+        activeVoiceUsers.delete(key);
+      }
+    }
+  }
+}
+
+// 5분마다 그 시점에 활동 중인 유저들에게 통화방 체류 XP를 지급한다.
+// 레벨업한 유저는 메인 XP 채널에 축하 메시지를 보낸다.
+function startVoiceXpTicker(client) {
+  setInterval(async () => {
+    for (const key of activeVoiceUsers) {
+      const [guildId, userId] = key.split(':');
+      const gained = Math.round(randomBaseXp() * VOICE_XP_TICK_MINUTES * VOICE_XP_MULTIPLIER);
+      const result = applyXp(guildId, userId, gained);
+      if (!result.leveledUp) continue;
+      try {
+        const channel = await client.channels.fetch(XP_CHANNEL_ID);
+        if (channel?.guildId === guildId) {
+          await channel.send({
+            content: `<@${userId}>님이 ${result.newLevel}레벨을 달성했어요. 🎉`,
+            allowedMentions: { users: [userId] },
+          });
+        }
+      } catch (error) {
+        console.error('통화방 레벨업 메시지 전송 실패:', error);
+      }
+    }
+  }, VOICE_XP_TICK_MS);
+}
+
 function getLeaderboard(guildId, limit = 10, offset = 0) {
   return Object.entries(getGuildLevels(guildId))
     .sort((a, b) => b[1] - a[1])
@@ -151,6 +228,9 @@ module.exports = {
   saveLevels,
   handleMessageXp,
   awardMatchCompletionXp,
+  trackVoiceStateUpdate,
+  initVoiceStates,
+  startVoiceXpTicker,
   levelFromXp,
   getXp,
   getLeaderboard,
