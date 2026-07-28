@@ -18,8 +18,8 @@ const XP_CHANNEL_ID = '1340523443413844048';
 
 // 기본 배율(1배)이 아닌 XP 배율을 적용할 채널
 const XP_CHANNEL_MULTIPLIERS = {
-  '1374679502394884178': 0.8,
-  '1522575222589620254': 0.8,
+  '1374679502394884178': 0.3,
+  '1522575222589620254': 0.3,
 };
 
 // 내전/모집 완료 보너스 XP를 적용할 채널과 배율
@@ -29,10 +29,10 @@ const PARTICIPANT_XP_MULTIPLIER = 1.1;
 
 // 통화방(음성 채널) 체류 XP: 봇이 음성에 직접 참가하지 않고도
 // voiceStateUpdate 게이트웨이 이벤트만으로 1분마다 활동 중인 유저에게 XP를 지급한다.
-// 0.8배 채널과 비슷한 수준이 되도록 분당 배율을 맞춤 (15~25 XP * 1분 * 0.8 = 12~20 XP/틱).
+// 분당 배율 (15~25 XP * 1분 * 0.3 = 5~8 XP/틱).
 const VOICE_XP_TICK_MINUTES = 1;
 const VOICE_XP_TICK_MS = VOICE_XP_TICK_MINUTES * 60 * 1000;
-const VOICE_XP_MULTIPLIER = 0.8;
+const VOICE_XP_MULTIPLIER = 0.3;
 
 let levels = {}; // { [guildId]: { [userId]: xp } }
 const cooldowns = new Map(); // `${guildId}:${userId}` → 마지막 XP 지급 시각
@@ -105,7 +105,7 @@ function handleMessageXp(message) {
   const userId = message.author.id;
   const key = `${guildId}:${userId}`;
 
-  // TTS 채널(0.8배 채널)은 음성 통화방과 짝지어 쓰이는 채널이라,
+  // TTS 채널(0.3배 채널)은 음성 통화방과 짝지어 쓰이는 채널이라,
   // 음소거 없이 음성 틱 XP를 이미 받고 있는 유저에게는 텍스트 XP를 중복 지급하지 않는다.
   if (multiplier !== undefined && activeVoiceUsers.has(key)) return null;
 
@@ -186,7 +186,7 @@ function initVoiceStates(client) {
   }
 }
 
-// 5분마다 그 시점에 활동 중인 유저들에게 통화방 체류 XP를 지급한다.
+// 1분마다 그 시점에 활동 중인 유저들에게 통화방 체류 XP를 지급한다.
 // 레벨업한 유저는 메인 XP 채널에 축하 메시지를 보낸다.
 function startVoiceXpTicker(client) {
   setInterval(async () => {
