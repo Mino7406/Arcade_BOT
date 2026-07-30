@@ -2,8 +2,22 @@
 // 여러 파일에 흩어져 있던 동일 로직을 한 곳에 모아, 한쪽만 고치고
 // 다른 쪽은 안 고쳐서 동작이 갈라지는 것을 방지합니다.
 
-const { EmbedBuilder } = require('discord.js');
+const {
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+} = require('discord.js');
 const { awardMatchCompletionXp, XP_CHANNEL_ID } = require('./levels');
+
+// 내전(naejeon)/모집(mojip) 두 시스템이 공유하는 게임 → 역할 이름 매핑.
+// (역할 멘션 대상 채널이 있으면 해당 역할을 핑한다.)
+const ROLE_NAMES = {
+  lol: '롤', valorant: '발로란트', overwatch: '오버워치', pubg: '배그',
+};
 
 const ADMIN_IDS = ['457437911869161472', '1043750483522752512', '685917435601092643'];
 
@@ -171,13 +185,162 @@ function buildTeamResultEmbed(data, teams) {
     .setTimestamp();
 }
 
+// ─── 내전(naejeon) / 모집(mojip) 공통 빌더 ──────────────────────
+// 두 시스템의 UI가 customId 접두사(type: 'naejeon' | 'mojip')와
+// 라벨 문구(label: '내전' | '모집')만 다르고 로직은 완전히 동일한
+// 부분만 여기로 모았다. 팀 배정/역할 멘션 유지처럼 실제 동작이
+// 다른 부분(buildPublicEmbed 등)은 각 핸들러 파일에 그대로 둔다.
+
+function buildPreviewEmbed({ game, gameInfo, title, datetime, players, description, organizer }) {
+  const max = parseInt(players) || 0;
+
+  const lines = [
+    `🎮 **게임**　　${gameInfo.name}`,
+    `📅 **일시**　　${datetime}`,
+    `👑 **주최자**　**\`${organizer.displayName}\`**`,
+    `📊 **상태**　　⏳ 게시 전`,
+  ];
+
+  const embed = new EmbedBuilder()
+    .setColor(gameInfo.color)
+    .setDescription(`${titleHeader(game, gameInfo, title)}\n${lines.join('\n')}`);
+
+  if (description) embed.addFields({ name: '📝 메모', value: description });
+
+  return embed
+    .addFields({ name: `👥 참가자  0 / ${max}명`, value: '*아직 참가자가 없습니다.*' })
+    .setFooter({ text: '🔎 게시하기 전에 내용을 다시 확인해 주세요.' })
+    .setTimestamp();
+}
+
+function buildModal(type, label, GAMES, game, data = {}) {
+  const gameInfo = GAMES[game];
+  const isCustom = game === 'custom';
+
+  const modal = new ModalBuilder()
+    .setCustomId(`${type}:modal:${game}`)
+    .setTitle(`${gameInfo.emoji} ${gameInfo.name} ${label} 생성`);
+
+  const titleInput = new TextInputBuilder()
+    .setCustomId('title')
+    .setLabel('제목 (비워두면 기본값 사용)')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder(isCustom ? `${label} 제목을 입력하세요 (선택사항)` : `${gameInfo.name} ${label}`)
+    .setRequired(false)
+    .setMaxLength(50);
+
+  const datetimeInput = new TextInputBuilder()
+    .setCustomId('datetime')
+    .setLabel('일시')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('예: 6월 5일 오후 8시')
+    .setRequired(true)
+    .setMaxLength(50);
+
+  const playersInput = new TextInputBuilder()
+    .setCustomId('players')
+    .setLabel(type === 'naejeon' ? '모집 인원 (명)' : '모집 인원 (숫자만 입력)')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('예: 10')
+    .setRequired(true)
+    .setMaxLength(10);
+
+  const descInput = new TextInputBuilder()
+    .setCustomId('description')
+    .setLabel('메모 / 설명 (선택사항)')
+    .setStyle(TextInputStyle.Paragraph)
+    .setPlaceholder('추가 안내사항이 있으면 입력하세요.')
+    .setRequired(false)
+    .setMaxLength(300);
+
+  if (data.title)       titleInput.setValue(data.title);
+  if (data.datetime)    datetimeInput.setValue(data.datetime);
+  if (data.players)     playersInput.setValue(data.players);
+  else if (gameInfo.defaultPlayers) playersInput.setValue(String(gameInfo.defaultPlayers));
+  if (data.description) descInput.setValue(data.description);
+
+  if (isCustom) {
+    const gameNameInput = new TextInputBuilder()
+      .setCustomId('game_name')
+      .setLabel('게임 이름')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('예: 마인크래프트, 철권 8 ...')
+      .setRequired(true)
+      .setMaxLength(50);
+    if (data.gameInfo && data.gameInfo.name !== '직접 입력') {
+      gameNameInput.setValue(data.gameInfo.name);
+    }
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(gameNameInput),
+      new ActionRowBuilder().addComponents(titleInput),
+      new ActionRowBuilder().addComponents(datetimeInput),
+      new ActionRowBuilder().addComponents(playersInput),
+      new ActionRowBuilder().addComponents(descInput),
+    );
+  } else {
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(titleInput),
+      new ActionRowBuilder().addComponents(datetimeInput),
+      new ActionRowBuilder().addComponents(playersInput),
+      new ActionRowBuilder().addComponents(descInput),
+    );
+  }
+
+  return modal;
+}
+
+function buildLeaveButton(type, msgId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`${type}:leave:${msgId}`)
+      .setLabel('❌ 참가 취소')
+      .setStyle(ButtonStyle.Danger),
+  );
+}
+
+function buildPreviewComponents(type, data = null) {
+  const row1 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`${type}:publish`).setLabel('📢 채널에 공개 게시').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`${type}:edit`).setLabel('✏️ 수정').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`${type}:cancel`).setLabel('❌ 취소').setStyle(ButtonStyle.Danger),
+  );
+  const autoCloseToggle = new ButtonBuilder()
+    .setCustomId(`${type}:toggle_autoclose`)
+    .setEmoji('⏰')
+    .setLabel(data && data.autoClose ? '자동 종료: ON' : '자동 종료: OFF')
+    .setStyle(data && data.autoClose ? ButtonStyle.Success : ButtonStyle.Secondary);
+
+  if (data && data.game === 'custom') {
+    const steamToggle = new ButtonBuilder()
+      .setCustomId(`${type}:toggle_steam`)
+      .setEmoji({ id: '1510954746012242021', name: 'Steam' })
+      .setLabel(data.mentionSteam ? '멘션 ON' : '멘션 OFF')
+      .setStyle(data.mentionSteam ? ButtonStyle.Success : ButtonStyle.Secondary);
+    return [row1, new ActionRowBuilder().addComponents(autoCloseToggle, steamToggle)];
+  }
+  return [row1, new ActionRowBuilder().addComponents(autoCloseToggle)];
+}
+
+function buildCancelComponents(type) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`${type}:cancel_confirm`).setLabel('✅ 확인').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`${type}:cancel_back`).setLabel('↩️ 돌아가기').setStyle(ButtonStyle.Secondary),
+  );
+}
+
 module.exports = {
   ADMIN_IDS,
   AUTO_CLOSE_DELAY_MS,
+  ROLE_NAMES,
   getResetDateStr,
   getNaejeonMatches,
   shuffleIntoTeams,
   buildTeamResultEmbed,
+  buildPreviewEmbed,
+  buildModal,
+  buildLeaveButton,
+  buildPreviewComponents,
+  buildCancelComponents,
   titleHeader,
   armAutoEnd,
   disarmAutoEnd,

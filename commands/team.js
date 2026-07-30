@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, ActionRowBuilder } = require('discord.js');
 const { buildMatchSelectMenu } = require('../handlers/team');
+const { getResetDateStr } = require('../handlers/shared');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -10,18 +11,7 @@ module.exports = {
     const matches = interaction.client.naejeonMatches;
 
     if (!matches || matches.size === 0) {
-      const startedAt = interaction.client.startedAt;
-      const dateStr = startedAt
-        ? (() => {
-            const kst = new Date(startedAt.getTime() + 9 * 60 * 60 * 1000);
-            const MM = String(kst.getUTCMonth() + 1).padStart(2, '0');
-            const DD = String(kst.getUTCDate()).padStart(2, '0');
-            const HH = String(kst.getUTCHours()).padStart(2, '0');
-            const mm = String(kst.getUTCMinutes()).padStart(2, '0');
-            return `※ ${MM}.${DD} ${HH}:${mm}에 초기화 됨`;
-          })()
-        : '봇 재시작 후 생성된 내전만 표시됩니다';
-      await interaction.reply({ content: `⚠️ **활성화된 내전이 없습니다.**\n(${dateStr})`, ephemeral: true });
+      await interaction.reply({ content: `⚠️ **활성화된 내전이 없습니다.**\n(${getResetDateStr(interaction.client)})`, ephemeral: true });
       return;
     }
 

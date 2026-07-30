@@ -1,8 +1,5 @@
 const {
   ActionRowBuilder,
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
   EmbedBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -10,7 +7,11 @@ const {
   UserSelectMenuBuilder,
 } = require('discord.js');
 
-const { ADMIN_IDS, getResetDateStr: getResetDateStrBase, titleHeader, markClosed, markReopened, announceMatchCompletionXp } = require('./shared');
+const {
+  ADMIN_IDS, getResetDateStr: getResetDateStrBase, titleHeader, markClosed, markReopened, announceMatchCompletionXp,
+  ROLE_NAMES, buildPreviewEmbed,
+  buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
+} = require('./shared');
 
 const GAMES = {
   lol:       { name: '리그 오브 레전드', emoji: '<:Lol:1510933684750913626>',    defaultPlayers: 5,   color: 0xC89B3C },
@@ -20,108 +21,13 @@ const GAMES = {
   custom:    { name: '직접 입력',        emoji: '🎮',                            defaultPlayers: null, color: 0x5865F2 },
 };
 
-const ROLE_NAMES = {
-  lol: '롤', valorant: '발로란트', overwatch: '오버워치', pubg: '배그',
-};
-
 // ─── 빌더 헬퍼 ────────────────────────────────────────────────
+// buildModal/buildLeaveButton/buildPreviewComponents/buildCancelComponents는
+// naejeon.js와 로직이 완전히 동일해 shared.js로 옮기고, 여기서는 'mojip' 타입으로
+// 고정해 호출하는 얇은 래퍼만 둔다(기존 함수 시그니처는 그대로 유지).
 
 function buildModal(game, data = {}) {
-  const gameInfo = GAMES[game];
-  const isCustom = game === 'custom';
-
-  const modal = new ModalBuilder()
-    .setCustomId(`mojip:modal:${game}`)
-    .setTitle(`${gameInfo.emoji} ${gameInfo.name} 모집 생성`);
-
-  const titleInput = new TextInputBuilder()
-    .setCustomId('title')
-    .setLabel('제목 (비워두면 기본값 사용)')
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder(isCustom ? '모집 제목을 입력하세요 (선택사항)' : `${gameInfo.name} 모집`)
-    .setRequired(false)
-    .setMaxLength(50);
-
-  const datetimeInput = new TextInputBuilder()
-    .setCustomId('datetime')
-    .setLabel('일시')
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder('예: 6월 5일 오후 8시')
-    .setRequired(true)
-    .setMaxLength(50);
-
-  const playersInput = new TextInputBuilder()
-    .setCustomId('players')
-    .setLabel('모집 인원 (숫자만 입력)')
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder('예: 10')
-    .setRequired(true)
-    .setMaxLength(10);
-
-  const descInput = new TextInputBuilder()
-    .setCustomId('description')
-    .setLabel('메모 / 설명 (선택사항)')
-    .setStyle(TextInputStyle.Paragraph)
-    .setPlaceholder('추가 안내사항이 있으면 입력하세요.')
-    .setRequired(false)
-    .setMaxLength(300);
-
-  if (data.title)       titleInput.setValue(data.title);
-  if (data.datetime)    datetimeInput.setValue(data.datetime);
-  if (data.players)     playersInput.setValue(data.players);
-  else if (gameInfo.defaultPlayers) playersInput.setValue(String(gameInfo.defaultPlayers));
-  if (data.description) descInput.setValue(data.description);
-
-  if (isCustom) {
-    const gameNameInput = new TextInputBuilder()
-      .setCustomId('game_name')
-      .setLabel('게임 이름')
-      .setStyle(TextInputStyle.Short)
-      .setPlaceholder('예: 마인크래프트, 철권 8 ...')
-      .setRequired(true)
-      .setMaxLength(50);
-    if (data.gameInfo && data.gameInfo.name !== '직접 입력') {
-      gameNameInput.setValue(data.gameInfo.name);
-    }
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(gameNameInput),
-      new ActionRowBuilder().addComponents(titleInput),
-      new ActionRowBuilder().addComponents(datetimeInput),
-      new ActionRowBuilder().addComponents(playersInput),
-      new ActionRowBuilder().addComponents(descInput),
-    );
-  } else {
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(titleInput),
-      new ActionRowBuilder().addComponents(datetimeInput),
-      new ActionRowBuilder().addComponents(playersInput),
-      new ActionRowBuilder().addComponents(descInput),
-    );
-  }
-
-  return modal;
-}
-
-function buildPreviewEmbed({ game, gameInfo, title, datetime, players, description, organizer }) {
-  const max = parseInt(players) || 0;
-
-  const lines = [
-    `🎮 **게임**　　${gameInfo.name}`,
-    `📅 **일시**　　${datetime}`,
-    `👑 **주최자**　**\`${organizer.displayName}\`**`,
-    `📊 **상태**　　⏳ 게시 전`,
-  ];
-
-  const embed = new EmbedBuilder()
-    .setColor(gameInfo.color)
-    .setDescription(`${titleHeader(game, gameInfo, title)}\n${lines.join('\n')}`);
-
-  if (description) embed.addFields({ name: '📝 메모', value: description });
-
-  return embed
-    .addFields({ name: `👥 참가자  0 / ${max}명`, value: '*아직 참가자가 없습니다.*' })
-    .setFooter({ text: '🔎 게시하기 전에 내용을 다시 확인해 주세요.' })
-    .setTimestamp();
+  return buildModalBase('mojip', '모집', GAMES, game, data);
 }
 
 function buildPublicEmbed(data, participants, closed = false) {
@@ -180,42 +86,15 @@ function buildMojipMessagePayload(match) {
 }
 
 function buildLeaveButton(msgId) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`mojip:leave:${msgId}`)
-      .setLabel('❌ 참가 취소')
-      .setStyle(ButtonStyle.Danger),
-  );
+  return buildLeaveButtonBase('mojip', msgId);
 }
 
 function buildPreviewComponents(data = null) {
-  const row1 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('mojip:publish').setLabel('📢 채널에 공개 게시').setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId('mojip:edit').setLabel('✏️ 수정').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('mojip:cancel').setLabel('❌ 취소').setStyle(ButtonStyle.Danger),
-  );
-  const autoCloseToggle = new ButtonBuilder()
-    .setCustomId('mojip:toggle_autoclose')
-    .setEmoji('⏰')
-    .setLabel(data && data.autoClose ? '자동 종료: ON' : '자동 종료: OFF')
-    .setStyle(data && data.autoClose ? ButtonStyle.Success : ButtonStyle.Secondary);
-
-  if (data && data.game === 'custom') {
-    const steamToggle = new ButtonBuilder()
-      .setCustomId('mojip:toggle_steam')
-      .setEmoji({ id: '1510954746012242021', name: 'Steam' })
-      .setLabel(data.mentionSteam ? '멘션 ON' : '멘션 OFF')
-      .setStyle(data.mentionSteam ? ButtonStyle.Success : ButtonStyle.Secondary);
-    return [row1, new ActionRowBuilder().addComponents(autoCloseToggle, steamToggle)];
-  }
-  return [row1, new ActionRowBuilder().addComponents(autoCloseToggle)];
+  return buildPreviewComponentsBase('mojip', data);
 }
 
 function buildCancelComponents() {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('mojip:cancel_confirm').setLabel('✅ 확인').setStyle(ButtonStyle.Danger),
-    new ButtonBuilder().setCustomId('mojip:cancel_back').setLabel('↩️ 돌아가기').setStyle(ButtonStyle.Secondary),
-  );
+  return buildCancelComponentsBase('mojip');
 }
 
 function buildManageMenu(match, msgId) {
@@ -466,69 +345,6 @@ async function handleMojipButton(interaction) {
       attachments: [],
     });
     await interaction.update({ content: '❌ **참가가 취소되었습니다.**', components: [] });
-    return;
-  }
-
-  // ── 마감 후 참가 취소 요청 (공개 임베드) ──────────────────────
-  if (customId === 'mojip:leave_request') {
-    const msgId = interaction.message.id;
-    const match = getMojips(interaction.client).get(msgId);
-    if (!match) {
-      await interaction.reply({ content: `⚠️ **만료된 모집입니다.**\n(${getResetDateStr(interaction.client)})`, ephemeral: true });
-      return;
-    }
-    const inMatch = match.participants.some(u => u.id === interaction.user.id);
-    if (!inMatch) {
-      await interaction.reply({ content: '⚠️ **참가자가 아닙니다.**', ephemeral: true });
-      return;
-    }
-    await interaction.reply({
-      content: '⚠️ **정말 모집에서 나가시겠습니까?**\n모집이 마감된 상태입니다. 취소 후에는 다시 참가할 수 없습니다.',
-      components: [new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`mojip:leave_do:${msgId}`)
-          .setLabel('✅ 확인')
-          .setStyle(ButtonStyle.Danger),
-        new ButtonBuilder()
-          .setCustomId('mojip:leave_back')
-          .setLabel('↩️ 돌아가기')
-          .setStyle(ButtonStyle.Secondary),
-      )],
-      ephemeral: true,
-    });
-    return;
-  }
-
-  // ── 마감 후 참가 취소 확정 ────────────────────────────────────
-  if (customId.startsWith('mojip:leave_do:')) {
-    const msgId = customId.slice('mojip:leave_do:'.length);
-    const match = getMojips(interaction.client).get(msgId);
-    if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 모집입니다.**\n(${getResetDateStr(interaction.client)})`, components: [] });
-      return;
-    }
-    const idx = match.participants.findIndex(u => u.id === interaction.user.id);
-    if (idx === -1) {
-      await interaction.update({ content: '⚠️ **이미 참가 취소된 상태입니다.**', components: [] });
-      return;
-    }
-    match.participants.splice(idx, 1);
-    const maxPlayers = parseInt(match.data.players) || 0;
-    const reopened = match.closed && match.participants.length < maxPlayers;
-    if (reopened) markReopened(match);
-    await match.message.edit({
-      embeds: [buildPublicEmbed(match.data, match.participants, match.closed)],
-      components: buildPublicComponents(match.participants, maxPlayers, match.closed),
-      attachments: [],
-    });
-    await interaction.update({ content: '🚪 **모집에서 이탈하였습니다.**', components: [] });
-    return;
-  }
-
-  // ── 마감 후 참가 취소 돌아가기 ───────────────────────────────
-  if (customId === 'mojip:leave_back') {
-    await interaction.deferUpdate();
-    await interaction.deleteReply();
     return;
   }
 
