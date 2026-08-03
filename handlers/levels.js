@@ -19,6 +19,9 @@ const EXCLUDED_GUILD_IDS = ['1282694117255548960'];
 // XP 지급을 감지할 채널 (이 채널의 메시지만 XP로 인정)
 const XP_CHANNEL_ID = '1340523443413844048';
 
+// 레벨업 축하 메시지를 보낼 채널
+const LEVEL_UP_ANNOUNCE_CHANNEL_ID = '1522174367075663872';
+
 // 기본 배율(1배)이 아닌 XP 배율을 적용할 채널
 // TTS 채널 0.06배 = 통화방 체류(수동) 시간당 평균(~24 XP)과 1:1로 맞춘 값.
 // 3분 쿨다운(TTS_CHANNEL_COOLDOWN_MS)을 딱딱 맞춰 쳐도 시간당 20회 × 평균 20 XP × 0.06 ≈ 24 XP로,
@@ -210,7 +213,7 @@ function startVoiceXpTicker(client) {
       const result = applyXp(guildId, userId, gained);
       if (!result.leveledUp) continue;
       try {
-        const channel = await client.channels.fetch(XP_CHANNEL_ID);
+        const channel = await client.channels.fetch(LEVEL_UP_ANNOUNCE_CHANNEL_ID);
         if (channel?.guildId === guildId) {
           await channel.send({
             content: `<@${userId}>님이 ${result.newLevel}레벨을 달성했어요. 🎉`,
@@ -255,5 +258,6 @@ module.exports = {
   getLeaderboard,
   getLeaderboardSize,
   XP_CHANNEL_ID,
+  LEVEL_UP_ANNOUNCE_CHANNEL_ID,
   buildProgressBar,
 };

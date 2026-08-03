@@ -11,7 +11,7 @@ const {
   TextInputBuilder,
   TextInputStyle,
 } = require('discord.js');
-const { awardMatchCompletionXp, XP_CHANNEL_ID } = require('./levels');
+const { awardMatchCompletionXp, LEVEL_UP_ANNOUNCE_CHANNEL_ID } = require('./levels');
 
 // 내전(naejeon)/모집(mojip) 두 시스템이 공유하는 게임 → 역할 이름 매핑.
 // (역할 멘션 대상 채널이 있으면 해당 역할을 핑한다.)
@@ -147,7 +147,7 @@ async function announceMatchCompletionXp(match) {
   if (leveledUp.length === 0) return;
   const client = match?.message?.client;
   if (!client) return;
-  const channel = client.channels.cache.get(XP_CHANNEL_ID) || await client.channels.fetch(XP_CHANNEL_ID).catch(() => null);
+  const channel = client.channels.cache.get(LEVEL_UP_ANNOUNCE_CHANNEL_ID) || await client.channels.fetch(LEVEL_UP_ANNOUNCE_CHANNEL_ID).catch(() => null);
   if (!channel) return;
   for (const { userId, newLevel } of leveledUp) {
     await channel.send({

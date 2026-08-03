@@ -12,7 +12,7 @@ const { handleAdminSelect, handleAdminButton } = require('./commands/관리');
 const { handleLevelShareButton } = require('./commands/레벨');
 const { handleRankingPageButton, handleRankingShareButton } = require('./commands/랭킹');
 const { saveAll, loadRows } = require('./db'); // ⬅️ 추가: SQLite 저장 모듈
-const { loadLevels, saveLevels, handleMessageXp, trackVoiceStateUpdate, initVoiceStates, startVoiceXpTicker, XP_CHANNEL_ID } = require('./handlers/levels');
+const { loadLevels, saveLevels, handleMessageXp, trackVoiceStateUpdate, initVoiceStates, startVoiceXpTicker, LEVEL_UP_ANNOUNCE_CHANNEL_ID } = require('./handlers/levels');
 
 const client = new Client({
   intents: [
@@ -206,7 +206,7 @@ client.on('messageCreate', async (message) => {
   try {
     const result = handleMessageXp(message);
     if (result?.leveledUp) {
-      const channel = message.guild.channels.cache.get(XP_CHANNEL_ID);
+      const channel = message.guild.channels.cache.get(LEVEL_UP_ANNOUNCE_CHANNEL_ID);
       if (channel) {
         await channel.send({
           content: `<@${message.author.id}>님이 ${result.newLevel}레벨을 달성했어요. 🎉`,
