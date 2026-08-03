@@ -146,6 +146,101 @@ npm start
 - 특정 서버(테스트 서버)는 시스템 자체가 비활성화됨
 - `/레벨`로 진행바 임베드 확인, `/랭킹`으로 서버 XP 순위 확인
 
+## 주요 함수
+
+각 파일에서 내보내는(export) 함수와 핵심 내부 함수를 정리했습니다. `handlers/naejeon.js`/`handlers/mojip.js`는 버튼/셀렉트/모달 커스텀ID 하나하나를 처리하는 대형 `if/else` 분기 함수(`handleNaejeonButton`, `handleMojipButton`)가 실질적인 로직 대부분을 담고 있어, 그 내부 동작은 위 "기능 상세" 절에서 흐름 위주로 설명했습니다.
+
+### `handlers/levels.js` — XP/레벨
+
+| 함수 | 설명 |
+|---|---|
+| `loadLevels()` / `saveLevels()` | `levels.json`에서 XP 데이터를 불러오거나 저장 |
+| `xpNeededForLevel(level)` | 레벨 `L→L+1`에 필요한 XP 계산 (`5L²+50L+100`) |
+| `levelFromXp(xp)` | 누적 XP → 현재 레벨/레벨 내 XP/다음 레벨 필요 XP |
+| `getXp(guildId, userId)` | 특정 유저의 누적 XP 조회 |
+| `applyXp(guildId, userId, amount)` | XP를 더하고 레벨업 여부 반환 (내부 공통 로직) |
+| `handleMessageXp(message)` | 메시지 1건에 대해 채널/쿨다운/배율을 판정해 XP 지급 |
+| `awardMatchCompletionXp(match)` | 내전/모집 마감 시 주최자·참가자에게 1회성 보너스 XP 지급 |
+| `trackVoiceStateUpdate(oldState, newState)` | 음성 상태 변화(입장/퇴장/음소거)를 추적해 활성 유저 집합 갱신 |
+| `initVoiceStates(client)` | 봇 재시작 시 이미 통화 중이던 유저를 추적 대상으로 재등록 |
+| `startVoiceXpTicker(client)` | 1분마다 통화 중인 유저에게 체류 XP를 자동 지급하는 타이머 시작 |
+| `getLeaderboard(guildId, limit, offset)` / `getLeaderboardSize(guildId)` | `/랭킹`용 정렬된 리더보드 조회 |
+| `buildProgressBar(current, needed, length)` | `/레벨` 임베드용 진행바(■□) 문자열 생성 |
+
+### `handlers/shared.js` — 내전/모집/팀 공용 유틸
+
+| 함수 | 설명 |
+|---|---|
+| `getNaejeonMatches(client)` | `client.naejeonMatches` Map 획득(없으면 생성) |
+| `shuffleIntoTeams(participants)` | Fisher–Yates 셔플 후 절반씩 팀1/팀2로 분할 |
+| `armAutoEnd(matchesMap, msgId, match, label, delayMs)` | 마감된 매치에 8시간 자동 종료 타이머 설정 |
+| `disarmAutoEnd(match)` | 자동 종료 타이머 해제 |
+| `markClosed(matchesMap, msgId, match, label)` / `markReopened(match)` | 매치 마감/마감 해제 처리 (자동 종료 타이머 연동) |
+| `endMatch(matchesMap, msgId, match, label)` | 매치를 종료 상태로 전환(임베드를 회색으로 교체, Map에서 제거) — 8시간 자동 타이머와 `/관리`의 수동 종료가 공유하는 종착점 |
+| `announceMatchCompletionXp(match)` | 마감된 매치에 보너스 XP 지급 + 레벨업 유저 축하 메시지 게시 |
+| `buildModal` / `buildPreviewEmbed` / `buildPreviewComponents` / `buildCancelComponents` / `buildLeaveButton` | 내전/모집이 공유하는 모달·임베드·버튼 빌더 (`type` 파라미터로 분기) |
+| `getResetDateStr(client, label)` | 봇 재시작 시각을 KST 문자열로 포맷(만료된 매치 안내 메시지용) |
+
+### `handlers/naejeon.js` — 내전
+
+| 함수 | 설명 |
+|---|---|
+| `handleGameSelect(interaction)` | 게임 선택 메뉴 → 모달 오픈 |
+| `handleNaejeonModal(interaction)` | 생성 모달 제출 → 미리보기 임베드 표시 |
+| `handleNaejeonEditModal(interaction)` | 게시 전 미리보기 상태에서 수정 모달 제출 처리 |
+| `handleNaejeonButton(interaction)` | 게시/참가/탈퇴/마감/취소/팀 관리 등 내전 관련 모든 버튼 처리 (커스텀ID 분기) |
+| `handleNaejeonMatchEditModal(interaction)` | 게시된 내전의 정보 수정 모달 제출 처리 |
+| `handleTeamAssign(interaction)` | 주최자 관리 메뉴에서 트리거되는 팀 배정 셀렉트 처리 |
+| `handleNaejeonMemberAdd(interaction)` / `handleNaejeonMemberRemove(interaction)` | 관리자/주최자의 참가자 강제 추가/제거 |
+| `buildPublicMessagePayload(match)` | 공개 게시 메시지(임베드+버튼) 페이로드 생성 — `/불러오기`에서 재게시할 때도 사용 |
+
+### `handlers/mojip.js` — 모집
+
+내전과 동일한 구조로 `handleMojipGameSelect`, `handleMojipModal`, `handleMojipEditModal`, `handleMojipButton`, `handleMojipMatchEditModal`, `handleMojipMemberAdd`, `handleMojipMemberRemove`, `buildMojipMessagePayload`를 내보내며 역할도 각각 내전 쪽 대응 함수와 동일합니다(팀 배정 관련 함수만 없음).
+
+### `handlers/team.js` — 팀 배정
+
+| 함수 | 설명 |
+|---|---|
+| `buildMatchSelectMenu(matches)` | `/팀` 실행 시 보여줄 내전 선택 메뉴 생성 |
+| `handleTeamMatchSelect(interaction)` | 내전 선택 → 권한 확인 후 팀 관리 UI 표시 |
+| `handleTeamButton(interaction)` | 팀 만들기/자동 배정/재배정 버튼 처리 |
+| `handleTeamAssignSelect(interaction)` | 팀1 수동 선택 셀렉트 제출 → `match.teams`에 반영, 공개 메시지·결과 임베드 갱신 |
+
+### `handlers/r.js` — 불러오기
+
+| 함수 | 설명 |
+|---|---|
+| `handleRMatchSelect(interaction)` | 선택된 내전/모집을 새 메시지로 재게시하고 기존 메시지를 삭제, 매치의 메시지 ID를 갱신 |
+
+### `handlers/wordchain.js` — 끝말잇기
+
+| 함수 | 설명 |
+|---|---|
+| `startWcCommand(interaction)` | `/끝말잇기` 실행 → 대기 로비 생성 |
+| `handleWcButton(interaction)` | 참가/시작/봇대결/취소/재대결 버튼 처리 |
+| `handleWcMessage(message)` | 채팅 메시지를 현재 차례의 답으로 검증하고 게임 진행 |
+| `dueumConvert(char)` *(내부)* | 한글 음절을 초성/중성/종성으로 분해해 두음법칙(ㄹ·ㄴ→ㄴ·ㅇ) 변환 |
+| `getAcceptableStarts(lastChar)` *(내부)* | 두음법칙을 반영해 다음 단어로 허용되는 시작 글자 목록 계산 |
+| `checkWordExists(word)` *(내부)* | 국립국어원 한국어기초사전 API로 실존 단어 여부 확인 (실패 시 fail-open) |
+| `findBotWord(game)` / `botPlay(game, games)` *(내부)* | 봇 참가 시 사전 API에서 후보 단어를 조회해 자동으로 응답 |
+| `endGame(game, games, loserId, reason, failWord)` *(내부)* | 게임 종료 처리 및 결과 임베드로 전환, 재대결 만료 타이머 설정 |
+
+### `index.js` — 엔트리 포인트
+
+| 함수 | 설명 |
+|---|---|
+| `restoreMatches(client)` | 재시작 시 `data.json`으로부터 내전/모집 매치를 복원하고 메시지를 최신 코드로 다시 렌더링 |
+| `onReady(client)` | `startedAt` 기록, 매치/레벨 데이터 로드, 음성 상태 초기화, XP 타이커 시작 |
+
+### `db.js` — 영속화
+
+| 함수 | 설명 |
+|---|---|
+| `matchToJSON(match)` | 직렬화 불가능한 필드(메시지 참조, 타이머 등)를 제외하고 매치를 JSON 변환 |
+| `saveAll(client)` | 모든 내전/모집 매치를 `data.json`에 저장 |
+| `loadRows()` | `data.json`을 읽어 매치 배열로 반환 (없거나 오류 시 빈 배열) |
+
 ## 데이터 저장 (`db.js`)
 
 - SQLite 등 별도 DB 엔진 없이, `fs`로 `data.json`에 내전/모집 매치를 직렬화해 저장합니다(Discord 메시지 참조·타이머 등 직렬화 불가능한 필드는 저장 전 제외).
