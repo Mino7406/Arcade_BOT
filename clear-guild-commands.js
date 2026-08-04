@@ -20,7 +20,7 @@ const rest = new REST().setToken(process.env.TOKEN);
       );
       console.log(`✅ 길드 ${guildId} 초기화 완료!`);
     }
-    console.log('✅ 모든 길드 커맨드 초기화 완료! 이제 글로벌 커맨드만 남습니다.');
+    console.log('✅ 모든 길드 커맨드 초기화 완료!');
   } catch (error) {
     console.error(error);
   }

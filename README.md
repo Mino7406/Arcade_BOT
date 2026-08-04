@@ -67,11 +67,10 @@ ALLOWED_CHANNEL_ID=채널_ID_1,채널_ID_2   # 내전/모집/팀/불러오기 �
 KRDICT_API_KEY=국립국어원_한국어기초사전_오픈API_키   # 끝말잇기 단어 검증용, 없으면 검증을 통과시킴(fail-open)
 ```
 
-슬래시 커맨드 등록:
+슬래시 커맨드 등록 (GUILD_ID의 각 길드에 즉시 반영):
 
 ```bash
-node deploy-commands.js          # 전역 등록 (반영까지 최대 1시간)
-node deploy-commands.js guild    # GUILD_ID의 각 길드에 즉시 등록 (개발용)
+node deploy-commands.js
 ```
 
 봇 실행:
@@ -252,7 +251,7 @@ npm start
 ## 명령어 사용 로그 (`handlers/commandLog.js`)
 
 - 슬래시 커맨드가 실행될 때마다(`index.js`의 `interactionCreate` 핸들러) 사용자·시각·명령어·옵션을 `command-log.json`에 기록합니다.
-- 각 항목: `timestamp`(ISO 8601), `userId`, `username`, `guildId`, `channelId`, `command`, `options`(입력된 옵션 이름/값 배열)
+- 각 항목: `timestamp`(KST 기준 `YYYY-MM-DD HH:mm:ss`), `userId`, `username`, `guildId`, `channelId`, `command`, `options`(입력된 옵션 이름/값 배열)
 - 매 호출마다 파일 전체를 읽어 배열에 append 후 다시 씁니다(별도 로테이션/용량 제한 없음).
 
 ## 데이터 저장 (`db.js`)

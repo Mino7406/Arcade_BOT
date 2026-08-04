@@ -14,6 +14,18 @@ function readLogs() {
   }
 }
 
+// 로그를 KST 기준 "YYYY-MM-DD HH:mm:ss" 형태로 남겨, 파일을 열어봤을 때 시:분:초까지 바로 보이게 함.
+function nowKstStr() {
+  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const YYYY = kst.getUTCFullYear();
+  const MM = String(kst.getUTCMonth() + 1).padStart(2, '0');
+  const DD = String(kst.getUTCDate()).padStart(2, '0');
+  const HH = String(kst.getUTCHours()).padStart(2, '0');
+  const mm = String(kst.getUTCMinutes()).padStart(2, '0');
+  const ss = String(kst.getUTCSeconds()).padStart(2, '0');
+  return `${YYYY}-${MM}-${DD} ${HH}:${mm}:${ss}`;
+}
+
 // 슬래시 커맨드 실행 정보를 기록합니다. (interactionCreate에서 execute 직전/직후 호출)
 function logCommandUsage(interaction) {
   const options = (interaction.options?.data || []).map(opt => ({
@@ -22,7 +34,7 @@ function logCommandUsage(interaction) {
   }));
 
   const entry = {
-    timestamp: new Date().toISOString(),
+    timestamp: nowKstStr(),
     userId: interaction.user.id,
     username: interaction.user.tag,
     guildId: interaction.guildId,
