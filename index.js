@@ -13,6 +13,7 @@ const { handleLevelShareButton } = require('./commands/레벨');
 const { handleRankingPageButton, handleRankingShareButton } = require('./commands/랭킹');
 const { saveAll, loadRows } = require('./db'); // ⬅️ 추가: SQLite 저장 모듈
 const { loadLevels, saveLevels, handleMessageXp, trackVoiceStateUpdate, initVoiceStates, startVoiceXpTicker, LEVEL_UP_ANNOUNCE_CHANNEL_ID } = require('./handlers/levels');
+const { logCommandUsage } = require('./handlers/commandLog');
 
 const client = new Client({
   intents: [
@@ -121,6 +122,7 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.isChatInputCommand()) {
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
+      logCommandUsage(interaction);
       await command.execute(interaction);
 
     } else if (interaction.isUserSelectMenu()) {
