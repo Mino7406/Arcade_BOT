@@ -43,9 +43,11 @@ Arcade_BOT/
 │  ├─ team.js
 │  ├─ wordchain.js
 │  ├─ levels.js
+│  ├─ commandLog.js         # 슬래시 커맨드 사용 로그 기록
 │  └─ shared.js             # 내전/모집/팀 공용 유틸 (관리자 목록, 임베드 빌더, 자동 종료 타이머 등)
 ├─ data.json                # 진행 중인 내전/모집 매치 (자동 생성, gitignore)
 ├─ levels.json               # 유저별 XP (자동 생성, gitignore)
+├─ command-log.json          # 슬래시 커맨드 사용 이력 (자동 생성, gitignore)
 └─ env                       # 환경변수 파일 (gitignore, 아래 참고)
 ```
 
@@ -226,6 +228,12 @@ npm start
 | `findBotWord(game)` / `botPlay(game, games)` *(내부)* | 봇 참가 시 사전 API에서 후보 단어를 조회해 자동으로 응답 |
 | `endGame(game, games, loserId, reason, failWord)` *(내부)* | 게임 종료 처리 및 결과 임베드로 전환, 재대결 만료 타이머 설정 |
 
+### `handlers/commandLog.js` — 명령어 사용 로그
+
+| 함수 | 설명 |
+|---|---|
+| `logCommandUsage(interaction)` | 슬래시 커맨드 실행 정보(유저/시각/명령어/옵션)를 `command-log.json`에 append |
+
 ### `index.js` — 엔트리 포인트
 
 | 함수 | 설명 |
@@ -240,6 +248,12 @@ npm start
 | `matchToJSON(match)` | 직렬화 불가능한 필드(메시지 참조, 타이머 등)를 제외하고 매치를 JSON 변환 |
 | `saveAll(client)` | 모든 내전/모집 매치를 `data.json`에 저장 |
 | `loadRows()` | `data.json`을 읽어 매치 배열로 반환 (없거나 오류 시 빈 배열) |
+
+## 명령어 사용 로그 (`handlers/commandLog.js`)
+
+- 슬래시 커맨드가 실행될 때마다(`index.js`의 `interactionCreate` 핸들러) 사용자·시각·명령어·옵션을 `command-log.json`에 기록합니다.
+- 각 항목: `timestamp`(ISO 8601), `userId`, `username`, `guildId`, `channelId`, `command`, `options`(입력된 옵션 이름/값 배열)
+- 매 호출마다 파일 전체를 읽어 배열에 append 후 다시 씁니다(별도 로테이션/용량 제한 없음).
 
 ## 데이터 저장 (`db.js`)
 
