@@ -395,7 +395,7 @@ async function handleMojipButton(interaction) {
       });
       return;
     }
-    markClosed(getMojips(interaction.client), msgId, match, '모집');
+    markClosed(getMojips(interaction.client), msgId, match, '모집', false);
     await match.message.edit({
       embeds: [buildPublicEmbed(match.data, match.participants, true)],
       components: buildPublicComponents(match.participants, maxPlayers, true),
@@ -417,7 +417,7 @@ async function handleMojipButton(interaction) {
       await interaction.update({ content: `⚠️ **만료된 모집입니다.**\n(${getResetDateStr(interaction.client)})`, components: [] });
       return;
     }
-    markClosed(getMojips(interaction.client), msgId, match, '모집');
+    markClosed(getMojips(interaction.client), msgId, match, '모집', false);
     const maxPlayers = parseInt(match.data.players) || 0;
     await match.message.edit({
       embeds: [buildPublicEmbed(match.data, match.participants, true)],

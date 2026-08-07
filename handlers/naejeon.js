@@ -489,7 +489,7 @@ async function handleNaejeonButton(interaction) {
       });
       return;
     }
-    markClosed(getMatches(interaction.client), matchMsgId, match, '내전');
+    markClosed(getMatches(interaction.client), matchMsgId, match, '내전', false);
     await match.message.edit(buildPublicMessagePayload(match));
     await announceMatchCompletionXp(match);
     await interaction.update({
@@ -507,7 +507,7 @@ async function handleNaejeonButton(interaction) {
       await interaction.update({ content: `⚠️ **만료된 내전입니다.**\n(${getResetDateStr(interaction.client)})`, components: [] });
       return;
     }
-    markClosed(getMatches(interaction.client), matchMsgId, match, '내전');
+    markClosed(getMatches(interaction.client), matchMsgId, match, '내전', false);
     await match.message.edit(buildPublicMessagePayload(match));
     await announceMatchCompletionXp(match);
     await interaction.update({

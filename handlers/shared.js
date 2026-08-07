@@ -86,11 +86,33 @@ function disarmAutoEnd(match) {
   match.closedAt = null;
 }
 
+// 마감 시 주최자에게 DM으로 알린다. 인원 초과/미달과 무관하게 markClosed를
+// 거치는 모든 경로(정원 자동 마감, 주최자 수동 마감, 강제 추가로 인한 마감)에 공통 적용.
+// DM 차단 등으로 실패해도 마감 처리 자체에는 영향을 주지 않는다.
+async function notifyOrganizerOnClose(match, label) {
+  const organizer = match?.data?.organizer;
+  const client = match?.message?.client;
+  if (!organizer?.id || !client) return;
+  try {
+    const user = await client.users.fetch(organizer.id);
+    const { title } = match.data;
+    await user.send({
+      content: `🔒 **"${title}"** ${label}이 마감되었습니다.\n${match.message.url}`,
+      allowedMentions: { parse: [] },
+    });
+  } catch (err) {
+    console.error(`${label} 마감 DM 전송 실패:`, err);
+  }
+}
+
 // 마감(🔒 마감됨) 상태로 전환하면서 8시간 자동 종료 타이머를 건다.
-function markClosed(matchesMap, msgId, match, label) {
+// notify=false를 넘기면 주최자 DM을 보내지 않는다 — 주최자 본인이 직접
+// "마감하기" 버튼을 눌러 마감한 경우(이미 알고 있으므로 불필요)에 사용.
+function markClosed(matchesMap, msgId, match, label, notify = true) {
   match.closed = true;
   match.closedAt = Date.now();
   armAutoEnd(matchesMap, msgId, match, label);
+  if (notify) notifyOrganizerOnClose(match, label).catch(() => {});
 }
 
 // 마감 해제(🔓) 상태로 전환하면서 예약돼 있던 자동 종료 타이머를 취소한다.
