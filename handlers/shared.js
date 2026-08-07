@@ -103,11 +103,11 @@ async function notifyOrganizerOnClose(match, label) {
     const container = new ContainerBuilder()
       .addTextDisplayComponents(td => td.setContent('# 🔒 마감 알림'))
       .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
-      .addTextDisplayComponents(td => td.setContent(`**${title}** 이(가) 방금 마감됐어요!\n지금 바로 확인해 보세요.`))
+      .addTextDisplayComponents(td => td.setContent(`**${title}** 이(가) 방금 마감됐어요!\n\n지금 바로 확인해 보세요.`))
       .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
-      .addTextDisplayComponents(td => td.setContent(`### 🔗 **바로가기**\n[${label} __누르면 바로 이동돼요.__](${match.message.url})`))
+      .addTextDisplayComponents(td => td.setContent(`### 🔗 **바로가기**\n[__누르면 바로 이동됩니다.__](${match.message.url})`))
       .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
-      .addTextDisplayComponents(td => td.setContent('-# 📌 정원이 가득 차 자동으로 마감되었습니다.'));
+      .addTextDisplayComponents(td => td.setContent('-# 자동 마감처리되어 주최자에게 알림이 전송되었습니다.'));
     await user.send({ components: [container], flags: MessageFlags.IsComponentsV2 });
   } catch (err) {
     console.error(`${label} 마감 DM 전송 실패:`, err);
