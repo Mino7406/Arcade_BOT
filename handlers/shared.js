@@ -95,18 +95,14 @@ async function notifyOrganizerOnClose(match, label) {
   if (!organizer?.id || !client) return;
   try {
     const user = await client.users.fetch(organizer.id);
-    const { title } = match.data;
-    await user.send({
-      content: [
-        `## 🔒 마감 알림`,
-        ``,
-        `**${title}** ${label}이 방금 마감됐어요!`,
-        ``,
-        `🔗 **바로가기**`,
-        `[${label} 게시글 확인하기](${match.message.url})`,
-      ].join('\n'),
-      allowedMentions: { parse: [] },
-    });
+    const { title, gameInfo } = match.data;
+    const embed = new EmbedBuilder()
+      .setColor(gameInfo?.color ?? 0x5865F2)
+      .setTitle('🔒 마감 알림')
+      .setDescription(`**${title}** ${label}이 방금 마감됐어요!`)
+      .addFields({ name: '🔗 바로가기', value: `[${label} 게시글 확인하기](${match.message.url})` })
+      .setTimestamp();
+    await user.send({ embeds: [embed] });
   } catch (err) {
     console.error(`${label} 마감 DM 전송 실패:`, err);
   }
