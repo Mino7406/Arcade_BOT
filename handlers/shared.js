@@ -97,7 +97,7 @@ async function notifyOrganizerOnClose(match, label) {
     const user = await client.users.fetch(organizer.id);
     const { title } = match.data;
     await user.send({
-      content: `## 📬 ${title} 이(가) 지금 마감되었습니다!\n-# ${label} 바로가기 → ${match.message.url}`,
+      content: `## 🔒 마감 안내\n### ${title}\n${label}이 방금 마감됐어요!\n\n-# 🔗 바로가기 → ${match.message.url}`,
       allowedMentions: { parse: [] },
     });
   } catch (err) {
