@@ -10,6 +10,10 @@ const {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
+  ContainerBuilder,
+  SeparatorBuilder,
+  SeparatorSpacingSize,
+  MessageFlags,
 } = require('discord.js');
 const { awardMatchCompletionXp, LEVEL_UP_ANNOUNCE_CHANNEL_ID } = require('./levels');
 
@@ -95,14 +99,14 @@ async function notifyOrganizerOnClose(match, label) {
   if (!organizer?.id || !client) return;
   try {
     const user = await client.users.fetch(organizer.id);
-    const { title, gameInfo } = match.data;
-    const embed = new EmbedBuilder()
-      .setColor(gameInfo?.color ?? 0x5865F2)
-      .setTitle('🔒 마감 알림')
-      .setDescription(`**${title}** ${label}이 방금 마감됐어요!`)
-      .addFields({ name: '🔗 바로가기', value: `[${label} 게시글 확인하기](${match.message.url})` })
-      .setTimestamp();
-    await user.send({ embeds: [embed] });
+    const { title } = match.data;
+    const container = new ContainerBuilder()
+      .addTextDisplayComponents(td => td.setContent(`## 🔒 마감 알림\n**${title}** 이(가) 방금 마감됐어요!`))
+      .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
+      .addTextDisplayComponents(td => td.setContent(`🔗 **바로가기**\n[${label} 게시글 확인하기](${match.message.url})`))
+      .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
+      .addTextDisplayComponents(td => td.setContent('-# 📌 정원이 가득 차 자동으로 마감되었을 때만 발송돼요'));
+    await user.send({ components: [container], flags: MessageFlags.IsComponentsV2 });
   } catch (err) {
     console.error(`${label} 마감 DM 전송 실패:`, err);
   }
