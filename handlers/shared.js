@@ -107,7 +107,7 @@ async function notifyOrganizerOnClose(match, label) {
       .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
       .addTextDisplayComponents(td => td.setContent(`### 🔗 **바로가기**\n[__누르면 바로 이동됩니다.__](${match.message.url})`))
       .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
-      .addTextDisplayComponents(td => td.setContent('-# `자동 마감처리되어 주최자에게 알림이 전송되었습니다.`'));
+      .addTextDisplayComponents(td => td.setContent('-# 📬 자동 마감처리되어 주최자에게 알림이 전송되었습니다.'));
     await user.send({ components: [container], flags: MessageFlags.IsComponentsV2 });
   } catch (err) {
     console.error(`${label} 마감 DM 전송 실패:`, err);
