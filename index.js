@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload: buildNaejeonMessagePayload } = require('./handlers/naejeon');
 const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipMemberAdd, handleMojipMemberRemove, buildMojipMessagePayload } = require('./handlers/mojip');
-const { armAutoEnd, endMatch, AUTO_CLOSE_DELAY_MS } = require('./handlers/shared');
+const { armAutoEnd, AUTO_CLOSE_DELAY_MS, announceMatchCompletionXp } = require('./handlers/shared');
 const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/team');
 const { handleRMatchSelect } = require('./handlers/r');
 const { handleWcButton, handleWcMessage } = require('./handlers/wordchain');
@@ -13,6 +13,7 @@ const { handleLevelShareButton } = require('./commands/레벨');
 const { handleRankingPageButton, handleRankingShareButton } = require('./commands/랭킹');
 const { saveAll, loadRows } = require('./db'); // ⬅️ 추가: SQLite 저장 모듈
 const { loadLevels, saveLevels, handleMessageXp, trackVoiceStateUpdate, initVoiceStates, startVoiceXpTicker, LEVEL_UP_ANNOUNCE_CHANNEL_ID } = require('./handlers/levels');
+const { handleTempVoiceState, reconcileTempChannels } = require('./handlers/voiceRooms');
 const { logCommandUsage } = require('./handlers/commandLog');
 
 const client = new Client({
@@ -61,13 +62,19 @@ async function restoreMatches(c) {
       await match.message.edit(buildPayload(match)).catch(err => console.error('복원 후 메시지 갱신 중 오류:', err));
 
       // 봇이 꺼져있던 동안 setTimeout이 소실되므로, 마감(closed) 시점을 기준으로
-      // 8시간 자동 종료를 다시 스케줄링합니다. 이미 8시간이 지났다면 즉시 종료 처리합니다.
-      // (closedAt이 없는 옛 데이터는 이미 마감 상태로 오래 방치돼 있었다는 뜻이므로 즉시 종료합니다.)
+      // 8시간 자동 삭제를 다시 스케줄링합니다. 이미 8시간이 지났다면 즉시 삭제합니다.
+      // (closedAt이 없는 옛 데이터는 이미 마감 상태로 오래 방치돼 있었다는 뜻이므로 즉시 삭제합니다.)
       if (match.closed && match.data?.autoClose) {
         const label = row.type === 'naejeon' ? '내전' : '모집';
         const remaining = match.closedAt ? AUTO_CLOSE_DELAY_MS - (Date.now() - match.closedAt) : 0;
         if (remaining <= 0) {
-          await endMatch(map, row.message_id, match, label).catch(err => console.error('복원 후 자동 종료 처리 중 오류:', err));
+          try {
+            await announceMatchCompletionXp(match);
+            map.delete(row.message_id);
+            await match.message.delete();
+          } catch (err) {
+            console.error('복원 후 자동 삭제 처리 중 오류:', err);
+          }
         } else {
           armAutoEnd(map, row.message_id, match, label, remaining);
         }
@@ -95,6 +102,7 @@ async function onReady(c) {
   loadLevels(); // ⬅️ 추가: 저장된 레벨/XP 복원
   initVoiceStates(c); // 재시작 전 이미 통화방에 있던 유저 추적 복원
   startVoiceXpTicker(c); // 통화방 체류 XP 1분 틱 시작
+  await reconcileTempChannels(c); // 재시작 전 만들어둔 임시 음성채널 중 빈 방 정리
 }
 client.once('clientReady', onReady);
 client.once('ready', onReady);
@@ -221,11 +229,17 @@ client.on('messageCreate', async (message) => {
   }
 });
 
-client.on('voiceStateUpdate', (oldState, newState) => {
+client.on('voiceStateUpdate', async (oldState, newState) => {
   try {
     trackVoiceStateUpdate(oldState, newState);
   } catch (error) {
     console.error('음성 상태 추적 실패:', error);
+  }
+
+  try {
+    await handleTempVoiceState(oldState, newState);
+  } catch (error) {
+    console.error('임시 음성채널 처리 실패:', error);
   }
 });
 

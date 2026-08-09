@@ -4,7 +4,7 @@
 
 ## 주요 기능
 
-- **내전(`/내전`)** — 게임별 내전 모집 글 생성, 참가/마감/자동 종료, 팀 자동/수동 배정, 참가자 관리
+- **내전(`/내전`)** — 게임별 내전 모집 글 생성, 참가/마감/자동 삭제, 팀 자동/수동 배정, 참가자 관리
 - **모집(`/모집`)** — 내전보다 가벼운 일반 게임 모집 (팀 배정 없음)
 - **불러오기(`/불러오기`)** — 채팅에 묻힌 내전/모집 게시글을 새 메시지로 다시 게시
 - **관리(`/관리`)** — 관리자 전용, 내전/모집 강제 종료·삭제, 봇 메시지 삭제
@@ -100,7 +100,7 @@ npm start
 2. 게임 선택 → 모달로 제목/일시/인원/설명 입력
 3. 제출 → 미리보기 임베드 + `📢 채널에 공개 게시` / `✏️ 수정` / `❌ 취소` 버튼, ⏰ 자동 마감 토글, (직접 입력 게임의 경우) Steam 역할 멘션 토글
 4. 공개 게시 시 게임에 해당하는 역할(롤→`롤`, 발로란트→`발로란트`, 오버워치→`오버워치`, 배그→`배그`)을 멘션하며 게시
-5. 참가/취소 버튼으로 인원 모집, 정원이 차면 자동 마감(`markClosed`) — 마감 시 8시간 후 자동 종료 타이머가 걸리고, 참가자에게 완료 보너스 XP가 지급되며, 정원이 자동으로 차서 마감된 경우 주최자에게 마감 안내 DM이 발송됨(주최자가 직접 "마감하기" 버튼으로 수동 마감한 경우는 본인이 이미 알고 있으므로 DM 미발송, DM 차단 시에도 무시)
+5. 참가/취소 버튼으로 인원 모집, 정원이 차면 자동 마감(`markClosed`) — 마감 시 8시간 후 자동 삭제 타이머가 걸리고(타이머 만료 시 참가자에게 완료 보너스 XP가 지급된 뒤 메시지가 삭제됨), 정원이 자동으로 차서 마감된 경우 주최자에게 마감 안내 DM이 발송됨(주최자가 직접 "마감하기" 버튼으로 수동 마감한 경우는 본인이 이미 알고 있으므로 DM 미발송, DM 차단 시에도 무시)
 6. 주최자(또는 관리자) 전용 관리 메뉴: 마감/마감 해제, 수정, 취소, 팀 만들기(수동/자동 배정), 참가자 멘션(1회성), 참가자 강제 추가/제거
 
 ### 모집 (`/모집`, `handlers/mojip.js`)
@@ -117,7 +117,7 @@ npm start
 
 - 현재 서버에서 진행 중인 내전/모집 목록을 셀렉트 메뉴로 표시(상태: 🔒 마감됨 / 🟢 모집중)
 - 선택 시 기존 메시지를 삭제하고 동일한 내용으로 새 메시지를 게시, 내부적으로 매치 데이터의 메시지 ID를 갱신
-- 자동 종료가 걸려 있던 매치는 남은 시간을 그대로 유지해 새 메시지에 재설정
+- 자동 삭제가 걸려 있던 매치는 남은 시간을 그대로 유지해 새 메시지에 재설정
 
 ### 관리 (`/관리`, `handlers/관리.js`, 관리자 전용)
 
@@ -174,11 +174,11 @@ npm start
 |---|---|
 | `getNaejeonMatches(client)` | `client.naejeonMatches` Map 획득(없으면 생성) |
 | `shuffleIntoTeams(participants)` | Fisher–Yates 셔플 후 절반씩 팀1/팀2로 분할 |
-| `armAutoEnd(matchesMap, msgId, match, label, delayMs)` | 마감된 매치에 8시간 자동 종료 타이머 설정 |
-| `disarmAutoEnd(match)` | 자동 종료 타이머 해제 |
-| `markClosed(matchesMap, msgId, match, label, notify = true)` / `markReopened(match)` | 매치 마감/마감 해제 처리 (자동 종료 타이머 연동). `notify=false`를 넘기면 주최자 DM을 생략(주최자 본인이 직접 마감한 경우에 사용) |
+| `armAutoEnd(matchesMap, msgId, match, label, delayMs)` | 마감된 매치에 8시간 자동 삭제 타이머 설정 — 만료 시 XP 지급 후 메시지를 바로 삭제(`endMatch` 미사용) |
+| `disarmAutoEnd(match)` | 자동 삭제 타이머 해제 |
+| `markClosed(matchesMap, msgId, match, label, notify = true)` / `markReopened(match)` | 매치 마감/마감 해제 처리 (자동 삭제 타이머 연동). `notify=false`를 넘기면 주최자 DM을 생략(주최자 본인이 직접 마감한 경우에 사용) |
 | `notifyOrganizerOnClose(match, label)` *(내부)* | 정원 자동 마감 시 주최자에게 게시글 제목과 링크를 DM으로 전송 (DM 차단 등 실패는 무시) |
-| `endMatch(matchesMap, msgId, match, label)` | 매치를 종료 상태로 전환(임베드를 회색으로 교체, Map에서 제거) — 8시간 자동 타이머와 `/관리`의 수동 종료가 공유하는 종착점 |
+| `endMatch(matchesMap, msgId, match, label)` | 매치를 종료 상태로 전환(임베드를 회색으로 교체, Map에서 제거) — `/관리`의 수동 "⌛ 종료" 버튼 전용 |
 | `announceMatchCompletionXp(match)` | 마감된 매치에 보너스 XP 지급 + 레벨업 유저 축하 메시지 게시 |
 | `buildModal` / `buildPreviewEmbed` / `buildPreviewComponents` / `buildCancelComponents` / `buildLeaveButton` | 내전/모집이 공유하는 모달·임베드·버튼 빌더 (`type` 파라미터로 분기) |
 | `getResetDateStr(client, label)` | 봇 재시작 시각을 KST 문자열로 포맷(만료된 매치 안내 메시지용) |
