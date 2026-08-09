@@ -93,6 +93,10 @@ async function restoreMatches(c) {
 // discord.js 버전에 따라 이벤트 이름이 'clientReady' 또는 'ready'라서 둘 다 등록.
 // _readyDone 플래그로 한 번만 실행되게 막습니다.
 let _readyDone = false;
+// restoreMatches/loadLevels가 끝나기 전에는 저장 관련 데이터가 비어있는 상태라,
+// 이 시점에 자동 저장(30초 간격)이 실행되면 아직 못 불러온 기존 데이터를 빈 값으로
+// 덮어써버린다. 복원이 끝난 뒤에만 자동 저장이 돌게 막는 플래그.
+let dataReady = false;
 async function onReady(c) {
   if (_readyDone) return;
   _readyDone = true;
@@ -103,6 +107,7 @@ async function onReady(c) {
   initVoiceStates(c); // 재시작 전 이미 통화방에 있던 유저 추적 복원
   startVoiceXpTicker(c); // 통화방 체류 XP 1분 틱 시작
   await reconcileTempChannels(c); // 재시작 전 만들어둔 임시 음성채널 중 빈 방 정리
+  dataReady = true;
 }
 client.once('clientReady', onReady);
 client.once('ready', onReady);
@@ -245,15 +250,20 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 
 // ─── 자동 저장 (30초마다) ─────────────────────────────────────
 // 봇이 갑자기 죽어도(크래시) 최대 30초 전 상태까지는 보존됩니다.
+// dataReady가 true가 되기 전(복원 완료 전)에는 저장을 건너뛴다 — 안 그러면
+// 아직 비어있는 메모리 상태로 기존 data.json/levels.json을 덮어써 초기화시킨다.
 setInterval(() => {
+  if (!dataReady) return;
   try { saveAll(client); } catch (e) { console.error('자동 저장 실패:', e); }
   try { saveLevels(); } catch (e) { console.error('레벨 자동 저장 실패:', e); }
 }, 30_000);
 
 // ─── 종료 시 마지막으로 한 번 더 저장 ─────────────────────────
 function shutdown() {
-  try { saveAll(client); } catch (e) { console.error('종료 저장 실패:', e); }
-  try { saveLevels(); } catch (e) { console.error('레벨 종료 저장 실패:', e); }
+  if (dataReady) {
+    try { saveAll(client); } catch (e) { console.error('종료 저장 실패:', e); }
+    try { saveLevels(); } catch (e) { console.error('레벨 종료 저장 실패:', e); }
+  }
   client.destroy();
   process.exit(0);
 }

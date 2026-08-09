@@ -84,8 +84,7 @@ async function createTempChannel(newState) {
 
   let tempChannel;
   try {
-    // parent만 지정하면 카테고리 권한을 그대로 이어받으므로, 만든 사람에게 줄
-    // 채널 관리 권한만 생성 시점에 추가로 얹는다.
+    // parent만 지정하면 카테고리 권한을 그대로 이어받는다.
     tempChannel = await guild.channels.create({
       name: `🔊 ${member.displayName}의 방`,
       type: ChannelType.GuildVoice,
@@ -93,14 +92,21 @@ async function createTempChannel(newState) {
       bitrate: newState.channel?.bitrate,
       userLimit: newState.channel?.userLimit,
     });
-    await tempChannel.permissionOverwrites.create(member.id, { ManageChannels: true });
   } catch (err) {
     console.error('임시 음성채널 생성 실패:', err);
     return;
   }
 
+  // 채널은 이미 만들어졌으니 이 시점부터는 무조건 추적 대상에 넣는다
+  // (권한 부여가 실패해도 방 자체는 정상 동작해야 하고, 삭제 추적도 끊기면 안 됨).
   tempChannelIds.add(tempChannel.id);
   saveTempChannels();
+
+  // 채널 관리 권한 부여는 별도 오류로 실패해도(예: 봇에 "역할 관리" 권한이 없는 경우)
+  // 아래 이동 로직에 영향을 주지 않도록 분리한다.
+  await tempChannel.permissionOverwrites
+    .create(member.id, { ManageChannels: true })
+    .catch(err => console.error('채널 관리 권한 부여 실패(봇에 "역할 관리" 권한이 있는지 확인):', err));
 
   try {
     await member.voice.setChannel(tempChannel);
