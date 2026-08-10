@@ -46,7 +46,7 @@ module.exports = {
 
     const embed = new EmbedBuilder()
       .setColor(0x5865f2)
-      .setTitle('## 게임모집 채널에 오신 걸 환영합니다!')
+      .setTitle('게임모집 채널에 오신 걸 환영합니다!')
       .setDescription(
         [
           '> **명령어 없이 바로 이용하세요. **',
@@ -69,7 +69,10 @@ module.exports = {
         ].join('\n'),
       )
       .setThumbnail(interaction.client.user.displayAvatarURL())
-      .setFooter({ text: '버튼 말고도 해당 채널에서 명령어로도 사용 가능합니다.' })
+      .setFooter({
+        text: '버튼 말고도 해당 채널에서 명령어로도 사용 가능합니다.',
+        iconURL: interaction.client.user.displayAvatarURL(),
+      })
       .setTimestamp();
 
     const playgroundEmbed = new EmbedBuilder()
@@ -83,19 +86,17 @@ module.exports = {
       new ButtonBuilder().setCustomId('recruit:내전').setLabel('⚔️ 내전 생성').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId('recruit:모집').setLabel('📋 모집 생성').setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId('recruit:불러오기').setLabel('🔎 불러오기').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('recruit:팀').setLabel('🛠️ 팀 관리').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('recruit:팀').setLabel('🛠️ 팀 관리').setStyle(ButtonStyle.Primary),
     );
     const row2 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('recruit:명령어').setLabel('📖 명령어 보기').setStyle(ButtonStyle.Secondary),
-    );
-    const row3 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setLabel('🎡 놀이터 채널 바로가기')
+        .setLabel('🎡 놀이터 바로가기')
         .setStyle(ButtonStyle.Link)
         .setURL(`https://discord.com/channels/${interaction.guild.id}/${PLAYGROUND_CHANNEL_ID}`),
     );
 
-    await interaction.channel.send({ embeds: [embed, playgroundEmbed], components: [row1, row2, row3] });
+    await interaction.channel.send({ embeds: [embed, playgroundEmbed], components: [row1, row2] });
     await interaction.reply({ content: '✅ **안내 패널을 게시했습니다.**', ephemeral: true });
   },
 
