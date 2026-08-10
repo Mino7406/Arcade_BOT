@@ -156,7 +156,6 @@ function buildManageMenu(match, msgId) {
           .setLabel('📣 참가자 멘션')
           .setStyle(ButtonStyle.Success)
           .setDisabled(!!match.mentionSent),
-        buildAutoCloseToggleButton(match, msgId, '모집'),
       ),
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
@@ -172,7 +171,7 @@ function buildManageMenu(match, msgId) {
           .setLabel('❌ 모집 취소')
           .setStyle(ButtonStyle.Danger),
       ),
-      new ActionRowBuilder().addComponents(buildNotifyButton(match, msgId)),
+      new ActionRowBuilder().addComponents(buildAutoCloseToggleButton(match, msgId, '모집'), buildNotifyButton(match, msgId)),
       addRemoveRow,
     ];
   }
@@ -190,9 +189,8 @@ function buildManageMenu(match, msgId) {
         .setCustomId(`mojip:match_cancel:${msgId}`)
         .setLabel('❌ 모집 취소')
         .setStyle(ButtonStyle.Danger),
-      buildAutoCloseToggleButton(match, msgId, '모집'),
     ),
-    new ActionRowBuilder().addComponents(buildNotifyButton(match, msgId)),
+    new ActionRowBuilder().addComponents(buildAutoCloseToggleButton(match, msgId, '모집'), buildNotifyButton(match, msgId)),
     addRemoveRow,
   ];
 }

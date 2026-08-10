@@ -208,7 +208,7 @@ async function sendMatchStartDm(match, label) {
     try {
       const target = await client.users.fetch(user.id);
       const container = new ContainerBuilder()
-        .addTextDisplayComponents(td => td.setContent('# ⏰ 시작 시간 알림'))
+        .addTextDisplayComponents(td => td.setContent('# ⏰ 시작 알림'))
         .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
         .addTextDisplayComponents(td => td.setContent(`**${match.data.title}** ${label} 시작 시간이에요!\n\n지금 바로 확인해 보세요.`))
         .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
@@ -600,7 +600,7 @@ function buildPreviewComponents(type, data = null) {
       .setEmoji({ id: '1510954746012242021', name: 'Steam' })
       .setLabel(data.mentionSteam ? '멘션 ON' : '멘션 OFF')
       .setStyle(data.mentionSteam ? ButtonStyle.Success : ButtonStyle.Secondary);
-    return [row1, new ActionRowBuilder().addComponents(autoCloseToggle, steamToggle), new ActionRowBuilder().addComponents(notifyButton)];
+    return [row1, new ActionRowBuilder().addComponents(autoCloseToggle, notifyButton), new ActionRowBuilder().addComponents(steamToggle)];
   }
   return [row1, new ActionRowBuilder().addComponents(autoCloseToggle, notifyButton)];
 }

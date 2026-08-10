@@ -192,7 +192,6 @@ function buildManageMenu(match, matchMsgId) {
           .setLabel('📣 참가자 멘션')
           .setStyle(ButtonStyle.Success)
           .setDisabled(!!match.mentionSent),
-        buildAutoCloseToggleButton(match, matchMsgId, '내전'),
       ),
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
@@ -208,7 +207,7 @@ function buildManageMenu(match, matchMsgId) {
           .setLabel('❌ 내전 취소')
           .setStyle(ButtonStyle.Danger),
       ),
-      new ActionRowBuilder().addComponents(buildNotifyButton(match, matchMsgId)),
+      new ActionRowBuilder().addComponents(buildAutoCloseToggleButton(match, matchMsgId, '내전'), buildNotifyButton(match, matchMsgId)),
       addRemoveRow,
     ];
   }
@@ -226,9 +225,8 @@ function buildManageMenu(match, matchMsgId) {
         .setCustomId(`naejeon:match_cancel:${matchMsgId}`)
         .setLabel('❌ 내전 취소')
         .setStyle(ButtonStyle.Danger),
-      buildAutoCloseToggleButton(match, matchMsgId, '내전'),
     ),
-    new ActionRowBuilder().addComponents(buildNotifyButton(match, matchMsgId)),
+    new ActionRowBuilder().addComponents(buildAutoCloseToggleButton(match, matchMsgId, '내전'), buildNotifyButton(match, matchMsgId)),
     addRemoveRow,
   ];
 }
