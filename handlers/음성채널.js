@@ -84,20 +84,17 @@ async function createTempChannel(newState) {
 
   let tempChannel;
   try {
-    // 허브("통화방 만들기") 바로 다음 자리에 고정한다. 매번 이 위치에 새로 넣으면 기존
-    // 임시 채널들은 한 칸씩 밀려날 뿐이라, 개수와 상관없이 항상 허브와 다른 고정방
-    // (1인실 등) 사이에 모여 있게 된다.
-    const category = await guild.channels.fetch(TEMP_CATEGORY_ID).catch(() => null);
-    const position = newState.channel ? newState.channel.position + 1 : undefined;
-
     // parent만 지정해서는 카테고리 권한(노래봇 등에 부여된 접속 권한 포함)이 자동으로
     // 복사되지 않는다(디스코드 클라이언트의 "동기화"는 UI 전용 동작). API로 만들 때는
     // 카테고리의 permissionOverwrites를 직접 넘겨줘야 실제로 같은 권한이 적용된다.
+    const category = await guild.channels.fetch(TEMP_CATEGORY_ID).catch(() => null);
+
+    // 생성 시점에 position을 같이 넘기면 디스코드가 무시하고 아무 데나(심지어 허브보다
+    // 위로) 배치하는 경우가 있어, 일단 만든 뒤 아래에서 setPosition으로 따로 지정한다.
     tempChannel = await guild.channels.create({
       name: `🔊 │${member.displayName}의 방`,
       type: ChannelType.GuildVoice,
       parent: TEMP_CATEGORY_ID,
-      position,
       bitrate: newState.channel?.bitrate,
       userLimit: newState.channel?.userLimit,
       permissionOverwrites: category?.permissionOverwrites.cache.map(o => ({
@@ -110,6 +107,16 @@ async function createTempChannel(newState) {
   } catch (err) {
     console.error('임시 음성채널 생성 실패:', err);
     return;
+  }
+
+  // 허브("통화방 만들기") 바로 다음 자리에 고정한다. 매번 이 위치로 옮기면 기존 임시
+  // 채널들은 한 칸씩 밀려날 뿐이라, 개수와 상관없이 항상 허브와 다른 고정방(1인실 등)
+  // 사이에 모여 있게 된다.
+  try {
+    const hub = newState.channel ?? await guild.channels.fetch(HUB_CHANNEL_ID).catch(() => null);
+    if (hub) await tempChannel.setPosition(hub.position + 1);
+  } catch (err) {
+    console.error('임시 음성채널 위치 지정 실패:', err);
   }
 
   // 채널은 이미 만들어졌으니 이 시점부터는 무조건 추적 대상에 넣는다
