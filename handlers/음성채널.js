@@ -84,10 +84,11 @@ async function createTempChannel(newState) {
 
   let tempChannel;
   try {
-    // 카테고리 안의 기존 채널들(고정방 등)보다 아래에 생기도록, 가장 큰 position 다음 자리로 만든다.
+    // 허브("통화방 만들기") 바로 다음 자리에 고정한다. 매번 이 위치에 새로 넣으면 기존
+    // 임시 채널들은 한 칸씩 밀려날 뿐이라, 개수와 상관없이 항상 허브와 다른 고정방
+    // (1인실 등) 사이에 모여 있게 된다.
     const category = await guild.channels.fetch(TEMP_CATEGORY_ID).catch(() => null);
-    const siblings = category?.children?.cache;
-    const position = siblings?.size > 0 ? Math.max(...siblings.map(c => c.position)) + 1 : undefined;
+    const position = newState.channel ? newState.channel.position + 1 : undefined;
 
     // parent만 지정해서는 카테고리 권한(노래봇 등에 부여된 접속 권한 포함)이 자동으로
     // 복사되지 않는다(디스코드 클라이언트의 "동기화"는 UI 전용 동작). API로 만들 때는
