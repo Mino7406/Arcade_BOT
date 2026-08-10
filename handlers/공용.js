@@ -45,7 +45,7 @@ function titleHeader(game, gameInfo, title) {
   return game === 'custom' ? `## ${title}` : `## ${gameInfo.emoji}  ${title}`;
 }
 
-const AUTO_CLOSE_DELAY_MS = 4 * 60 * 60 * 1000;
+const AUTO_CLOSE_DELAY_MS = 8 * 60 * 60 * 1000;
 
 function clearAutoEndTimer(match) {
   if (match._autoEndTimer) {
@@ -54,7 +54,7 @@ function clearAutoEndTimer(match) {
   }
 }
 
-// 마감(closed)된 시점부터 delayMs(기본 4시간) 후 자동으로 메시지를 삭제한다.
+// 마감(closed)된 시점부터 delayMs(기본 8시간) 후 자동으로 메시지를 삭제한다.
 // autoClose 옵션이 꺼져있으면 아무것도 하지 않는다. 봇 재시작 후 복원할 때는
 // 이미 지난 시간만큼 뺀 delayMs를 넘겨 원래 마감 시각 기준을 유지한다.
 function armAutoEnd(matchesMap, msgId, match, label, delayMs = AUTO_CLOSE_DELAY_MS) {
@@ -78,6 +78,33 @@ function armAutoEnd(matchesMap, msgId, match, label, delayMs = AUTO_CLOSE_DELAY_
 function disarmAutoEnd(match) {
   clearAutoEndTimer(match);
   match.closedAt = null;
+}
+
+function getCancelledDeletions(client) {
+  if (!client.cancelledDeletions) client.cancelledDeletions = new Map();
+  return client.cancelledDeletions;
+}
+
+// 취소된(🔴 취소됨) 임베드를 deleteAt(기본 8시간 후) 시점에 자동 삭제한다.
+// 취소는 마감(closed)과 달리 재개(마감 해제) 개념이 없는 종결 상태이므로,
+// autoClose 토글과 무관하게 항상 예약한다. naejeonMatches/mojipMatches에는
+// 이미 취소 시점에 매치가 제거되어 있어(활성 매치 관리 로직과 뒤섞이지 않도록)
+// 별도의 client.cancelledDeletions에 채널/삭제 시각만 기록해 추적한다.
+function scheduleCancelledDelete(client, msgId, channelId, deleteAt = Date.now() + AUTO_CLOSE_DELAY_MS) {
+  const map = getCancelledDeletions(client);
+  map.set(msgId, { channelId, deleteAt });
+  const delayMs = Math.max(0, deleteAt - Date.now());
+  setTimeout(async () => {
+    if (!getCancelledDeletions(client).has(msgId)) return;
+    getCancelledDeletions(client).delete(msgId);
+    try {
+      const channel = client.channels.cache.get(channelId) || await client.channels.fetch(channelId).catch(() => null);
+      const message = channel && await channel.messages.fetch(msgId).catch(() => null);
+      if (message) await message.delete();
+    } catch (err) {
+      console.error('취소된 임베드 자동 삭제 중 오류:', err);
+    }
+  }, delayMs);
 }
 
 // 마감 시 주최자에게 DM으로 알린다. 인원 초과/미달과 무관하게 markClosed를
@@ -104,7 +131,7 @@ async function notifyOrganizerOnClose(match, label) {
   }
 }
 
-// 마감(🔒 마감됨) 상태로 전환하면서 4시간 후 자동 삭제 타이머를 건다.
+// 마감(🔒 마감됨) 상태로 전환하면서 8시간 후 자동 삭제 타이머를 건다.
 // notify=false를 넘기면 주최자 DM을 보내지 않는다 — 주최자 본인이 직접
 // "마감하기" 버튼을 눌러 마감한 경우(이미 알고 있으므로 불필요)에 사용.
 function markClosed(matchesMap, msgId, match, label, notify = true) {
@@ -147,7 +174,7 @@ function buildEndedEmbed(match, label) {
 }
 
 // 매치를 "종료됨" 상태로 만든다: 임베드/버튼을 종료 화면으로 교체하고 관리 목록에서 제거한다.
-// /관리 의 수동 "⌛ 종료" 버튼에서 사용한다 (4시간 자동 처리는 메시지를 바로 삭제하며 이 함수를 쓰지 않는다).
+// /관리 의 수동 "⌛ 종료" 버튼에서 사용한다 (8시간 자동 처리는 메시지를 바로 삭제하며 이 함수를 쓰지 않는다).
 async function endMatch(matchesMap, msgId, match, label) {
   clearAutoEndTimer(match);
   match.closed = true;
@@ -354,6 +381,8 @@ module.exports = {
   AUTO_CLOSE_DELAY_MS,
   ROLE_NAMES,
   getNaejeonMatches,
+  getCancelledDeletions,
+  scheduleCancelledDelete,
   shuffleIntoTeams,
   buildTeamResultEmbed,
   buildPreviewEmbed,

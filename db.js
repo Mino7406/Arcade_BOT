@@ -30,6 +30,16 @@ function saveAll(client) {
   };
   dump(client.naejeonMatches, 'naejeon');
   dump(client.mojipMatches,   'mojip');
+  if (client.cancelledDeletions) {
+    for (const [messageId, entry] of client.cancelledDeletions) {
+      rows.push({
+        message_id: messageId,
+        channel_id: entry.channelId,
+        type: 'cancelled_delete',
+        data: JSON.stringify({ deleteAt: entry.deleteAt }),
+      });
+    }
+  }
   fs.writeFileSync(DB_PATH, JSON.stringify(rows), 'utf8');
 }
 

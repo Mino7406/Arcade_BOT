@@ -9,7 +9,7 @@ const {
 
 const {
   ADMIN_IDS, getNaejeonMatches: getMatches, shuffleIntoTeams, buildTeamResultEmbed, titleHeader, markClosed, markReopened, announceMatchCompletionXp,
-  ROLE_NAMES, buildPreviewEmbed,
+  ROLE_NAMES, buildPreviewEmbed, scheduleCancelledDelete,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
 } = require('./공용');
 
@@ -696,6 +696,7 @@ async function handleNaejeonButton(interaction) {
 
     await match.message.edit({ content: '', embeds: [cancelledEmbed], components: [], attachments: [], allowedMentions: { parse: [] } });
     getMatches(interaction.client).delete(matchMsgId);
+    scheduleCancelledDelete(interaction.client, matchMsgId, match.message.channelId);
     await interaction.update({ content: '✅ **내전이 취소되었습니다.**', components: [] });
     return;
   }
@@ -763,7 +764,7 @@ async function handleNaejeonButton(interaction) {
     return;
   }
 
-  // ── 4시간 후 자동 종료 토글 ───────────────────────────────
+  // ── 8시간 후 자동 종료 토글 ───────────────────────────────
   if (customId === 'naejeon:toggle_autoclose') {
     const data = getPending(interaction.client).get(interaction.user.id);
     if (!data) {

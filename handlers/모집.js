@@ -9,7 +9,7 @@ const {
 
 const {
   ADMIN_IDS, titleHeader, markClosed, markReopened, announceMatchCompletionXp,
-  ROLE_NAMES, buildPreviewEmbed,
+  ROLE_NAMES, buildPreviewEmbed, scheduleCancelledDelete,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
 } = require('./공용');
 
@@ -565,6 +565,7 @@ async function handleMojipButton(interaction) {
 
     await match.message.edit({ content: '', embeds: [cancelledEmbed], components: [], attachments: [], allowedMentions: { parse: [] } });
     getMojips(interaction.client).delete(msgId);
+    scheduleCancelledDelete(interaction.client, msgId, match.message.channelId);
     await interaction.update({ content: '✅ **모집이 취소되었습니다.**', components: [] });
     return;
   }
@@ -633,7 +634,7 @@ async function handleMojipButton(interaction) {
     return;
   }
 
-  // ── 4시간 후 자동 종료 토글 ───────────────────────────────
+  // ── 8시간 후 자동 종료 토글 ───────────────────────────────
   if (customId === 'mojip:toggle_autoclose') {
     const data = getPending(interaction.client).get(interaction.user.id);
     if (!data) {

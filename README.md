@@ -108,8 +108,9 @@ npm start
 2. 게임 선택 → 모달로 제목/일시/인원/설명 입력
 3. 제출 → 미리보기 임베드 + `📢 채널에 공개 게시` / `✏️ 수정` / `❌ 취소` 버튼, ⏰ 자동 마감 토글, (직접 입력 게임의 경우) Steam 역할 멘션 토글
 4. 공개 게시 시 게임에 해당하는 역할(롤→`롤`, 발로란트→`발로란트`, 오버워치→`오버워치`, 배그→`배그`)을 멘션하며 게시
-5. 참가/취소 버튼으로 인원 모집, 정원이 차면 자동 마감(`markClosed`) — 마감 시 4시간 후 자동 삭제 타이머가 걸리고(타이머 만료 시 참가자에게 완료 보너스 XP가 지급된 뒤 메시지가 삭제됨), 정원이 자동으로 차서 마감된 경우 주최자에게 마감 안내 DM이 발송됨(주최자가 직접 "마감하기" 버튼으로 수동 마감한 경우는 본인이 이미 알고 있으므로 DM 미발송, DM 차단 시에도 무시)
+5. 참가/취소 버튼으로 인원 모집, 정원이 차면 자동 마감(`markClosed`) — 마감 시 8시간 후 자동 삭제 타이머가 걸리고(타이머 만료 시 참가자에게 완료 보너스 XP가 지급된 뒤 메시지가 삭제됨), 정원이 자동으로 차서 마감된 경우 주최자에게 마감 안내 DM이 발송됨(주최자가 직접 "마감하기" 버튼으로 수동 마감한 경우는 본인이 이미 알고 있으므로 DM 미발송, DM 차단 시에도 무시)
 6. 주최자(또는 관리자) 전용 관리 메뉴: 마감/마감 해제, 수정, 취소, 팀 만들기(수동/자동 배정), 참가자 멘션(1회성), 참가자 강제 추가/제거
+7. 주최자가 취소하면 🔴 취소됨 임베드로 교체되고(`autoClose` 토글과 무관하게 항상) 8시간 후 자동 삭제됨(`scheduleCancelledDelete`) — 재시작해도 `data.json`에 삭제 예정 시각이 저장돼 있어 남은 시간만큼 다시 예약됨
 
 ### 모집 (`/모집`, `handlers/모집.js`)
 
@@ -199,8 +200,9 @@ npm start
 |---|---|
 | `getNaejeonMatches(client)` | `client.naejeonMatches` Map 획득(없으면 생성) |
 | `shuffleIntoTeams(participants)` | Fisher–Yates 셔플 후 절반씩 팀1/팀2로 분할 |
-| `armAutoEnd(matchesMap, msgId, match, label, delayMs)` | 마감된 매치에 4시간 자동 삭제 타이머 설정 — 만료 시 XP 지급 후 메시지를 바로 삭제(`endMatch` 미사용) |
+| `armAutoEnd(matchesMap, msgId, match, label, delayMs)` | 마감된 매치에 8시간 자동 삭제 타이머 설정 — 만료 시 XP 지급 후 메시지를 바로 삭제(`endMatch` 미사용) |
 | `disarmAutoEnd(match)` | 자동 삭제 타이머 해제 |
+| `scheduleCancelledDelete(client, msgId, channelId, deleteAt)` | 취소된 매치를 `deleteAt`(기본 8시간 후) 시점에 자동 삭제 예약 — `client.cancelledDeletions` Map에 기록해 재시작 후에도 복원 가능 |
 | `markClosed(matchesMap, msgId, match, label, notify = true)` / `markReopened(match)` | 매치 마감/마감 해제 처리 (자동 삭제 타이머 연동). `notify=false`를 넘기면 주최자 DM을 생략(주최자 본인이 직접 마감한 경우에 사용) |
 | `notifyOrganizerOnClose(match, label)` *(내부)* | 정원 자동 마감 시 주최자에게 게시글 제목과 링크를 DM으로 전송 (DM 차단 등 실패는 무시) |
 | `endMatch(matchesMap, msgId, match, label)` | 매치를 종료 상태로 전환(임베드를 회색으로 교체, Map에서 제거) — `/관리`의 수동 "⌛ 종료" 버튼 전용 |

@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload: buildNaejeonMessagePayload } = require('./handlers/내전');
 const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipMemberAdd, handleMojipMemberRemove, buildMojipMessagePayload } = require('./handlers/모집');
-const { armAutoEnd, AUTO_CLOSE_DELAY_MS, announceMatchCompletionXp } = require('./handlers/공용');
+const { armAutoEnd, AUTO_CLOSE_DELAY_MS, announceMatchCompletionXp, scheduleCancelledDelete } = require('./handlers/공용');
 const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/팀');
 const { handleRMatchSelect } = require('./handlers/불러오기');
 const { handleWcButton, handleWcMessage } = require('./handlers/끝말잇기');
@@ -53,6 +53,24 @@ async function restoreMatches(c) {
 
   let ok = 0, dropped = 0;
   for (const row of loadRows()) {
+    // 취소된 임베드는 활성 매치 목록에 없으므로(취소 시점에 즉시 제거됨) 별도 타입으로
+    // 저장돼 있다. 활성 매치 복원(아래 buildPayload 재렌더링) 경로를 타면 "취소됨" 임베드가
+    // 다시 모집중 상태로 잘못 되살아나므로, 여기서 따로 걸러 삭제 예약만 다시 건다.
+    if (row.type === 'cancelled_delete') {
+      try {
+        const { deleteAt } = JSON.parse(row.data);
+        if (deleteAt <= Date.now()) {
+          const channel = await c.channels.fetch(row.channel_id).catch(() => null);
+          const message = channel && await channel.messages.fetch(row.message_id).catch(() => null);
+          if (message) await message.delete().catch(() => {});
+        } else {
+          scheduleCancelledDelete(c, row.message_id, row.channel_id, deleteAt);
+        }
+      } catch (err) {
+        console.error('취소된 임베드 삭제 예약 복원 중 오류:', err);
+      }
+      continue;
+    }
     try {
       const match = JSON.parse(row.data);
       // 저장 못 했던 '살아있는 메시지'를 디스코드에서 다시 가져와 연결합니다.
@@ -70,7 +88,7 @@ async function restoreMatches(c) {
       await match.message.edit(buildPayload(match)).catch(err => console.error('복원 후 메시지 갱신 중 오류:', err));
 
       // 봇이 꺼져있던 동안 setTimeout이 소실되므로, 마감(closed) 시점을 기준으로
-      // 4시간 자동 삭제를 다시 스케줄링합니다. 이미 4시간이 지났다면 즉시 삭제합니다.
+      // 8시간 자동 삭제를 다시 스케줄링합니다. 이미 8시간이 지났다면 즉시 삭제합니다.
       // (closedAt이 없는 옛 데이터는 이미 마감 상태로 오래 방치돼 있었다는 뜻이므로 즉시 삭제합니다.)
       if (match.closed && match.data?.autoClose) {
         const label = row.type === 'naejeon' ? '내전' : '모집';
