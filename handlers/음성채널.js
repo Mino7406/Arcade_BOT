@@ -91,7 +91,7 @@ async function createTempChannel(newState) {
 
     // parent만 지정하면 카테고리 권한을 그대로 이어받는다.
     tempChannel = await guild.channels.create({
-      name: `🔊 ${member.displayName}의 방`,
+      name: `${member.displayName}의 방`,
       type: ChannelType.GuildVoice,
       parent: TEMP_CATEGORY_ID,
       position,
