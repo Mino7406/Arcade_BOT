@@ -661,8 +661,8 @@ async function handleMojipButton(interaction) {
       .setCustomId(`mojip:member_remove_select:${msgId}`)
       .setPlaceholder('참가자 선택')
       .setMinValues(1)
-      .setMaxValues(match.participants.length)
-      .addOptions(match.participants.map(u => ({ label: u.displayName, value: u.id })));
+      .setMaxValues(Math.min(match.participants.length, 25))
+      .addOptions(match.participants.slice(0, 25).map(u => ({ label: u.displayName, value: u.id })));
     await interaction.update({
       content: '➖ **참가자 제거** - 제거할 멤버를 선택하세요.',
       embeds: [], attachments: [],

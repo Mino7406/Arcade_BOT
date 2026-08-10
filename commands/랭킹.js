@@ -112,13 +112,15 @@ module.exports = {
     .setDescription('서버 레벨 순위표를 확인합니다.'),
 
   async execute(interaction) {
+    // 멤버 조회(네트워크 요청) 전에 먼저 ack해서 3초 인터랙션 응답 제한을 넘기지 않는다.
+    await interaction.deferReply({ ephemeral: true });
     const view = await buildRankingView(interaction.guild, 1);
     if (!view) {
-      await interaction.reply({ content: '📭 **아직 레벨 기록이 없습니다.**', ephemeral: true });
+      await interaction.editReply({ content: '📭 **아직 레벨 기록이 없습니다.**' });
       return;
     }
 
-    await interaction.reply({ embeds: [view.embed], components: view.components, ephemeral: true });
+    await interaction.editReply({ embeds: [view.embed], components: view.components });
   },
 };
 

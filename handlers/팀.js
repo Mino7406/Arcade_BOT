@@ -33,7 +33,7 @@ function buildMatchSelectMenu(matches) {
   return new StringSelectMenuBuilder()
     .setCustomId('team:match_select')
     .setPlaceholder('팀을 관리할 내전을 선택하세요')
-    .addOptions(options);
+    .addOptions(options.slice(0, 25));
 }
 
 function buildManageRow(matchMsgId) {

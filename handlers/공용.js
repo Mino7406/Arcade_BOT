@@ -207,6 +207,7 @@ async function endMatch(matchesMap, msgId, match, label) {
   clearAutoEndTimer(match);
   match.closed = true;
   match.closedAt = null;
+  await announceMatchCompletionXp(match);
   await match.message.edit({
     content: '',
     embeds: [buildEndedEmbed(match, label)],
