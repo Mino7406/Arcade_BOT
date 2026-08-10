@@ -2,9 +2,9 @@ require('dotenv').config({ path: './env' });
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload: buildNaejeonMessagePayload } = require('./handlers/내전');
-const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipMemberAdd, handleMojipMemberRemove, buildMojipMessagePayload } = require('./handlers/모집');
-const { armAutoEnd, AUTO_CLOSE_DELAY_MS, announceMatchCompletionXp, scheduleCancelledDelete, scheduleMessageDelete, deleteMentionMessage, ADMIN_IDS } = require('./handlers/공용');
+const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleNaejeonNotifyModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload: buildNaejeonMessagePayload } = require('./handlers/내전');
+const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipNotifyModal, handleMojipMemberAdd, handleMojipMemberRemove, buildMojipMessagePayload } = require('./handlers/모집');
+const { armAutoEnd, AUTO_CLOSE_DELAY_MS, announceMatchCompletionXp, scheduleCancelledDelete, scheduleMessageDelete, deleteMentionMessage, armNotifyReminder, ADMIN_IDS } = require('./handlers/공용');
 const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/팀');
 const { handleRMatchSelect } = require('./handlers/불러오기');
 const { handleWcButton, handleWcMessage } = require('./handlers/끝말잇기');
@@ -107,8 +107,9 @@ async function restoreMatches(c) {
       // 봇이 꺼져있던 동안 setTimeout이 소실되므로, 마감(closed) 시점을 기준으로
       // 8시간 자동 삭제를 다시 스케줄링합니다. 이미 8시간이 지났다면 즉시 삭제합니다.
       // (closedAt이 없는 옛 데이터는 이미 마감 상태로 오래 방치돼 있었다는 뜻이므로 즉시 삭제합니다.)
+      const label = row.type === 'naejeon' ? '내전' : '모집';
+      let deleted = false;
       if (match.closed && match.data?.autoClose) {
-        const label = row.type === 'naejeon' ? '내전' : '모집';
         const remaining = match.closedAt ? AUTO_CLOSE_DELAY_MS - (Date.now() - match.closedAt) : 0;
         if (remaining <= 0) {
           try {
@@ -116,12 +117,19 @@ async function restoreMatches(c) {
             map.delete(row.message_id);
             await deleteMentionMessage(c, match);
             await match.message.delete();
+            deleted = true;
           } catch (err) {
             console.error('복원 후 자동 삭제 처리 중 오류:', err);
           }
         } else {
           armAutoEnd(map, row.message_id, match, label, remaining);
         }
+      }
+
+      // 알림 예약(notifyAt)도 setTimeout이 소실되므로 다시 건다. 이미 지난 시각이면
+      // armNotifyReminder가 내부적으로 그냥 건너뛴다(지나간 알림을 뒤늦게 보내지 않음).
+      if (!deleted && match.data?.notifyAt) {
+        armNotifyReminder(map, row.message_id, match, label);
       }
 
       ok++;
@@ -229,12 +237,16 @@ client.on('interactionCreate', async (interaction) => {
         await handleNaejeonEditModal(interaction);
       } else if (interaction.customId.startsWith('naejeon:match_edit_modal:')) {
         await handleNaejeonMatchEditModal(interaction);
+      } else if (interaction.customId.startsWith('naejeon:notify_modal:')) {
+        await handleNaejeonNotifyModal(interaction);
       } else if (interaction.customId.startsWith('mojip:modal:')) {
         await handleMojipModal(interaction);
       } else if (interaction.customId.startsWith('mojip:modal_edit:')) {
         await handleMojipEditModal(interaction);
       } else if (interaction.customId.startsWith('mojip:match_edit_modal:')) {
         await handleMojipMatchEditModal(interaction);
+      } else if (interaction.customId.startsWith('mojip:notify_modal:')) {
+        await handleMojipNotifyModal(interaction);
       }
 
     } else if (interaction.isButton()) {

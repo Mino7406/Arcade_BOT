@@ -11,6 +11,7 @@ const {
   ADMIN_IDS, titleHeader, markClosed, markReopened, toggleAutoCloseWhileClosed, announceMatchCompletionXp,
   ROLE_NAMES, buildPreviewEmbed, scheduleCancelledDelete, AUTO_CLOSE_DELAY_MS,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
+  buildNotifyModal: buildNotifyModalBase, parseNotifyTime, formatNotifyTime, armNotifyReminder, clearNotifyTimer,
 } = require('./공용');
 
 const GAMES = {
@@ -28,6 +29,10 @@ const GAMES = {
 
 function buildModal(game, data = {}) {
   return buildModalBase('mojip', '모집', GAMES, game, data);
+}
+
+function buildNotifyModal(msgId, notifyAt) {
+  return buildNotifyModalBase('mojip', msgId, notifyAt);
 }
 
 function buildPublicEmbed(data, participants, closed = false) {
@@ -119,6 +124,14 @@ function buildAutoCloseToggleButton(match, msgId, label) {
     .setStyle(match.data.autoClose ? ButtonStyle.Success : ButtonStyle.Secondary);
 }
 
+function buildNotifyButton(match, msgId) {
+  const notifyAt = match.data?.notifyAt;
+  return new ButtonBuilder()
+    .setCustomId(`mojip:notify_set:${msgId}`)
+    .setLabel(notifyAt ? `🔔 알림 예약: ${formatNotifyTime(notifyAt)}` : '🔔 알림 예약')
+    .setStyle(notifyAt ? ButtonStyle.Success : ButtonStyle.Secondary);
+}
+
 function buildManageMenu(match, msgId) {
   const closed = match.closed;
   const hasParticipants = match.participants.length > 0;
@@ -160,6 +173,7 @@ function buildManageMenu(match, msgId) {
           .setCustomId(`mojip:match_cancel:${msgId}`)
           .setLabel('❌ 모집 취소')
           .setStyle(ButtonStyle.Danger),
+        buildNotifyButton(match, msgId),
       ),
       addRemoveRow,
     ];
@@ -182,6 +196,7 @@ function buildManageMenu(match, msgId) {
         .setStyle(ButtonStyle.Danger),
       buildAutoCloseToggleButton(match, msgId, '모집'),
     ),
+    new ActionRowBuilder().addComponents(buildNotifyButton(match, msgId)),
     addRemoveRow,
   ];
 }
@@ -555,6 +570,22 @@ async function handleMojipButton(interaction) {
     return;
   }
 
+  // ── 알림 예약 (주최자 전용) ────────────────────────────────────
+  if (customId.startsWith('mojip:notify_set:')) {
+    const msgId = customId.slice('mojip:notify_set:'.length);
+    const match = getMojips(interaction.client).get(msgId);
+    if (!match) {
+      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, components: [] });
+      return;
+    }
+    if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
+      await interaction.reply({ content: '❌ **주최자만 사용할 수 있습니다.**', ephemeral: true });
+      return;
+    }
+    await interaction.showModal(buildNotifyModal(msgId, match.data.notifyAt));
+    return;
+  }
+
   // ── 모집 수정 ────────────────────────────────────────────────
   if (customId.startsWith('mojip:match_edit:')) {
     const msgId = customId.slice('mojip:match_edit:'.length);
@@ -805,6 +836,37 @@ async function handleMojipMatchEditModal(interaction) {
   await interaction.reply({ content: '✅ **모집 정보가 수정되었습니다.**', ephemeral: true });
 }
 
+// customId: mojip:notify_modal:{msgId}. 비워서 제출하면 예약을 취소한다.
+async function handleMojipNotifyModal(interaction) {
+  const msgId = interaction.customId.slice('mojip:notify_modal:'.length);
+  const match = getMojips(interaction.client).get(msgId);
+  if (!match) {
+    await interaction.reply({ content: `⚠️ **만료된 모집입니다.**`, ephemeral: true });
+    return;
+  }
+
+  const raw = interaction.fields.getTextInputValue('notify_time').trim();
+  if (!raw) {
+    match.data.notifyAt = null;
+    clearNotifyTimer(match);
+    await interaction.reply({ content: '🔕 **알림 예약이 취소되었습니다.**', ephemeral: true });
+    return;
+  }
+
+  const notifyAt = parseNotifyTime(raw);
+  if (!notifyAt) {
+    await interaction.reply({ content: '⚠️ **알림 시각 형식이 올바르지 않습니다.** (예: `6/5 20:00`)', ephemeral: true });
+    return;
+  }
+
+  match.data.notifyAt = notifyAt;
+  armNotifyReminder(getMojips(interaction.client), msgId, match, '모집');
+  await interaction.reply({
+    content: `🔔 **${formatNotifyTime(notifyAt)}(KST)에 마감 상태면 참가자에게 DM 알림을 보낼게요.**`,
+    ephemeral: true,
+  });
+}
+
 async function handleMojipMemberAdd(interaction) {
   const msgId = interaction.customId.slice('mojip:member_add_select:'.length);
   const match = getMojips(interaction.client).get(msgId);
@@ -877,4 +939,4 @@ async function handleMojipMemberRemove(interaction) {
   });
 }
 
-module.exports = { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipMemberAdd, handleMojipMemberRemove, buildMojipMessagePayload };
+module.exports = { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipNotifyModal, handleMojipMemberAdd, handleMojipMemberRemove, buildMojipMessagePayload };

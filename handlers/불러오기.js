@@ -1,6 +1,6 @@
 const { buildPublicMessagePayload } = require('./내전');
 const { buildMojipMessagePayload } = require('./모집');
-const { armAutoEnd, AUTO_CLOSE_DELAY_MS } = require('./공용');
+const { armAutoEnd, AUTO_CLOSE_DELAY_MS, armNotifyReminder } = require('./공용');
 
 async function handleRMatchSelect(interaction) {
   const value = interaction.values[0];
@@ -28,6 +28,10 @@ async function handleRMatchSelect(interaction) {
   if (match.closed && match.data?.autoClose) {
     const remaining = match.closedAt ? AUTO_CLOSE_DELAY_MS - (Date.now() - match.closedAt) : 0;
     armAutoEnd(matches, newMsg.id, match, label, Math.max(0, remaining));
+  }
+  // 알림 예약 타이머도 옛 메시지 ID에 걸려있으므로 새 ID로 다시 건다.
+  if (match.data?.notifyAt) {
+    armNotifyReminder(matches, newMsg.id, match, label);
   }
   await interaction.update({ content: `✅ **${label} 임베드가 다시 게시되었습니다.**`, embeds: [], attachments: [], components: [] });
 }

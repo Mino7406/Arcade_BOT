@@ -11,6 +11,7 @@ const {
   ADMIN_IDS, getNaejeonMatches: getMatches, shuffleIntoTeams, buildTeamResultEmbed, titleHeader, markClosed, markReopened, toggleAutoCloseWhileClosed, announceMatchCompletionXp,
   ROLE_NAMES, buildPreviewEmbed, scheduleCancelledDelete, AUTO_CLOSE_DELAY_MS,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
+  buildNotifyModal: buildNotifyModalBase, parseNotifyTime, formatNotifyTime, armNotifyReminder, clearNotifyTimer,
 } = require('./공용');
 
 const GAMES = {
@@ -28,6 +29,10 @@ const GAMES = {
 
 function buildModal(game, data = {}) {
   return buildModalBase('naejeon', '내전', GAMES, game, data);
+}
+
+function buildNotifyModal(matchMsgId, notifyAt) {
+  return buildNotifyModalBase('naejeon', matchMsgId, notifyAt);
 }
 
 // teams: null | { team1: User[], team2: User[] }
@@ -152,6 +157,14 @@ function buildAutoCloseToggleButton(match, matchMsgId, label) {
     .setStyle(match.data.autoClose ? ButtonStyle.Success : ButtonStyle.Secondary);
 }
 
+function buildNotifyButton(match, matchMsgId) {
+  const notifyAt = match.data?.notifyAt;
+  return new ButtonBuilder()
+    .setCustomId(`naejeon:notify_set:${matchMsgId}`)
+    .setLabel(notifyAt ? `🔔 알림 예약: ${formatNotifyTime(notifyAt)}` : '🔔 알림 예약')
+    .setStyle(notifyAt ? ButtonStyle.Success : ButtonStyle.Secondary);
+}
+
 function buildManageMenu(match, matchMsgId) {
   const hasParticipants = match.participants.length > 0;
   const addRemoveRow = new ActionRowBuilder().addComponents(
@@ -197,6 +210,7 @@ function buildManageMenu(match, matchMsgId) {
           .setLabel('❌ 내전 취소')
           .setStyle(ButtonStyle.Danger),
       ),
+      new ActionRowBuilder().addComponents(buildNotifyButton(match, matchMsgId)),
       addRemoveRow,
     ];
   }
@@ -218,6 +232,7 @@ function buildManageMenu(match, matchMsgId) {
         .setStyle(ButtonStyle.Danger),
       buildAutoCloseToggleButton(match, matchMsgId, '내전'),
     ),
+    new ActionRowBuilder().addComponents(buildNotifyButton(match, matchMsgId)),
     addRemoveRow,
   ];
 }
@@ -692,6 +707,22 @@ async function handleNaejeonButton(interaction) {
     return;
   }
 
+  // ── 알림 예약 (주최자 전용) ────────────────────────────────────
+  if (customId.startsWith('naejeon:notify_set:')) {
+    const matchMsgId = customId.slice('naejeon:notify_set:'.length);
+    const match = getMatches(interaction.client).get(matchMsgId);
+    if (!match) {
+      await interaction.update({ content: `⚠️ **만료된 내전입니다.**`, components: [] });
+      return;
+    }
+    if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
+      await interaction.reply({ content: '❌ **주최자만 사용할 수 있습니다.**', ephemeral: true });
+      return;
+    }
+    await interaction.showModal(buildNotifyModal(matchMsgId, match.data.notifyAt));
+    return;
+  }
+
   // ── 내전 수정 (주최자 전용) ────────────────────────────────────
   if (customId.startsWith('naejeon:match_edit:')) {
     const matchMsgId = customId.slice('naejeon:match_edit:'.length);
@@ -936,6 +967,37 @@ async function handleNaejeonMatchEditModal(interaction) {
   await interaction.reply({ content: '✅ **내전 정보가 수정되었습니다.**', ephemeral: true });
 }
 
+// customId: naejeon:notify_modal:{matchMsgId}. 비워서 제출하면 예약을 취소한다.
+async function handleNaejeonNotifyModal(interaction) {
+  const matchMsgId = interaction.customId.slice('naejeon:notify_modal:'.length);
+  const match = getMatches(interaction.client).get(matchMsgId);
+  if (!match) {
+    await interaction.reply({ content: `⚠️ **만료된 내전입니다.**`, ephemeral: true });
+    return;
+  }
+
+  const raw = interaction.fields.getTextInputValue('notify_time').trim();
+  if (!raw) {
+    match.data.notifyAt = null;
+    clearNotifyTimer(match);
+    await interaction.reply({ content: '🔕 **알림 예약이 취소되었습니다.**', ephemeral: true });
+    return;
+  }
+
+  const notifyAt = parseNotifyTime(raw);
+  if (!notifyAt) {
+    await interaction.reply({ content: '⚠️ **알림 시각 형식이 올바르지 않습니다.** (예: `6/5 20:00`)', ephemeral: true });
+    return;
+  }
+
+  match.data.notifyAt = notifyAt;
+  armNotifyReminder(getMatches(interaction.client), matchMsgId, match, '내전');
+  await interaction.reply({
+    content: `🔔 **${formatNotifyTime(notifyAt)}(KST)에 마감 상태면 참가자에게 DM 알림을 보낼게요.**`,
+    ephemeral: true,
+  });
+}
+
 async function handleNaejeonMemberAdd(interaction) {
   const matchMsgId = interaction.customId.slice('naejeon:member_add_select:'.length);
   const match = getMatches(interaction.client).get(matchMsgId);
@@ -1005,4 +1067,4 @@ async function handleNaejeonMemberRemove(interaction) {
   });
 }
 
-module.exports = { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload };
+module.exports = { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleNaejeonNotifyModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload };

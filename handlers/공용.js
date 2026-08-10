@@ -68,6 +68,114 @@ async function deleteMentionMessage(client, match) {
   }
 }
 
+// 알림 예약 시각: "M/D HH:mm"(KST, 24시간제) 형식만 허용한다. 사람마다 제각각인 "일시" 자유
+// 텍스트로는 setTimeout에 넘길 정확한 시각을 뽑아낼 수 없어서, 알림을 원하는 사람만 채우는
+// 별도 필드에 이 고정 포맷 하나만 강제한다.
+const NOTIFY_TIME_REGEX = /^(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})$/;
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+// "M/D HH:mm"(KST) → epoch ms. 형식이 안 맞거나 존재하지 않는 날짜(예: 2/30)면 null.
+// 연도 입력이 없으므로 올해 기준으로 계산하고, 이미 지난 시각이면 내년으로 보정한다.
+function parseNotifyTime(input) {
+  const m = NOTIFY_TIME_REGEX.exec((input || '').trim());
+  if (!m) return null;
+  const month = Number(m[1]), day = Number(m[2]), hour = Number(m[3]), minute = Number(m[4]);
+  if (month < 1 || month > 12 || hour > 23 || minute > 59) return null;
+
+  const nowKstYear = new Date(Date.now() + KST_OFFSET_MS).getUTCFullYear();
+  const build = (year) => Date.UTC(year, month - 1, day, hour, minute) - KST_OFFSET_MS;
+
+  let epoch = build(nowKstYear);
+  if (epoch <= Date.now()) epoch = build(nowKstYear + 1);
+
+  // 존재하지 않는 날짜(2/30 등)는 Date가 다음 달로 밀어버리므로, 되돌려서 월/일이 그대로인지 검증.
+  const check = new Date(epoch + KST_OFFSET_MS);
+  if (check.getUTCMonth() + 1 !== month || check.getUTCDate() !== day) return null;
+
+  return epoch;
+}
+
+// epoch ms → "M/D HH:mm"(KST). 모달 재입력 시 기존 값을 보여주거나 DM 문구에 사용.
+function formatNotifyTime(epochMs) {
+  const kst = new Date(epochMs + KST_OFFSET_MS);
+  const hh = String(kst.getUTCHours()).padStart(2, '0');
+  const mm = String(kst.getUTCMinutes()).padStart(2, '0');
+  return `${kst.getUTCMonth() + 1}/${kst.getUTCDate()} ${hh}:${mm}`;
+}
+
+// 알림 시각 입력 모달(내전/모집 공용). 비워서 제출하면 예약을 취소하는 용도로도 쓰인다.
+function buildNotifyModal(type, matchMsgId, notifyAt) {
+  const input = new TextInputBuilder()
+    .setCustomId('notify_time')
+    .setLabel('알림 시각 (M/D HH:mm, 24시간제)')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('예: 6/5 20:00 · 비우면 알림 취소')
+    .setRequired(false)
+    .setMaxLength(20);
+  if (notifyAt) input.setValue(formatNotifyTime(notifyAt));
+
+  return new ModalBuilder()
+    .setCustomId(`${type}:notify_modal:${matchMsgId}`)
+    .setTitle('🔔 시작 시간 알림 예약')
+    .addComponents(new ActionRowBuilder().addComponents(input));
+}
+
+function clearNotifyTimer(match) {
+  if (match._notifyTimer) {
+    clearTimeout(match._notifyTimer);
+    match._notifyTimer = null;
+  }
+}
+
+// setTimeout에 넘길 수 있는 지연시간의 사실상 한계(약 24.8일, 32비트 오버플로).
+// 이보다 먼 시각은 예약하지 않는다(내전/모집 알림이 그렇게 먼 미래일 일은 없다고 가정).
+const MAX_TIMEOUT_DELAY_MS = 2 ** 31 - 1;
+
+// data.notifyAt(epoch ms) 시각에, 그 시점에도 마감(closed) 상태인 경우에만 주최자+참가자
+// 전원에게 DM으로 시작 알림을 보낸다("마감된 매치"만 대상으로 하는 요구사항이라 마감 전이면
+// 조용히 건너뛴다). notifyAt이 그 사이 바뀌거나 취소됐으면(맵 조회 시 값이 다르면) 발송하지 않는다.
+function armNotifyReminder(matchesMap, msgId, match, label) {
+  clearNotifyTimer(match);
+  const notifyAt = match.data?.notifyAt;
+  if (!notifyAt) return;
+  const delayMs = notifyAt - Date.now();
+  if (delayMs <= 0 || delayMs > MAX_TIMEOUT_DELAY_MS) return;
+  match._notifyTimer = setTimeout(async () => {
+    match._notifyTimer = null;
+    const current = matchesMap.get(msgId);
+    if (!current || current.data?.notifyAt !== notifyAt) return;
+    if (!current.closed) return;
+    await sendMatchStartDm(current, label);
+  }, delayMs);
+}
+
+// 참가자 전원에게 시작 알림 DM을 보낸다(주최자는 제외, 중복 유저는 1회만). DM 차단 등 실패는 무시.
+async function sendMatchStartDm(match, label) {
+  const client = match.message?.client;
+  if (!client) return;
+  const organizerId = match.data?.organizer?.id;
+  const recipients = match.participants.filter(u => u?.id && u.id !== organizerId);
+  const seen = new Set();
+  for (const user of recipients) {
+    if (seen.has(user.id)) continue;
+    seen.add(user.id);
+    try {
+      const target = await client.users.fetch(user.id);
+      const container = new ContainerBuilder()
+        .addTextDisplayComponents(td => td.setContent('# ⏰ 시작 시간 알림'))
+        .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
+        .addTextDisplayComponents(td => td.setContent(`**${match.data.title}** ${label} 시작 시간이에요!\n\n지금 바로 확인해 보세요.`))
+        .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
+        .addTextDisplayComponents(td => td.setContent(`### 🔗 **바로가기**\n[__누르면 바로 이동됩니다.__](${match.message.url})`))
+        .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
+        .addTextDisplayComponents(td => td.setContent('-# 📬 예약된 알림 시각이 되어 참가자에게 자동으로 전송되었습니다.'));
+      await target.send({ components: [container], flags: MessageFlags.IsComponentsV2 });
+    } catch {
+      // DM 차단 등으로 실패해도 다른 수신자 발송에는 영향 없음
+    }
+  }
+}
+
 // 마감(closed)된 시점부터 delayMs(기본 8시간) 후 자동으로 메시지를 삭제한다.
 // autoClose 옵션이 꺼져있으면 아무것도 하지 않는다. 봇 재시작 후 복원할 때는
 // 이미 지난 시간만큼 뺀 delayMs를 넘겨 원래 마감 시각 기준을 유지한다.
@@ -466,6 +574,7 @@ module.exports = {
   buildLeaveButton,
   buildPreviewComponents,
   buildCancelComponents,
+  buildNotifyModal,
   titleHeader,
   armAutoEnd,
   disarmAutoEnd,
@@ -475,4 +584,8 @@ module.exports = {
   buildEndedEmbed,
   endMatch,
   announceMatchCompletionXp,
+  parseNotifyTime,
+  formatNotifyTime,
+  armNotifyReminder,
+  clearNotifyTimer,
 };
