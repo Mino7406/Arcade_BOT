@@ -147,6 +147,34 @@ function markReopened(match) {
   disarmAutoEnd(match);
 }
 
+// 관리 메뉴의 "자동 삭제" 토글을 눌렀을 때 사용한다(마감 전/후 모두 호출 가능).
+// 아직 마감 전이면 설정값만 바꿔두고 끝(마감 시 markClosed가 이 값을 보고 타이머를 건다).
+// 이미 마감된 상태라면 markReopened와 달리 closedAt(원래 마감 시각)은 그대로 두고,
+// 꺼져 있으면 타이머만 취소, 켜면 원래 마감 시각 기준 남은 시간으로 다시 예약한다
+// (남은 시간이 이미 다 지났다면 즉시 삭제). autoClose가 꺼진 채로 마감된 매치는
+// 애초에 타이머가 걸려있지 않으므로, 이 함수가 유일하게 마감 후 자동 삭제를 붙이는 경로다.
+async function toggleAutoCloseWhileClosed(matchesMap, msgId, match, label, enabled) {
+  match.data.autoClose = enabled;
+  if (!match.closed) return;
+  if (!enabled) {
+    clearAutoEndTimer(match);
+    return;
+  }
+  const remaining = match.closedAt ? AUTO_CLOSE_DELAY_MS - (Date.now() - match.closedAt) : AUTO_CLOSE_DELAY_MS;
+  if (remaining <= 0) {
+    clearAutoEndTimer(match);
+    try {
+      await announceMatchCompletionXp(match);
+      matchesMap.delete(msgId);
+      await match.message.delete();
+    } catch (err) {
+      console.error('자동 삭제 처리 중 오류:', err);
+    }
+    return;
+  }
+  armAutoEnd(matchesMap, msgId, match, label, remaining);
+}
+
 // /관리 의 "⌛ 종료"와 동일한 회색 "종료됨" 임베드를 만든다.
 function buildEndedEmbed(match, label) {
   const { game, gameInfo, title, datetime, organizer, description } = match.data;
@@ -395,6 +423,7 @@ module.exports = {
   disarmAutoEnd,
   markClosed,
   markReopened,
+  toggleAutoCloseWhileClosed,
   buildEndedEmbed,
   endMatch,
   announceMatchCompletionXp,

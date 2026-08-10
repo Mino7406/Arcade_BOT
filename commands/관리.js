@@ -4,6 +4,7 @@ const {
   StringSelectMenuBuilder,
   ButtonBuilder,
   ButtonStyle,
+  PermissionFlagsBits,
 } = require('discord.js');
 
 const { ADMIN_IDS, endMatch } = require('../handlers/공용');
@@ -21,6 +22,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('관리')
     .setDescription('[관리자 전용] 내전/모집을 관리하거나 봇 메시지를 삭제합니다.')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(opt =>
       opt.setName('메시지삭제')
         .setDescription('삭제할 봇 메시지의 ID 또는 링크 (입력 시 바로 삭제, 비우면 내전/모집 관리 메뉴)')

@@ -8,8 +8,8 @@ const {
 } = require('discord.js');
 
 const {
-  ADMIN_IDS, titleHeader, markClosed, markReopened, announceMatchCompletionXp,
-  ROLE_NAMES, buildPreviewEmbed, scheduleCancelledDelete,
+  ADMIN_IDS, titleHeader, markClosed, markReopened, toggleAutoCloseWhileClosed, announceMatchCompletionXp,
+  ROLE_NAMES, buildPreviewEmbed, scheduleCancelledDelete, AUTO_CLOSE_DELAY_MS,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
 } = require('./공용');
 
@@ -97,6 +97,28 @@ function buildCancelComponents() {
   return buildCancelComponentsBase('mojip');
 }
 
+// 마감된 상태에서 자동 삭제 예정 시각(closedAt + 8시간)이 이미 지났는지 확인한다.
+// autoClose가 꺼진 채로 마감돼 타이머가 안 걸린 매치는 시간이 아무리 지나도
+// 저절로 안 없어지므로, 이 경우 ON/OFF 토글 대신 바로 "삭제" 버튼을 보여준다.
+function isAutoDeleteExpired(match) {
+  return !!(match.closed && match.closedAt && Date.now() - match.closedAt >= AUTO_CLOSE_DELAY_MS);
+}
+
+function buildAutoCloseToggleButton(match, msgId, label) {
+  if (isAutoDeleteExpired(match)) {
+    return new ButtonBuilder()
+      .setCustomId(`mojip:toggle_match_autoclose:${msgId}`)
+      .setEmoji('🗑️')
+      .setLabel(`${label} 삭제`)
+      .setStyle(ButtonStyle.Danger);
+  }
+  return new ButtonBuilder()
+    .setCustomId(`mojip:toggle_match_autoclose:${msgId}`)
+    .setEmoji('⏰')
+    .setLabel(match.data.autoClose ? '자동 삭제: ON' : '자동 삭제: OFF')
+    .setStyle(match.data.autoClose ? ButtonStyle.Success : ButtonStyle.Secondary);
+}
+
 function buildManageMenu(match, msgId) {
   const closed = match.closed;
   const hasParticipants = match.participants.length > 0;
@@ -119,6 +141,7 @@ function buildManageMenu(match, msgId) {
           .setLabel('📣 참가자 멘션')
           .setStyle(ButtonStyle.Success)
           .setDisabled(!!match.mentionSent),
+        buildAutoCloseToggleButton(match, msgId, '모집'),
       ),
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
@@ -151,6 +174,7 @@ function buildManageMenu(match, msgId) {
         .setCustomId(`mojip:match_cancel:${msgId}`)
         .setLabel('❌ 모집 취소')
         .setStyle(ButtonStyle.Danger),
+      buildAutoCloseToggleButton(match, msgId, '모집'),
     ),
     addRemoveRow,
   ];
@@ -445,6 +469,27 @@ async function handleMojipButton(interaction) {
     });
     await interaction.update({
       content: '🔓 **모집 마감이 해제되었습니다.**',
+      components: buildManageMenu(match, msgId),
+    });
+    return;
+  }
+
+  // ── 자동 삭제 ON/OFF 토글 (마감 후 자동 삭제 시각이 지났다면 즉시 삭제) ──
+  if (customId.startsWith('mojip:toggle_match_autoclose:')) {
+    const msgId = customId.slice('mojip:toggle_match_autoclose:'.length);
+    const match = getMojips(interaction.client).get(msgId);
+    if (!match) {
+      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, components: [] });
+      return;
+    }
+    const enabled = isAutoDeleteExpired(match) ? true : !match.data.autoClose;
+    await toggleAutoCloseWhileClosed(getMojips(interaction.client), msgId, match, '모집', enabled);
+    if (!getMojips(interaction.client).has(msgId)) {
+      await interaction.update({ content: '✅ **자동 삭제 시간이 지나 모집이 삭제되었습니다.**', components: [] });
+      return;
+    }
+    await interaction.update({
+      content: `⏰ **자동 삭제가 ${match.data.autoClose ? 'ON' : 'OFF'}으로 변경되었습니다.**`,
       components: buildManageMenu(match, msgId),
     });
     return;

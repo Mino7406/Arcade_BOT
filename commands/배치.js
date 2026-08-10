@@ -4,6 +4,7 @@ const {
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
+  PermissionFlagsBits,
 } = require('discord.js');
 
 const { ADMIN_IDS } = require('../handlers/공용');
@@ -100,7 +101,8 @@ function buildSetupPanelPayload(interaction) {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('배치')
-    .setDescription('[관리자 전용] 현재 채널에 내전/모집 안내 패널을 게시합니다.'),
+    .setDescription('[관리자 전용] 현재 채널에 내전/모집 안내 패널을 게시합니다.')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   async execute(interaction) {
     if (!ADMIN_IDS.includes(interaction.user.id)) {
