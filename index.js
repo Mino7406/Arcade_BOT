@@ -2,19 +2,27 @@ require('dotenv').config({ path: './env' });
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload: buildNaejeonMessagePayload } = require('./handlers/naejeon');
-const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipMemberAdd, handleMojipMemberRemove, buildMojipMessagePayload } = require('./handlers/mojip');
-const { armAutoEnd, AUTO_CLOSE_DELAY_MS, announceMatchCompletionXp } = require('./handlers/shared');
-const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/team');
-const { handleRMatchSelect } = require('./handlers/r');
-const { handleWcButton, handleWcMessage } = require('./handlers/wordchain');
+const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload: buildNaejeonMessagePayload } = require('./handlers/내전');
+const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipMemberAdd, handleMojipMemberRemove, buildMojipMessagePayload } = require('./handlers/모집');
+const { armAutoEnd, AUTO_CLOSE_DELAY_MS, announceMatchCompletionXp } = require('./handlers/공용');
+const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/팀');
+const { handleRMatchSelect } = require('./handlers/불러오기');
+const { handleWcButton, handleWcMessage } = require('./handlers/끝말잇기');
 const { handleAdminSelect, handleAdminButton } = require('./commands/관리');
+const { buildGameSelectPayload: buildNaejeonGameSelectPayload } = require('./commands/내전');
+const { buildGameSelectPayload: buildMojipGameSelectPayload } = require('./commands/모집');
+const { buildReloadListPayload } = require('./commands/불러오기');
+const { buildTeamMatchListPayload } = require('./commands/팀');
+const { buildCommandListPayload } = require('./commands/셋업');
 const { handleLevelShareButton } = require('./commands/레벨');
 const { handleRankingPageButton, handleRankingShareButton } = require('./commands/랭킹');
 const { saveAll, loadRows } = require('./db'); // ⬅️ 추가: SQLite 저장 모듈
-const { loadLevels, saveLevels, handleMessageXp, trackVoiceStateUpdate, initVoiceStates, startVoiceXpTicker, LEVEL_UP_ANNOUNCE_CHANNEL_ID } = require('./handlers/levels');
-const { handleTempVoiceState, reconcileTempChannels } = require('./handlers/voiceRooms');
-const { logCommandUsage } = require('./handlers/commandLog');
+const { loadLevels, saveLevels, handleMessageXp, trackVoiceStateUpdate, initVoiceStates, startVoiceXpTicker, LEVEL_UP_ANNOUNCE_CHANNEL_ID } = require('./handlers/레벨');
+const { handleTempVoiceState, reconcileTempChannels } = require('./handlers/음성채널');
+const { logCommandUsage } = require('./handlers/명령어로그');
+
+// 끝말잇기/랭킹 명령어와 관련 버튼을 이 채널에서만 사용할 수 있게 제한한다.
+const WORDCHAIN_RANKING_CHANNEL_ID = '1522174367075663872';
 
 const client = new Client({
   intents: [
@@ -114,12 +122,24 @@ client.once('ready', onReady);
 
 client.on('interactionCreate', async (interaction) => {
   try {
-    const isChannelExempt =
-      (interaction.isChatInputCommand() && ['끝말잇기', '레벨', '랭킹', '관리'].includes(interaction.commandName)) ||
+    // 끝말잇기/랭킹은 다른 채널 허용 목록과 무관하게 이 채널에서만 사용 가능.
+    const isWordchainOrRanking =
+      (interaction.isChatInputCommand() && ['끝말잇기', '랭킹'].includes(interaction.commandName)) ||
       interaction.customId?.startsWith('wc:') ||
-      interaction.customId?.startsWith('admin:') ||
-      interaction.customId?.startsWith('level:') ||
       interaction.customId?.startsWith('ranking:');
+
+    if (isWordchainOrRanking && interaction.channelId !== WORDCHAIN_RANKING_CHANNEL_ID) {
+      if (interaction.isRepliable()) {
+        await interaction.reply({ content: '❌ 이 채널에서는 사용할 수 없습니다.', ephemeral: true });
+      }
+      return;
+    }
+
+    const isChannelExempt =
+      (interaction.isChatInputCommand() && ['레벨', '관리', '셋업'].includes(interaction.commandName)) ||
+      isWordchainOrRanking ||
+      interaction.customId?.startsWith('admin:') ||
+      interaction.customId?.startsWith('level:');
 
     if (!isChannelExempt) {
       const allowedChannel = process.env.ALLOWED_CHANNEL_ID;
@@ -198,6 +218,16 @@ client.on('interactionCreate', async (interaction) => {
         await handleRankingPageButton(interaction);
       } else if (interaction.customId.startsWith('ranking:share:')) {
         await handleRankingShareButton(interaction);
+      } else if (interaction.customId === 'recruit:내전') {
+        await interaction.reply(buildNaejeonGameSelectPayload());
+      } else if (interaction.customId === 'recruit:모집') {
+        await interaction.reply(buildMojipGameSelectPayload());
+      } else if (interaction.customId === 'recruit:불러오기') {
+        await interaction.reply(buildReloadListPayload(interaction));
+      } else if (interaction.customId === 'recruit:팀') {
+        await interaction.reply(buildTeamMatchListPayload(interaction));
+      } else if (interaction.customId === 'recruit:명령어') {
+        await interaction.reply(buildCommandListPayload());
       }
     }
   } catch (error) {

@@ -1,4 +1,4 @@
-// shared.js — 내전/모집/팀 핸들러가 공통으로 쓰는 상수·유틸·임베드 빌더
+// 공용.js — 내전/모집/팀 핸들러가 공통으로 쓰는 상수·유틸·임베드 빌더
 // 여러 파일에 흩어져 있던 동일 로직을 한 곳에 모아, 한쪽만 고치고
 // 다른 쪽은 안 고쳐서 동작이 갈라지는 것을 방지합니다.
 
@@ -15,7 +15,7 @@ const {
   SeparatorSpacingSize,
   MessageFlags,
 } = require('discord.js');
-const { awardMatchCompletionXp, LEVEL_UP_ANNOUNCE_CHANNEL_ID } = require('./levels');
+const { awardMatchCompletionXp, LEVEL_UP_ANNOUNCE_CHANNEL_ID } = require('./레벨');
 
 // 내전(naejeon)/모집(mojip) 두 시스템이 공유하는 게임 → 역할 이름 매핑.
 // (역할 멘션 대상 채널이 있으면 해당 역할을 핑한다.)

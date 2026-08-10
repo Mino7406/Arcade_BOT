@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { getLeaderboard, getLeaderboardSize, buildProgressBar } = require('../handlers/levels');
+const { getLeaderboard, getLeaderboardSize, buildProgressBar } = require('../handlers/레벨');
 
 const PAGE_SIZE = 5;
 const DESCRIPTION_LIMIT = 4096; // Discord 임베드 description 최대 길이

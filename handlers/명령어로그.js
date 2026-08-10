@@ -1,4 +1,4 @@
-// handlers/commandLog.js — 누가 언제 어떤 명령어를 썼는지 command-log.json에 기록하는 모듈
+// handlers/명령어로그.js — 누가 언제 어떤 명령어를 썼는지 command-log.json에 기록하는 모듈
 
 const fs = require('fs');
 const path = require('path');

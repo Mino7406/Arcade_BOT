@@ -5,7 +5,7 @@ const {
   ButtonStyle,
   StringSelectMenuBuilder,
 } = require('discord.js');
-const { buildPublicMessagePayload } = require('./naejeon');
+const { buildPublicMessagePayload } = require('./내전');
 const {
   ADMIN_IDS,
   getResetDateStr,
@@ -13,7 +13,7 @@ const {
   shuffleIntoTeams,
   buildTeamResultEmbed: buildTeamEmbed,
   titleHeader,
-} = require('./shared');
+} = require('./공용');
 
 function buildMatchSelectMenu(matches) {
   const options = matches.map(([id, m]) => {

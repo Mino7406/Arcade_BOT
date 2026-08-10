@@ -7,10 +7,12 @@
 - **내전(`/내전`)** — 게임별 내전 모집 글 생성, 참가/마감/자동 삭제, 팀 자동/수동 배정, 참가자 관리
 - **모집(`/모집`)** — 내전보다 가벼운 일반 게임 모집 (팀 배정 없음)
 - **불러오기(`/불러오기`)** — 채팅에 묻힌 내전/모집 게시글을 새 메시지로 다시 게시
+- **셋업(`/셋업`)** — 관리자 전용, 현재 채널에 버튼(⚔️ 내전 생성 / 📋 모집 생성 / 🔎 불러오기 / 🛠️ 팀 관리 / 📖 명령어 보기)이 달린 안내 패널을 게시해 명령어 없이도 이용 가능
 - **관리(`/관리`)** — 관리자 전용, 내전/모집 강제 종료·삭제, 봇 메시지 삭제
 - **팀 배정(`/팀`)** — 내전 참가자를 팀으로 수동/자동(랜덤) 배정
-- **끝말잇기(`/끝말잇기`)** — 두음법칙을 반영한 한국어 끝말잇기 게임, 국립국어원 API로 단어 검증, 봇 참가 가능
-- **레벨/XP(`/레벨`, `/랭킹`)** — 채팅·통화방 체류·내전 참여 기반 XP/레벨 시스템, MEE6 방식 레벨업 공식
+- **끝말잇기(`/끝말잇기`)** — 두음법칙을 반영한 한국어 끝말잇기 게임, 국립국어원 API로 단어 검증, 봇 참가 가능 (지정된 채널 전용)
+- **레벨/XP(`/레벨`, `/랭킹`)** — 채팅·통화방 체류·내전 참여 기반 XP/레벨 시스템, MEE6 방식 레벨업 공식 (`/랭킹`은 지정된 채널 전용)
+- **임시 음성채널** — 허브 채널 입장 시 개인 음성채널 자동 생성/이동, 빈 방 자동 삭제
 
 ## 기술 스택
 
@@ -28,26 +30,29 @@ Arcade_BOT/
 ├─ deploy-commands.js       # 슬래시 커맨드 등록 (전역 / 길드 단위)
 ├─ clear-guild-commands.js  # 길드 단위로 등록된 커맨드 전체 삭제
 ├─ commands/                # 슬래시 커맨드 정의 (얇은 진입점, 실제 로직은 handlers/)
-│  ├─ naejeon.js            # /내전
-│  ├─ mojip.js              # /모집
-│  ├─ r.js                  # /불러오기
+│  ├─ 내전.js                # /내전
+│  ├─ 모집.js                # /모집
+│  ├─ 불러오기.js             # /불러오기
+│  ├─ 셋업.js                # /셋업
 │  ├─ 관리.js                # /관리
-│  ├─ team.js               # /팀
+│  ├─ 팀.js                 # /팀
 │  ├─ 끝말잇기.js             # /끝말잇기
 │  ├─ 레벨.js                # /레벨
 │  └─ 랭킹.js                # /랭킹
 ├─ handlers/                # 실제 비즈니스 로직 (버튼/모달/셀렉트 메뉴 처리 포함)
-│  ├─ naejeon.js
-│  ├─ mojip.js
-│  ├─ r.js
-│  ├─ team.js
-│  ├─ wordchain.js
-│  ├─ levels.js
-│  ├─ commandLog.js         # 슬래시 커맨드 사용 로그 기록
-│  └─ shared.js             # 내전/모집/팀 공용 유틸 (관리자 목록, 임베드 빌더, 자동 종료 타이머 등)
+│  ├─ 내전.js
+│  ├─ 모집.js
+│  ├─ 불러오기.js
+│  ├─ 팀.js
+│  ├─ 끝말잇기.js
+│  ├─ 레벨.js
+│  ├─ 명령어로그.js           # 슬래시 커맨드 사용 로그 기록
+│  ├─ 음성채널.js             # 허브 채널 입장 시 임시 음성채널 자동 생성/삭제
+│  └─ 공용.js                # 내전/모집/팀 공용 유틸 (관리자 목록, 임베드 빌더, 자동 종료 타이머 등)
 ├─ data.json                # 진행 중인 내전/모집 매치 (자동 생성, gitignore)
 ├─ levels.json               # 유저별 XP (자동 생성, gitignore)
 ├─ command-log.json          # 슬래시 커맨드 사용 이력 (자동 생성, gitignore)
+├─ voiceRooms.json           # 봇이 생성한 임시 음성채널 ID 목록 (자동 생성, gitignore)
 └─ env                       # 환경변수 파일 (gitignore, 아래 참고)
 ```
 
@@ -66,6 +71,8 @@ GUILD_ID=길드_ID_1,길드_ID_2        # 커맨드를 길드 단위로 배포/�
 ALLOWED_CHANNEL_ID=채널_ID_1,채널_ID_2   # 내전/모집/팀/불러오기 명령을 허용할 채널 목록, 콤마로 여러 개 가능
 KRDICT_API_KEY=국립국어원_한국어기초사전_오픈API_키   # 끝말잇기 단어 검증용, 없으면 검증을 통과시킴(fail-open)
 ```
+
+> `/끝말잇기`, `/랭킹`과 관련 버튼(`wc:*`, `ranking:*`)이 허용되는 채널 ID, 임시 음성채널 허브/카테고리 채널 ID, 레벨업 축하 채널 ID 등 일부 채널 ID는 `ALLOWED_CHANNEL_ID`가 아니라 코드에 상수로 하드코딩되어 있습니다(`index.js`의 `WORDCHAIN_RANKING_CHANNEL_ID`, `handlers/음성채널.js`의 `HUB_CHANNEL_ID`/`TEMP_CATEGORY_ID`, `handlers/레벨.js`의 `LEVEL_UP_ANNOUNCE_CHANNEL_ID`). 다른 서버에 배포할 때는 이 값들도 함께 수정해야 합니다.
 
 슬래시 커맨드 등록 (GUILD_ID의 각 길드에 즉시 반영):
 
@@ -86,6 +93,7 @@ npm start
 | `/내전` | 게임 내전을 생성합니다 | - |
 | `/모집` | 게임 모집을 생성합니다 | - |
 | `/불러오기` | 진행 중인 내전/모집 게시글을 새 메시지로 다시 불러옵니다 | - |
+| `/셋업` | [관리자 전용] 현재 채널에 내전/모집/불러오기/팀 관리/명령어 보기 안내 패널(버튼)을 게시합니다 | - |
 | `/관리` | [관리자 전용] 내전/모집 관리, 봇 메시지 삭제 | `메시지삭제`(선택) |
 | `/팀` | 내전 참가자를 팀으로 배정합니다 | - |
 | `/끝말잇기` | 끝말잇기 게임을 시작합니다 | - |
@@ -94,7 +102,7 @@ npm start
 
 ## 기능 상세
 
-### 내전 (`/내전`, `handlers/naejeon.js`)
+### 내전 (`/내전`, `handlers/내전.js`)
 
 1. `/내전` 실행 → 게임 선택 메뉴(롤/발로란트/오버워치/배틀그라운드/직접 입력)
 2. 게임 선택 → 모달로 제목/일시/인원/설명 입력
@@ -103,36 +111,51 @@ npm start
 5. 참가/취소 버튼으로 인원 모집, 정원이 차면 자동 마감(`markClosed`) — 마감 시 8시간 후 자동 삭제 타이머가 걸리고(타이머 만료 시 참가자에게 완료 보너스 XP가 지급된 뒤 메시지가 삭제됨), 정원이 자동으로 차서 마감된 경우 주최자에게 마감 안내 DM이 발송됨(주최자가 직접 "마감하기" 버튼으로 수동 마감한 경우는 본인이 이미 알고 있으므로 DM 미발송, DM 차단 시에도 무시)
 6. 주최자(또는 관리자) 전용 관리 메뉴: 마감/마감 해제, 수정, 취소, 팀 만들기(수동/자동 배정), 참가자 멘션(1회성), 참가자 강제 추가/제거
 
-### 모집 (`/모집`, `handlers/mojip.js`)
+### 모집 (`/모집`, `handlers/모집.js`)
 
 내전과 동일한 생성/게시/참가/관리 흐름을 갖되 **팀 배정 기능이 없는** 더 가벼운 버전입니다. 기본 인원수도 더 적게 설정되어 있습니다(롤/발로란트/오버워치 5명, 배그 4명 vs 내전 10명/8명).
 
-### 팀 배정 (`/팀`, `handlers/team.js`)
+### 팀 배정 (`/팀`, `handlers/팀.js`)
 
 - 참가자 2명 이상인 진행 중 내전만 선택 가능
 - `🛠️ 팀 만들기`(팀1을 수동으로 선택, 나머지는 자동으로 팀2) 또는 `🎲 자동 배정`(Fisher–Yates 셔플 후 절반씩 분할) 선택
 - 배정 결과는 원본 내전 게시글과 팀 결과 임베드에 반영됨
 
-### 불러오기 (`/불러오기`, `handlers/r.js`)
+### 불러오기 (`/불러오기`, `handlers/불러오기.js`)
 
 - 현재 서버에서 진행 중인 내전/모집 목록을 셀렉트 메뉴로 표시(상태: 🔒 마감됨 / 🟢 모집중)
 - 선택 시 기존 메시지를 삭제하고 동일한 내용으로 새 메시지를 게시, 내부적으로 매치 데이터의 메시지 ID를 갱신
 - 자동 삭제가 걸려 있던 매치는 남은 시간을 그대로 유지해 새 메시지에 재설정
 
-### 관리 (`/관리`, `handlers/관리.js`, 관리자 전용)
+### 셋업 (`/셋업`, `commands/셋업.js`, 관리자 전용)
+
+- 실행한 채널에 안내 임베드(1회성 게시, 별도 저장/복원 없음)와 "⚔️ 내전 생성" / "📋 모집 생성" / "🔎 불러오기" / "🛠️ 팀 관리" / "📖 명령어 보기" 버튼을 게시
+- 버튼 클릭 시 각각 `/내전`, `/모집`, `/불러오기`, `/팀` 실행과 동일한 메뉴, "명령어 보기"는 전체 명령어 목록 임베드가 클릭한 유저에게만(ephemeral) 표시되어, 이후 흐름은 슬래시 커맨드와 완전히 동일(내부적으로 각 커맨드 파일이 내보내는 `buildGameSelectPayload`/`buildReloadListPayload`/`buildTeamMatchListPayload`/`buildCommandListPayload`를 그대로 재사용)
+- 버튼 자체는 관리자 권한 없이 아무나 클릭 가능(안내 패널의 목적이 명령어 없이도 접근 가능하게 하는 것이므로) — 패널을 게시하는 `/셋업` 실행만 관리자 전용
+- 패널을 게시한 채널이 `ALLOWED_CHANNEL_ID`에 포함되어 있어야 버튼 클릭 이후의 게임 선택/모달 등 후속 상호작용이 정상 동작함
+
+### 관리 (`/관리`, `commands/관리.js`, 관리자 전용)
 
 - `메시지삭제` 옵션에 메시지 ID/링크를 입력하면 해당 봇 메시지를 즉시 삭제
 - 옵션 없이 실행하면 내전/모집 관리 메뉴 표시 → 선택한 매치를 `⌛ 종료`(그레이아웃 처리 후 목록에서 제거) 또는 `🗑️ 삭제`
-- 관리자 판별은 `handlers/shared.js`의 `ADMIN_IDS`(하드코딩된 유저 ID 목록)로 처리됩니다
+- 관리자 판별은 `handlers/공용.js`의 `ADMIN_IDS`(하드코딩된 유저 ID 목록)로 처리됩니다
 
-### 끝말잇기 (`/끝말잇기`, `handlers/wordchain.js`)
+### 끝말잇기 (`/끝말잇기`, `handlers/끝말잇기.js`)
 
+- `index.js`의 `WORDCHAIN_RANKING_CHANNEL_ID`로 지정된 채널에서만 사용 가능
 - 참가 버튼으로 대기열에 합류(최대 90초), 2명 이상이면 시작 가능, 사람이 1명뿐이면 봇과 대결 가능
 - 순서가 된 사람이 채팅으로 답을 입력하면 검증: 한글 여부, 최소 길이, 이전 단어 끝 글자와 일치(두음법칙 변환 반영), 중복 사용 여부, 국립국어원 한국어기초사전 API를 통한 실존 단어 여부
 - 20초 제한시간 초과, 규칙 위반, 사전에 없는 단어 등으로 게임 종료 시 사유와 함께 결과 임베드 표시, `🔁 재대결` 버튼으로 5분 내 동일 참가자로 재시작 가능
 - 봇 참가 시 두음법칙을 반영해 가능한 시작 글자들로 한국어기초사전 API에서 단어를 조회해 자동 응답
 
-### XP / 레벨 시스템 (`/레벨`, `/랭킹`, `handlers/levels.js`)
+### 임시 음성채널 (`handlers/음성채널.js`)
+
+- 지정된 허브 채널(`HUB_CHANNEL_ID`)에 입장하면 지정된 카테고리(`TEMP_CATEGORY_ID`)에 `🔊 {닉네임}의 방` 음성채널을 새로 만들어 그리로 이동시킴
+- 방을 만든 사람에게는 해당 채널의 "채널 관리" 권한을 부여(이름/인원제한 등을 스스로 수정 가능)
+- 채널에 아무도 남지 않으면 자동으로 삭제(허브로 바로 재입장해 새 방을 만드는 경우에도 이전 방 정리가 먼저 처리됨)
+- 봇 재시작 시 그동안 만들어졌던 임시 채널 중 빈 방을 정리(`voiceRooms.json`으로 추적 ID 영속화)
+
+### XP / 레벨 시스템 (`/레벨`, `/랭킹`, `handlers/레벨.js`)
 
 레벨 `L → L+1` 필요 XP 공식(MEE6 방식): `5×L² + 50×L + 100`
 
@@ -145,13 +168,13 @@ npm start
 
 - 레벨업 시 지정된 채널에 축하 메시지 게시
 - 특정 서버(테스트 서버)는 시스템 자체가 비활성화됨
-- `/레벨`로 진행바 임베드 확인, `/랭킹`으로 서버 XP 순위 확인
+- `/레벨`로 진행바 임베드 확인, `/랭킹`으로 서버 XP 순위 확인(`/랭킹`은 `index.js`의 `WORDCHAIN_RANKING_CHANNEL_ID` 채널에서만 사용 가능)
 
 ## 주요 함수
 
-각 파일에서 내보내는(export) 함수와 핵심 내부 함수를 정리했습니다. `handlers/naejeon.js`/`handlers/mojip.js`는 버튼/셀렉트/모달 커스텀ID 하나하나를 처리하는 대형 `if/else` 분기 함수(`handleNaejeonButton`, `handleMojipButton`)가 실질적인 로직 대부분을 담고 있어, 그 내부 동작은 위 "기능 상세" 절에서 흐름 위주로 설명했습니다.
+각 파일에서 내보내는(export) 함수와 핵심 내부 함수를 정리했습니다. `handlers/내전.js`/`handlers/모집.js`는 버튼/셀렉트/모달 커스텀ID 하나하나를 처리하는 대형 `if/else` 분기 함수(`handleNaejeonButton`, `handleMojipButton`)가 실질적인 로직 대부분을 담고 있어, 그 내부 동작은 위 "기능 상세" 절에서 흐름 위주로 설명했습니다.
 
-### `handlers/levels.js` — XP/레벨
+### `handlers/레벨.js` — XP/레벨
 
 | 함수 | 설명 |
 |---|---|
@@ -168,7 +191,7 @@ npm start
 | `getLeaderboard(guildId, limit, offset)` / `getLeaderboardSize(guildId)` | `/랭킹`용 정렬된 리더보드 조회 |
 | `buildProgressBar(current, needed, length)` | `/레벨` 임베드용 진행바(■□) 문자열 생성 |
 
-### `handlers/shared.js` — 내전/모집/팀 공용 유틸
+### `handlers/공용.js` — 내전/모집/팀 공용 유틸
 
 | 함수 | 설명 |
 |---|---|
@@ -183,7 +206,7 @@ npm start
 | `buildModal` / `buildPreviewEmbed` / `buildPreviewComponents` / `buildCancelComponents` / `buildLeaveButton` | 내전/모집이 공유하는 모달·임베드·버튼 빌더 (`type` 파라미터로 분기) |
 | `getResetDateStr(client, label)` | 봇 재시작 시각을 KST 문자열로 포맷(만료된 매치 안내 메시지용) |
 
-### `handlers/naejeon.js` — 내전
+### `handlers/내전.js` — 내전
 
 | 함수 | 설명 |
 |---|---|
@@ -196,11 +219,11 @@ npm start
 | `handleNaejeonMemberAdd(interaction)` / `handleNaejeonMemberRemove(interaction)` | 관리자/주최자의 참가자 강제 추가/제거 |
 | `buildPublicMessagePayload(match)` | 공개 게시 메시지(임베드+버튼) 페이로드 생성 — `/불러오기`에서 재게시할 때도 사용 |
 
-### `handlers/mojip.js` — 모집
+### `handlers/모집.js` — 모집
 
 내전과 동일한 구조로 `handleMojipGameSelect`, `handleMojipModal`, `handleMojipEditModal`, `handleMojipButton`, `handleMojipMatchEditModal`, `handleMojipMemberAdd`, `handleMojipMemberRemove`, `buildMojipMessagePayload`를 내보내며 역할도 각각 내전 쪽 대응 함수와 동일합니다(팀 배정 관련 함수만 없음).
 
-### `handlers/team.js` — 팀 배정
+### `handlers/팀.js` — 팀 배정
 
 | 함수 | 설명 |
 |---|---|
@@ -209,13 +232,13 @@ npm start
 | `handleTeamButton(interaction)` | 팀 만들기/자동 배정/재배정 버튼 처리 |
 | `handleTeamAssignSelect(interaction)` | 팀1 수동 선택 셀렉트 제출 → `match.teams`에 반영, 공개 메시지·결과 임베드 갱신 |
 
-### `handlers/r.js` — 불러오기
+### `handlers/불러오기.js` — 불러오기
 
 | 함수 | 설명 |
 |---|---|
 | `handleRMatchSelect(interaction)` | 선택된 내전/모집을 새 메시지로 재게시하고 기존 메시지를 삭제, 매치의 메시지 ID를 갱신 |
 
-### `handlers/wordchain.js` — 끝말잇기
+### `handlers/끝말잇기.js` — 끝말잇기
 
 | 함수 | 설명 |
 |---|---|
@@ -228,11 +251,26 @@ npm start
 | `findBotWord(game)` / `botPlay(game, games)` *(내부)* | 봇 참가 시 사전 API에서 후보 단어를 조회해 자동으로 응답 |
 | `endGame(game, games, loserId, reason, failWord)` *(내부)* | 게임 종료 처리 및 결과 임베드로 전환, 재대결 만료 타이머 설정 |
 
-### `handlers/commandLog.js` — 명령어 사용 로그
+### `handlers/명령어로그.js` — 명령어 사용 로그
 
 | 함수 | 설명 |
 |---|---|
 | `logCommandUsage(interaction)` | 슬래시 커맨드 실행 정보(유저/시각/명령어/옵션)를 `command-log.json`에 append |
+
+### `handlers/음성채널.js` — 임시 음성채널
+
+| 함수 | 설명 |
+|---|---|
+| `handleTempVoiceState(oldState, newState)` | `voiceStateUpdate` 이벤트 처리: 허브 채널 입장 시 임시 채널 생성, 빈 채널 자동 삭제 |
+| `reconcileTempChannels(client)` | 봇 재시작 시 이전에 만든 임시 채널 중 빈 방을 정리 |
+| `createTempChannel(newState)` *(내부)* | 임시 음성채널 생성 + 이동 + 채널 관리 권한 부여 |
+| `cleanupIfEmpty(oldState, newState)` *(내부)* | 추적 중인 임시 채널이 비면 삭제 |
+
+### `commands/셋업.js` — 안내 패널
+
+| 함수 | 설명 |
+|---|---|
+| `buildCommandListPayload()` | "📖 명령어 보기" 버튼용 전체 명령어 목록 임베드 페이로드 생성 (index.js에서도 재사용) |
 
 ### `index.js` — 엔트리 포인트
 
@@ -249,7 +287,7 @@ npm start
 | `saveAll(client)` | 모든 내전/모집 매치를 `data.json`에 저장 |
 | `loadRows()` | `data.json`을 읽어 매치 배열로 반환 (없거나 오류 시 빈 배열) |
 
-## 명령어 사용 로그 (`handlers/commandLog.js`)
+## 명령어 사용 로그 (`handlers/명령어로그.js`)
 
 - 슬래시 커맨드가 실행될 때마다(`index.js`의 `interactionCreate` 핸들러) 사용자·시각·명령어·옵션을 `command-log.json`에 기록합니다.
 - 각 항목: `timestamp`(KST 기준 `YYYY-MM-DD HH:mm:ss`), `userId`, `username`, `guildId`, `channelId`, `command`, `options`(입력된 옵션 이름/값 배열)
@@ -264,6 +302,7 @@ npm start
 
 ## 권한
 
-- 관리자 기능(내전/모집 강제 관리, 봇 메시지 삭제 등)은 `handlers/shared.js`의 `ADMIN_IDS`에 등록된 유저만 사용할 수 있습니다.
+- 관리자 기능(내전/모집 강제 관리, 봇 메시지 삭제, `/셋업` 등)은 `handlers/공용.js`의 `ADMIN_IDS`에 등록된 유저만 사용할 수 있습니다.
 - 내전/모집의 일반 관리 메뉴(마감/수정/취소 등)는 해당 매치의 주최자 또는 `ADMIN_IDS`만 사용할 수 있습니다.
 - `ALLOWED_CHANNEL_ID`에 등록되지 않은 채널에서는 내전/모집/팀/불러오기 관련 상호작용이 차단됩니다.
+- `/끝말잇기`, `/랭킹`과 관련 버튼은 `ALLOWED_CHANNEL_ID`와 무관하게 `index.js`의 `WORDCHAIN_RANKING_CHANNEL_ID` 채널에서만 사용할 수 있습니다.

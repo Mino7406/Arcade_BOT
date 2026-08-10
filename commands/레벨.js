@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { getXp, levelFromXp, buildProgressBar } = require('../handlers/levels');
+const { getXp, levelFromXp, buildProgressBar } = require('../handlers/레벨');
 
 function buildLevelEmbed(guildId, targetUser, displayName) {
   const xp = getXp(guildId, targetUser.id);

@@ -1,6 +1,6 @@
-const { buildPublicMessagePayload } = require('./naejeon');
-const { buildMojipMessagePayload } = require('./mojip');
-const { armAutoEnd, AUTO_CLOSE_DELAY_MS } = require('./shared');
+const { buildPublicMessagePayload } = require('./내전');
+const { buildMojipMessagePayload } = require('./모집');
+const { armAutoEnd, AUTO_CLOSE_DELAY_MS } = require('./공용');
 
 async function handleRMatchSelect(interaction) {
   const value = interaction.values[0];
