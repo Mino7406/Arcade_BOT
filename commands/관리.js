@@ -4,7 +4,6 @@ const {
   StringSelectMenuBuilder,
   ButtonBuilder,
   ButtonStyle,
-  PermissionFlagsBits,
 } = require('discord.js');
 
 const { ADMIN_IDS, endMatch } = require('../handlers/공용');
@@ -22,7 +21,6 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('관리')
     .setDescription('[관리자 전용] 내전/모집을 관리하거나 봇 메시지를 삭제합니다.')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(opt =>
       opt.setName('메시지삭제')
         .setDescription('삭제할 봇 메시지의 ID 또는 링크 (입력 시 바로 삭제, 비우면 내전/모집 관리 메뉴)')
@@ -65,22 +63,20 @@ module.exports = {
     const naejeons = interaction.client.naejeonMatches || new Map();
     const mojips   = interaction.client.mojipMatches   || new Map();
 
-    // 서버 구분 없이 봇이 들어가 있는 모든 서버(테스트 서버 포함)의 내전/모집을 함께 관리할 수 있게
-    // guildId 필터 없이 전부 나열한다. 어느 서버 글인지 구분할 수 있도록 설명에 서버 이름을 붙인다.
-    const guildName = (guildId) => interaction.client.guilds.cache.get(guildId)?.name ?? '알 수 없는 서버';
-
     const options = [];
     for (const [msgId, match] of naejeons) {
+      if (match.guildId !== interaction.guildId) continue;
       options.push({
         label:       `[내전] ${match.data.title}`.slice(0, 100),
-        description: `${guildName(match.guildId)} · ${match.data.organizer?.displayName ?? '?'} · ${match.closed ? '🔒 마감됨' : '🟢 모집중'}`.slice(0, 100),
+        description: `${match.data.organizer?.displayName ?? '?'} · ${match.data.datetime} · ${match.closed ? '🔒 마감됨' : '🟢 모집중'}`.slice(0, 100),
         value:       `naejeon:${msgId}`,
       });
     }
     for (const [msgId, match] of mojips) {
+      if (match.guildId !== interaction.guildId) continue;
       options.push({
         label:       `[모집] ${match.data.title}`.slice(0, 100),
-        description: `${guildName(match.guildId)} · ${match.data.organizer?.displayName ?? '?'} · ${match.closed ? '🔒 마감됨' : '🟢 모집중'}`.slice(0, 100),
+        description: `${match.data.organizer?.displayName ?? '?'} · ${match.data.datetime} · ${match.closed ? '🔒 마감됨' : '🟢 모집중'}`.slice(0, 100),
         value:       `mojip:${msgId}`,
       });
     }
@@ -122,7 +118,7 @@ async function handleAdminSelect(interaction) {
     : interaction.client.mojipMatches;
   const match = map?.get(msgId);
 
-  if (!match) {
+  if (!match || match.guildId !== interaction.guildId) {
     await interaction.update({ content: '⚠️ **해당 내전/모집을 찾을 수 없습니다.**', components: [] });
     return;
   }
@@ -165,7 +161,7 @@ async function handleAdminButton(interaction) {
       : interaction.client.mojipMatches;
     const match = map?.get(msgId);
 
-    if (!match) {
+    if (!match || match.guildId !== interaction.guildId) {
       await interaction.update({ content: '⚠️ **이미 종료된 내전/모집입니다.**', components: [] });
       return;
     }
@@ -187,7 +183,7 @@ async function handleAdminButton(interaction) {
       : interaction.client.mojipMatches;
     const match = map?.get(msgId);
 
-    if (!match) {
+    if (!match || match.guildId !== interaction.guildId) {
       await interaction.update({ content: '⚠️ **이미 종료된 내전/모집입니다.**', components: [] });
       return;
     }
