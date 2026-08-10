@@ -93,7 +93,7 @@ async function createTempChannel(newState) {
     // 복사되지 않는다(디스코드 클라이언트의 "동기화"는 UI 전용 동작). API로 만들 때는
     // 카테고리의 permissionOverwrites를 직접 넘겨줘야 실제로 같은 권한이 적용된다.
     tempChannel = await guild.channels.create({
-      name: `${member.displayName}의 방`,
+      name: `🔊 │${member.displayName}의 방`,
       type: ChannelType.GuildVoice,
       parent: TEMP_CATEGORY_ID,
       position,
