@@ -79,22 +79,28 @@ function buildSetupPanelPayload(interaction) {
       '**끝말잇기, 레벨, 랭킹**은 놀이터 채널에서만 이용할 수 있어요.\n아래 버튼으로 바로 이동하세요.',
     );
 
+  // 모바일에서는 한 줄에 버튼이 다 안 들어가면 넘치는 버튼이 다음 줄에 혼자 남아 어색해 보이므로,
+  // 한 줄에 2개씩만 배치해 어느 화면 너비에서도 줄바꿈이 고르게 보이도록 한다.
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('recruit:내전').setLabel('⚔️ 내전 생성').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('recruit:모집').setLabel('📋 모집 생성').setStyle(ButtonStyle.Success),
+  );
+  const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('recruit:불러오기').setLabel('🔎 불러오기').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId('recruit:팀').setLabel('🛠️ 팀 관리').setStyle(ButtonStyle.Primary),
   );
-  const row2 = new ActionRowBuilder().addComponents(
+  const row3 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('recruit:명령어').setLabel('📖 명령어 보기').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setLabel('🎡 놀이터 바로가기')
       .setStyle(ButtonStyle.Link)
       .setURL(`https://discord.com/channels/${interaction.guild.id}/${PLAYGROUND_CHANNEL_ID}`),
+  );
+  const row4 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('recruit:새로고침').setLabel('🔄 새로고침').setStyle(ButtonStyle.Danger),
   );
 
-  return { embeds: [embed, playgroundEmbed], components: [row1, row2] };
+  return { embeds: [embed, playgroundEmbed], components: [row1, row2, row3, row4] };
 }
 
 module.exports = {

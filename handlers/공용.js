@@ -54,6 +54,20 @@ function clearAutoEndTimer(match) {
   }
 }
 
+// "📣 참가자 멘션" 버튼으로 보낸 멘션 메시지를 삭제한다. 멘션을 보낸 적 없으면 아무것도 안 함.
+// 이미 지워졌거나 채널 접근이 불가한 경우도 조용히 무시한다(본 임베드 삭제를 막으면 안 되므로).
+async function deleteMentionMessage(client, match) {
+  if (!match.mentionMessageId) return;
+  try {
+    const channel = client.channels.cache.get(match.message.channelId)
+      || await client.channels.fetch(match.message.channelId).catch(() => null);
+    const mentionMsg = channel && await channel.messages.fetch(match.mentionMessageId).catch(() => null);
+    if (mentionMsg) await mentionMsg.delete();
+  } catch (err) {
+    console.error('멘션 메시지 자동 삭제 중 오류:', err);
+  }
+}
+
 // 마감(closed)된 시점부터 delayMs(기본 8시간) 후 자동으로 메시지를 삭제한다.
 // autoClose 옵션이 꺼져있으면 아무것도 하지 않는다. 봇 재시작 후 복원할 때는
 // 이미 지난 시간만큼 뺀 delayMs를 넘겨 원래 마감 시각 기준을 유지한다.
@@ -67,6 +81,7 @@ function armAutoEnd(matchesMap, msgId, match, label, delayMs = AUTO_CLOSE_DELAY_
     try {
       await announceMatchCompletionXp(current);
       matchesMap.delete(msgId);
+      await deleteMentionMessage(current.message.client, current);
       await current.message.delete();
     } catch (err) {
       console.error('자동 삭제 처리 중 오류:', err);
@@ -103,6 +118,31 @@ function scheduleCancelledDelete(client, msgId, channelId, deleteAt = Date.now()
       if (message) await message.delete();
     } catch (err) {
       console.error('취소된 임베드 자동 삭제 중 오류:', err);
+    }
+  }, delayMs);
+}
+
+function getPendingMessageDeletions(client) {
+  if (!client.pendingMessageDeletions) client.pendingMessageDeletions = new Map();
+  return client.pendingMessageDeletions;
+}
+
+// 특정 채널에 올라온 일반 메시지(내전/모집과 무관한 유저 채팅 등)를 deleteAt(기본 8시간 후)
+// 시점에 자동 삭제한다. scheduleCancelledDelete와 달리 내전/모집 매치 상태와는 전혀 무관하게,
+// 순전히 "이 메시지를 이 시각에 지운다"만 기록·추적한다(client.pendingMessageDeletions).
+function scheduleMessageDelete(client, msgId, channelId, deleteAt = Date.now() + AUTO_CLOSE_DELAY_MS) {
+  const map = getPendingMessageDeletions(client);
+  map.set(msgId, { channelId, deleteAt });
+  const delayMs = Math.max(0, deleteAt - Date.now());
+  setTimeout(async () => {
+    if (!getPendingMessageDeletions(client).has(msgId)) return;
+    getPendingMessageDeletions(client).delete(msgId);
+    try {
+      const channel = client.channels.cache.get(channelId) || await client.channels.fetch(channelId).catch(() => null);
+      const message = channel && await channel.messages.fetch(msgId).catch(() => null);
+      if (message) await message.delete();
+    } catch (err) {
+      console.error('메시지 자동 삭제 중 오류:', err);
     }
   }, delayMs);
 }
@@ -166,6 +206,7 @@ async function toggleAutoCloseWhileClosed(matchesMap, msgId, match, label, enabl
     try {
       await announceMatchCompletionXp(match);
       matchesMap.delete(msgId);
+      await deleteMentionMessage(match.message.client, match);
       await match.message.delete();
     } catch (err) {
       console.error('자동 삭제 처리 중 오류:', err);
@@ -375,9 +416,13 @@ function buildLeaveButton(type, msgId) {
   );
 }
 
+// 모바일에서 한 줄에 다 안 들어가는 버튼이 다음 줄에 혼자 남아 어색해 보이는 문제를 피하려고,
+// 한 줄에 실텍스트 버튼 2개까지만 배치한다(주 액션은 단독 줄로 분리).
 function buildPreviewComponents(type, data = null) {
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`${type}:publish`).setLabel('📢 채널에 공개 게시').setStyle(ButtonStyle.Primary),
+  );
+  const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`${type}:edit`).setLabel('✏️ 수정').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(`${type}:cancel`).setLabel('❌ 취소').setStyle(ButtonStyle.Danger),
   );
@@ -393,9 +438,9 @@ function buildPreviewComponents(type, data = null) {
       .setEmoji({ id: '1510954746012242021', name: 'Steam' })
       .setLabel(data.mentionSteam ? '멘션 ON' : '멘션 OFF')
       .setStyle(data.mentionSteam ? ButtonStyle.Success : ButtonStyle.Secondary);
-    return [row1, new ActionRowBuilder().addComponents(autoCloseToggle, steamToggle)];
+    return [row1, row2, new ActionRowBuilder().addComponents(autoCloseToggle, steamToggle)];
   }
-  return [row1, new ActionRowBuilder().addComponents(autoCloseToggle)];
+  return [row1, row2, new ActionRowBuilder().addComponents(autoCloseToggle)];
 }
 
 function buildCancelComponents(type) {
@@ -412,6 +457,8 @@ module.exports = {
   getNaejeonMatches,
   getCancelledDeletions,
   scheduleCancelledDelete,
+  scheduleMessageDelete,
+  deleteMentionMessage,
   shuffleIntoTeams,
   buildTeamResultEmbed,
   buildPreviewEmbed,

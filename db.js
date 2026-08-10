@@ -40,6 +40,16 @@ function saveAll(client) {
       });
     }
   }
+  if (client.pendingMessageDeletions) {
+    for (const [messageId, entry] of client.pendingMessageDeletions) {
+      rows.push({
+        message_id: messageId,
+        channel_id: entry.channelId,
+        type: 'pending_msg_delete',
+        data: JSON.stringify({ deleteAt: entry.deleteAt }),
+      });
+    }
+  }
   fs.writeFileSync(DB_PATH, JSON.stringify(rows), 'utf8');
 }
 

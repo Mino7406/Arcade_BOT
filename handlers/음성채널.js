@@ -92,7 +92,7 @@ async function createTempChannel(newState) {
     // 생성 시점에 position을 같이 넘기면 디스코드가 무시하고 아무 데나(심지어 허브보다
     // 위로) 배치하는 경우가 있어, 일단 만든 뒤 아래에서 setPosition으로 따로 지정한다.
     tempChannel = await guild.channels.create({
-      name: `🔊 │${member.displayName}의 방`,
+      name: `🔊│${member.displayName}의 방`,
       type: ChannelType.GuildVoice,
       parent: TEMP_CATEGORY_ID,
       bitrate: newState.channel?.bitrate,

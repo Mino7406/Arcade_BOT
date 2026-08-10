@@ -188,6 +188,8 @@ function buildFinishedEmbed(game) {
 
 // ── 컴포넌트 빌더 ──────────────────────────────────────────────
 
+// 모바일에서 한 줄에 다 안 들어가는 버튼이 다음 줄에 혼자 남아 어색해 보이는 문제를 피하려고,
+// 한 줄에 버튼 2개까지만 배치한다.
 function buildWaitingComponents(game) {
   const hasBot = game.players.some(p => p.id === 'BOT');
   return [
@@ -201,6 +203,8 @@ function buildWaitingComponents(game) {
         .setLabel('▶️ 게임 시작')
         .setStyle(ButtonStyle.Primary)
         .setDisabled(game.players.length < 2),
+    ),
+    new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`wc:bot_start:${game.id}`)
         .setLabel('🤖 봇과 시작')

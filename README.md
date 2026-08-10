@@ -172,7 +172,8 @@ npm start
 
 - 레벨업 시 지정된 채널에 축하 메시지 게시
 - 특정 서버(테스트 서버)는 시스템 자체가 비활성화됨
-- `/레벨`로 진행바 임베드 확인, `/랭킹`으로 서버 XP 순위 확인(`/랭킹`은 `index.js`의 `WORDCHAIN_RANKING_CHANNEL_ID` 채널에서만 사용 가능)
+- 내전/모집 완료 보너스 채널(`MATCH_BONUS_CHANNEL_ID`)에 올라온 일반 유저 메시지는 8시간 후 자동 삭제됨(`scheduleMessageDelete`, 봇 메시지는 제외) — 재시작해도 `data.json`에 삭제 예정 시각이 저장돼 있어 남은 시간만큼 다시 예약됨
+- `/레벨`로 진행바 임베드 확인, `/랭킹`으로 서버 XP 순위 확인(`/레벨`, `/랭킹` 모두 `index.js`의 `WORDCHAIN_RANKING_CHANNEL_ID` 채널에서만 사용 가능)
 - `/랭킹`은 서버를 나갔거나 멤버 조회가 안 되는(알 수 없는 사용자) 유저를 목록에서 완전히 제외함 — 페이지 단위가 아니라 전체 랭킹을 먼저 걸러낸 뒤 페이지를 나눠서, 나간 유저가 있어도 한 페이지가 5명 미만으로 비지 않음
 
 ## 주요 함수
@@ -205,6 +206,7 @@ npm start
 | `armAutoEnd(matchesMap, msgId, match, label, delayMs)` | 마감된 매치에 8시간 자동 삭제 타이머 설정 — 만료 시 XP 지급 후 메시지를 바로 삭제(`endMatch` 미사용) |
 | `disarmAutoEnd(match)` | 자동 삭제 타이머 해제 |
 | `scheduleCancelledDelete(client, msgId, channelId, deleteAt)` | 취소된 매치를 `deleteAt`(기본 8시간 후) 시점에 자동 삭제 예약 — `client.cancelledDeletions` Map에 기록해 재시작 후에도 복원 가능 |
+| `scheduleMessageDelete(client, msgId, channelId, deleteAt)` | 매치 상태와 무관하게 일반 메시지를 `deleteAt`(기본 8시간 후) 시점에 자동 삭제 예약 — `client.pendingMessageDeletions` Map에 기록해 재시작 후에도 복원 가능 (내전/모집 인증 채널의 유저 메시지 정리에 사용) |
 | `markClosed(matchesMap, msgId, match, label, notify = true)` / `markReopened(match)` | 매치 마감/마감 해제 처리 (자동 삭제 타이머 연동). `notify=false`를 넘기면 주최자 DM을 생략(주최자 본인이 직접 마감한 경우에 사용) |
 | `toggleAutoCloseWhileClosed(matchesMap, msgId, match, label, enabled)` | 이미 마감된 매치의 자동 삭제 ON/OFF를 관리 메뉴에서 토글 — 원래 마감 시각 기준 남은 시간으로 재예약(다 지났으면 즉시 삭제), OFF 시 타이머만 취소 |
 | `notifyOrganizerOnClose(match, label)` *(내부)* | 정원 자동 마감 시 주최자에게 게시글 제목과 링크를 DM으로 전송 (DM 차단 등 실패는 무시) |
@@ -312,4 +314,4 @@ npm start
 - 관리자 기능(내전/모집 강제 관리, 봇 메시지 삭제, `/배치` 등)은 `handlers/공용.js`의 `ADMIN_IDS`에 등록된 유저만 사용할 수 있습니다.
 - 내전/모집의 일반 관리 메뉴(마감/수정/취소 등)는 해당 매치의 주최자 또는 `ADMIN_IDS`만 사용할 수 있습니다.
 - `ALLOWED_CHANNEL_ID`에 등록되지 않은 채널에서는 내전/모집/팀/불러오기 관련 상호작용이 차단됩니다.
-- `/끝말잇기`, `/랭킹`과 관련 버튼은 `ALLOWED_CHANNEL_ID`와 무관하게 `index.js`의 `WORDCHAIN_RANKING_CHANNEL_ID` 채널에서만 사용할 수 있습니다.
+- `/끝말잇기`, `/레벨`, `/랭킹`과 관련 버튼은 `ALLOWED_CHANNEL_ID`와 무관하게 `index.js`의 `WORDCHAIN_RANKING_CHANNEL_ID` 채널에서만 사용할 수 있습니다.

@@ -259,5 +259,6 @@ module.exports = {
   getLeaderboardSize,
   XP_CHANNEL_ID,
   LEVEL_UP_ANNOUNCE_CHANNEL_ID,
+  MATCH_BONUS_CHANNEL_ID,
   buildProgressBar,
 };

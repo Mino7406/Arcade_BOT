@@ -165,6 +165,8 @@ function buildManageMenu(match, matchMsgId) {
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(!hasParticipants),
   );
+  // 모바일에서 한 줄에 다 안 들어가는 버튼이 다음 줄에 혼자 남아 어색해 보이는 문제를 피하려고,
+  // 한 줄에 버튼 2개까지만 배치한다.
   if (match.closed) {
     return [
       new ActionRowBuilder().addComponents(
@@ -177,13 +179,15 @@ function buildManageMenu(match, matchMsgId) {
           .setLabel('📣 참가자 멘션')
           .setStyle(ButtonStyle.Success)
           .setDisabled(!!match.mentionSent),
-        buildAutoCloseToggleButton(match, matchMsgId, '내전'),
       ),
       new ActionRowBuilder().addComponents(
+        buildAutoCloseToggleButton(match, matchMsgId, '내전'),
         new ButtonBuilder()
           .setCustomId(`naejeon:match_reopen:${matchMsgId}`)
           .setLabel('🔓 마감 해제')
           .setStyle(ButtonStyle.Secondary),
+      ),
+      new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`naejeon:match_edit:${matchMsgId}`)
           .setLabel('✏️ 내전 수정')
@@ -206,6 +210,8 @@ function buildManageMenu(match, matchMsgId) {
         .setCustomId(`naejeon:match_edit:${matchMsgId}`)
         .setLabel('✏️ 내전 수정')
         .setStyle(ButtonStyle.Secondary),
+    ),
+    new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`naejeon:match_cancel:${matchMsgId}`)
         .setLabel('❌ 내전 취소')
@@ -244,21 +250,27 @@ function buildTeamBuilderComponents(match, matchMsgId) {
   ];
 }
 
+// 모바일에서 한 줄에 다 안 들어가는 버튼이 다음 줄에 혼자 남아 어색해 보이는 문제를 피하려고,
+// 한 줄에 버튼 2개까지만 배치한다.
 function buildTeamDoneRow(matchMsgId) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`naejeon:team_builder:${matchMsgId}`)
-      .setLabel('🔄 다시 배정')
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(`naejeon:team_shuffle:${matchMsgId}`)
-      .setLabel('🎲 자동 배정')
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(`naejeon:manage_back:${matchMsgId}`)
-      .setLabel('↩️ 관리로')
-      .setStyle(ButtonStyle.Secondary),
-  );
+  return [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`naejeon:team_builder:${matchMsgId}`)
+        .setLabel('🔄 다시 배정')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`naejeon:team_shuffle:${matchMsgId}`)
+        .setLabel('🎲 자동 배정')
+        .setStyle(ButtonStyle.Secondary),
+    ),
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`naejeon:manage_back:${matchMsgId}`)
+        .setLabel('↩️ 관리로')
+        .setStyle(ButtonStyle.Secondary),
+    ),
+  ];
 }
 
 function getPending(client) {
@@ -354,7 +366,7 @@ async function handleTeamAssign(interaction) {
   match.teams = { team1, team2 };
 
   await match.message.edit(buildPublicMessagePayload(match));
-  await interaction.update({ content: '✅ **팀 배정이 완료되었습니다.**', embeds: [], attachments: [], components: [buildTeamDoneRow(matchMsgId)] });
+  await interaction.update({ content: '✅ **팀 배정이 완료되었습니다.**', embeds: [], attachments: [], components: buildTeamDoneRow(matchMsgId) });
   await interaction.channel.send({ embeds: [buildTeamResultEmbed(match.data, match.teams)], attachments: [], allowedMentions: { parse: [] } });
 }
 
@@ -621,7 +633,7 @@ async function handleNaejeonButton(interaction) {
     }
     match.teams = shuffleIntoTeams(match.participants);
     await match.message.edit(buildPublicMessagePayload(match));
-    await interaction.update({ content: '✅ **자동 팀 배정이 완료되었습니다.**', embeds: [], attachments: [], components: [buildTeamDoneRow(matchMsgId)] });
+    await interaction.update({ content: '✅ **자동 팀 배정이 완료되었습니다.**', embeds: [], attachments: [], components: buildTeamDoneRow(matchMsgId) });
     await interaction.channel.send({ embeds: [buildTeamResultEmbed(match.data, match.teams)], attachments: [], allowedMentions: { parse: [] } });
     return;
   }
@@ -668,10 +680,11 @@ async function handleNaejeonButton(interaction) {
     }
     match.mentionSent = true;
     const mentionText = match.participants.map(u => `<@${u.id}>`).join(' ');
-    await interaction.channel.send({
+    const mentionMsg = await interaction.channel.send({
       content: `📣 **${match.data.title}**\n${mentionText}`,
       allowedMentions: { parse: ['users'] },
     });
+    match.mentionMessageId = mentionMsg.id;
     await interaction.update({
       content: '📣 **참가자에게 멘션을 보냈습니다.**',
       components: buildManageMenu(match, matchMsgId),

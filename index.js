@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload: buildNaejeonMessagePayload } = require('./handlers/내전');
 const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipMemberAdd, handleMojipMemberRemove, buildMojipMessagePayload } = require('./handlers/모집');
-const { armAutoEnd, AUTO_CLOSE_DELAY_MS, announceMatchCompletionXp, scheduleCancelledDelete } = require('./handlers/공용');
+const { armAutoEnd, AUTO_CLOSE_DELAY_MS, announceMatchCompletionXp, scheduleCancelledDelete, scheduleMessageDelete, deleteMentionMessage, ADMIN_IDS } = require('./handlers/공용');
 const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/팀');
 const { handleRMatchSelect } = require('./handlers/불러오기');
 const { handleWcButton, handleWcMessage } = require('./handlers/끝말잇기');
@@ -17,7 +17,7 @@ const { buildCommandListPayload, buildSetupPanelPayload } = require('./commands/
 const { handleLevelShareButton } = require('./commands/레벨');
 const { handleRankingPageButton, handleRankingShareButton } = require('./commands/랭킹');
 const { saveAll, loadRows } = require('./db'); // ⬅️ 추가: SQLite 저장 모듈
-const { loadLevels, saveLevels, handleMessageXp, trackVoiceStateUpdate, initVoiceStates, startVoiceXpTicker, LEVEL_UP_ANNOUNCE_CHANNEL_ID } = require('./handlers/레벨');
+const { loadLevels, saveLevels, handleMessageXp, trackVoiceStateUpdate, initVoiceStates, startVoiceXpTicker, LEVEL_UP_ANNOUNCE_CHANNEL_ID, MATCH_BONUS_CHANNEL_ID } = require('./handlers/레벨');
 const { handleTempVoiceState, reconcileTempChannels } = require('./handlers/음성채널');
 const { logCommandUsage } = require('./handlers/명령어로그');
 
@@ -71,6 +71,23 @@ async function restoreMatches(c) {
       }
       continue;
     }
+    // 내전/모집 인증 채널(MATCH_BONUS_CHANNEL_ID)의 일반 유저 메시지 자동 삭제 예약.
+    // 매치 데이터가 아니라 순수 메시지 삭제 예약이므로 위 취소된 임베드와 동일하게 별도 복원한다.
+    if (row.type === 'pending_msg_delete') {
+      try {
+        const { deleteAt } = JSON.parse(row.data);
+        if (deleteAt <= Date.now()) {
+          const channel = await c.channels.fetch(row.channel_id).catch(() => null);
+          const message = channel && await channel.messages.fetch(row.message_id).catch(() => null);
+          if (message) await message.delete().catch(() => {});
+        } else {
+          scheduleMessageDelete(c, row.message_id, row.channel_id, deleteAt);
+        }
+      } catch (err) {
+        console.error('메시지 자동 삭제 예약 복원 중 오류:', err);
+      }
+      continue;
+    }
     try {
       const match = JSON.parse(row.data);
       // 저장 못 했던 '살아있는 메시지'를 디스코드에서 다시 가져와 연결합니다.
@@ -97,6 +114,7 @@ async function restoreMatches(c) {
           try {
             await announceMatchCompletionXp(match);
             map.delete(row.message_id);
+            await deleteMentionMessage(c, match);
             await match.message.delete();
           } catch (err) {
             console.error('복원 후 자동 삭제 처리 중 오류:', err);
@@ -140,11 +158,12 @@ client.once('ready', onReady);
 
 client.on('interactionCreate', async (interaction) => {
   try {
-    // 끝말잇기/랭킹은 다른 채널 허용 목록과 무관하게 이 채널에서만 사용 가능.
+    // 끝말잇기/레벨/랭킹은 다른 채널 허용 목록과 무관하게 이 채널에서만 사용 가능.
     const isWordchainOrRanking =
-      (interaction.isChatInputCommand() && ['끝말잇기', '랭킹'].includes(interaction.commandName)) ||
+      (interaction.isChatInputCommand() && ['끝말잇기', '레벨', '랭킹'].includes(interaction.commandName)) ||
       interaction.customId?.startsWith('wc:') ||
-      interaction.customId?.startsWith('ranking:');
+      interaction.customId?.startsWith('ranking:') ||
+      interaction.customId?.startsWith('level:');
 
     if (isWordchainOrRanking && interaction.channelId !== WORDCHAIN_RANKING_CHANNEL_ID) {
       if (interaction.isRepliable()) {
@@ -154,10 +173,9 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     const isChannelExempt =
-      (interaction.isChatInputCommand() && ['레벨', '관리', '배치'].includes(interaction.commandName)) ||
+      (interaction.isChatInputCommand() && ['관리', '배치'].includes(interaction.commandName)) ||
       isWordchainOrRanking ||
-      interaction.customId?.startsWith('admin:') ||
-      interaction.customId?.startsWith('level:');
+      interaction.customId?.startsWith('admin:');
 
     if (!isChannelExempt) {
       const allowedChannel = process.env.ALLOWED_CHANNEL_ID;
@@ -247,7 +265,14 @@ client.on('interactionCreate', async (interaction) => {
       } else if (interaction.customId === 'recruit:명령어') {
         await interaction.reply(buildCommandListPayload());
       } else if (interaction.customId === 'recruit:새로고침') {
-        await interaction.update(buildSetupPanelPayload(interaction));
+        if (!ADMIN_IDS.includes(interaction.user.id)) {
+          await interaction.reply({ content: '❌ **권한이 없습니다.**', ephemeral: true });
+        } else {
+          // 기존 패널을 그 자리에서 갱신(update)하지 않고, 삭제 후 새로 게시해 항상 채널 맨 아래로 올라오게 한다.
+          await interaction.deferUpdate();
+          await interaction.message.delete().catch(() => {});
+          await interaction.channel.send(buildSetupPanelPayload(interaction));
+        }
       }
     }
   } catch (error) {
@@ -281,6 +306,15 @@ client.on('messageCreate', async (message) => {
     }
   } catch (error) {
     console.error(error);
+  }
+
+  // 내전/모집 인증 채널에 올라온 일반 유저 메시지는 8시간 후 자동 삭제한다(봇 메시지는 제외).
+  try {
+    if (message.channelId === MATCH_BONUS_CHANNEL_ID && !message.author.bot) {
+      scheduleMessageDelete(message.client, message.id, message.channelId);
+    }
+  } catch (error) {
+    console.error('메시지 자동 삭제 예약 중 오류:', error);
   }
 });
 

@@ -6,7 +6,7 @@ const {
   ButtonStyle,
 } = require('discord.js');
 
-const { ADMIN_IDS, endMatch, announceMatchCompletionXp } = require('../handlers/공용');
+const { ADMIN_IDS, endMatch, announceMatchCompletionXp, deleteMentionMessage } = require('../handlers/공용');
 
 // 메시지 ID 또는 디스코드 메시지 링크에서 { channelId, messageId }를 추출한다.
 // channelId가 없으면(순수 ID만 입력) 명령어를 실행한 현재 채널을 사용한다.
@@ -168,6 +168,7 @@ async function handleAdminButton(interaction) {
 
     await announceMatchCompletionXp(match);
     map.delete(msgId);
+    await deleteMentionMessage(interaction.client, match);
     await match.message.delete();
     await interaction.update({ content: '✅ **종료 처리 후 삭제되었습니다.**', components: [] });
     return;

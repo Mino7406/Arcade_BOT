@@ -133,6 +133,8 @@ function buildManageMenu(match, msgId) {
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(!hasParticipants),
   );
+  // 모바일에서 한 줄에 다 안 들어가는 버튼이 다음 줄에 혼자 남아 어색해 보이는 문제를 피하려고,
+  // 한 줄에 버튼 2개까지만 배치한다.
   if (closed) {
     return [
       new ActionRowBuilder().addComponents(
@@ -152,6 +154,8 @@ function buildManageMenu(match, msgId) {
           .setCustomId(`mojip:match_edit:${msgId}`)
           .setLabel('✏️ 모집 수정')
           .setStyle(ButtonStyle.Secondary),
+      ),
+      new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`mojip:match_cancel:${msgId}`)
           .setLabel('❌ 모집 취소')
@@ -170,6 +174,8 @@ function buildManageMenu(match, msgId) {
         .setCustomId(`mojip:match_edit:${msgId}`)
         .setLabel('✏️ 모집 수정')
         .setStyle(ButtonStyle.Secondary),
+    ),
+    new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`mojip:match_cancel:${msgId}`)
         .setLabel('❌ 모집 취소')
@@ -521,10 +527,11 @@ async function handleMojipButton(interaction) {
     }
     match.mentionSent = true;
     const mentionText = match.participants.map(u => `<@${u.id}>`).join(' ');
-    await interaction.channel.send({
+    const mentionMsg = await interaction.channel.send({
       content: `📣 **${match.data.title}**\n${mentionText}`,
       allowedMentions: { parse: ['users'] },
     });
+    match.mentionMessageId = mentionMsg.id;
     await interaction.update({
       content: '📣 **참가자에게 멘션을 보냈습니다.**',
       components: buildManageMenu(match, msgId),
