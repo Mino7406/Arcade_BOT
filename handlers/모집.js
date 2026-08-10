@@ -633,7 +633,7 @@ async function handleMojipButton(interaction) {
     return;
   }
 
-  // ── 8시간 후 자동 종료 토글 ───────────────────────────────
+  // ── 5시간 후 자동 종료 토글 ───────────────────────────────
   if (customId === 'mojip:toggle_autoclose') {
     const data = getPending(interaction.client).get(interaction.user.id);
     if (!data) {

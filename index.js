@@ -70,7 +70,7 @@ async function restoreMatches(c) {
       await match.message.edit(buildPayload(match)).catch(err => console.error('복원 후 메시지 갱신 중 오류:', err));
 
       // 봇이 꺼져있던 동안 setTimeout이 소실되므로, 마감(closed) 시점을 기준으로
-      // 8시간 자동 삭제를 다시 스케줄링합니다. 이미 8시간이 지났다면 즉시 삭제합니다.
+      // 5시간 자동 삭제를 다시 스케줄링합니다. 이미 5시간이 지났다면 즉시 삭제합니다.
       // (closedAt이 없는 옛 데이터는 이미 마감 상태로 오래 방치돼 있었다는 뜻이므로 즉시 삭제합니다.)
       if (match.closed && match.data?.autoClose) {
         const label = row.type === 'naejeon' ? '내전' : '모집';

@@ -31,9 +31,9 @@ function buildCommandListPayload() {
     .setColor(0x5865f2)
     .setTitle('📖 명령어 목록')
     .addFields(
-      ...COMMAND_LIST.map(c => ({ name: c.name, value: c.value, inline: true })),
+      ...COMMAND_LIST.map(c => ({ name: `\`${c.name}\``, value: c.value, inline: true })),
       { name: '​', value: '**🎡 놀이터 채널 전용**', inline: false },
-      ...PLAYGROUND_COMMAND_LIST.map(c => ({ name: c.name, value: c.value, inline: true })),
+      ...PLAYGROUND_COMMAND_LIST.map(c => ({ name: `\`${c.name}\``, value: c.value, inline: true })),
     );
 
   return { embeds: [embed], ephemeral: true };
