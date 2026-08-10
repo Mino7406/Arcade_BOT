@@ -84,11 +84,17 @@ async function createTempChannel(newState) {
 
   let tempChannel;
   try {
+    // 카테고리 안의 기존 채널들(고정방 등)보다 아래에 생기도록, 가장 큰 position 다음 자리로 만든다.
+    const category = await guild.channels.fetch(TEMP_CATEGORY_ID).catch(() => null);
+    const siblings = category?.children?.cache;
+    const position = siblings?.size > 0 ? Math.max(...siblings.map(c => c.position)) + 1 : undefined;
+
     // parent만 지정하면 카테고리 권한을 그대로 이어받는다.
     tempChannel = await guild.channels.create({
       name: `🔊 ${member.displayName}의 방`,
       type: ChannelType.GuildVoice,
       parent: TEMP_CATEGORY_ID,
+      position,
       bitrate: newState.channel?.bitrate,
       userLimit: newState.channel?.userLimit,
     });
