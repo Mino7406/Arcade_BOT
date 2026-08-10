@@ -11,7 +11,7 @@ const {
   ADMIN_IDS, getNaejeonMatches: getMatches, shuffleIntoTeams, buildTeamResultEmbed, titleHeader, markClosed, markReopened, toggleAutoCloseWhileClosed, announceMatchCompletionXp,
   ROLE_NAMES, buildPreviewEmbed, scheduleCancelledDelete, AUTO_CLOSE_DELAY_MS,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
-  buildNotifyModal: buildNotifyModalBase, parseNotifyTime, formatNotifyTime, armNotifyReminder, clearNotifyTimer,
+  buildNotifyModal: buildNotifyModalBase, parseNotifyTime, formatNotifyTime, formatNotifyTimeKorean, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
 } = require('./공용');
 
 const GAMES = {
@@ -157,12 +157,14 @@ function buildAutoCloseToggleButton(match, matchMsgId, label) {
     .setStyle(match.data.autoClose ? ButtonStyle.Success : ButtonStyle.Secondary);
 }
 
+// 마감 후에는 알림 예약을 더 바꿀 수 없도록 버튼을 비활성화한다(설정된 시각은 그대로 유지·표시).
 function buildNotifyButton(match, matchMsgId) {
   const notifyAt = match.data?.notifyAt;
   return new ButtonBuilder()
     .setCustomId(`naejeon:notify_set:${matchMsgId}`)
-    .setLabel(notifyAt ? `🔔 알림 예약: ${formatNotifyTime(notifyAt)}` : '🔔 알림 예약')
-    .setStyle(notifyAt ? ButtonStyle.Success : ButtonStyle.Secondary);
+    .setLabel(notifyAt ? `🔔 알림 예약: ${formatNotifyTimeKorean(notifyAt)}` : '🔔 알림 예약')
+    .setStyle(notifyAt ? ButtonStyle.Success : ButtonStyle.Secondary)
+    .setDisabled(!!match.closed);
 }
 
 function buildManageMenu(match, matchMsgId) {
@@ -178,8 +180,6 @@ function buildManageMenu(match, matchMsgId) {
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(!hasParticipants),
   );
-  // 모바일에서 한 줄에 다 안 들어가는 버튼이 다음 줄에 혼자 남아 어색해 보이는 문제를 피하려고,
-  // 한 줄에 버튼 2개까지만 배치한다.
   if (match.closed) {
     return [
       new ActionRowBuilder().addComponents(
@@ -192,15 +192,13 @@ function buildManageMenu(match, matchMsgId) {
           .setLabel('📣 참가자 멘션')
           .setStyle(ButtonStyle.Success)
           .setDisabled(!!match.mentionSent),
+        buildAutoCloseToggleButton(match, matchMsgId, '내전'),
       ),
       new ActionRowBuilder().addComponents(
-        buildAutoCloseToggleButton(match, matchMsgId, '내전'),
         new ButtonBuilder()
           .setCustomId(`naejeon:match_reopen:${matchMsgId}`)
           .setLabel('🔓 마감 해제')
           .setStyle(ButtonStyle.Secondary),
-      ),
-      new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`naejeon:match_edit:${matchMsgId}`)
           .setLabel('✏️ 내전 수정')
@@ -224,8 +222,6 @@ function buildManageMenu(match, matchMsgId) {
         .setCustomId(`naejeon:match_edit:${matchMsgId}`)
         .setLabel('✏️ 내전 수정')
         .setStyle(ButtonStyle.Secondary),
-    ),
-    new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`naejeon:match_cancel:${matchMsgId}`)
         .setLabel('❌ 내전 취소')
@@ -265,27 +261,21 @@ function buildTeamBuilderComponents(match, matchMsgId) {
   ];
 }
 
-// 모바일에서 한 줄에 다 안 들어가는 버튼이 다음 줄에 혼자 남아 어색해 보이는 문제를 피하려고,
-// 한 줄에 버튼 2개까지만 배치한다.
 function buildTeamDoneRow(matchMsgId) {
-  return [
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`naejeon:team_builder:${matchMsgId}`)
-        .setLabel('🔄 다시 배정')
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(`naejeon:team_shuffle:${matchMsgId}`)
-        .setLabel('🎲 자동 배정')
-        .setStyle(ButtonStyle.Secondary),
-    ),
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`naejeon:manage_back:${matchMsgId}`)
-        .setLabel('↩️ 관리로')
-        .setStyle(ButtonStyle.Secondary),
-    ),
-  ];
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`naejeon:team_builder:${matchMsgId}`)
+      .setLabel('🔄 다시 배정')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(`naejeon:team_shuffle:${matchMsgId}`)
+      .setLabel('🎲 자동 배정')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(`naejeon:manage_back:${matchMsgId}`)
+      .setLabel('↩️ 관리로')
+      .setStyle(ButtonStyle.Secondary),
+  );
 }
 
 function getPending(client) {
@@ -381,7 +371,7 @@ async function handleTeamAssign(interaction) {
   match.teams = { team1, team2 };
 
   await match.message.edit(buildPublicMessagePayload(match));
-  await interaction.update({ content: '✅ **팀 배정이 완료되었습니다.**', embeds: [], attachments: [], components: buildTeamDoneRow(matchMsgId) });
+  await interaction.update({ content: '✅ **팀 배정이 완료되었습니다.**', embeds: [], attachments: [], components: [buildTeamDoneRow(matchMsgId)] });
   await interaction.channel.send({ embeds: [buildTeamResultEmbed(match.data, match.teams)], attachments: [], allowedMentions: { parse: [] } });
 }
 
@@ -410,7 +400,10 @@ async function handleNaejeonButton(interaction) {
       attachments: [],
       allowedMentions: { roles: role ? [role.id] : [], users: [] },
     });
-    getMatches(interaction.client).set(msg.id, { data, participants, message: msg, closed: false, closedAt: null, teams: null, mentionSent: false, roleContent, guildId: interaction.guildId });
+    const match = { data, participants, message: msg, closed: false, closedAt: null, teams: null, mentionSent: false, roleContent, guildId: interaction.guildId };
+    getMatches(interaction.client).set(msg.id, match);
+    // 게시 전 미리보기 단계에서 이미 알림 예약을 해뒀다면, 그때는 매치가 없어 타이머를 못 걸었으므로 지금 건다.
+    if (data.notifyAt) armNotifyReminder(getMatches(interaction.client), msg.id, match, '내전');
     await interaction.update({ content: '✅ **채널에 공개 게시되었습니다!**', embeds: [], attachments: [], components: [] });
     return;
   }
@@ -648,7 +641,7 @@ async function handleNaejeonButton(interaction) {
     }
     match.teams = shuffleIntoTeams(match.participants);
     await match.message.edit(buildPublicMessagePayload(match));
-    await interaction.update({ content: '✅ **자동 팀 배정이 완료되었습니다.**', embeds: [], attachments: [], components: buildTeamDoneRow(matchMsgId) });
+    await interaction.update({ content: '✅ **자동 팀 배정이 완료되었습니다.**', embeds: [], attachments: [], components: [buildTeamDoneRow(matchMsgId)] });
     await interaction.channel.send({ embeds: [buildTeamResultEmbed(match.data, match.teams)], attachments: [], allowedMentions: { parse: [] } });
     return;
   }
@@ -717,6 +710,10 @@ async function handleNaejeonButton(interaction) {
     }
     if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
       await interaction.reply({ content: '❌ **주최자만 사용할 수 있습니다.**', ephemeral: true });
+      return;
+    }
+    if (match.closed) {
+      await interaction.reply({ content: '❌ **마감된 이후에는 알림 예약을 변경할 수 없습니다.**', ephemeral: true });
       return;
     }
     await interaction.showModal(buildNotifyModal(matchMsgId, match.data.notifyAt));
@@ -887,6 +884,17 @@ async function handleNaejeonButton(interaction) {
     return;
   }
 
+  // ── 알림 예약 (게시 전 미리보기) ────────────────────────────────
+  if (customId === 'naejeon:notify_set_preview') {
+    const data = getPending(interaction.client).get(interaction.user.id);
+    if (!data) {
+      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/내전\`을 실행해주세요.`, ephemeral: true });
+      return;
+    }
+    await interaction.showModal(buildNotifyModal('preview', data.notifyAt));
+    return;
+  }
+
   // ── 수정 ───────────────────────────────────────────────────
   if (customId === 'naejeon:edit') {
     const data = getPending(interaction.client).get(interaction.user.id);
@@ -970,15 +978,49 @@ async function handleNaejeonMatchEditModal(interaction) {
 // customId: naejeon:notify_modal:{matchMsgId}. 비워서 제출하면 예약을 취소한다.
 async function handleNaejeonNotifyModal(interaction) {
   const matchMsgId = interaction.customId.slice('naejeon:notify_modal:'.length);
+  const raw = interaction.fields.getTextInputValue('notify_time').trim();
+
+  // 게시 전 미리보기 단계: matchMsgId가 없으므로 유저 ID로 보관된 대기 데이터를 사용한다.
+  if (matchMsgId === 'preview') {
+    const data = getPending(interaction.client).get(interaction.user.id);
+    if (!data || !data._previewInteraction) {
+      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/내전\`을 실행해주세요.`, ephemeral: true });
+      return;
+    }
+    if (raw) {
+      const notifyAt = parseNotifyTime(raw);
+      if (!notifyAt) {
+        await interaction.reply({ content: '⚠️ **알림 시각 형식이 올바르지 않습니다.** (예: `6/5 20:00` 또는 `6/5 오후 8:00`)', ephemeral: true });
+        return;
+      }
+      if (isNotifyTooFar(notifyAt)) {
+        await interaction.reply({ content: '⚠️ **알림은 최대 24일 이내로만 예약할 수 있습니다.**', ephemeral: true });
+        return;
+      }
+      data.notifyAt = notifyAt;
+    } else {
+      data.notifyAt = null;
+    }
+    await data._previewInteraction.editReply({
+      content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
+      embeds: [buildPreviewEmbed(data)],
+      components: buildPreviewComponents(data),
+      attachments: [],
+    });
+    await interaction.deferReply({ ephemeral: true });
+    await interaction.deleteReply();
+    return;
+  }
+
   const match = getMatches(interaction.client).get(matchMsgId);
   if (!match) {
     await interaction.reply({ content: `⚠️ **만료된 내전입니다.**`, ephemeral: true });
     return;
   }
 
-  const raw = interaction.fields.getTextInputValue('notify_time').trim();
   if (!raw) {
     match.data.notifyAt = null;
+    match.notifySent = false;
     clearNotifyTimer(match);
     await interaction.reply({ content: '🔕 **알림 예약이 취소되었습니다.**', ephemeral: true });
     return;
@@ -986,14 +1028,19 @@ async function handleNaejeonNotifyModal(interaction) {
 
   const notifyAt = parseNotifyTime(raw);
   if (!notifyAt) {
-    await interaction.reply({ content: '⚠️ **알림 시각 형식이 올바르지 않습니다.** (예: `6/5 20:00`)', ephemeral: true });
+    await interaction.reply({ content: '⚠️ **알림 시각 형식이 올바르지 않습니다.** (예: `6/5 20:00` 또는 `6/5 오후 8:00`)', ephemeral: true });
+    return;
+  }
+  if (isNotifyTooFar(notifyAt)) {
+    await interaction.reply({ content: '⚠️ **알림은 최대 24일 이내로만 예약할 수 있습니다.**', ephemeral: true });
     return;
   }
 
   match.data.notifyAt = notifyAt;
+  match.notifySent = false;
   armNotifyReminder(getMatches(interaction.client), matchMsgId, match, '내전');
   await interaction.reply({
-    content: `🔔 **${formatNotifyTime(notifyAt)}(KST)에 마감 상태면 참가자에게 DM 알림을 보낼게요.**`,
+    content: `🔔 **${formatNotifyTime(notifyAt)} = ${formatNotifyTimeKorean(notifyAt)}(KST)에 마감 상태면 참가자에게 DM 알림을 보낼게요.**`,
     ephemeral: true,
   });
 }

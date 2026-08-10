@@ -52,10 +52,8 @@ function buildDescription(lines) {
 }
 
 // includeShare: false면 공유하기 버튼을 뺀다 (이미 공개된 메시지에는 다시 공유할 이유가 없음).
-// 모바일에서 한 줄에 다 안 들어가는 버튼이 다음 줄에 혼자 남아 어색해 보이는 문제를 피하려고,
-// 공유하기 버튼이 있을 때는 페이지 이동 버튼과 다른 줄에 배치한다.
 function buildComponents(page, totalPages, includeShare = true) {
-  const pageRow = new ActionRowBuilder().addComponents(
+  const buttons = [
     new ButtonBuilder()
       .setCustomId(`ranking:page:${page - 1}`)
       .setLabel('◀')
@@ -66,16 +64,16 @@ function buildComponents(page, totalPages, includeShare = true) {
       .setLabel('▶')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page >= totalPages),
-  );
-  if (!includeShare) return [pageRow];
-
-  const shareRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`ranking:share:${page}`)
-      .setLabel('📤 공유하기')
-      .setStyle(ButtonStyle.Primary),
-  );
-  return [pageRow, shareRow];
+  ];
+  if (includeShare) {
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId(`ranking:share:${page}`)
+        .setLabel('📤 공유하기')
+        .setStyle(ButtonStyle.Primary),
+    );
+  }
+  return [new ActionRowBuilder().addComponents(...buttons)];
 }
 
 // 반환값이 null이면 랭킹 기록이 없다는 뜻 (호출부에서 안내 메시지를 대신 보낸다).
@@ -133,6 +131,7 @@ async function handleRankingPageButton(interaction) {
   const page = parseInt(interaction.customId.slice('ranking:page:'.length), 10) || 1;
   // 지금 누른 메시지에 원래 공유하기 버튼이 있었는지 그대로 유지한다.
   // (공개 채널 메시지는 공유하기 버튼이 없어야 하므로, 페이지를 넘겨도 다시 생기면 안 된다.)
+  // 행 전체를 훑어서 확인한다 — 배포 시점에 따라 공유하기 버튼이 어느 행에 있었는지가 달라질 수 있다.
   const includeShare = interaction.message.components.some(
     row => row.components.some(c => c.customId?.startsWith('ranking:share:')),
   );

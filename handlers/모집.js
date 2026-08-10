@@ -11,7 +11,7 @@ const {
   ADMIN_IDS, titleHeader, markClosed, markReopened, toggleAutoCloseWhileClosed, announceMatchCompletionXp,
   ROLE_NAMES, buildPreviewEmbed, scheduleCancelledDelete, AUTO_CLOSE_DELAY_MS,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
-  buildNotifyModal: buildNotifyModalBase, parseNotifyTime, formatNotifyTime, armNotifyReminder, clearNotifyTimer,
+  buildNotifyModal: buildNotifyModalBase, parseNotifyTime, formatNotifyTime, formatNotifyTimeKorean, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
 } = require('./공용');
 
 const GAMES = {
@@ -124,12 +124,14 @@ function buildAutoCloseToggleButton(match, msgId, label) {
     .setStyle(match.data.autoClose ? ButtonStyle.Success : ButtonStyle.Secondary);
 }
 
+// 마감 후에는 알림 예약을 더 바꿀 수 없도록 버튼을 비활성화한다(설정된 시각은 그대로 유지·표시).
 function buildNotifyButton(match, msgId) {
   const notifyAt = match.data?.notifyAt;
   return new ButtonBuilder()
     .setCustomId(`mojip:notify_set:${msgId}`)
-    .setLabel(notifyAt ? `🔔 알림 예약: ${formatNotifyTime(notifyAt)}` : '🔔 알림 예약')
-    .setStyle(notifyAt ? ButtonStyle.Success : ButtonStyle.Secondary);
+    .setLabel(notifyAt ? `🔔 알림 예약: ${formatNotifyTimeKorean(notifyAt)}` : '🔔 알림 예약')
+    .setStyle(notifyAt ? ButtonStyle.Success : ButtonStyle.Secondary)
+    .setDisabled(!!match.closed);
 }
 
 function buildManageMenu(match, msgId) {
@@ -146,8 +148,6 @@ function buildManageMenu(match, msgId) {
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(!hasParticipants),
   );
-  // 모바일에서 한 줄에 다 안 들어가는 버튼이 다음 줄에 혼자 남아 어색해 보이는 문제를 피하려고,
-  // 한 줄에 버튼 2개까지만 배치한다.
   if (closed) {
     return [
       new ActionRowBuilder().addComponents(
@@ -167,14 +167,12 @@ function buildManageMenu(match, msgId) {
           .setCustomId(`mojip:match_edit:${msgId}`)
           .setLabel('✏️ 모집 수정')
           .setStyle(ButtonStyle.Secondary),
-      ),
-      new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`mojip:match_cancel:${msgId}`)
           .setLabel('❌ 모집 취소')
           .setStyle(ButtonStyle.Danger),
-        buildNotifyButton(match, msgId),
       ),
+      new ActionRowBuilder().addComponents(buildNotifyButton(match, msgId)),
       addRemoveRow,
     ];
   }
@@ -188,8 +186,6 @@ function buildManageMenu(match, msgId) {
         .setCustomId(`mojip:match_edit:${msgId}`)
         .setLabel('✏️ 모집 수정')
         .setStyle(ButtonStyle.Secondary),
-    ),
-    new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`mojip:match_cancel:${msgId}`)
         .setLabel('❌ 모집 취소')
@@ -306,7 +302,10 @@ async function handleMojipButton(interaction) {
       attachments: [],
       allowedMentions: { roles: role ? [role.id] : [], users: [] },
     });
-    getMojips(interaction.client).set(msg.id, { data, participants, message: msg, closed: false, closedAt: null, mentionSent: false, guildId: interaction.guildId });
+    const match = { data, participants, message: msg, closed: false, closedAt: null, mentionSent: false, guildId: interaction.guildId };
+    getMojips(interaction.client).set(msg.id, match);
+    // 게시 전 미리보기 단계에서 이미 알림 예약을 해뒀다면, 그때는 매치가 없어 타이머를 못 걸었으므로 지금 건다.
+    if (data.notifyAt) armNotifyReminder(getMojips(interaction.client), msg.id, match, '모집');
     await interaction.update({ content: '✅ **채널에 공개 게시되었습니다!**', embeds: [], attachments: [], components: [] });
     return;
   }
@@ -582,6 +581,10 @@ async function handleMojipButton(interaction) {
       await interaction.reply({ content: '❌ **주최자만 사용할 수 있습니다.**', ephemeral: true });
       return;
     }
+    if (match.closed) {
+      await interaction.reply({ content: '❌ **마감된 이후에는 알림 예약을 변경할 수 없습니다.**', ephemeral: true });
+      return;
+    }
     await interaction.showModal(buildNotifyModal(msgId, match.data.notifyAt));
     return;
   }
@@ -751,6 +754,17 @@ async function handleMojipButton(interaction) {
     return;
   }
 
+  // ── 알림 예약 (게시 전 미리보기) ────────────────────────────────
+  if (customId === 'mojip:notify_set_preview') {
+    const data = getPending(interaction.client).get(interaction.user.id);
+    if (!data) {
+      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/모집\`을 실행해주세요.`, ephemeral: true });
+      return;
+    }
+    await interaction.showModal(buildNotifyModal('preview', data.notifyAt));
+    return;
+  }
+
   // ── 수정 (미리보기) ────────────────────────────────────────────
   if (customId === 'mojip:edit') {
     const data = getPending(interaction.client).get(interaction.user.id);
@@ -839,15 +853,49 @@ async function handleMojipMatchEditModal(interaction) {
 // customId: mojip:notify_modal:{msgId}. 비워서 제출하면 예약을 취소한다.
 async function handleMojipNotifyModal(interaction) {
   const msgId = interaction.customId.slice('mojip:notify_modal:'.length);
+  const raw = interaction.fields.getTextInputValue('notify_time').trim();
+
+  // 게시 전 미리보기 단계: msgId가 없으므로 유저 ID로 보관된 대기 데이터를 사용한다.
+  if (msgId === 'preview') {
+    const data = getPending(interaction.client).get(interaction.user.id);
+    if (!data || !data._previewInteraction) {
+      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/모집\`을 실행해주세요.`, ephemeral: true });
+      return;
+    }
+    if (raw) {
+      const notifyAt = parseNotifyTime(raw);
+      if (!notifyAt) {
+        await interaction.reply({ content: '⚠️ **알림 시각 형식이 올바르지 않습니다.** (예: `6/5 20:00` 또는 `6/5 오후 8:00`)', ephemeral: true });
+        return;
+      }
+      if (isNotifyTooFar(notifyAt)) {
+        await interaction.reply({ content: '⚠️ **알림은 최대 24일 이내로만 예약할 수 있습니다.**', ephemeral: true });
+        return;
+      }
+      data.notifyAt = notifyAt;
+    } else {
+      data.notifyAt = null;
+    }
+    await data._previewInteraction.editReply({
+      content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
+      embeds: [buildPreviewEmbed(data)],
+      components: buildPreviewComponents(data),
+      attachments: [],
+    });
+    await interaction.deferReply({ ephemeral: true });
+    await interaction.deleteReply();
+    return;
+  }
+
   const match = getMojips(interaction.client).get(msgId);
   if (!match) {
     await interaction.reply({ content: `⚠️ **만료된 모집입니다.**`, ephemeral: true });
     return;
   }
 
-  const raw = interaction.fields.getTextInputValue('notify_time').trim();
   if (!raw) {
     match.data.notifyAt = null;
+    match.notifySent = false;
     clearNotifyTimer(match);
     await interaction.reply({ content: '🔕 **알림 예약이 취소되었습니다.**', ephemeral: true });
     return;
@@ -855,14 +903,19 @@ async function handleMojipNotifyModal(interaction) {
 
   const notifyAt = parseNotifyTime(raw);
   if (!notifyAt) {
-    await interaction.reply({ content: '⚠️ **알림 시각 형식이 올바르지 않습니다.** (예: `6/5 20:00`)', ephemeral: true });
+    await interaction.reply({ content: '⚠️ **알림 시각 형식이 올바르지 않습니다.** (예: `6/5 20:00` 또는 `6/5 오후 8:00`)', ephemeral: true });
+    return;
+  }
+  if (isNotifyTooFar(notifyAt)) {
+    await interaction.reply({ content: '⚠️ **알림은 최대 24일 이내로만 예약할 수 있습니다.**', ephemeral: true });
     return;
   }
 
   match.data.notifyAt = notifyAt;
+  match.notifySent = false;
   armNotifyReminder(getMojips(interaction.client), msgId, match, '모집');
   await interaction.reply({
-    content: `🔔 **${formatNotifyTime(notifyAt)}(KST)에 마감 상태면 참가자에게 DM 알림을 보낼게요.**`,
+    content: `🔔 **${formatNotifyTime(notifyAt)} = ${formatNotifyTimeKorean(notifyAt)}(KST)에 마감 상태면 참가자에게 DM 알림을 보낼게요.**`,
     ephemeral: true,
   });
 }
