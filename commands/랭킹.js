@@ -7,6 +7,24 @@ const HEADER = '## 🏆 서버 랭킹\n\n';
 const TRUNCATE_NOTICE = '\n\n*(목록이 길어 일부 순위는 생략되었습니다)*';
 const MEDALS = ['🥇', '🥈', '🥉'];
 const BAR_LENGTH = 10;
+const MEMBER_FETCH_CHUNK_SIZE = 100; // 디스코드 게이트웨이 멤버 조회 1회 요청당 유저 ID 최대 개수
+
+// userIds가 100개를 넘으면 한 번에 조회가 안 되므로 100개씩 나눠 병렬로 조회한 뒤 합친다.
+async function fetchMembersById(guild, userIds) {
+  if (userIds.length === 0) return new Map();
+  const chunks = [];
+  for (let i = 0; i < userIds.length; i += MEMBER_FETCH_CHUNK_SIZE) {
+    chunks.push(userIds.slice(i, i + MEMBER_FETCH_CHUNK_SIZE));
+  }
+  const results = await Promise.all(
+    chunks.map(chunk => guild.members.fetch({ user: chunk }).catch(() => new Map())),
+  );
+  const merged = new Map();
+  for (const result of results) {
+    for (const [id, member] of result) merged.set(id, member);
+  }
+  return merged;
+}
 
 function formatEntry(entry, name) {
   const medal = MEDALS[entry.rank - 1];
@@ -60,24 +78,24 @@ function buildComponents(page, totalPages, includeShare = true) {
 
 // 반환값이 null이면 랭킹 기록이 없다는 뜻 (호출부에서 안내 메시지를 대신 보낸다).
 async function buildRankingView(guild, page, includeShare = true) {
-  const total = getLeaderboardSize(guild.id);
-  if (total === 0) return null;
+  const rawTotal = getLeaderboardSize(guild.id);
+  if (rawTotal === 0) return null;
 
+  // 서버를 나갔거나 조회가 안 되는 유저를 목록에서 완전히 빼려면, 페이지 단위가 아니라
+  // 전체 랭킹을 먼저 가져와 멤버 여부를 확인한 뒤 걸러내고 그 결과로 페이지를 나눠야 한다.
+  // (레벨 데이터는 파일 하나짜리 인메모리 객체라 전체를 훑어도 부담이 없다.)
+  const allEntries = getLeaderboard(guild.id, rawTotal, 0);
+  const members = await fetchMembersById(guild, allEntries.map(e => e.userId));
+  const entries = allEntries.filter(e => members.has(e.userId));
+  if (entries.length === 0) return null;
+
+  const total = entries.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const clampedPage = Math.min(Math.max(1, page), totalPages);
   const offset = (clampedPage - 1) * PAGE_SIZE;
-  const entries = getLeaderboard(guild.id, PAGE_SIZE, offset);
+  const pageEntries = entries.slice(offset, offset + PAGE_SIZE);
 
-  // 유저마다 따로 fetch하면 페이지당 여러 번 API를 왕복해 느려지므로, ID를 한 번에 묶어서 조회한다.
-  const members = entries.length > 0
-    ? await guild.members.fetch({ user: entries.map(e => e.userId) }).catch(() => new Map())
-    : new Map();
-
-  const lines = entries.map((entry) => {
-    const member = members.get(entry.userId);
-    const name = member?.displayName || `알 수 없는 사용자 (${entry.userId})`;
-    return formatEntry(entry, name);
-  });
+  const lines = pageEntries.map((entry) => formatEntry(entry, members.get(entry.userId).displayName));
 
   const embed = new EmbedBuilder()
     .setColor(0xFEE75C)
