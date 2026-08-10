@@ -89,7 +89,9 @@ async function createTempChannel(newState) {
     const siblings = category?.children?.cache;
     const position = siblings?.size > 0 ? Math.max(...siblings.map(c => c.position)) + 1 : undefined;
 
-    // parent만 지정하면 카테고리 권한을 그대로 이어받는다.
+    // parent만 지정해서는 카테고리 권한(노래봇 등에 부여된 접속 권한 포함)이 자동으로
+    // 복사되지 않는다(디스코드 클라이언트의 "동기화"는 UI 전용 동작). API로 만들 때는
+    // 카테고리의 permissionOverwrites를 직접 넘겨줘야 실제로 같은 권한이 적용된다.
     tempChannel = await guild.channels.create({
       name: `${member.displayName}의 방`,
       type: ChannelType.GuildVoice,
@@ -97,6 +99,12 @@ async function createTempChannel(newState) {
       position,
       bitrate: newState.channel?.bitrate,
       userLimit: newState.channel?.userLimit,
+      permissionOverwrites: category?.permissionOverwrites.cache.map(o => ({
+        id: o.id,
+        type: o.type,
+        allow: o.allow,
+        deny: o.deny,
+      })),
     });
   } catch (err) {
     console.error('임시 음성채널 생성 실패:', err);

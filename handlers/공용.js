@@ -25,17 +25,6 @@ const ROLE_NAMES = {
 
 const ADMIN_IDS = ['457437911869161472', '1043750483522752512', '685917435601092643'];
 
-function getResetDateStr(client, label = '내전') {
-  const startedAt = client.startedAt;
-  if (!startedAt) return `봇 재시작 후 생성된 ${label}만 표시됩니다`;
-  const kst = new Date(startedAt.getTime() + 9 * 60 * 60 * 1000);
-  const MM = String(kst.getUTCMonth() + 1).padStart(2, '0');
-  const DD = String(kst.getUTCDate()).padStart(2, '0');
-  const HH = String(kst.getUTCHours()).padStart(2, '0');
-  const mm = String(kst.getUTCMinutes()).padStart(2, '0');
-  return `※ ${MM}.${DD} ${HH}:${mm}에 초기화 됨`;
-}
-
 function getNaejeonMatches(client) {
   if (!client.naejeonMatches) client.naejeonMatches = new Map();
   return client.naejeonMatches;
@@ -364,7 +353,6 @@ module.exports = {
   ADMIN_IDS,
   AUTO_CLOSE_DELAY_MS,
   ROLE_NAMES,
-  getResetDateStr,
   getNaejeonMatches,
   shuffleIntoTeams,
   buildTeamResultEmbed,

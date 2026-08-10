@@ -13,7 +13,7 @@ const { buildGameSelectPayload: buildNaejeonGameSelectPayload } = require('./com
 const { buildGameSelectPayload: buildMojipGameSelectPayload } = require('./commands/모집');
 const { buildReloadListPayload } = require('./commands/불러오기');
 const { buildTeamMatchListPayload } = require('./commands/팀');
-const { buildCommandListPayload, buildSetupPanelPayload } = require('./commands/셋업');
+const { buildCommandListPayload, buildSetupPanelPayload } = require('./commands/배치');
 const { handleLevelShareButton } = require('./commands/레벨');
 const { handleRankingPageButton, handleRankingShareButton } = require('./commands/랭킹');
 const { saveAll, loadRows } = require('./db'); // ⬅️ 추가: SQLite 저장 모듈
@@ -136,7 +136,7 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     const isChannelExempt =
-      (interaction.isChatInputCommand() && ['레벨', '관리', '셋업'].includes(interaction.commandName)) ||
+      (interaction.isChatInputCommand() && ['레벨', '관리', '배치'].includes(interaction.commandName)) ||
       isWordchainOrRanking ||
       interaction.customId?.startsWith('admin:') ||
       interaction.customId?.startsWith('level:');

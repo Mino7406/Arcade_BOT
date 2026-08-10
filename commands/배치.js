@@ -17,23 +17,29 @@ const COMMAND_LIST = [
   { name: '/모집', value: '게임 모집을 생성합니다' },
   { name: '/불러오기', value: '진행 중인 내전/모집 게시글을 다시 불러옵니다' },
   { name: '/팀', value: '내전 참가자를 팀으로 배정합니다' },
+];
+
+// 놀이터 채널에서만 사용 가능한 명령어(PLAYGROUND_CHANNEL_ID). 위 목록과 구분선으로 구역을 나눠 표시한다.
+const PLAYGROUND_COMMAND_LIST = [
   { name: '/끝말잇기', value: '끝말잇기 게임을 시작합니다' },
   { name: '/레벨', value: '나 또는 다른 유저의 레벨/XP를 확인합니다' },
   { name: '/랭킹', value: '서버 XP 랭킹을 확인합니다' },
-  { name: '/관리', value: '[관리자 전용] 내전/모집 관리, 봇 메시지 삭제' },
-  { name: '/셋업', value: '[관리자 전용] 이 안내 패널을 게시합니다' },
 ];
 
 function buildCommandListPayload() {
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
     .setTitle('📖 명령어 목록')
-    .addFields(COMMAND_LIST.map(c => ({ name: c.name, value: c.value, inline: true })));
+    .addFields(
+      ...COMMAND_LIST.map(c => ({ name: c.name, value: c.value, inline: true })),
+      { name: '​', value: '**🎡 놀이터 채널 전용**', inline: false },
+      ...PLAYGROUND_COMMAND_LIST.map(c => ({ name: c.name, value: c.value, inline: true })),
+    );
 
   return { embeds: [embed], ephemeral: true };
 }
 
-// /셋업 최초 게시와 "🔄 새로고침" 버튼(index.js)에서 함께 사용.
+// /배치 최초 게시와 "🔄 새로고침" 버튼(index.js)에서 함께 사용.
 function buildSetupPanelPayload(interaction) {
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
@@ -76,7 +82,7 @@ function buildSetupPanelPayload(interaction) {
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('recruit:내전').setLabel('⚔️ 내전 생성').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('recruit:모집').setLabel('📋 모집 생성').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId('recruit:불러오기').setLabel('🔎 불러오기').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('recruit:불러오기').setLabel('🔎 불러오기').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId('recruit:팀').setLabel('🛠️ 팀 관리').setStyle(ButtonStyle.Primary),
   );
   const row2 = new ActionRowBuilder().addComponents(
@@ -85,7 +91,7 @@ function buildSetupPanelPayload(interaction) {
       .setLabel('🎡 놀이터 바로가기')
       .setStyle(ButtonStyle.Link)
       .setURL(`https://discord.com/channels/${interaction.guild.id}/${PLAYGROUND_CHANNEL_ID}`),
-    new ButtonBuilder().setCustomId('recruit:새로고침').setLabel('🔄 새로고침').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('recruit:새로고침').setLabel('🔄 새로고침').setStyle(ButtonStyle.Danger),
   );
 
   return { embeds: [embed, playgroundEmbed], components: [row1, row2] };
@@ -93,7 +99,7 @@ function buildSetupPanelPayload(interaction) {
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName('셋업')
+    .setName('배치')
     .setDescription('[관리자 전용] 현재 채널에 내전/모집 안내 패널을 게시합니다.'),
 
   async execute(interaction) {

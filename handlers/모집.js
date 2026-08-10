@@ -8,7 +8,7 @@ const {
 } = require('discord.js');
 
 const {
-  ADMIN_IDS, getResetDateStr: getResetDateStrBase, titleHeader, markClosed, markReopened, announceMatchCompletionXp,
+  ADMIN_IDS, titleHeader, markClosed, markReopened, announceMatchCompletionXp,
   ROLE_NAMES, buildPreviewEmbed,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
 } = require('./공용');
@@ -156,10 +156,6 @@ function buildManageMenu(match, msgId) {
   ];
 }
 
-function getResetDateStr(client) {
-  return getResetDateStrBase(client, '모집');
-}
-
 function getMojips(client) {
   if (!client.mojipMatches) client.mojipMatches = new Map();
   return client.mojipMatches;
@@ -223,7 +219,7 @@ async function handleMojipEditModal(interaction) {
 
   const data = getPending(interaction.client).get(interaction.user.id);
   if (!data || !data._previewInteraction) {
-    await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/모집\`을 실행해주세요. (${getResetDateStr(interaction.client)})`, ephemeral: true });
+    await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/모집\`을 실행해주세요.`, ephemeral: true });
     return;
   }
 
@@ -248,7 +244,7 @@ async function handleMojipButton(interaction) {
   if (customId === 'mojip:publish') {
     const data = getPending(interaction.client).get(interaction.user.id);
     if (!data) {
-      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/모집\`을 실행해주세요. (${getResetDateStr(interaction.client)})`, ephemeral: true });
+      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/모집\`을 실행해주세요.`, ephemeral: true });
       return;
     }
     const maxPlayers = parseInt(data.players) || 0;
@@ -274,7 +270,7 @@ async function handleMojipButton(interaction) {
   if (customId === 'mojip:join') {
     const match = getMojips(interaction.client).get(interaction.message.id);
     if (!match) {
-      await interaction.reply({ content: `⚠️ **만료된 모집입니다.**\n(${getResetDateStr(interaction.client)})`, ephemeral: true });
+      await interaction.reply({ content: `⚠️ **만료된 모집입니다.**`, ephemeral: true });
       return;
     }
     if (match.closed) {
@@ -327,7 +323,7 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:leave:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 모집입니다.**\n(${getResetDateStr(interaction.client)})`, components: [] });
+      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, components: [] });
       return;
     }
     const idx = match.participants.findIndex(u => u.id === interaction.user.id);
@@ -353,7 +349,7 @@ async function handleMojipButton(interaction) {
     const msgId = interaction.message.id;
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.reply({ content: `⚠️ **만료된 모집입니다.**\n(${getResetDateStr(interaction.client)})`, ephemeral: true });
+      await interaction.reply({ content: `⚠️ **만료된 모집입니다.**`, ephemeral: true });
       return;
     }
     if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
@@ -373,7 +369,7 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:match_close:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 모집입니다.**\n(${getResetDateStr(interaction.client)})`, components: [] });
+      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, components: [] });
       return;
     }
     const maxPlayers = parseInt(match.data.players) || 0;
@@ -414,7 +410,7 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:match_close_confirm:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 모집입니다.**\n(${getResetDateStr(interaction.client)})`, components: [] });
+      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, components: [] });
       return;
     }
     markClosed(getMojips(interaction.client), msgId, match, '모집', false);
@@ -437,7 +433,7 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:match_reopen:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 모집입니다.**\n(${getResetDateStr(interaction.client)})`, components: [] });
+      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, components: [] });
       return;
     }
     markReopened(match);
@@ -459,7 +455,7 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:match_mention:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 모집입니다.**\n(${getResetDateStr(interaction.client)})`, components: [] });
+      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, components: [] });
       return;
     }
     if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
@@ -496,7 +492,7 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:manage_back:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 모집입니다.**\n(${getResetDateStr(interaction.client)})`, embeds: [], attachments: [], components: [] });
+      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, embeds: [], attachments: [], components: [] });
       return;
     }
     await interaction.update({
@@ -512,7 +508,7 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:match_edit:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: `**⚠️ 만료된 모집입니다.**\n(${getResetDateStr(interaction.client)})`, components: [] });
+      await interaction.update({ content: `**⚠️ 만료된 모집입니다.**`, components: [] });
       return;
     }
     const editModal = buildModal(match.data.game, match.data);
@@ -526,7 +522,7 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:match_cancel:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 모집입니다.**\n(${getResetDateStr(interaction.client)})`, components: [] });
+      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, components: [] });
       return;
     }
     const confirmRow = new ActionRowBuilder().addComponents(
@@ -578,7 +574,7 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:add_member:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 모집입니다.**\n(${getResetDateStr(interaction.client)})`, embeds: [], attachments: [], components: [] });
+      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, embeds: [], attachments: [], components: [] });
       return;
     }
     const sel = new UserSelectMenuBuilder()
@@ -608,7 +604,7 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:remove_member:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 모집입니다.**\n(${getResetDateStr(interaction.client)})`, embeds: [], attachments: [], components: [] });
+      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, embeds: [], attachments: [], components: [] });
       return;
     }
     if (match.participants.length === 0) {
@@ -641,7 +637,7 @@ async function handleMojipButton(interaction) {
   if (customId === 'mojip:toggle_autoclose') {
     const data = getPending(interaction.client).get(interaction.user.id);
     if (!data) {
-      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/모집\`을 실행해주세요. (${getResetDateStr(interaction.client)})`, ephemeral: true });
+      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/모집\`을 실행해주세요.`, ephemeral: true });
       return;
     }
     data.autoClose = !data.autoClose;
@@ -658,7 +654,7 @@ async function handleMojipButton(interaction) {
   if (customId === 'mojip:toggle_steam') {
     const data = getPending(interaction.client).get(interaction.user.id);
     if (!data) {
-      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/모집\`을 실행해주세요. (${getResetDateStr(interaction.client)})`, ephemeral: true });
+      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/모집\`을 실행해주세요.`, ephemeral: true });
       return;
     }
     data.mentionSteam = !data.mentionSteam;
@@ -675,7 +671,7 @@ async function handleMojipButton(interaction) {
   if (customId === 'mojip:edit') {
     const data = getPending(interaction.client).get(interaction.user.id);
     if (!data) {
-      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/모집\`을 실행해주세요. (${getResetDateStr(interaction.client)})`, ephemeral: true });
+      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/모집\`을 실행해주세요.`, ephemeral: true });
       return;
     }
     const editModal = buildModal(data.game, data);
@@ -705,7 +701,7 @@ async function handleMojipButton(interaction) {
   if (customId === 'mojip:cancel_back') {
     const data = getPending(interaction.client).get(interaction.user.id);
     if (!data) {
-      await interaction.update({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/모집\`을 실행해주세요. (${getResetDateStr(interaction.client)})`, embeds: [], attachments: [], components: [] });
+      await interaction.update({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/모집\`을 실행해주세요.`, embeds: [], attachments: [], components: [] });
       return;
     }
     await interaction.update({
@@ -730,7 +726,7 @@ async function handleMojipMatchEditModal(interaction) {
 
   const match = getMojips(interaction.client).get(msgId);
   if (!match) {
-    await interaction.reply({ content: `⚠️ **만료된 모집입니다.**\n(${getResetDateStr(interaction.client)})`, ephemeral: true });
+    await interaction.reply({ content: `⚠️ **만료된 모집입니다.**`, ephemeral: true });
     return;
   }
 
@@ -760,7 +756,7 @@ async function handleMojipMemberAdd(interaction) {
   const msgId = interaction.customId.slice('mojip:member_add_select:'.length);
   const match = getMojips(interaction.client).get(msgId);
   if (!match) {
-    await interaction.update({ content: `⚠️ **만료된 모집입니다.**\n(${getResetDateStr(interaction.client)})`, embeds: [], attachments: [], components: [] });
+    await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, embeds: [], attachments: [], components: [] });
     return;
   }
   const maxPlayers = parseInt(match.data.players) || 0;
@@ -805,7 +801,7 @@ async function handleMojipMemberRemove(interaction) {
   const msgId = interaction.customId.slice('mojip:member_remove_select:'.length);
   const match = getMojips(interaction.client).get(msgId);
   if (!match) {
-    await interaction.update({ content: `⚠️ **만료된 모집입니다.**\n(${getResetDateStr(interaction.client)})`, embeds: [], attachments: [], components: [] });
+    await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, embeds: [], attachments: [], components: [] });
     return;
   }
   const removeIds = new Set(interaction.values);
