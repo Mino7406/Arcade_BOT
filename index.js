@@ -13,7 +13,7 @@ const { buildGameSelectPayload: buildNaejeonGameSelectPayload } = require('./com
 const { buildGameSelectPayload: buildMojipGameSelectPayload } = require('./commands/모집');
 const { buildReloadListPayload } = require('./commands/불러오기');
 const { buildTeamMatchListPayload } = require('./commands/팀');
-const { buildCommandListPayload } = require('./commands/셋업');
+const { buildCommandListPayload, buildSetupPanelPayload } = require('./commands/셋업');
 const { handleLevelShareButton } = require('./commands/레벨');
 const { handleRankingPageButton, handleRankingShareButton } = require('./commands/랭킹');
 const { saveAll, loadRows } = require('./db'); // ⬅️ 추가: SQLite 저장 모듈
@@ -228,6 +228,8 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply(buildTeamMatchListPayload(interaction));
       } else if (interaction.customId === 'recruit:명령어') {
         await interaction.reply(buildCommandListPayload());
+      } else if (interaction.customId === 'recruit:새로고침') {
+        await interaction.update(buildSetupPanelPayload(interaction));
       }
     }
   } catch (error) {
