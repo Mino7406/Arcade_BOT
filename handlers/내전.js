@@ -50,10 +50,11 @@ function buildPublicEmbed(data, participants, closed = false, teams = null) {
     `👑 **주최자**　**\`${organizer.displayName}\`**`,
     `📊 **상태**　　${statusText}`,
   ];
+  if (data.notifyAt) lines.push(`🔔 **알림**　　${formatNotifyTimeKorean(data.notifyAt)}`);
 
   const embed = new EmbedBuilder()
     .setColor(color)
-    .setDescription(`${titleHeader(game, gameInfo, title)}${data.notifyAt ? ' 🔔' : ''}\n${lines.join('\n')}`)
+    .setDescription(`${titleHeader(game, gameInfo, title)}\n${lines.join('\n')}`)
     .setFooter({ text: closed ? '🔒 마감된 내전입니다.' : isFull ? '✅ 모집이 완료되었습니다.' : '✅ 버튼을 눌러 참가하세요!' })
     .setTimestamp();
 
@@ -157,14 +158,15 @@ function buildAutoCloseToggleButton(match, matchMsgId, label) {
     .setStyle(match.data.autoClose ? ButtonStyle.Success : ButtonStyle.Secondary);
 }
 
-// 마감 후에는 알림 예약을 더 바꿀 수 없도록 버튼을 비활성화한다(설정된 시각은 그대로 유지·표시).
+// 알림은 마감 여부와 무관하게 예약 시각에 발송되므로, 마감 후에도 확인/수정 가능하게 둔다.
+// 이미 발송이 끝난 뒤에만(notifySent) 더 바꿀 수 없도록 버튼을 비활성화한다.
 function buildNotifyButton(match, matchMsgId) {
   const notifyAt = match.data?.notifyAt;
   return new ButtonBuilder()
     .setCustomId(`naejeon:notify_set:${matchMsgId}`)
     .setLabel(notifyAt ? `🔔 알림 예약: ${formatNotifyTimeKorean(notifyAt)}` : '🔔 알림 예약')
     .setStyle(notifyAt ? ButtonStyle.Success : ButtonStyle.Secondary)
-    .setDisabled(!!match.closed);
+    .setDisabled(!!match.notifySent);
 }
 
 function buildManageMenu(match, matchMsgId) {
@@ -711,8 +713,8 @@ async function handleNaejeonButton(interaction) {
       await interaction.reply({ content: '❌ **주최자만 사용할 수 있습니다.**', ephemeral: true });
       return;
     }
-    if (match.closed) {
-      await interaction.reply({ content: '❌ **마감된 이후에는 알림 예약을 변경할 수 없습니다.**', ephemeral: true });
+    if (match.notifySent) {
+      await interaction.reply({ content: '❌ **이미 발송된 알림은 다시 수정할 수 없습니다.**', ephemeral: true });
       return;
     }
     if (match.data.notifyAt) {
@@ -749,8 +751,8 @@ async function handleNaejeonButton(interaction) {
       await interaction.reply({ content: '❌ **주최자만 사용할 수 있습니다.**', ephemeral: true });
       return;
     }
-    if (match.closed) {
-      await interaction.reply({ content: '❌ **마감된 이후에는 알림 예약을 변경할 수 없습니다.**', ephemeral: true });
+    if (match.notifySent) {
+      await interaction.reply({ content: '❌ **이미 발송된 알림은 다시 수정할 수 없습니다.**', ephemeral: true });
       return;
     }
     await interaction.showModal(buildNotifyModal(matchMsgId, match.data.notifyAt));
@@ -817,6 +819,7 @@ async function handleNaejeonButton(interaction) {
       .setFooter({ text: '❌ 주최자에 의해 내전이 취소되었습니다.' })
       .setTimestamp();
 
+    clearNotifyTimer(match); // 취소된 매치는 알림을 보내지 않으므로 남은 예약 타이머를 취소한다.
     await match.message.edit({ content: '', embeds: [cancelledEmbed], components: [], attachments: [], allowedMentions: { parse: [] } });
     getMatches(interaction.client).delete(matchMsgId);
     await deleteMentionMessage(interaction.client, match);
@@ -1080,7 +1083,7 @@ async function handleNaejeonNotifyModal(interaction) {
   armNotifyReminder(getMatches(interaction.client), matchMsgId, match, '내전');
   await match.message.edit(buildPublicMessagePayload(match)).catch(err => console.error('알림 예약 아이콘 갱신 실패:', err));
   await interaction.reply({
-    content: `🔔 **${formatNotifyTime(notifyAt)} = ${formatNotifyTimeKorean(notifyAt)}(KST)에 마감 상태면 참가자에게 DM 알림을 보낼게요.**`,
+    content: `✅ **${formatNotifyTime(notifyAt)} = ${formatNotifyTimeKorean(notifyAt)}에 참가자에게 DM 알림을 보낼게요.**`,
     ephemeral: true,
   });
 }

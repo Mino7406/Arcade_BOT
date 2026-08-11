@@ -161,19 +161,20 @@ function isNotifyTooFar(notifyAt) {
   return notifyAt - Date.now() > MAX_TIMEOUT_DELAY_MS;
 }
 
-// notifyAt 시각에 마감(closed) 상태면 DM을 보내고 notifySent를 표시한다. 이미 보냈거나 아직
-// 마감 전이면 아무것도 하지 않는다 — 마감 전이라 건너뛴 경우엔 나중에 markClosed가 호출될 때
-// (그 시점에 이미 예약 시각이 지나 있으면) 다시 시도하므로, 여기서 놓쳐도 유실되지 않는다.
+// notifyAt 시각에 마감 여부와 무관하게 DM을 보내고 notifySent를 표시한다. 이미 보냈으면
+// 아무것도 하지 않는다. armNotifyReminder의 타이머가 매치가 살아있는 동안(matchesMap에 남아
+// 있는 동안)에만 이 함수를 호출하므로, 취소/종료/삭제된 매치는 자연히 발송 대상에서 빠진다
+// (armNotifyReminder의 fire() 안 matchesMap.get(msgId) 조회 실패 시 조용히 건너뜀).
 async function trySendNotify(match, label) {
-  if (!match.data?.notifyAt || match.notifySent || !match.closed) return;
+  if (!match.data?.notifyAt || match.notifySent) return;
   if (match.data.notifyAt > Date.now()) return; // 예약 시각이 아직 안 지났으면 armNotifyReminder의 타이머가 그때 처리
   match.notifySent = true;
   await sendMatchStartDm(match, label);
 }
 
-// data.notifyAt(epoch ms) 시각에 trySendNotify를 시도한다. notifyAt이 그 사이 바뀌었으면
-// (맵 조회 시 값이 다르면) 옛 예약이므로 발송하지 않는다. 이미 지난 시각으로 예약(호출)되면
-// 타이머 없이 바로 시도한다(마감 상태면 즉시 발송, 아니면 마감 시점까지 기다림).
+// data.notifyAt(epoch ms) 시각에 trySendNotify를 시도한다. notifyAt이 그 사이 바뀌었거나
+// 매치 자체가 취소/종료/삭제로 matchesMap에서 사라졌으면 옛 예약이므로 발송하지 않는다.
+// 이미 지난 시각으로 예약(호출)되면 타이머 없이 바로 시도한다.
 function armNotifyReminder(matchesMap, msgId, match, label) {
   clearNotifyTimer(match);
   const notifyAt = match.data?.notifyAt;
@@ -233,6 +234,7 @@ function armAutoEnd(matchesMap, msgId, match, label, delayMs = AUTO_CLOSE_DELAY_
     const current = matchesMap.get(msgId);
     if (!current || !current.closed) return;
     try {
+      clearNotifyTimer(current); // 삭제된 매치는 알림을 보내지 않으므로 남은 예약 타이머를 취소한다.
       await announceMatchCompletionXp(current);
       matchesMap.delete(msgId);
       await deleteMentionMessage(current.message.client, current);
@@ -333,9 +335,6 @@ function markClosed(matchesMap, msgId, match, label, notify = true) {
   match.closedAt = Date.now();
   armAutoEnd(matchesMap, msgId, match, label);
   if (notify) notifyOrganizerOnClose(match, label).catch(() => {});
-  // 알림 예약 시각이 이미 지나 있는데(A/E: 마감 전이라 건너뛰었던 경우) 지금 막 마감됐다면 바로 발송.
-  // 아직 시각이 안 지났으면 armNotifyReminder로 걸어둔 타이머가 그때 가서 처리하므로 여기선 아무것도 안 함.
-  trySendNotify(match, label).catch(err => console.error('시작 시간 알림 DM 발송 중 오류:', err));
 }
 
 // 마감 해제(🔓) 상태로 전환하면서 예약돼 있던 자동 종료 타이머를 취소한다.
@@ -361,6 +360,7 @@ async function toggleAutoCloseWhileClosed(matchesMap, msgId, match, label, enabl
   if (remaining <= 0) {
     clearAutoEndTimer(match);
     try {
+      clearNotifyTimer(match); // 삭제된 매치는 알림을 보내지 않으므로 남은 예약 타이머를 취소한다.
       await announceMatchCompletionXp(match);
       matchesMap.delete(msgId);
       await deleteMentionMessage(match.message.client, match);
@@ -403,13 +403,10 @@ function buildEndedEmbed(match, label) {
 // /관리 의 수동 "⌛ 종료" 버튼에서 사용한다 (8시간 자동 처리는 메시지를 바로 삭제하며 이 함수를 쓰지 않는다).
 async function endMatch(matchesMap, msgId, match, label) {
   clearAutoEndTimer(match);
-  clearNotifyTimer(match);
+  clearNotifyTimer(match); // 종료된 매치는 알림을 보내지 않으므로 남은 예약 타이머를 취소한다.
   match.closed = true;
   match.closedAt = null;
   await announceMatchCompletionXp(match);
-  // 마감을 거치지 않고 바로 종료되는 경로라 markClosed의 알림 발송 로직을 안 타므로, 여기서도
-  // 예약 시각이 이미 지난 알림이 있으면 매치를 지우기 전에 마지막으로 한 번 시도한다.
-  await trySendNotify(match, label).catch(err => console.error('시작 시간 알림 DM 발송 중 오류:', err));
   await deleteMentionMessage(match.message.client, match);
   await match.message.edit({
     content: '',
