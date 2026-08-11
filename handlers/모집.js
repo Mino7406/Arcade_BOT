@@ -11,7 +11,7 @@ const {
   ADMIN_IDS, titleHeader, markClosed, markReopened, toggleAutoCloseWhileClosed, announceMatchCompletionXp,
   ROLE_NAMES, buildPreviewEmbed, scheduleCancelledDelete, deleteMentionMessage, AUTO_CLOSE_DELAY_MS,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
-  buildNotifyModal: buildNotifyModalBase, parseNotifyTime, formatNotifyTime, formatNotifyTimeKorean, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
+  buildNotifyModal: buildNotifyModalBase, parseNotifyTime, formatNotifyTimeSmart, isNotify12HourInput, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
 } = require('./공용');
 
 const GAMES = {
@@ -31,8 +31,8 @@ function buildModal(game, data = {}) {
   return buildModalBase('mojip', '모집', GAMES, game, data);
 }
 
-function buildNotifyModal(msgId, notifyAt) {
-  return buildNotifyModalBase('mojip', msgId, notifyAt);
+function buildNotifyModal(msgId, notifyAt, is12h) {
+  return buildNotifyModalBase('mojip', msgId, notifyAt, is12h);
 }
 
 function buildPublicEmbed(data, participants, closed = false) {
@@ -49,7 +49,7 @@ function buildPublicEmbed(data, participants, closed = false) {
     `👑 **주최자**　**\`${organizer.displayName}\`**`,
     `📊 **상태**　　${statusText}`,
   ];
-  if (data.notifyAt) lines.push(`🔔 **알림**　　${formatNotifyTimeKorean(data.notifyAt)}`);
+  if (data.notifyAt) lines.push(`🔔 **알림**　　${formatNotifyTimeSmart(data.notifyAt, data.notify12h)}`);
 
   const participantText = participants.length > 0
     ? `\`\`\`\n${participants.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n')}\n\`\`\``
@@ -131,7 +131,7 @@ function buildNotifyButton(match, msgId) {
   const notifyAt = match.data?.notifyAt;
   return new ButtonBuilder()
     .setCustomId(`mojip:notify_set:${msgId}`)
-    .setLabel(notifyAt ? `🔔 알림 예약: ${formatNotifyTimeKorean(notifyAt)}` : '🔔 알림 예약')
+    .setLabel(notifyAt ? `🔔 알림 예약: ${formatNotifyTimeSmart(notifyAt, match.data?.notify12h)}` : '🔔 알림 예약')
     .setStyle(notifyAt ? ButtonStyle.Success : ButtonStyle.Secondary)
     .setDisabled(!!match.notifySent);
 }
@@ -598,13 +598,13 @@ async function handleMojipButton(interaction) {
           .setStyle(ButtonStyle.Secondary),
       );
       await interaction.update({
-        content: `🔔 **이미 알림이 예약되어 있습니다.** (${formatNotifyTimeKorean(match.data.notifyAt)})\n수정하시겠습니까?`,
+        content: `🔔 **이미 알림이 예약되어 있습니다.** (${formatNotifyTimeSmart(match.data.notifyAt, match.data.notify12h)})\n수정하시겠습니까?`,
         embeds: [], attachments: [],
         components: [confirmRow],
       });
       return;
     }
-    await interaction.showModal(buildNotifyModal(msgId, match.data.notifyAt));
+    await interaction.showModal(buildNotifyModal(msgId, match.data.notifyAt, match.data.notify12h));
     return;
   }
 
@@ -624,7 +624,7 @@ async function handleMojipButton(interaction) {
       await interaction.reply({ content: '❌ **이미 발송된 알림은 다시 수정할 수 없습니다.**', ephemeral: true });
       return;
     }
-    await interaction.showModal(buildNotifyModal(msgId, match.data.notifyAt));
+    await interaction.showModal(buildNotifyModal(msgId, match.data.notifyAt, match.data.notify12h));
     return;
   }
 
@@ -802,7 +802,7 @@ async function handleMojipButton(interaction) {
       await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/모집\`을 실행해주세요.`, ephemeral: true });
       return;
     }
-    await interaction.showModal(buildNotifyModal('preview', data.notifyAt));
+    await interaction.showModal(buildNotifyModal('preview', data.notifyAt, data.notify12h));
     return;
   }
 
@@ -914,8 +914,10 @@ async function handleMojipNotifyModal(interaction) {
         return;
       }
       data.notifyAt = notifyAt;
+      data.notify12h = isNotify12HourInput(raw);
     } else {
       data.notifyAt = null;
+      data.notify12h = false;
     }
     await data._previewInteraction.editReply({
       content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
@@ -936,6 +938,7 @@ async function handleMojipNotifyModal(interaction) {
 
   if (!raw) {
     match.data.notifyAt = null;
+    match.data.notify12h = false;
     match.notifySent = false;
     clearNotifyTimer(match);
     await match.message.edit(buildMojipMessagePayload(match)).catch(err => console.error('알림 예약 아이콘 갱신 실패:', err));
@@ -954,11 +957,12 @@ async function handleMojipNotifyModal(interaction) {
   }
 
   match.data.notifyAt = notifyAt;
+  match.data.notify12h = isNotify12HourInput(raw);
   match.notifySent = false;
   armNotifyReminder(getMojips(interaction.client), msgId, match, '모집');
   await match.message.edit(buildMojipMessagePayload(match)).catch(err => console.error('알림 예약 아이콘 갱신 실패:', err));
   await interaction.reply({
-    content: `✅ **${formatNotifyTime(notifyAt)} = ${formatNotifyTimeKorean(notifyAt)}에 참가자에게 DM 알림을 보낼게요.**`,
+    content: `✅ **${formatNotifyTimeSmart(notifyAt, match.data.notify12h)}에 참가자에게 DM 알림을 보낼게요.**`,
     ephemeral: true,
   });
 }

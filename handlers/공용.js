@@ -127,8 +127,21 @@ function formatNotifyTimeKorean(epochMs) {
   return `${kst.getUTCMonth() + 1}/${kst.getUTCDate()} ${period} ${hour12}:${mm}`;
 }
 
+// 입력 문자열이 12시간제(오전/오후 포함)였는지 판별한다. 이미 parseNotifyTime으로 형식 검증을
+// 마친 뒤 호출되는 게 전제라 별도 유효성 검사 없이 오전/오후 포함 여부만 본다.
+function isNotify12HourInput(input) {
+  return /오전|오후/.test((input || '').trim());
+}
+
+// 주최자가 입력한 형식(24시간제/12시간제) 그대로 표시한다. notifyAt만 있고 is12h 정보가 없는
+// 옛 데이터는 기존 기본값(12시간제)으로 표시한다.
+function formatNotifyTimeSmart(epochMs, is12h) {
+  return is12h ? formatNotifyTimeKorean(epochMs) : formatNotifyTime(epochMs);
+}
+
 // 알림 시각 입력 모달(내전/모집 공용). 비워서 제출하면 예약을 취소하는 용도로도 쓰인다.
-function buildNotifyModal(type, matchMsgId, notifyAt) {
+// is12h를 넘기면 기존 예약을 수정할 때 원래 입력했던 형식 그대로 재입력창에 채워준다.
+function buildNotifyModal(type, matchMsgId, notifyAt, is12h) {
   const input = new TextInputBuilder()
     .setCustomId('notify_time')
     .setLabel('알림 시각 (24시간제 또는 오전/오후)')
@@ -136,7 +149,7 @@ function buildNotifyModal(type, matchMsgId, notifyAt) {
     .setPlaceholder('예: 6/5 20:00 또는 6/5 오후 8:00 · 비우면 알림 취소')
     .setRequired(false)
     .setMaxLength(20);
-  if (notifyAt) input.setValue(formatNotifyTime(notifyAt));
+  if (notifyAt) input.setValue(formatNotifyTimeSmart(notifyAt, is12h));
 
   return new ModalBuilder()
     .setCustomId(`${type}:notify_modal:${matchMsgId}`)
@@ -589,7 +602,7 @@ function buildPreviewComponents(type, data = null) {
   const notifyAt = data?.notifyAt;
   const notifyButton = new ButtonBuilder()
     .setCustomId(`${type}:notify_set_preview`)
-    .setLabel(notifyAt ? `🔔 알림 예약: ${formatNotifyTimeKorean(notifyAt)}` : '🔔 알림 예약')
+    .setLabel(notifyAt ? `🔔 알림 예약: ${formatNotifyTimeSmart(notifyAt, data?.notify12h)}` : '🔔 알림 예약')
     .setStyle(notifyAt ? ButtonStyle.Success : ButtonStyle.Secondary);
 
   if (data && data.game === 'custom') {
@@ -639,6 +652,8 @@ module.exports = {
   parseNotifyTime,
   formatNotifyTime,
   formatNotifyTimeKorean,
+  formatNotifyTimeSmart,
+  isNotify12HourInput,
   armNotifyReminder,
   clearNotifyTimer,
   isNotifyTooFar,
