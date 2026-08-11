@@ -68,11 +68,13 @@ npm install
 TOKEN=디스코드_봇_토큰
 CLIENT_ID=디스코드_애플리케이션(클라이언트) ID
 GUILD_ID=길드_ID_1,길드_ID_2        # 커맨드를 길드 단위로 배포/삭제할 때 사용, 콤마로 여러 개 가능
-ALLOWED_CHANNEL_ID=채널_ID_1,채널_ID_2   # 내전/모집/팀/불러오기 명령을 허용할 채널 목록, 콤마로 여러 개 가능
+ALLOWED_CHANNEL_ID=채널_ID_1,채널_ID_2   # 내전/모집/팀 명령을 허용할 채널 목록, 콤마로 여러 개 가능(불러오기는 아래 MATCH_BONUS_CHANNEL_ID 채널 전용으로 별도 고정)
 KRDICT_API_KEY=국립국어원_한국어기초사전_오픈API_키   # 끝말잇기 단어 검증용, 없으면 검증을 통과시킴(fail-open)
 ```
 
 > `/끝말잇기`, `/랭킹`과 관련 버튼(`wc:*`, `ranking:*`)이 허용되는 채널 ID, 임시 음성채널 허브/카테고리 채널 ID, 레벨업 축하 채널 ID 등 일부 채널 ID는 `ALLOWED_CHANNEL_ID`가 아니라 코드에 상수로 하드코딩되어 있습니다(`index.js`의 `WORDCHAIN_RANKING_CHANNEL_ID`, `handlers/음성채널.js`의 `HUB_CHANNEL_ID`/`TEMP_CATEGORY_ID`, `handlers/레벨.js`의 `LEVEL_UP_ANNOUNCE_CHANNEL_ID`). 다른 서버에 배포할 때는 이 값들도 함께 수정해야 합니다.
+
+> `/랭킹`이 `guild.members.fetch({ user: [...] })`로 멤버 정보를 대량 조회하기 때문에 `GuildMembers` 특권 인텐트(privileged intent)가 필요합니다(`index.js`). [Discord Developer Portal](https://discord.com/developers/applications) → 해당 애플리케이션 → Bot → Privileged Gateway Intents에서 **Server Members Intent**를 켜야 합니다 — 안 켜면 봇 로그인 자체가 "Used disallowed intents" 에러로 실패합니다.
 
 슬래시 커맨드 등록 (GUILD_ID의 각 길드에 즉시 반영):
 
@@ -128,6 +130,7 @@ npm start
 - 현재 서버에서 진행 중인 내전/모집 목록을 셀렉트 메뉴로 표시(상태: 🔒 마감됨 / 🟢 모집중)
 - 선택 시 기존 메시지를 삭제하고 동일한 내용으로 새 메시지를 게시, 내부적으로 매치 데이터의 메시지 ID를 갱신
 - 자동 삭제가 걸려 있던 매치는 남은 시간을 그대로 유지해 새 메시지에 재설정
+- `/불러오기` 명령어, `불러오기:select` 선택 메뉴, `/배치` 패널의 "🔎 불러오기" 버튼(`recruit:불러오기`) 모두 완료 보너스 채널(`MATCH_BONUS_CHANNEL_ID`)에서만 사용 가능(`index.js`) — 다른 채널에서 재게시하면 `match.message.channelId`가 바뀌어 XP 보너스 자격이 어긋나는 것을 방지
 
 ### 배치 (`/배치`, `commands/배치.js`, 관리자 전용)
 
@@ -314,5 +317,6 @@ npm start
 
 - 관리자 기능(내전/모집 강제 관리, 봇 메시지 삭제, `/배치` 등)은 `handlers/공용.js`의 `ADMIN_IDS`에 등록된 유저만 사용할 수 있습니다.
 - 내전/모집의 일반 관리 메뉴(마감/수정/취소 등)는 해당 매치의 주최자 또는 `ADMIN_IDS`만 사용할 수 있습니다.
-- `ALLOWED_CHANNEL_ID`에 등록되지 않은 채널에서는 내전/모집/팀/불러오기 관련 상호작용이 차단됩니다.
+- `ALLOWED_CHANNEL_ID`에 등록되지 않은 채널에서는 내전/모집/팀 관련 상호작용이 차단됩니다.
 - `/끝말잇기`, `/레벨`, `/랭킹`과 관련 버튼은 `ALLOWED_CHANNEL_ID`와 무관하게 `index.js`의 `WORDCHAIN_RANKING_CHANNEL_ID` 채널에서만 사용할 수 있습니다.
+- `/불러오기`(및 `불러오기:select`, `recruit:불러오기` 버튼)는 `ALLOWED_CHANNEL_ID`와 무관하게 완료 보너스 채널(`MATCH_BONUS_CHANNEL_ID`)에서만 사용할 수 있습니다 — 다른 채널에서 재게시하면 XP 보너스 자격 판정이 어긋나기 때문입니다.

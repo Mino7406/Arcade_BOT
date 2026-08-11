@@ -30,6 +30,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildMembers, // /랭킹의 대량 멤버 조회(guild.members.fetch({ user: [...] }))에 필요(특권 인텐트)
   ],
 });
 
@@ -215,9 +216,24 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
+    // 불러오기(재게시)는 완료 보너스 채널 밖에서 쓰면 match.message.channelId가 바뀌어
+    // XP 보너스 자격이 어긋나므로, 이 채널에서만 쓸 수 있게 막는다.
+    const isReload =
+      (interaction.isChatInputCommand() && interaction.commandName === '불러오기') ||
+      interaction.customId === '불러오기:select' ||
+      interaction.customId === 'recruit:불러오기';
+
+    if (isReload && interaction.channelId !== MATCH_BONUS_CHANNEL_ID) {
+      if (interaction.isRepliable()) {
+        await interaction.reply({ content: '❌ 이 채널에서는 사용할 수 없습니다.', ephemeral: true });
+      }
+      return;
+    }
+
     const isChannelExempt =
       (interaction.isChatInputCommand() && ['관리', '배치'].includes(interaction.commandName)) ||
       isWordchainOrRanking ||
+      isReload ||
       interaction.customId?.startsWith('admin:');
 
     if (!isChannelExempt) {

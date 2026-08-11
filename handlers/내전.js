@@ -398,6 +398,7 @@ async function handleNaejeonButton(interaction) {
       attachments: [],
       allowedMentions: { roles: role ? [role.id] : [], users: [] },
     });
+    delete data._previewInteraction; // 게시 후에는 필요 없으므로 여기서 끊어 매치가 Interaction 객체를 계속 붙들지 않게 한다.
     const match = { data, participants, message: msg, closed: false, closedAt: null, teams: null, mentionSent: false, roleContent, guildId: interaction.guildId };
     getMatches(interaction.client).set(msg.id, match);
     // 게시 전 미리보기 단계에서 이미 알림 예약을 해뒀다면, 그때는 매치가 없어 타이머를 못 걸었으므로 지금 건다.
