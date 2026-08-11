@@ -213,7 +213,7 @@ npm start
 | `shuffleIntoTeams(participants)` | Fisher–Yates 셔플 후 절반씩 팀1/팀2로 분할 |
 | `armAutoEnd(matchesMap, msgId, match, label, delayMs)` | 마감된 매치에 8시간 자동 삭제 타이머 설정 — 만료 시 XP 지급 후 메시지를 바로 삭제(`endMatch` 미사용) |
 | `disarmAutoEnd(match)` | 자동 삭제 타이머 해제 |
-| `scheduleCancelledDelete(client, msgId, channelId, deleteAt)` | 취소된 매치를 `deleteAt`(기본 8시간 후) 시점에 자동 삭제 예약 — `client.cancelledDeletions` Map에 기록해 재시작 후에도 복원 가능 |
+| `scheduleCancelledDelete(client, msgId, channelId, cancelledAt)` | 취소된 매치를 취소 시각(`cancelledAt`, 기본 현재 시각) 기준 3시간 후 자동 삭제 예약 — `client.cancelledDeletions` Map에 기록해 재시작 후에도 복원 가능(재시작 시 항상 최신 지연시간 기준으로 재계산) |
 | `scheduleMessageDelete(client, msgId, channelId, deleteAt)` | 매치 상태와 무관하게 일반 메시지를 `deleteAt`(기본 8시간 후) 시점에 자동 삭제 예약 — `client.pendingMessageDeletions` Map에 기록해 재시작 후에도 복원 가능 (내전/모집 인증 채널의 유저 메시지 정리에 사용) |
 | `markClosed(matchesMap, msgId, match, label, notify = true)` / `markReopened(match)` | 매치 마감/마감 해제 처리 (자동 삭제 타이머 연동). `notify=false`를 넘기면 주최자 DM을 생략(주최자 본인이 직접 마감한 경우에 사용) |
 | `toggleAutoCloseWhileClosed(matchesMap, msgId, match, label, enabled)` | 이미 마감된 매치의 자동 삭제 ON/OFF를 관리 메뉴에서 토글 — 원래 마감 시각 기준 남은 시간으로 재예약(다 지났으면 즉시 삭제), OFF 시 타이머만 취소 |

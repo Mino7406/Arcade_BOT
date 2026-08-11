@@ -59,14 +59,13 @@ async function restoreMatches(c) {
     // 다시 모집중 상태로 잘못 되살아나므로, 여기서 따로 걸러 삭제 예약만 다시 건다.
     if (row.type === 'cancelled_delete') {
       try {
-        const { deleteAt } = JSON.parse(row.data);
-        if (deleteAt <= Date.now()) {
-          const channel = await c.channels.fetch(row.channel_id).catch(() => null);
-          const message = channel && await channel.messages.fetch(row.message_id).catch(() => null);
-          if (message) await message.delete().catch(() => {});
-        } else {
-          scheduleCancelledDelete(c, row.message_id, row.channel_id, deleteAt);
-        }
+        const parsed = JSON.parse(row.data);
+        // 구버전 데이터는 취소 시각 대신 deleteAt(취소 시각 + 그 당시 지연시간)만 저장했다.
+        // cancelledAt이 없으면 그 시절 지연시간(AUTO_CLOSE_DELAY_MS, 8시간) 기준으로 취소
+        // 시각을 역산해 복원한다 — scheduleCancelledDelete가 항상 최신 지연시간
+        // (CANCELLED_DELETE_DELAY_MS)으로 다시 계산하므로 이미 지났으면 즉시 삭제된다.
+        const cancelledAt = parsed.cancelledAt ?? (parsed.deleteAt - AUTO_CLOSE_DELAY_MS);
+        scheduleCancelledDelete(c, row.message_id, row.channel_id, cancelledAt);
       } catch (err) {
         console.error('취소된 임베드 삭제 예약 복원 중 오류:', err);
       }

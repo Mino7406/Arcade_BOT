@@ -36,7 +36,7 @@ function saveAll(client) {
         message_id: messageId,
         channel_id: entry.channelId,
         type: 'cancelled_delete',
-        data: JSON.stringify({ deleteAt: entry.deleteAt }),
+        data: JSON.stringify({ cancelledAt: entry.cancelledAt }),
       });
     }
   }
