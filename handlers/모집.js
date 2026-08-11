@@ -56,7 +56,7 @@ function buildPublicEmbed(data, participants, closed = false) {
 
   const embed = new EmbedBuilder()
     .setColor(color)
-    .setDescription(`${titleHeader(game, gameInfo, title)}\n${lines.join('\n')}`);
+    .setDescription(`${titleHeader(game, gameInfo, title)}${data.notifyAt ? ' 🔔' : ''}\n${lines.join('\n')}`);
 
   if (description) embed.addFields({ name: '📝 메모', value: description });
 
@@ -584,6 +584,44 @@ async function handleMojipButton(interaction) {
       await interaction.reply({ content: '❌ **마감된 이후에는 알림 예약을 변경할 수 없습니다.**', ephemeral: true });
       return;
     }
+    if (match.data.notifyAt) {
+      const confirmRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`mojip:notify_edit:${msgId}`)
+          .setLabel('✏️ 수정하기')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId(`mojip:manage_back:${msgId}`)
+          .setLabel('↩️ 돌아가기')
+          .setStyle(ButtonStyle.Secondary),
+      );
+      await interaction.update({
+        content: `🔔 **이미 알림이 예약되어 있습니다.** (${formatNotifyTimeKorean(match.data.notifyAt)})\n수정하시겠습니까?`,
+        embeds: [], attachments: [],
+        components: [confirmRow],
+      });
+      return;
+    }
+    await interaction.showModal(buildNotifyModal(msgId, match.data.notifyAt));
+    return;
+  }
+
+  // ── 알림 예약 수정(이미 예약된 상태에서 확인 후 모달 열기) ──────
+  if (customId.startsWith('mojip:notify_edit:')) {
+    const msgId = customId.slice('mojip:notify_edit:'.length);
+    const match = getMojips(interaction.client).get(msgId);
+    if (!match) {
+      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, components: [] });
+      return;
+    }
+    if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
+      await interaction.reply({ content: '❌ **주최자만 사용할 수 있습니다.**', ephemeral: true });
+      return;
+    }
+    if (match.closed) {
+      await interaction.reply({ content: '❌ **마감된 이후에는 알림 예약을 변경할 수 없습니다.**', ephemeral: true });
+      return;
+    }
     await interaction.showModal(buildNotifyModal(msgId, match.data.notifyAt));
     return;
   }
@@ -897,6 +935,7 @@ async function handleMojipNotifyModal(interaction) {
     match.data.notifyAt = null;
     match.notifySent = false;
     clearNotifyTimer(match);
+    await match.message.edit(buildMojipMessagePayload(match)).catch(err => console.error('알림 예약 아이콘 갱신 실패:', err));
     await interaction.reply({ content: '🔕 **알림 예약이 취소되었습니다.**', ephemeral: true });
     return;
   }
@@ -914,6 +953,7 @@ async function handleMojipNotifyModal(interaction) {
   match.data.notifyAt = notifyAt;
   match.notifySent = false;
   armNotifyReminder(getMojips(interaction.client), msgId, match, '모집');
+  await match.message.edit(buildMojipMessagePayload(match)).catch(err => console.error('알림 예약 아이콘 갱신 실패:', err));
   await interaction.reply({
     content: `🔔 **${formatNotifyTime(notifyAt)} = ${formatNotifyTimeKorean(notifyAt)}(KST)에 마감 상태면 참가자에게 DM 알림을 보낼게요.**`,
     ephemeral: true,
