@@ -141,6 +141,40 @@ async function restoreMatches(c) {
   console.log(`♻️  복원 완료: ${ok}건 복원 / ${dropped}건 누락`);
 }
 
+// ─── 인증 채널 자동 삭제 예약 복구 ────────────────────────────
+// scheduleMessageDelete는 messageCreate 이벤트에서만 걸리는데, 봇이 꺼져있던 동안
+// (재시작 등) 인증 채널에 올라온 메시지는 그 이벤트를 아예 못 받아 예약이 안 걸린 채로
+// 남는다. data.json 복원(restoreMatches)은 "이미 예약돼 있던" 항목만 되살릴 뿐 이런
+// 누락은 못 잡으므로, 재시작 시 최근 메시지 기록을 직접 훑어서 예약이 빠진 메시지를 찾아
+// 다시 건다. 최대 500개(5페이지) 또는 24시간(자동삭제 기준 8시간의 3배)치까지만 훑고,
+// 그보다 오래된 건 예외적인 경우로 보고 포기한다(무한정 과거까지 훑지 않기 위함).
+const CHANNEL_RECONCILE_LOOKBACK_MS = AUTO_CLOSE_DELAY_MS * 3;
+async function reconcileMatchBonusMessages(c) {
+  const channel = await c.channels.fetch(MATCH_BONUS_CHANNEL_ID).catch(() => null);
+  if (!channel) return;
+
+  const cutoff = Date.now() - CHANNEL_RECONCILE_LOOKBACK_MS;
+  let before;
+  let recovered = 0;
+
+  for (let page = 0; page < 5; page++) {
+    const batch = await channel.messages.fetch({ limit: 100, ...(before ? { before } : {}) }).catch(() => null);
+    if (!batch || batch.size === 0) break;
+
+    for (const msg of batch.values()) {
+      if (msg.author.bot) continue;
+      if (c.pendingMessageDeletions?.has(msg.id)) continue;
+      scheduleMessageDelete(c, msg.id, msg.channelId, msg.createdTimestamp + AUTO_CLOSE_DELAY_MS);
+      recovered++;
+    }
+
+    const oldest = batch.last();
+    if (batch.size < 100 || !oldest || oldest.createdTimestamp < cutoff) break;
+    before = oldest.id;
+  }
+  if (recovered > 0) console.log(`♻️  인증 채널 자동 삭제 예약 복구: ${recovered}건`);
+}
+
 // ─── 봇 준비 완료 시 ──────────────────────────────────────────
 // discord.js 버전에 따라 이벤트 이름이 'clientReady' 또는 'ready'라서 둘 다 등록.
 // _readyDone 플래그로 한 번만 실행되게 막습니다.
@@ -159,6 +193,7 @@ async function onReady(c) {
   initVoiceStates(c); // 재시작 전 이미 통화방에 있던 유저 추적 복원
   startVoiceXpTicker(c); // 통화방 체류 XP 1분 틱 시작
   await reconcileTempChannels(c); // 재시작 전 만들어둔 임시 음성채널 중 빈 방 정리
+  await reconcileMatchBonusMessages(c); // 봇이 꺼져있던 동안 인증 채널에 올라와 예약이 빠진 메시지 복구
   dataReady = true;
 }
 client.once('clientReady', onReady);

@@ -410,6 +410,7 @@ async function endMatch(matchesMap, msgId, match, label) {
   // 마감을 거치지 않고 바로 종료되는 경로라 markClosed의 알림 발송 로직을 안 타므로, 여기서도
   // 예약 시각이 이미 지난 알림이 있으면 매치를 지우기 전에 마지막으로 한 번 시도한다.
   await trySendNotify(match, label).catch(err => console.error('시작 시간 알림 DM 발송 중 오류:', err));
+  await deleteMentionMessage(match.message.client, match);
   await match.message.edit({
     content: '',
     embeds: [buildEndedEmbed(match, label)],

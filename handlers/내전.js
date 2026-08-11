@@ -9,7 +9,7 @@ const {
 
 const {
   ADMIN_IDS, getNaejeonMatches: getMatches, shuffleIntoTeams, buildTeamResultEmbed, titleHeader, markClosed, markReopened, toggleAutoCloseWhileClosed, announceMatchCompletionXp,
-  ROLE_NAMES, buildPreviewEmbed, scheduleCancelledDelete, AUTO_CLOSE_DELAY_MS,
+  ROLE_NAMES, buildPreviewEmbed, scheduleCancelledDelete, deleteMentionMessage, AUTO_CLOSE_DELAY_MS,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
   buildNotifyModal: buildNotifyModalBase, parseNotifyTime, formatNotifyTime, formatNotifyTimeKorean, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
 } = require('./공용');
@@ -780,6 +780,7 @@ async function handleNaejeonButton(interaction) {
 
     await match.message.edit({ content: '', embeds: [cancelledEmbed], components: [], attachments: [], allowedMentions: { parse: [] } });
     getMatches(interaction.client).delete(matchMsgId);
+    await deleteMentionMessage(interaction.client, match);
     scheduleCancelledDelete(interaction.client, matchMsgId, match.message.channelId);
     await interaction.update({ content: '✅ **내전이 취소되었습니다.**', components: [] });
     return;

@@ -110,7 +110,7 @@ npm start
 4. 공개 게시 시 게임에 해당하는 역할(롤→`롤`, 발로란트→`발로란트`, 오버워치→`오버워치`, 배그→`배그`)을 멘션하며 게시
 5. 참가/취소 버튼으로 인원 모집, 정원이 차면 자동 마감(`markClosed`) — 마감 시 8시간 후 자동 삭제 타이머가 걸리고(타이머 만료 시 참가자에게 완료 보너스 XP가 지급된 뒤 메시지가 삭제됨), 정원이 자동으로 차서 마감된 경우 주최자에게 마감 안내 DM이 발송됨(주최자가 직접 "마감하기" 버튼으로 수동 마감한 경우는 본인이 이미 알고 있으므로 DM 미발송, DM 차단 시에도 무시)
 6. 주최자(또는 관리자) 전용 관리 메뉴: 마감/마감 해제, 수정, 취소, 팀 만들기(수동/자동 배정), 참가자 멘션(1회성), 🔔 알림 예약, 참가자 강제 추가/제거, ⏰ 자동 삭제 ON/OFF 토글(마감 전/후 상관없이 항상 현재 설정에 맞춰 표시) — 게시 전 미리보기에서 정한 설정을 마감 후에도 바꿀 수 있으며, 원래 마감 시각 기준 남은 시간으로 다시 예약됨(`toggleAutoCloseWhileClosed`); 이미 그 8시간이 지나 다음 클릭 시 즉시 삭제될 상황이면 버튼이 `🗑️ (내전/모집) 삭제`로 바뀜
-7. 주최자가 취소하면 🔴 취소됨 임베드로 교체되고(`autoClose` 토글과 무관하게 항상) 8시간 후 자동 삭제됨(`scheduleCancelledDelete`) — 재시작해도 `data.json`에 삭제 예정 시각이 저장돼 있어 남은 시간만큼 다시 예약됨
+7. 주최자가 취소하면 🔴 취소됨 임베드로 교체되고(`autoClose` 토글과 무관하게 항상) 8시간 후 자동 삭제됨(`scheduleCancelledDelete`) — 재시작해도 `data.json`에 삭제 예정 시각이 저장돼 있어 남은 시간만큼 다시 예약됨. 참가자 멘션을 이미 보낸 상태였다면 그 멘션 메시지도 즉시 함께 삭제됨(`deleteMentionMessage`) — 자동 삭제/관리 메뉴 즉시삭제/⌛ 종료 등 매치가 끝나는 모든 경로에서 공통
 8. **🔔 알림 예약**: 자유 형식인 "일시"와 별개로, "M/D HH:mm"(KST, 24시간제) 형식만 받는 전용 모달(`buildNotifyModal`)로 알림 시각을 설정. 그 시각이 됐을 때 **매치가 마감(closed) 상태인 경우에만** 주최자+참가자 전원에게 DM으로 시작 알림을 보냄(마감 전이면 조용히 건너뜀). 형식이 안 맞으면 제출이 거부되고, 연도 입력이 없으므로 올해 기준으로 계산하되 이미 지난 시각이면 내년으로 자동 보정. 빈 값으로 제출하면 예약 취소. `data.notifyAt`(epoch ms)이 매치 데이터에 함께 저장되므로 재시작 후에도 `armNotifyReminder`로 다시 예약됨, 재게시(`/불러오기`)로 메시지 ID가 바뀌어도 새 ID로 다시 걸림
 
 ### 모집 (`/모집`, `handlers/모집.js`)
@@ -173,7 +173,7 @@ npm start
 
 - 레벨업 시 지정된 채널에 축하 메시지 게시
 - 특정 서버(테스트 서버)는 시스템 자체가 비활성화됨
-- 내전/모집 완료 보너스 채널(`MATCH_BONUS_CHANNEL_ID`)에 올라온 일반 유저 메시지는 8시간 후 자동 삭제됨(`scheduleMessageDelete`, 봇 메시지는 제외) — 재시작해도 `data.json`에 삭제 예정 시각이 저장돼 있어 남은 시간만큼 다시 예약됨
+- 내전/모집 완료 보너스 채널(`MATCH_BONUS_CHANNEL_ID`)에 올라온 일반 유저 메시지는 8시간 후 자동 삭제됨(`scheduleMessageDelete`, 봇 메시지는 제외) — 재시작해도 `data.json`에 삭제 예정 시각이 저장돼 있어 남은 시간만큼 다시 예약됨. 다만 이 예약은 `messageCreate` 이벤트에서만 걸리므로, 봇이 꺼져있던 동안 올라온 메시지는 예약 자체가 안 걸린 채로 남을 수 있음 — 봇 시작 시(`index.js`의 `reconcileMatchBonusMessages`) 이 채널의 최근 메시지(최대 500개 또는 24시간치)를 훑어 예약이 빠진 메시지를 찾아 다시 걸어줌
 - `/레벨`로 진행바 임베드 확인, `/랭킹`으로 서버 XP 순위 확인(`/레벨`, `/랭킹` 모두 `index.js`의 `WORDCHAIN_RANKING_CHANNEL_ID` 채널에서만 사용 가능)
 - `/랭킹`은 서버를 나갔거나 멤버 조회가 안 되는(알 수 없는 사용자) 유저를 목록에서 완전히 제외함 — 페이지 단위가 아니라 전체 랭킹을 먼저 걸러낸 뒤 페이지를 나눠서, 나간 유저가 있어도 한 페이지가 5명 미만으로 비지 않음
 
@@ -211,7 +211,7 @@ npm start
 | `markClosed(matchesMap, msgId, match, label, notify = true)` / `markReopened(match)` | 매치 마감/마감 해제 처리 (자동 삭제 타이머 연동). `notify=false`를 넘기면 주최자 DM을 생략(주최자 본인이 직접 마감한 경우에 사용) |
 | `toggleAutoCloseWhileClosed(matchesMap, msgId, match, label, enabled)` | 이미 마감된 매치의 자동 삭제 ON/OFF를 관리 메뉴에서 토글 — 원래 마감 시각 기준 남은 시간으로 재예약(다 지났으면 즉시 삭제), OFF 시 타이머만 취소 |
 | `notifyOrganizerOnClose(match, label)` *(내부)* | 정원 자동 마감 시 주최자에게 게시글 제목과 링크를 DM으로 전송 (DM 차단 등 실패는 무시) |
-| `endMatch(matchesMap, msgId, match, label)` | 매치를 종료 상태로 전환(임베드를 회색으로 교체, Map에서 제거) — `/관리`의 수동 "⌛ 종료" 버튼 전용 |
+| `endMatch(matchesMap, msgId, match, label)` | 매치를 종료 상태로 전환(임베드를 회색으로 교체, 참가자 멘션 메시지 삭제, Map에서 제거) — `/관리`의 수동 "⌛ 종료" 버튼 전용 |
 | `announceMatchCompletionXp(match)` | 마감된 매치에 보너스 XP 지급 + 레벨업 유저 축하 메시지 게시 |
 | `buildModal` / `buildPreviewEmbed` / `buildPreviewComponents` / `buildCancelComponents` / `buildLeaveButton` | 내전/모집이 공유하는 모달·임베드·버튼 빌더 (`type` 파라미터로 분기) |
 

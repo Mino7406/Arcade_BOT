@@ -9,7 +9,7 @@ const {
 
 const {
   ADMIN_IDS, titleHeader, markClosed, markReopened, toggleAutoCloseWhileClosed, announceMatchCompletionXp,
-  ROLE_NAMES, buildPreviewEmbed, scheduleCancelledDelete, AUTO_CLOSE_DELAY_MS,
+  ROLE_NAMES, buildPreviewEmbed, scheduleCancelledDelete, deleteMentionMessage, AUTO_CLOSE_DELAY_MS,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
   buildNotifyModal: buildNotifyModalBase, parseNotifyTime, formatNotifyTime, formatNotifyTimeKorean, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
 } = require('./공용');
@@ -649,6 +649,7 @@ async function handleMojipButton(interaction) {
 
     await match.message.edit({ content: '', embeds: [cancelledEmbed], components: [], attachments: [], allowedMentions: { parse: [] } });
     getMojips(interaction.client).delete(msgId);
+    await deleteMentionMessage(interaction.client, match);
     scheduleCancelledDelete(interaction.client, msgId, match.message.channelId);
     await interaction.update({ content: '✅ **모집이 취소되었습니다.**', components: [] });
     return;
