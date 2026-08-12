@@ -174,8 +174,16 @@ function buildEmbed(game) {
   let desc = `❌ ${xName}  **vs**  ⭕ ${oName}\n\n`;
 
   if (game.status === 'waiting') {
-    desc += '⏳ 상대방의 수락을 기다리는 중...\n' +
+    const xReady = game.ready.X ? '✅ 준비완료' : '⌛ 대기 중';
+    const oReady = game.ready.O ? '✅ 준비완료' : '⌛ 대기 중';
+    desc += '⏳ 두 사람 모두 레디하면 시작됩니다.\n' +
+      `${xReady} ${xName}   ·   ${oReady} ${oName}\n` +
       `⚠️ 이 대결은 **XP 내기**가 걸립니다 — 지는 사람이 최대 ${WAGER_XP} XP를 잃고(레벨은 안 깎임) 이긴 사람이 그만큼 받습니다.`;
+    if (game.infinite) {
+      desc += '\n**(무한모드)** 각자 최대 3개까지만 유지되고, 4번째를 두면 가장 오래된 조각이 사라집니다.';
+    }
+  } else if (game.status === 'setup') {
+    desc += `⚙️ 아래 **시작** 버튼을 누르면 대결이 시작됩니다. (이기면 +${BOT_WIN_XP} XP)`;
     if (game.infinite) {
       desc += '\n**(무한모드)** 각자 최대 3개까지만 유지되고, 4번째를 두면 가장 오래된 조각이 사라집니다.';
     }
@@ -287,6 +295,38 @@ function buildFinishedRow(game) {
   );
 }
 
+// 무한모드 토글 버튼: PvP 대결 신청 로비(waiting)와 봇 대결 설정 로비(setup) 둘 다 이 버튼을
+// 쓰므로, 현재 game.infinite 값에 맞춰 라벨/스타일만 바뀐다.
+function buildInfiniteToggleButton(game) {
+  return new ButtonBuilder()
+    .setCustomId(`ttt:toggleinf:${game.id}`)
+    .setLabel(game.infinite ? '무한모드: ON' : '무한모드: OFF')
+    .setStyle(game.infinite ? ButtonStyle.Success : ButtonStyle.Secondary);
+}
+
+// PvP 대결 신청 로비(레디 대기 중)에서 쓰는 버튼 행 — 레디 버튼은 누른 사람 본인의 준비
+// 상태만 토글하고(둘 다 준비되면 자동 시작), 라벨 자체는 고정이며 현재 준비 상태는 임베드에 표시.
+function buildChallengeRow(game) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`ttt:ready:${game.id}`).setLabel('✅ 레디').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`ttt:decline:${game.id}`).setLabel('❌ 거절').setStyle(ButtonStyle.Danger),
+    buildInfiniteToggleButton(game),
+  );
+}
+
+// 봇 대결 설정 로비(시작 전)에서 쓰는 버튼 행.
+function buildBotSetupRow(game) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`ttt:botstart:${game.id}`).setLabel('▶️ 시작').setStyle(ButtonStyle.Success),
+    buildInfiniteToggleButton(game),
+  );
+}
+
+// 로비 상태(waiting/setup)에 맞는 버튼 행을 골라준다 — 무한모드 토글 후 다시 그릴 때 공용으로 사용.
+function buildLobbyRow(game) {
+  return game.players.O === 'BOT' ? buildBotSetupRow(game) : buildChallengeRow(game);
+}
+
 // 사람 vs 사람 대결에서 승부가 났을 때 내기 XP를 정산한다(무승부·봇 상대는 여기서 처리 안 함).
 // 진 사람의 currentLevelXp(현재 레벨 안에서 쌓인 XP)로 상한을 걸어두기 때문에, 아무리 내기에서
 // 져도 레벨업 문턱 아래로는 안 내려간다(레벨 자체가 깎이지 않음).
@@ -394,7 +434,6 @@ async function startTttCommand(interaction) {
   const games = getGames(interaction.client);
   const gameId = interaction.id;
   const opponent = interaction.options.getUser('상대방');
-  const infinite = interaction.options.getBoolean('무한모드') ?? false;
 
   if (opponent) {
     if (opponent.id === interaction.user.id) {
@@ -416,24 +455,20 @@ async function startTttCommand(interaction) {
       winner: null,
       message: null,
       timeoutId: null,
-      infinite,
+      infinite: false,
       marks: { X: [], O: [] },
+      ready: { X: false, O: false },
     };
     games.set(gameId, game);
-
-    const acceptRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`ttt:accept:${gameId}`).setLabel('✅ 수락').setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId(`ttt:decline:${gameId}`).setLabel('❌ 거절').setStyle(ButtonStyle.Danger),
-    );
 
     await interaction.reply({
       content: `⚔️ <@${opponent.id}>님, <@${interaction.user.id}>님이 틱택토 대결을 신청했습니다!`,
       embeds: [buildEmbed(game)],
-      components: [acceptRow],
+      components: [buildChallengeRow(game)],
     });
     game.message = await interaction.fetchReply();
 
-    // 60초 수락 대기
+    // 60초 내로 둘 다 레디하지 않으면 만료
     game.timeoutId = setTimeout(async () => {
       const g = games.get(gameId);
       if (!g || g.status !== 'waiting') return;
@@ -443,25 +478,32 @@ async function startTttCommand(interaction) {
     return;
   }
 
-  // 봇 대결
+  // 봇 대결 — 설정 로비(무한모드 토글 후 시작 버튼)를 먼저 보여준다.
   const game = {
     id: gameId,
     board: Array(9).fill(''),
     players: { X: interaction.user.id, O: 'BOT' },
     guildId: interaction.guildId,
     currentTurn: 'X',
-    status: 'playing',
+    status: 'setup',
     winner: null,
     message: null,
     timeoutId: null,
-    infinite,
+    infinite: false,
     marks: { X: [], O: [] },
   };
   games.set(gameId, game);
 
-  await interaction.reply({ embeds: [buildEmbed(game)], components: buildBoard(game) });
+  await interaction.reply({ embeds: [buildEmbed(game)], components: [buildBotSetupRow(game)] });
   game.message = await interaction.fetchReply();
-  resetTimeout(game, games);
+
+  // 60초 내로 시작하지 않으면 만료
+  game.timeoutId = setTimeout(async () => {
+    const g = games.get(gameId);
+    if (!g || g.status !== 'setup') return;
+    games.delete(gameId);
+    await interaction.editReply({ content: '⏰ **설정 시간이 초과되어 게임이 취소되었습니다.**', embeds: [], components: [] }).catch(() => {});
+  }, 60_000);
 }
 
 // 재대결: 원래 게임은 끝나는 순간 map에서 지워지므로, ttt:rematch 버튼의 customId에
@@ -531,22 +573,32 @@ async function handleTttButton(interaction) {
   const { customId } = interaction;
   const games = getGames(interaction.client);
 
-  // ── 수락 ──────────────────────────────────────────────────
-  if (customId.startsWith('ttt:accept:')) {
-    const gameId = customId.slice('ttt:accept:'.length);
+  // ── 레디 ──────────────────────────────────────────────────
+  // 두 참가자가 각자 자기 준비 상태를 토글하고, 둘 다 준비되면 그 순간 바로 시작한다.
+  if (customId.startsWith('ttt:ready:')) {
+    const gameId = customId.slice('ttt:ready:'.length);
     const game = games.get(gameId);
-    if (!game) {
+    if (!game || game.status !== 'waiting') {
       await interaction.reply({ content: '⚠️ **만료된 게임입니다.**', ephemeral: true });
       return;
     }
-    if (interaction.user.id !== game.players.O) {
-      await interaction.reply({ content: '⚠️ **초대받은 플레이어만 수락할 수 있습니다.**', ephemeral: true });
+    const mark = interaction.user.id === game.players.X ? 'X'
+      : interaction.user.id === game.players.O ? 'O' : null;
+    if (!mark) {
+      await interaction.reply({ content: '⚠️ **게임 참가자만 사용할 수 있습니다.**', ephemeral: true });
       return;
     }
-    clearTimeout(game.timeoutId);
-    game.status = 'playing';
-    await interaction.update({ content: '', embeds: [buildEmbed(game)], components: buildBoard(game) });
-    resetTimeout(game, games);
+    game.ready[mark] = !game.ready[mark];
+
+    if (game.ready.X && game.ready.O) {
+      clearTimeout(game.timeoutId);
+      game.status = 'playing';
+      await interaction.update({ content: '', embeds: [buildEmbed(game)], components: buildBoard(game) });
+      resetTimeout(game, games);
+      return;
+    }
+
+    await interaction.update({ embeds: [buildEmbed(game)], components: [buildChallengeRow(game)] });
     return;
   }
 
@@ -565,6 +617,47 @@ async function handleTttButton(interaction) {
     clearTimeout(game.timeoutId);
     games.delete(gameId);
     await interaction.update({ content: `❌ **<@${interaction.user.id}>님이 대결을 거절했습니다.**`, embeds: [], components: [] });
+    return;
+  }
+
+  // ── 무한모드 토글 (PvP 레디 로비 / 봇 설정 로비 공용) ────────────
+  if (customId.startsWith('ttt:toggleinf:')) {
+    const gameId = customId.slice('ttt:toggleinf:'.length);
+    const game = games.get(gameId);
+    if (!game || (game.status !== 'waiting' && game.status !== 'setup')) {
+      await interaction.reply({ content: '⚠️ **만료된 게임입니다.**', ephemeral: true });
+      return;
+    }
+    if (interaction.user.id !== game.players.X && interaction.user.id !== game.players.O) {
+      await interaction.reply({ content: '⚠️ **게임 참가자만 사용할 수 있습니다.**', ephemeral: true });
+      return;
+    }
+    game.infinite = !game.infinite;
+    if (game.status === 'waiting') {
+      // 규칙이 바뀌었으니 양쪽 다 다시 레디해야 한다.
+      game.ready.X = false;
+      game.ready.O = false;
+    }
+    await interaction.update({ embeds: [buildEmbed(game)], components: [buildLobbyRow(game)] });
+    return;
+  }
+
+  // ── 봇 대결 시작 ─────────────────────────────────────────────
+  if (customId.startsWith('ttt:botstart:')) {
+    const gameId = customId.slice('ttt:botstart:'.length);
+    const game = games.get(gameId);
+    if (!game || game.status !== 'setup') {
+      await interaction.reply({ content: '⚠️ **만료된 게임입니다.**', ephemeral: true });
+      return;
+    }
+    if (interaction.user.id !== game.players.X) {
+      await interaction.reply({ content: '⚠️ **게임을 시작한 사람만 시작할 수 있습니다.**', ephemeral: true });
+      return;
+    }
+    clearTimeout(game.timeoutId);
+    game.status = 'playing';
+    await interaction.update({ content: '', embeds: [buildEmbed(game)], components: buildBoard(game) });
+    resetTimeout(game, games);
     return;
   }
 
@@ -615,6 +708,19 @@ async function handleTttButton(interaction) {
     const prevOId = parts[3];
     const infinite = parts[4] === '1';
     await startRematch(interaction, prevXId, prevOId, infinite);
+    return;
+  }
+
+  // ── 종료 ──────────────────────────────────────────────────
+  if (customId.startsWith('ttt:close:')) {
+    const parts = customId.split(':');
+    const xId = parts[2];
+    const oId = parts[3];
+    if (interaction.user.id !== xId && interaction.user.id !== oId) {
+      await interaction.reply({ content: '⚠️ **원래 참가자만 종료할 수 있습니다.**', ephemeral: true });
+      return;
+    }
+    await interaction.update({ components: [] });
   }
 }
 
