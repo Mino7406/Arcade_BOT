@@ -56,12 +56,19 @@ const FALLBACK_WORDS = [
 // 상식퀴즈는 초성 힌트가 없다는 것만으로 이미 체감 난이도가 더 높다.
 const GRADE_PREFERENCE = ['초급', '중급'];
 
+// 보상은 고정값이 아니라 매 문제마다 100~300 XP 사이에서 무작위로 정해진다(정답자에게는
+// 실제로 지급된 금액을 채팅에 그대로 알려줌 — handleQuizMessage 참고).
+const XP_REWARD_MIN = 100;
+const XP_REWARD_MAX = 300;
+function rollXpReward() {
+  return XP_REWARD_MIN + Math.floor(Math.random() * (XP_REWARD_MAX - XP_REWARD_MIN + 1));
+}
+
 const MODES = {
   chosung: {
     label: '초성퀴즈',
     title: '📖 오늘의 퀴즈!',
     gradePreference: GRADE_PREFERENCE,
-    xpReward: 600,
     buildEmbed({ word, hint }) {
       return new EmbedBuilder()
         .setColor(0xFEE75C)
@@ -78,7 +85,6 @@ const MODES = {
     label: '상식퀴즈',
     title: '📖 오늘의 퀴즈!',
     gradePreference: GRADE_PREFERENCE,
-    xpReward: 600,
     buildEmbed({ word, hint }) {
       return new EmbedBuilder()
         .setColor(0xEB459E)
@@ -216,7 +222,7 @@ async function postQuiz(client, state, modeKey, picked, slotKey = 'activeQuiz', 
     picked = picked || await pickWord(state.recentWords || [], mode.gradePreference);
     state.recentWords = [picked.word, ...(state.recentWords || [])].slice(0, RECENT_WORD_MEMORY);
 
-    const quiz = { channelId: QUIZ_CHANNEL_ID, guildId: channel.guildId, word: picked.word, mode: modeKey, xpReward: mode.xpReward, ...extraFields };
+    const quiz = { channelId: QUIZ_CHANNEL_ID, guildId: channel.guildId, word: picked.word, mode: modeKey, xpReward: rollXpReward(), ...extraFields };
     client[slotKey] = quiz;
     state[slotKey] = quiz;
     saveState(state);
