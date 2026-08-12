@@ -96,6 +96,77 @@ function getBotMove(board) {
   return bestMoves[Math.floor(Math.random() * bestMoves.length)];
 }
 
+// ── 무한모드(각자 최대 3개, 4번째를 두면 가장 오래된 조각이 사라짐) 전용 봇 AI ──
+// 이 모드는 판이 절대 다 채워지지 않아(각자 최대 3개 = 최대 6칸) 일반 minimax처럼
+// "판이 꽉 찰 때까지" 완전 탐색하면 게임 트리가 끝없이 순환해 재귀가 끝나지 않는다.
+// 그래서 깊이를 제한한 minimax + 휴리스틱 평가로 대신한다(완벽한 수는 아니지만 충분히
+// 잘 막고 잘 노림).
+const INFINITE_BOT_DEPTH = 4;
+
+function evaluateInfiniteHeuristic(board) {
+  let score = 0;
+  for (const line of WINS) {
+    const vals = line.map(i => board[i]);
+    const oCount = vals.filter(v => v === 'O').length;
+    const xCount = vals.filter(v => v === 'X').length;
+    if (oCount > 0 && xCount > 0) continue; // 이미 막힌 줄은 승산 없음
+    if (oCount === 3) score += 100;
+    else if (oCount === 2) score += 10;
+    else if (oCount === 1) score += 1;
+    if (xCount === 3) score -= 100;
+    else if (xCount === 2) score -= 10;
+    else if (xCount === 1) score -= 1;
+  }
+  return score;
+}
+
+// 무한모드의 "4번째를 두면 가장 오래된 조각 소멸" 규칙을 반영해 다음 board/marks를 계산.
+function simulateInfiniteMove(board, marks, idx, mark) {
+  const nextBoard = board.slice();
+  const nextMarks = { X: [...marks.X], O: [...marks.O] };
+  nextBoard[idx] = mark;
+  nextMarks[mark].push(idx);
+  if (nextMarks[mark].length > 3) {
+    const vanished = nextMarks[mark].shift();
+    nextBoard[vanished] = '';
+  }
+  return { board: nextBoard, marks: nextMarks };
+}
+
+function minimaxInfinite(board, marks, isBotTurn, depth) {
+  const winner = checkWinner(board);
+  if (winner === 'O') return 1000 + depth; // 더 빨리 이기는 수를 선호
+  if (winner === 'X') return -1000 - depth;
+  if (depth === 0) return evaluateInfiniteHeuristic(board);
+
+  const mark = isBotTurn ? 'O' : 'X';
+  let best = isBotTurn ? -Infinity : Infinity;
+  for (let i = 0; i < 9; i++) {
+    if (board[i] !== '') continue;
+    const next = simulateInfiniteMove(board, marks, i, mark);
+    const s = minimaxInfinite(next.board, next.marks, !isBotTurn, depth - 1);
+    best = isBotTurn ? Math.max(best, s) : Math.min(best, s);
+  }
+  return best;
+}
+
+function getBotMoveInfinite(board, marks) {
+  let bestScore = -Infinity;
+  let bestMoves = [];
+  for (let i = 0; i < 9; i++) {
+    if (board[i] !== '') continue;
+    const next = simulateInfiniteMove(board, marks, i, 'O');
+    const s = minimaxInfinite(next.board, next.marks, false, INFINITE_BOT_DEPTH - 1);
+    if (s > bestScore) {
+      bestScore = s;
+      bestMoves = [i];
+    } else if (s === bestScore) {
+      bestMoves.push(i);
+    }
+  }
+  return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+}
+
 function buildEmbed(game) {
   const xName = game.players.X === 'BOT' ? '🤖 봇' : `<@${game.players.X}>`;
   const oName = game.players.O === 'BOT' ? '🤖 봇' : `<@${game.players.O}>`;
@@ -105,6 +176,9 @@ function buildEmbed(game) {
   if (game.status === 'waiting') {
     desc += '⏳ 상대방의 수락을 기다리는 중...\n' +
       `⚠️ 이 대결은 **XP 내기**가 걸립니다 — 지는 사람이 최대 ${WAGER_XP} XP를 잃고(레벨은 안 깎임) 이긴 사람이 그만큼 받습니다.`;
+    if (game.infinite) {
+      desc += '\n🌀 **무한모드**: 각자 최대 3개까지만 유지되고, 4번째를 두면 가장 오래된 조각이 사라집니다.';
+    }
   } else if (game.status === 'finished') {
     if (game.winner === 'DRAW') {
       desc += '**🤝 무승부!**';
@@ -131,15 +205,35 @@ function buildEmbed(game) {
       ? game.winner === 'DRAW' ? 0x808080 : 0xFFD700
       : 0x5865F2;
 
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(color)
-    .setTitle('⚔️ 틱택토')
+    .setTitle(game.infinite ? '⚔️ 틱택토 · 🌀 무한모드' : '⚔️ 틱택토')
     .setDescription(desc)
     .setTimestamp();
+
+  if (game.infinite && game.status === 'playing') {
+    embed.setFooter({ text: '🌀 각자 최대 3개까지만 유지되며, 4번째를 두면 가장 오래된 조각(회색으로 표시)이 사라집니다.' });
+  }
+
+  return embed;
+}
+
+// 무한모드에서 각 마크가 이미 3개를 채워, 다음 그 마크가 하나 더 놓이면 사라질 "가장 오래된"
+// 칸의 인덱스를 반환한다({ X: idx|undefined, O: idx|undefined }). 그 칸은 buildBoard에서
+// 옅은 색(Secondary)으로 그려서 곧 사라질 조각임을 미리 알려준다.
+function getFadingCells(game) {
+  const fading = {};
+  if (!game.infinite) return fading;
+  for (const mark of ['X', 'O']) {
+    const arr = game.marks?.[mark] || [];
+    if (arr.length >= 3) fading[mark] = arr[0];
+  }
+  return fading;
 }
 
 function buildBoard(game) {
   const rows = [];
+  const fading = getFadingCells(game);
   for (let r = 0; r < 3; r++) {
     const btns = [];
     for (let c = 0; c < 3; c++) {
@@ -153,9 +247,11 @@ function buildBoard(game) {
         .setDisabled(disabled);
 
       if (cell === 'X') {
-        btn.setLabel('❌').setStyle(ButtonStyle.Primary).setDisabled(true);
+        const isFading = fading.X === idx;
+        btn.setLabel('❌').setStyle(isFading ? ButtonStyle.Secondary : ButtonStyle.Primary).setDisabled(true);
       } else if (cell === 'O') {
-        btn.setLabel('⭕').setStyle(ButtonStyle.Danger).setDisabled(true);
+        const isFading = fading.O === idx;
+        btn.setLabel('⭕').setStyle(isFading ? ButtonStyle.Secondary : ButtonStyle.Danger).setDisabled(true);
       } else {
         btn.setEmoji('⬜').setStyle(style);
       }
@@ -164,7 +260,24 @@ function buildBoard(game) {
     }
     rows.push(new ActionRowBuilder().addComponents(...btns));
   }
+
+  if (game.status === 'finished') {
+    rows.push(buildRematchRow(game));
+  }
+
   return rows;
+}
+
+// 재대결 버튼: 게임이 끝나면 map에서 지워지므로(applyMove), 다시 조회할 필요가 없도록
+// 필요한 정보(선/후공 플레이어, 무한모드 여부)를 customId에 그대로 인코딩해둔다.
+function buildRematchRow(game) {
+  const flag = game.infinite ? '1' : '0';
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`ttt:rematch:${game.players.X}:${game.players.O}:${flag}`)
+      .setLabel('🔄 재대결')
+      .setStyle(ButtonStyle.Primary),
+  );
 }
 
 // 사람 vs 사람 대결에서 승부가 났을 때 내기 XP를 정산한다(무승부·봇 상대는 여기서 처리 안 함).
@@ -228,6 +341,16 @@ function settleGameXp(game) {
 
 function applyMove(game, games, idx, mark) {
   game.board[idx] = mark;
+
+  if (game.infinite) {
+    // 각자 최대 3개까지만 유지 — 4번째를 두면 그 마크의 가장 오래된 조각이 사라진다.
+    game.marks[mark].push(idx);
+    if (game.marks[mark].length > 3) {
+      const vanished = game.marks[mark].shift();
+      game.board[vanished] = '';
+    }
+  }
+
   const winner = checkWinner(game.board);
   if (winner) {
     game.status = 'finished';
@@ -261,6 +384,7 @@ async function startTttCommand(interaction) {
   const games = getGames(interaction.client);
   const gameId = interaction.id;
   const opponent = interaction.options.getUser('상대방');
+  const infinite = interaction.options.getBoolean('무한모드') ?? false;
 
   if (opponent) {
     if (opponent.id === interaction.user.id) {
@@ -282,6 +406,8 @@ async function startTttCommand(interaction) {
       winner: null,
       message: null,
       timeoutId: null,
+      infinite,
+      marks: { X: [], O: [] },
     };
     games.set(gameId, game);
 
@@ -318,10 +444,75 @@ async function startTttCommand(interaction) {
     winner: null,
     message: null,
     timeoutId: null,
+    infinite,
+    marks: { X: [], O: [] },
   };
   games.set(gameId, game);
 
   await interaction.reply({ embeds: [buildEmbed(game)], components: buildBoard(game) });
+  game.message = await interaction.fetchReply();
+  resetTimeout(game, games);
+}
+
+// 재대결: 원래 게임은 끝나는 순간 map에서 지워지므로, ttt:rematch 버튼의 customId에
+// 담아둔 정보(X/O였던 유저, 무한모드 여부)만으로 새 게임을 만든다. 사람 상대였던 경우
+// 선공/후공을 서로 바꿔서(X↔O) 매번 같은 사람만 먼저 두지 않게 한다.
+async function startRematch(interaction, prevXId, prevOId, infinite) {
+  const games = getGames(interaction.client);
+  const gameId = interaction.id;
+
+  if (prevOId === 'BOT') {
+    if (interaction.user.id !== prevXId) {
+      await interaction.reply({ content: '⚠️ **원래 참가자만 재대결할 수 있습니다.**', ephemeral: true });
+      return;
+    }
+
+    const game = {
+      id: gameId,
+      board: Array(9).fill(''),
+      players: { X: prevXId, O: 'BOT' },
+      guildId: interaction.guildId,
+      currentTurn: 'X',
+      status: 'playing',
+      winner: null,
+      message: null,
+      timeoutId: null,
+      infinite,
+      marks: { X: [], O: [] },
+    };
+    games.set(gameId, game);
+
+    await interaction.update({ content: '', embeds: [buildEmbed(game)], components: buildBoard(game) });
+    game.message = await interaction.fetchReply();
+    resetTimeout(game, games);
+    return;
+  }
+
+  if (interaction.user.id !== prevXId && interaction.user.id !== prevOId) {
+    await interaction.reply({ content: '⚠️ **원래 참가자만 재대결할 수 있습니다.**', ephemeral: true });
+    return;
+  }
+
+  const game = {
+    id: gameId,
+    board: Array(9).fill(''),
+    players: { X: prevOId, O: prevXId }, // 선공/후공을 바꿔서 재대결
+    guildId: interaction.guildId,
+    currentTurn: 'X',
+    status: 'playing',
+    winner: null,
+    message: null,
+    timeoutId: null,
+    infinite,
+    marks: { X: [], O: [] },
+  };
+  games.set(gameId, game);
+
+  await interaction.update({
+    content: `🔄 **재대결이 시작됐습니다!** (이번엔 <@${prevOId}>님이 선공 ❌)`,
+    embeds: [buildEmbed(game)],
+    components: buildBoard(game),
+  });
   game.message = await interaction.fetchReply();
   resetTimeout(game, games);
 }
@@ -397,13 +588,23 @@ async function handleTttButton(interaction) {
 
     // 봇 차례
     if (game.players[game.currentTurn] === 'BOT') {
-      const botIdx = getBotMove(game.board);
+      const botIdx = game.infinite ? getBotMoveInfinite(game.board, game.marks) : getBotMove(game.board);
       applyMove(game, games, botIdx, 'O');
       await game.message.edit({ content: '', embeds: [buildEmbed(game)], components: buildBoard(game) }).catch(() => {});
       return;
     }
 
     resetTimeout(game, games);
+    return;
+  }
+
+  // ── 재대결 ────────────────────────────────────────────────
+  if (customId.startsWith('ttt:rematch:')) {
+    const parts = customId.split(':');
+    const prevXId = parts[2];
+    const prevOId = parts[3];
+    const infinite = parts[4] === '1';
+    await startRematch(interaction, prevXId, prevOId, infinite);
   }
 }
 
