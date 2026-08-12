@@ -177,7 +177,7 @@ function buildEmbed(game) {
     desc += '⏳ 상대방의 수락을 기다리는 중...\n' +
       `⚠️ 이 대결은 **XP 내기**가 걸립니다 — 지는 사람이 최대 ${WAGER_XP} XP를 잃고(레벨은 안 깎임) 이긴 사람이 그만큼 받습니다.`;
     if (game.infinite) {
-      desc += '\n🌀 **무한모드**: 각자 최대 3개까지만 유지되고, 4번째를 두면 가장 오래된 조각이 사라집니다.';
+      desc += '\n**(무한모드)** 각자 최대 3개까지만 유지되고, 4번째를 두면 가장 오래된 조각이 사라집니다.';
     }
   } else if (game.status === 'finished') {
     if (game.winner === 'DRAW') {
@@ -192,6 +192,9 @@ function buildEmbed(game) {
         desc += `\n🎲 내기 결과 : <@${loserId}> −${wager} XP → <@${winnerId}> +${wager} XP`;
       } else if (game.xpResult?.type === 'bot_win') {
         desc += `\n🎉 <@${game.xpResult.winnerId}>님 +${game.xpResult.amount} XP!`;
+      } else if (game.xpResult?.type === 'cooldown') {
+        const cooldownMin = Math.ceil(XP_SETTLE_COOLDOWN_MS / 60000);
+        desc += `\n⏳ 연속 대결 쿨다운 중이라 이번 판은 XP 정산이 생략됐습니다. (직전 정산 후 ${cooldownMin}분 이내)`;
       }
     }
   } else {
@@ -207,12 +210,12 @@ function buildEmbed(game) {
 
   const embed = new EmbedBuilder()
     .setColor(color)
-    .setTitle(game.infinite ? '⚔️ 틱택토 · 🌀 무한모드' : '⚔️ 틱택토')
+    .setTitle(game.infinite ? '⚔️ 틱택토 (무한모드)' : '⚔️ 틱택토')
     .setDescription(desc)
     .setTimestamp();
 
   if (game.infinite && game.status === 'playing') {
-    embed.setFooter({ text: '🌀 각자 최대 3개까지만 유지되며, 4번째를 두면 가장 오래된 조각(회색으로 표시)이 사라집니다.' });
+    embed.setFooter({ text: '각자 최대 3개까지만 유지되며, 4번째를 두면 가장 오래된 조각(회색으로 표시)이 사라집니다.' });
   }
 
   return embed;
@@ -293,7 +296,9 @@ function settleWagerXp(game) {
   const winnerId = game.players[game.winner];
   const loserId = game.players[loserMark];
   if (winnerId === 'BOT' || loserId === 'BOT') return null; // 봇이 낀 경기는 아래 settleBotWinXp가 처리
-  if (isOnCooldown(winnerId) || isOnCooldown(loserId)) return null; // 같은 유저가 연달아 내기를 반복해 XP를 옮기는 것 방지
+  // 같은 유저가 연달아 내기를 반복해 XP를 옮기는 것 방지 — 재대결로 곧바로 다시 붙었을 때도
+  // 걸릴 수 있으므로, 조용히 넘기지 않고 xpResult에 이유를 남겨서 화면에 안내한다.
+  if (isOnCooldown(winnerId) || isOnCooldown(loserId)) return { type: 'cooldown' };
 
   const loserLevelXp = levelFromXp(getXp(game.guildId, loserId)).currentLevelXp;
   const wager = Math.min(WAGER_XP, loserLevelXp);
@@ -310,7 +315,8 @@ function settleBotWinXp(game) {
   const loserMark = game.winner === 'X' ? 'O' : 'X';
   const winnerId = game.players[game.winner];
   if (game.players[loserMark] !== 'BOT' || winnerId === 'BOT') return null;
-  if (isOnCooldown(winnerId)) return null; // 봇전 반복 플레이로 XP를 무한히 파밍하는 것 방지
+  // 봇전 반복 플레이로 XP를 무한히 파밍하는 것 방지 — 이유를 xpResult에 남겨서 화면에 안내한다.
+  if (isOnCooldown(winnerId)) return { type: 'cooldown' };
 
   const result = applyXp(game.guildId, winnerId, BOT_WIN_XP);
   return { type: 'bot_win', amount: BOT_WIN_XP, winnerId, winnerResult: result };
@@ -331,7 +337,7 @@ function settleGameXp(game) {
   if (EXCLUDED_GUILD_IDS.includes(game.guildId)) return; // 레벨 시스템 제외 서버(테스트 서버 등)는 내기/보상도 미적용
   const result = settleWagerXp(game) || settleBotWinXp(game);
   game.xpResult = result;
-  if (!result) return;
+  if (!result || result.type === 'cooldown') return;
 
   markCooldown(result.winnerId);
   if (result.loserId) markCooldown(result.loserId);
@@ -609,19 +615,6 @@ async function handleTttButton(interaction) {
     const prevOId = parts[3];
     const infinite = parts[4] === '1';
     await startRematch(interaction, prevXId, prevOId, infinite);
-    return;
-  }
-
-  // ── 종료 ──────────────────────────────────────────────────
-  if (customId.startsWith('ttt:close:')) {
-    const parts = customId.split(':');
-    const xId = parts[2];
-    const oId = parts[3];
-    if (interaction.user.id !== xId && interaction.user.id !== oId) {
-      await interaction.reply({ content: '⚠️ **원래 참가자만 종료할 수 있습니다.**', ephemeral: true });
-      return;
-    }
-    await interaction.update({ components: [] });
   }
 }
 
