@@ -262,21 +262,25 @@ function buildBoard(game) {
   }
 
   if (game.status === 'finished') {
-    rows.push(buildRematchRow(game));
+    rows.push(buildFinishedRow(game));
   }
 
   return rows;
 }
 
-// 재대결 버튼: 게임이 끝나면 map에서 지워지므로(applyMove), 다시 조회할 필요가 없도록
+// 재대결/종료 버튼: 게임이 끝나면 map에서 지워지므로(applyMove), 다시 조회할 필요가 없도록
 // 필요한 정보(선/후공 플레이어, 무한모드 여부)를 customId에 그대로 인코딩해둔다.
-function buildRematchRow(game) {
+function buildFinishedRow(game) {
   const flag = game.infinite ? '1' : '0';
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`ttt:rematch:${game.players.X}:${game.players.O}:${flag}`)
       .setLabel('🔄 재대결')
       .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(`ttt:close:${game.players.X}:${game.players.O}`)
+      .setLabel('🛑 종료')
+      .setStyle(ButtonStyle.Secondary),
   );
 }
 
@@ -605,6 +609,19 @@ async function handleTttButton(interaction) {
     const prevOId = parts[3];
     const infinite = parts[4] === '1';
     await startRematch(interaction, prevXId, prevOId, infinite);
+    return;
+  }
+
+  // ── 종료 ──────────────────────────────────────────────────
+  if (customId.startsWith('ttt:close:')) {
+    const parts = customId.split(':');
+    const xId = parts[2];
+    const oId = parts[3];
+    if (interaction.user.id !== xId && interaction.user.id !== oId) {
+      await interaction.reply({ content: '⚠️ **원래 참가자만 종료할 수 있습니다.**', ephemeral: true });
+      return;
+    }
+    await interaction.update({ components: [] });
   }
 }
 
