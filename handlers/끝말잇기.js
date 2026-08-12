@@ -273,6 +273,108 @@ function buildFinishedComponents(game) {
   ];
 }
 
+// ── 재대결 승낙/거절 ──────────────────────────────────────────
+// 참가자가 여럿일 수 있으므로, 재대결을 신청하면 신청자를 제외한 이전 참가자 전원이
+// 각자 수락/거절해야 한다. 사람 상대가 없었던(봇하고만 했던) 게임은 승낙받을 상대가
+// 없으므로 이 단계 없이 바로 시작한다(startRematchGame으로 직행).
+function buildRematchRequestEmbed(game) {
+  const lines = game.humanPlayers
+    .map(p => `${game.accepted.has(p.id) ? '✅ 수락' : '⌛ 대기 중'}  <@${p.id}>`)
+    .join('\n');
+  let desc = `# 🔁 끝말잇기 재대결 신청\n모두 수락하면 바로 시작됩니다.\n\n${lines}`;
+  if (game.hadBot) desc += '\n\n🤖 봇도 함께 참가합니다.';
+
+  return new EmbedBuilder()
+    .setColor(0x5865F2)
+    .setDescription(desc)
+    .setTimestamp();
+}
+
+function buildRematchRequestComponents(game) {
+  return [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`wc:rematch_accept:${game.id}`).setLabel('✅ 수락').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`wc:rematch_decline:${game.id}`).setLabel('❌ 거절').setStyle(ButtonStyle.Danger),
+    ),
+  ];
+}
+
+async function startRematchRequest(interaction, humanPlayers, hadBot) {
+  const games = getGames(interaction.client);
+  const gameId = interaction.id;
+
+  const game = {
+    id: gameId,
+    channelId: interaction.channelId,
+    guildId: interaction.guildId,
+    status: 'rematch_pending',
+    humanPlayers,
+    hadBot,
+    accepted: new Set([interaction.user.id]),
+    message: null,
+    timeoutId: null,
+  };
+  games.set(gameId, game);
+
+  await interaction.update({
+    content: '',
+    embeds: [buildRematchRequestEmbed(game)],
+    components: buildRematchRequestComponents(game),
+    attachments: [],
+  });
+  game.message = await interaction.fetchReply();
+
+  // 60초 내로 전원 수락하지 않으면 만료
+  game.timeoutId = setTimeout(async () => {
+    const g = games.get(gameId);
+    if (!g || g.status !== 'rematch_pending') return;
+    games.delete(gameId);
+    await g.message.edit({ content: '⏰ **재대결 신청이 만료되었습니다.**', embeds: [], components: [], attachments: [] }).catch(() => {});
+  }, 60_000);
+}
+
+// 전원 수락(혹은 애초에 사람 상대가 없어 승낙이 필요 없는) 경우 실제 게임을 시작한다.
+async function startRematchGame(interaction, gameId, humanPlayers, hadBot) {
+  const games = getGames(interaction.client);
+
+  const players = humanPlayers.map(p => ({ id: p.id, name: p.name }));
+  if (hadBot) players.push({ id: 'BOT', name: '봇' });
+  for (let i = players.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [players[i], players[j]] = [players[j], players[i]];
+  }
+
+  const game = {
+    id: gameId,
+    hostId: interaction.user.id,
+    channelId: interaction.channelId,
+    guildId: interaction.guildId,
+    players,
+    currentIdx: 0,
+    used: new Set(),
+    history: [],
+    lastWord: null,
+    lastChar: null,
+    status: 'playing',
+    loser: null,
+    endReason: null,
+    failWord: null,
+    xpResult: null,
+    message: null,
+    timeoutId: null,
+  };
+  games.set(gameId, game);
+
+  await interaction.update({
+    content: '🔄 **재대결이 시작됐습니다!**',
+    embeds: [buildPlayingEmbed(game)],
+    components: buildPlayingComponents(game),
+    attachments: [],
+  });
+  game.message = await interaction.fetchReply();
+  startTurn(game, games);
+}
+
 // ── 게임 종료 / XP 정산 ────────────────────────────────────────
 
 // 사람끼리만 참가한 게임에서 진 사람의 내기 XP(min(WAGER_XP, 현재 레벨 안 XP))를 생존자들에게
@@ -576,7 +678,7 @@ async function handleWcButton(interaction) {
     return;
   }
 
-  // ── 재대결 ────────────────────────────────────────────────
+  // ── 재대결 신청 ───────────────────────────────────────────
   if (customId.startsWith('wc:rematch:')) {
     const oldGameId = customId.slice('wc:rematch:'.length);
     const oldGame = games.get(oldGameId);
@@ -588,11 +690,59 @@ async function handleWcButton(interaction) {
       await interaction.reply({ content: '⚠️ **이전 게임 참가자만 재대결을 시작할 수 있습니다.**', ephemeral: true });
       return;
     }
-    const rematchPlayers = oldGame.players
-      .filter(p => p.id !== 'BOT')
-      .map(p => ({ id: p.id, name: p.name }));
-    await createLobby(interaction, rematchPlayers, interaction.user.id);
-    await oldGame.message?.edit({ components: [] }).catch(() => {});
+
+    const hadBot = oldGame.players.some(p => p.id === 'BOT');
+    const humanPlayers = oldGame.players.filter(p => p.id !== 'BOT').map(p => ({ id: p.id, name: p.name }));
+    const others = humanPlayers.filter(p => p.id !== interaction.user.id);
+
+    if (others.length === 0) {
+      // 승낙받을 사람 상대가 없음(봇하고만 했던 게임) — 바로 시작
+      await startRematchGame(interaction, interaction.id, humanPlayers, hadBot);
+    } else {
+      await startRematchRequest(interaction, humanPlayers, hadBot);
+    }
+    return;
+  }
+
+  // ── 재대결 수락 ───────────────────────────────────────────
+  if (customId.startsWith('wc:rematch_accept:')) {
+    const gameId = customId.slice('wc:rematch_accept:'.length);
+    const game = games.get(gameId);
+    if (!game || game.status !== 'rematch_pending') {
+      await interaction.reply({ content: '⚠️ **만료된 재대결 신청입니다.**', ephemeral: true });
+      return;
+    }
+    if (!game.humanPlayers.some(p => p.id === interaction.user.id)) {
+      await interaction.reply({ content: '⚠️ **이전 게임 참가자만 응답할 수 있습니다.**', ephemeral: true });
+      return;
+    }
+    game.accepted.add(interaction.user.id);
+
+    if (game.humanPlayers.every(p => game.accepted.has(p.id))) {
+      clearTimeout(game.timeoutId);
+      await startRematchGame(interaction, gameId, game.humanPlayers, game.hadBot);
+      return;
+    }
+
+    await interaction.update({ embeds: [buildRematchRequestEmbed(game)], components: buildRematchRequestComponents(game) });
+    return;
+  }
+
+  // ── 재대결 거절 ───────────────────────────────────────────
+  if (customId.startsWith('wc:rematch_decline:')) {
+    const gameId = customId.slice('wc:rematch_decline:'.length);
+    const game = games.get(gameId);
+    if (!game || game.status !== 'rematch_pending') {
+      await interaction.reply({ content: '⚠️ **만료된 재대결 신청입니다.**', ephemeral: true });
+      return;
+    }
+    if (!game.humanPlayers.some(p => p.id === interaction.user.id)) {
+      await interaction.reply({ content: '⚠️ **이전 게임 참가자만 응답할 수 있습니다.**', ephemeral: true });
+      return;
+    }
+    clearTimeout(game.timeoutId);
+    games.delete(gameId);
+    await interaction.update({ content: `❌ **<@${interaction.user.id}>님이 재대결을 거절했습니다.**`, embeds: [], components: [], attachments: [] });
     return;
   }
 }

@@ -519,13 +519,14 @@ async function startRematch(interaction, prevXId, prevOId, infinite) {
       return;
     }
 
+    // 봇전 재대결도 곧바로 시작하지 않고, 무한모드를 다시 고를 수 있는 설정 로비를 보여준다.
     const game = {
       id: gameId,
       board: Array(9).fill(''),
       players: { X: prevXId, O: 'BOT' },
       guildId: interaction.guildId,
       currentTurn: 'X',
-      status: 'playing',
+      status: 'setup',
       winner: null,
       message: null,
       timeoutId: null,
@@ -534,9 +535,15 @@ async function startRematch(interaction, prevXId, prevOId, infinite) {
     };
     games.set(gameId, game);
 
-    await interaction.update({ content: '', embeds: [buildEmbed(game)], components: buildBoard(game) });
+    await interaction.update({ content: '', embeds: [buildEmbed(game)], components: [buildBotSetupRow(game)] });
     game.message = await interaction.fetchReply();
-    resetTimeout(game, games);
+
+    game.timeoutId = setTimeout(async () => {
+      const g = games.get(gameId);
+      if (!g || g.status !== 'setup') return;
+      games.delete(gameId);
+      await g.message.edit({ content: '⏰ **설정 시간이 초과되어 게임이 취소되었습니다.**', embeds: [], components: [] }).catch(() => {});
+    }, 60_000);
     return;
   }
 
@@ -545,28 +552,43 @@ async function startRematch(interaction, prevXId, prevOId, infinite) {
     return;
   }
 
+  // 사람 상대 재대결은 즉시 시작하지 않고, 기존 레디 로비(ttt:ready/ttt:decline)를 그대로
+  // 재사용해 상대의 승낙을 받는다. 신청한 사람은 자동으로 레디 상태로 시작한다.
+  const newX = prevOId;
+  const newO = prevXId; // 선공/후공을 바꿔서 재대결
+  const requesterMark = interaction.user.id === newX ? 'X' : 'O';
+  const opponentId = requesterMark === 'X' ? newO : newX;
+
   const game = {
     id: gameId,
     board: Array(9).fill(''),
-    players: { X: prevOId, O: prevXId }, // 선공/후공을 바꿔서 재대결
+    players: { X: newX, O: newO },
     guildId: interaction.guildId,
     currentTurn: 'X',
-    status: 'playing',
+    status: 'waiting',
     winner: null,
     message: null,
     timeoutId: null,
     infinite,
     marks: { X: [], O: [] },
+    ready: { X: requesterMark === 'X', O: requesterMark === 'O' },
   };
   games.set(gameId, game);
 
   await interaction.update({
-    content: `🔄 **재대결이 시작됐습니다!** (이번엔 <@${prevOId}>님이 선공 ❌)`,
+    content: `🔄 <@${opponentId}>님, <@${interaction.user.id}>님이 재대결을 신청했습니다!`,
     embeds: [buildEmbed(game)],
-    components: buildBoard(game),
+    components: [buildChallengeRow(game)],
   });
   game.message = await interaction.fetchReply();
-  resetTimeout(game, games);
+
+  // 60초 내로 상대가 레디하지 않으면 만료
+  game.timeoutId = setTimeout(async () => {
+    const g = games.get(gameId);
+    if (!g || g.status !== 'waiting') return;
+    games.delete(gameId);
+    await g.message.edit({ content: '⏰ **재대결 신청이 만료되었습니다.**', embeds: [], components: [] }).catch(() => {});
+  }, 60_000);
 }
 
 async function handleTttButton(interaction) {
