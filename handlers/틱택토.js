@@ -223,7 +223,7 @@ function buildEmbed(game) {
     .setTimestamp();
 
   if (game.infinite && game.status === 'playing') {
-    embed.setFooter({ text: '각자 최대 3개까지만 유지되며, 4번째를 두면 가장 오래된 조각(회색으로 표시)이 사라집니다.' });
+    embed.setFooter({ text: '각자 최대 3개까지만 유지되며, 4번째를 두면 가장 오래된 조각(회색)이 사라집니다.' });
   }
 
   return embed;
