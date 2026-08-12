@@ -182,13 +182,16 @@ async function pickWord(recentWords, gradePreference) {
   return { word, hint };
 }
 
-// 전날 문제를 아무도 못 맞힌 채로 다음 문제를 낼 시점이 되면, 그 전 문제는 정답을 공개하며
-// 보상 없이 무효 처리한다(제한시간이 없어 계속 열어두면 새/헌 문제 정답이 동시에 유효해져 혼선이 생김).
-async function voidPreviousQuiz(client, state) {
-  const quiz = client.activeQuiz;
+// 자동 출제(activeQuiz)와 관리자 수동 출제(activeManualQuiz)는 완전히 별개 슬롯으로 관리한다
+// — 자동으로 걸려있는 문제가 있어도 관리자가 문제를 만들면 그건 별도로 새로 열리고, 둘 다
+// 동시에 채점 대상이 된다(자동이 수동을 밀어내거나 그 반대의 일은 없음). 각 슬롯 안에서는
+// 여전히 "그 전 문제를 아무도 못 맞힌 채 새 문제가 그 슬롯에 또 올라오면 무효 처리"가 적용된다.
+async function voidQuiz(client, state, slotKey) {
+  const quiz = client[slotKey];
   if (!quiz) return;
-  client.activeQuiz = null;
-  state.activeQuiz = null;
+  if (quiz.timeoutId) clearTimeout(quiz.timeoutId);
+  client[slotKey] = null;
+  state[slotKey] = null;
   try {
     const channel = await client.channels.fetch(quiz.channelId).catch(() => null);
     await channel?.send(`⌛ **지난 ${MODES[quiz.mode]?.label ?? '퀴즈'} 정답은 ${quiz.word} 였습니다.** 아무도 맞히지 못해 보상 없이 마감되었습니다.`);
@@ -197,12 +200,13 @@ async function voidPreviousQuiz(client, state) {
   }
 }
 
-// 실제로 채널에 문제를 올리는 부분(전날 문제 무효 처리 + 문제 확정 + 게시)만 떼어낸 함수.
-// fireQuiz(예약 경로)와 postCustomQuiz(관리자가 /퀴즈로 직접 만든 문제 경로)가 공유한다.
-// picked를 안 주면(예약 경로) 평소처럼 API에서 무작위로 고르고, 주면(관리자 직접 출제) 그걸 그대로 쓴다.
-async function postQuiz(client, state, modeKey, picked) {
+// 실제로 채널에 문제를 올리는 부분(같은 슬롯의 이전 미해결 문제 무효 처리 + 문제 확정 + 게시)만
+// 떼어낸 함수. fireQuiz(예약 경로, slotKey='activeQuiz')와 postCustomQuiz(관리자 직접 출제
+// 경로, slotKey='activeManualQuiz')가 공유한다. picked를 안 주면 API에서 무작위로 고르고,
+// 주면(관리자 직접 출제) 그걸 그대로 쓴다.
+async function postQuiz(client, state, modeKey, picked, slotKey = 'activeQuiz', extraFields = {}) {
   const mode = MODES[modeKey];
-  await voidPreviousQuiz(client, state); // state.activeQuiz를 정리할 수 있으므로 아래 saveState보다 먼저 실행
+  await voidQuiz(client, state, slotKey); // state[slotKey]를 정리할 수 있으므로 아래 saveState보다 먼저 실행
   saveState(state);
 
   try {
@@ -212,9 +216,9 @@ async function postQuiz(client, state, modeKey, picked) {
     picked = picked || await pickWord(state.recentWords || [], mode.gradePreference);
     state.recentWords = [picked.word, ...(state.recentWords || [])].slice(0, RECENT_WORD_MEMORY);
 
-    const quiz = { channelId: QUIZ_CHANNEL_ID, guildId: channel.guildId, word: picked.word, mode: modeKey, xpReward: mode.xpReward };
-    client.activeQuiz = quiz;
-    state.activeQuiz = quiz;
+    const quiz = { channelId: QUIZ_CHANNEL_ID, guildId: channel.guildId, word: picked.word, mode: modeKey, xpReward: mode.xpReward, ...extraFields };
+    client[slotKey] = quiz;
+    state[slotKey] = quiz;
     saveState(state);
 
     await channel.send({ embeds: [mode.buildEmbed(picked)] });
@@ -234,7 +238,7 @@ async function fireQuiz(client, modeKey) {
   // 한 번 더 예약하는 경합(중복 출제)을 막을 수 있다.
   saveState(state);
 
-  await postQuiz(client, state, modeKey);
+  await postQuiz(client, state, modeKey); // slotKey 기본값 'activeQuiz'
 }
 
 let armedTimer = null;
@@ -251,16 +255,31 @@ function disarmTimer() {
 // 무작위 시각을 골라 setTimeout을 건다. 모드는 어제 출제된 모드의 반대로 자동 결정(첫 실행은
 // 초성퀴즈부터). scheduledAt(고정
 // 시각)을 파일에 저장해두므로, 봇이 재시작돼도 같은 시각·같은 모드로 다시 예약되고(이미 지났으면 즉시
-// 출제) 하루에 두 번 출제되지 않는다. 아직 안 풀린 문제(activeQuiz)도 파일에 저장해두므로, 봇이
-// 재시작돼도 채점이 끊기지 않고 이어진다(다음 문제가 나갈 때 voidPreviousQuiz가 정리).
-// /퀴즈 중지로 paused 상태가 되면 예약을 걸지 않고(이미 나간 문제 채점은 계속 동작), /퀴즈 재개 시
-// 다시 정상적으로 예약을 재개한다.
+// 출제) 하루에 두 번 출제되지 않는다. 아직 안 풀린 문제(activeQuiz/activeManualQuiz)도 파일에
+// 저장해두므로, 봇이 재시작돼도 채점이 끊기지 않고 이어진다(다음 문제가 같은 슬롯에 나갈 때
+// voidQuiz가 정리). /퀴즈 중지로 paused 상태가 되면 예약을 걸지 않고(이미 나간 문제 채점은 계속
+// 동작), /퀴즈 재개 시 다시 정상적으로 예약을 재개한다. paused는 자동 출제에만 영향을 주며,
+// 관리자 수동 출제(activeManualQuiz)는 이 스케줄러와 무관하게 언제든 별도로 동작한다.
 function checkAndSchedule(client) {
   const now = Date.now();
   const today = cycleDateString(now);
   let state = loadState();
 
   if (state?.activeQuiz && !client.activeQuiz) client.activeQuiz = state.activeQuiz;
+
+  // 관리자 출제(activeManualQuiz)는 1시간 제한시간이 있는데, 그 타이머는 메모리에만 있어서
+  // 재시작하면 사라진다. expiresAt(고정 만료 시각)을 기준으로 남은 시간을 다시 계산해 이어
+  // 걸거나, 이미 지났으면 그 자리에서 바로 마감 처리한다.
+  if (state?.activeManualQuiz && !client.activeManualQuiz) {
+    client.activeManualQuiz = state.activeManualQuiz;
+    const remaining = (state.activeManualQuiz.expiresAt ?? 0) - now;
+    if (remaining <= 0) {
+      voidQuiz(client, state, 'activeManualQuiz').catch(() => {});
+      saveState(state);
+    } else {
+      armManualQuizTimeout(client, client.activeManualQuiz, remaining);
+    }
+  }
 
   if (state?.paused) {
     disarmTimer();
@@ -276,6 +295,7 @@ function checkAndSchedule(client) {
     state = {
       day: today, mode, scheduledAt, posted: scheduledAt === null, paused: false,
       recentWords: state?.recentWords || [], activeQuiz: state?.activeQuiz || null,
+      activeManualQuiz: state?.activeManualQuiz || null,
     };
     saveState(state);
   }
@@ -300,7 +320,8 @@ function startQuizScheduler(client) {
 // ── 관리자 명령어(/퀴즈)에서 사용하는 제어 함수 ────────────────────────
 function pauseQuiz() {
   const state = loadState() || {
-    day: cycleDateString(), mode: 'chosung', scheduledAt: null, posted: true, recentWords: [], activeQuiz: null,
+    day: cycleDateString(), mode: 'chosung', scheduledAt: null, posted: true,
+    recentWords: [], activeQuiz: null, activeManualQuiz: null,
   };
   state.paused = true;
   saveState(state);
@@ -316,32 +337,47 @@ function resumeQuiz(client) {
   checkAndSchedule(client);
 }
 
-// 예약 타이머를 끄고, 오늘 몫 출제를 "강제로 지금 낼" 준비를 한다(무작위 시각/기존 posted 여부 무시).
-// modeOverride를 주면 오늘의 모드 자체를 그걸로 바꿔서 내보낸다(다음 날 교대 기준도 그걸로 갱신됨).
-function prepareManualFire(modeOverride) {
-  disarmTimer();
+// 관리자가 직접 낸 문제는 자동 출제 스케줄과 완전히 무관하게 별도 슬롯(activeManualQuiz)에서
+// 돌기 때문에, 자동 출제처럼 "다음 문제가 나갈 때까지 무기한 대기"로 두면 계속 열린 채 잊혀질
+// 수 있다. 그래서 자동 출제와 달리 1시간 제한시간을 둬서, 그 안에 못 맞히면 정답 공개와 함께
+// 자동으로 마감한다.
+const MANUAL_QUIZ_TIME_LIMIT_MS = 60 * 60 * 1000;
 
-  const now = Date.now();
-  const today = cycleDateString(now);
-  let state = loadState();
-  if (!state || state.day !== today) {
-    state = {
-      day: today, mode: modeOverride || 'chosung', scheduledAt: null, posted: false, paused: state?.paused || false,
-      recentWords: state?.recentWords || [], activeQuiz: state?.activeQuiz || null,
-    };
-  }
-
-  const modeKey = modeOverride && MODES[modeOverride] ? modeOverride : state.mode;
-  state.mode = modeKey;
-  state.posted = true;
-  saveState(state);
-  return { state, modeKey };
+// delayMs를 따로 주면 그 시간 뒤에 마감(재시작 후 남은 시간만큼만 다시 예약할 때 사용),
+// 안 주면 기본 1시간 뒤 마감.
+function armManualQuizTimeout(client, quiz, delayMs = MANUAL_QUIZ_TIME_LIMIT_MS) {
+  quiz.timeoutId = setTimeout(async () => {
+    if (client.activeManualQuiz !== quiz) return; // 이미 정답 처리됐거나 다른 문제로 교체됨
+    client.activeManualQuiz = null;
+    const state = loadState();
+    if (state) {
+      state.activeManualQuiz = null;
+      saveState(state);
+    }
+    try {
+      const channel = await client.channels.fetch(quiz.channelId).catch(() => null);
+      await channel?.send(`⌛ **1시간이 지나 관리자가 낸 ${MODES[quiz.mode]?.label ?? '퀴즈'}가 마감되었습니다.** 정답은 **${quiz.word}** 였습니다.`);
+    } catch (err) {
+      console.error('관리자 출제 문제 시간 초과 처리 중 오류:', err);
+    }
+  }, Math.max(0, delayMs));
 }
 
 // 관리자가 /퀴즈에서 직접 입력한 단어·힌트로 문제를 출제한다(API로 무작위로 고르지 않음).
+// 자동 출제(activeQuiz)의 예약/오늘 출제 여부와는 전혀 무관하게 별도 슬롯(activeManualQuiz)에
+// 독립적으로 열리며, 1시간 안에 못 맞히면 자동으로 마감된다.
 async function postCustomQuiz(client, modeOverride, word, hint) {
-  const { state, modeKey } = prepareManualFire(modeOverride);
-  const ok = await postQuiz(client, state, modeKey, { word, hint });
+  const modeKey = modeOverride && MODES[modeOverride] ? modeOverride : 'chosung';
+  const state = loadState() || {
+    day: cycleDateString(), mode: 'chosung', scheduledAt: null, posted: false, paused: false,
+    recentWords: [], activeQuiz: null, activeManualQuiz: null,
+  };
+
+  // expiresAt(고정 만료 시각)을 quiz에 함께 저장해두면, 봇이 재시작돼도 남은 시간을 다시
+  // 계산해 타이머를 정확히 이어서 걸 수 있다(재시작 시 checkAndSchedule에서 복원).
+  const expiresAt = Date.now() + MANUAL_QUIZ_TIME_LIMIT_MS;
+  const ok = await postQuiz(client, state, modeKey, { word, hint }, 'activeManualQuiz', { expiresAt });
+  if (ok && client.activeManualQuiz) armManualQuizTimeout(client, client.activeManualQuiz, MANUAL_QUIZ_TIME_LIMIT_MS);
   return { ok, mode: modeKey };
 }
 
@@ -349,27 +385,37 @@ function getQuizStatus() {
   return loadState();
 }
 
+// 자동 출제(activeQuiz)와 관리자 수동 출제(activeManualQuiz) 두 슬롯을 모두 확인해서, 채팅
+// 메시지가 둘 중 하나의 정답과 일치하면 그 슬롯만 채점한다(다른 슬롯은 그대로 계속 열려있음).
 async function handleQuizMessage(message) {
-  const quiz = message.client.activeQuiz;
-  if (!quiz || message.author.bot || message.channelId !== quiz.channelId) return;
-  if (EXCLUDED_GUILD_IDS.includes(quiz.guildId)) return; // 레벨 시스템 제외 서버(테스트 서버 등)는 채점하지 않음
+  if (message.author.bot) return;
 
+  const client = message.client;
   const normalize = s => s.replace(/\s+/g, '');
-  if (normalize(message.content) !== normalize(quiz.word)) return;
+  const guess = normalize(message.content);
 
-  message.client.activeQuiz = null;
-  const state = loadState();
-  if (state) {
-    state.activeQuiz = null;
-    saveState(state);
+  for (const slotKey of ['activeQuiz', 'activeManualQuiz']) {
+    const quiz = client[slotKey];
+    if (!quiz || message.channelId !== quiz.channelId) continue;
+    if (normalize(quiz.word) !== guess) continue;
+    if (EXCLUDED_GUILD_IDS.includes(quiz.guildId)) return; // 레벨 시스템 제외 서버(테스트 서버 등)는 채점하지 않음
+
+    if (quiz.timeoutId) clearTimeout(quiz.timeoutId);
+    client[slotKey] = null;
+    const state = loadState();
+    if (state) {
+      state[slotKey] = null;
+      saveState(state);
+    }
+
+    const result = applyXp(quiz.guildId, message.author.id, quiz.xpReward);
+    const levelUpLine = result.leveledUp ? `\n🎊 ${message.author}님이 **${result.newLevel}레벨**을 달성했어요!` : '';
+    await message.reply({
+      content: `🎉 정답입니다! **${quiz.word}** (+${quiz.xpReward} XP)${levelUpLine}`,
+      allowedMentions: { repliedUser: false, users: result.leveledUp ? [message.author.id] : [] },
+    }).catch(() => {});
+    return; // 한 메시지는 한 슬롯만 채점
   }
-
-  const result = applyXp(quiz.guildId, message.author.id, quiz.xpReward);
-  const levelUpLine = result.leveledUp ? `\n🎊 ${message.author}님이 **${result.newLevel}레벨**을 달성했어요!` : '';
-  await message.reply({
-    content: `🎉 정답입니다! **${quiz.word}** (+${quiz.xpReward} XP)${levelUpLine}`,
-    allowedMentions: { repliedUser: false, users: result.leveledUp ? [message.author.id] : [] },
-  }).catch(() => {});
 }
 
 module.exports = {

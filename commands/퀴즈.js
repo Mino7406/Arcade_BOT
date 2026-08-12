@@ -35,7 +35,8 @@ function buildQuizPanelPayload(notice) {
     `오늘 모드 : ${MODE_LABELS[state.mode] ?? state.mode}`,
     `오늘 출제 여부 : ${state.posted ? '✅ 출제됨' : '⏳ 대기 중'}`,
     `출제 예정 시각 : ${state.posted ? '-' : formatKst(state.scheduledAt)} (KST)`,
-    `현재 미해결 문제 : ${state.activeQuiz ? `${MODE_LABELS[state.activeQuiz.mode] ?? state.activeQuiz.mode} · \`${state.activeQuiz.word}\`` : '없음'}`,
+    `자동 출제 미해결 문제 : ${state.activeQuiz ? `${MODE_LABELS[state.activeQuiz.mode] ?? state.activeQuiz.mode} · \`${state.activeQuiz.word}\`` : '없음'}`,
+    `관리자 출제 미해결 문제 : ${state.activeManualQuiz ? `${MODE_LABELS[state.activeManualQuiz.mode] ?? state.activeManualQuiz.mode} · \`${state.activeManualQuiz.word}\` (1시간 후 자동 마감)` : '없음'}`,
   ];
 
   return {
@@ -57,7 +58,7 @@ function buildMainRow(paused) {
 // "✍️ 문제 만들기" 클릭 시 보여줄 모드 선택 화면 — 고르면 바로 입력용 모달이 뜬다.
 function buildCreateMenuPayload() {
   return {
-    content: '✍️ **문제 직접 만들기 — 어떤 모드로 낼까요?**\n단어와 힌트(뜻풀이)를 직접 입력해서 지금 바로 출제합니다. 중지 상태이거나 오늘 이미 출제됐어도 무시하고 강제로 새로 냅니다.',
+    content: '✍️ **문제 직접 만들기 — 어떤 모드로 낼까요?**\n단어와 힌트(뜻풀이)를 직접 입력해서 지금 바로 출제합니다. 자동 출제(초성퀴즈·상식퀴즈)와는 완전히 별개로 진행되는 보너스 문제라 중지 상태여도, 오늘 자동 출제가 이미 나갔어도 상관없이 낼 수 있습니다. 다만 **1시간 안에 못 맞히면 자동으로 마감**됩니다.',
     components: [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('quiz:create:chosung').setLabel('🔤 초성퀴즈로 만들기').setStyle(ButtonStyle.Secondary),
@@ -175,7 +176,7 @@ async function handleQuizCreateModal(interaction) {
   await interaction.deferReply({ ephemeral: true });
   const result = await postCustomQuiz(interaction.client, modeKey, word, hint);
   const notice = result.ok
-    ? `✅ **직접 만든 ${MODE_LABELS[result.mode]}를 출제했습니다.** (정답: \`${word}\`)`
+    ? `✅ **직접 만든 ${MODE_LABELS[result.mode]}를 출제했습니다.** (정답: \`${word}\`, 1시간 안에 못 맞히면 자동 마감)`
     : '⚠️ **출제에 실패했습니다.** 놀이터 채널을 찾을 수 없거나 오류가 발생했습니다.';
   await interaction.editReply(buildQuizPanelPayload(notice));
 }
