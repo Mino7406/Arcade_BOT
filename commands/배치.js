@@ -8,7 +8,7 @@ const {
 
 const { ADMIN_IDS } = require('../handlers/공용');
 
-// 끝말잇기/레벨/랭킹은 이 채널(놀이터)에서만 사용 가능.
+// 끝말잇기/틱택토/레벨/랭킹은 이 채널(놀이터)에서만 사용 가능.
 const PLAYGROUND_CHANNEL_ID = '1522174367075663872';
 
 // 안내 패널의 "명령어 보기" 버튼(index.js)에서 재사용.
@@ -22,6 +22,7 @@ const COMMAND_LIST = [
 // 놀이터 채널에서만 사용 가능한 명령어(PLAYGROUND_CHANNEL_ID). 위 목록과 구분선으로 구역을 나눠 표시한다.
 const PLAYGROUND_COMMAND_LIST = [
   { name: '/끝말잇기', value: '끝말잇기 게임을 시작합니다' },
+  { name: '/틱택토', value: '틱택토 게임을 시작합니다 (상대방 없으면 봇과 대결)' },
   { name: '/레벨', value: '나 또는 다른 유저의 레벨/XP를 확인합니다' },
   { name: '/랭킹', value: '서버 XP 랭킹을 확인합니다' },
 ];
@@ -76,7 +77,7 @@ function buildSetupPanelPayload(interaction) {
     .setColor(0x57f287)
     .setTitle('🎡 놀이터 채널 안내')
     .setDescription(
-      '**끝말잇기, 레벨, 랭킹**은 놀이터 채널에서만 이용할 수 있어요.\n아래 버튼으로 바로 이동하세요.',
+      '**끝말잇기, 틱택토, 레벨, 랭킹**은 놀이터 채널에서만 이용할 수 있어요.\n아래 버튼으로 바로 이동하세요.',
     );
 
   const row1 = new ActionRowBuilder().addComponents(

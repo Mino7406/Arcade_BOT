@@ -8,7 +8,10 @@ const { armAutoEnd, AUTO_CLOSE_DELAY_MS, announceMatchCompletionXp, scheduleCanc
 const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/팀');
 const { handleRMatchSelect } = require('./handlers/불러오기');
 const { handleWcButton, handleWcMessage } = require('./handlers/끝말잇기');
+const { handleTttButton } = require('./handlers/틱택토');
+const { startQuizScheduler, handleQuizMessage } = require('./handlers/퀴즈');
 const { handleAdminSelect, handleAdminButton } = require('./commands/관리');
+const { handleQuizAdminButton, handleQuizCreateModal } = require('./commands/퀴즈');
 const { buildGameSelectPayload: buildNaejeonGameSelectPayload } = require('./commands/내전');
 const { buildGameSelectPayload: buildMojipGameSelectPayload } = require('./commands/모집');
 const { buildReloadListPayload } = require('./commands/불러오기');
@@ -21,7 +24,7 @@ const { loadLevels, saveLevels, handleMessageXp, trackVoiceStateUpdate, initVoic
 const { handleTempVoiceState, reconcileTempChannels } = require('./handlers/음성채널');
 const { logCommandUsage } = require('./handlers/명령어로그');
 
-// 끝말잇기/랭킹 명령어와 관련 버튼을 이 채널에서만 사용할 수 있게 제한한다.
+// 끝말잇기/틱택토/랭킹 명령어와 관련 버튼을 이 채널에서만 사용할 수 있게 제한한다.
 const WORDCHAIN_RANKING_CHANNEL_ID = '1522174367075663872';
 
 const client = new Client({
@@ -194,6 +197,7 @@ async function onReady(c) {
   startVoiceXpTicker(c); // 통화방 체류 XP 1분 틱 시작
   await reconcileTempChannels(c); // 재시작 전 만들어둔 임시 음성채널 중 빈 방 정리
   await reconcileMatchBonusMessages(c); // 봇이 꺼져있던 동안 인증 채널에 올라와 예약이 빠진 메시지 복구
+  startQuizScheduler(c); // 놀이터 채널에 하루 한 번 무작위 시각으로 초성퀴즈/상식퀴즈를 번갈아 출제
   dataReady = true;
 }
 client.once('clientReady', onReady);
@@ -201,10 +205,11 @@ client.once('ready', onReady);
 
 client.on('interactionCreate', async (interaction) => {
   try {
-    // 끝말잇기/레벨/랭킹은 다른 채널 허용 목록과 무관하게 이 채널에서만 사용 가능.
+    // 끝말잇기/틱택토/레벨/랭킹은 다른 채널 허용 목록과 무관하게 이 채널에서만 사용 가능.
     const isWordchainOrRanking =
-      (interaction.isChatInputCommand() && ['끝말잇기', '레벨', '랭킹'].includes(interaction.commandName)) ||
+      (interaction.isChatInputCommand() && ['끝말잇기', '틱택토', '레벨', '랭킹'].includes(interaction.commandName)) ||
       interaction.customId?.startsWith('wc:') ||
+      interaction.customId?.startsWith('ttt:') ||
       interaction.customId?.startsWith('ranking:') ||
       interaction.customId?.startsWith('level:');
 
@@ -230,10 +235,11 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     const isChannelExempt =
-      (interaction.isChatInputCommand() && ['관리', '배치'].includes(interaction.commandName)) ||
+      (interaction.isChatInputCommand() && ['관리', '배치', '퀴즈'].includes(interaction.commandName)) ||
       isWordchainOrRanking ||
       isReload ||
-      interaction.customId?.startsWith('admin:');
+      interaction.customId?.startsWith('admin:') ||
+      interaction.customId?.startsWith('quiz:');
 
     if (!isChannelExempt) {
       const allowedChannel = process.env.ALLOWED_CHANNEL_ID;
@@ -297,6 +303,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleMojipMatchEditModal(interaction);
       } else if (interaction.customId.startsWith('mojip:notify_modal:')) {
         await handleMojipNotifyModal(interaction);
+      } else if (interaction.customId.startsWith('quiz:create_modal:')) {
+        await handleQuizCreateModal(interaction);
       }
 
     } else if (interaction.isButton()) {
@@ -308,8 +316,12 @@ client.on('interactionCreate', async (interaction) => {
         await handleTeamButton(interaction);
       } else if (interaction.customId.startsWith('wc:')) {
         await handleWcButton(interaction);
+      } else if (interaction.customId.startsWith('ttt:')) {
+        await handleTttButton(interaction);
       } else if (interaction.customId.startsWith('admin:')) {
         await handleAdminButton(interaction);
+      } else if (interaction.customId.startsWith('quiz:')) {
+        await handleQuizAdminButton(interaction);
       } else if (interaction.customId.startsWith('level:share:')) {
         await handleLevelShareButton(interaction);
       } else if (interaction.customId.startsWith('ranking:page:')) {
@@ -351,6 +363,12 @@ client.on('interactionCreate', async (interaction) => {
 client.on('messageCreate', async (message) => {
   try {
     await handleWcMessage(message);
+  } catch (error) {
+    console.error(error);
+  }
+
+  try {
+    await handleQuizMessage(message);
   } catch (error) {
     console.error(error);
   }

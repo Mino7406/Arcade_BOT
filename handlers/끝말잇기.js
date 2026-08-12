@@ -4,12 +4,19 @@ const {
   ButtonBuilder,
   ButtonStyle,
 } = require('discord.js');
+const { applyXp, getXp, levelFromXp, LEVEL_UP_ANNOUNCE_CHANNEL_ID, EXCLUDED_GUILD_IDS } = require('./레벨');
 
 const TURN_MS  = 20_000;
 const TURN_SEC = TURN_MS / 1000;
 const JOIN_MS  = 90_000;
 const REMATCH_EXPIRY_MS = 5 * 60_000; // 종료된 게임은 5분간 재대결 버튼으로 이어할 수 있음
 const KOREAN   = /^[가-힣]+$/;
+// 사람끼리만 참가한 게임에서 자동으로 거는 내기 XP. 진 사람의 "현재 레벨 안에 쌓인 XP"로
+// 상한을 걸어(min(WAGER_XP, currentLevelXp)) 내기에서 져도 레벨이 떨어지지는 않게 한다.
+// 살아남은 사람이 여럿이면 진 사람의 몫을 그만큼 나눠 가짐(틱택토와 동일한 방식).
+const WAGER_XP = 100;
+// 참가자 중 봇이 있는 게임에서 봇이 탈락했을 때 생존자 각자에게 지급하는 고정 XP(내기 아님).
+const BOT_WIN_XP = 60;
 
 // ── 두음법칙 변환 ─────────────────────────────────────────────────
 // 단어 첫머리의 'ㄹ/ㄴ' 초성은 뒤따르는 모음에 따라 'ㄴ' 또는 'ㅇ'으로
@@ -179,11 +186,23 @@ function buildFinishedEmbed(game) {
     .setColor(0xED4245)
     .setDescription(
       `# 🔤 끝말잇기 종료\n**탈락** : \`${loserName}\`\n**이유** : ${REASONS[game.endReason] || '게임 종료'}\n\n` +
-      `총 **${game.history.length}개** 단어 사용`,
+      `총 **${game.history.length}개** 단어 사용` +
+      formatXpResultLine(game),
     );
   return embed
     .addFields({ name: '📝 마지막 단어들', value: recent })
     .setTimestamp();
+}
+
+function formatXpResultLine(game) {
+  const result = game.xpResult;
+  if (!result) return '';
+
+  const winnerText = result.winnerResults.map(w => `<@${w.userId}> +${w.amount}`).join(', ');
+  if (result.type === 'wager') {
+    return `\n🎲 내기 결과 : <@${result.loserId}> −${result.wager} XP → ${winnerText} XP`;
+  }
+  return `\n🎉 봇을 이겨서 XP 획득 : ${winnerText} XP`;
 }
 
 // ── 컴포넌트 빌더 ──────────────────────────────────────────────
@@ -236,7 +255,68 @@ function buildFinishedComponents(game) {
   ];
 }
 
-// ── 게임 종료 ──────────────────────────────────────────────────
+// ── 게임 종료 / XP 정산 ────────────────────────────────────────
+
+// 사람끼리만 참가한 게임에서 진 사람의 내기 XP(min(WAGER_XP, 현재 레벨 안 XP))를 생존자들에게
+// 고르게 나눠준다 — 참가자 중 봇이 있으면(hasBot) 적용하지 않음(아래 settleBotWinXp가 대신 처리).
+function settleWagerXp(game) {
+  if (!game.guildId || game.endReason === 'cancelled') return null;
+  if (game.players.some(p => p.id === 'BOT')) return null;
+
+  const survivors = game.players.map(p => p.id).filter(id => id !== game.loser);
+  if (!survivors.length) return null;
+
+  const loserLevelXp = levelFromXp(getXp(game.guildId, game.loser)).currentLevelXp;
+  const wager = Math.min(WAGER_XP, loserLevelXp);
+  if (wager <= 0) return null;
+
+  const loserResult = applyXp(game.guildId, game.loser, -wager);
+  const share = Math.floor(wager / survivors.length);
+  let remainder = wager - share * survivors.length;
+  const winnerResults = [];
+  for (const id of survivors) {
+    const amount = share + (remainder > 0 ? 1 : 0);
+    if (remainder > 0) remainder--;
+    if (amount > 0) winnerResults.push({ userId: id, amount, ...applyXp(game.guildId, id, amount) });
+  }
+  return { type: 'wager', wager, loserId: game.loser, loserResult, winnerResults };
+}
+
+// 참가자 중 봇이 있었고 봇이 탈락했다면(=사람들이 이김) 생존자(사람) 각자에게 고정 XP를 지급.
+// 사람이 탈락한 경우(봇이 살아남은 경우)는 지급하지 않음 — 봇전은 보상만 있고 패널티는 없음.
+function settleBotWinXp(game) {
+  if (!game.guildId || game.endReason === 'cancelled') return null;
+  if (game.loser !== 'BOT') return null;
+
+  const survivors = game.players.map(p => p.id).filter(id => id !== 'BOT');
+  if (!survivors.length) return null;
+  const winnerResults = survivors.map(id => ({ userId: id, amount: BOT_WIN_XP, ...applyXp(game.guildId, id, BOT_WIN_XP) }));
+  return { type: 'bot_win', winnerResults };
+}
+
+async function announceLevelUp(client, guildId, userId, newLevel) {
+  try {
+    const channel = await client.channels.fetch(LEVEL_UP_ANNOUNCE_CHANNEL_ID).catch(() => null);
+    if (channel?.guildId === guildId) {
+      await channel.send({ content: `<@${userId}>님이 ${newLevel}레벨을 달성했어요. 🎉`, allowedMentions: { users: [userId] } });
+    }
+  } catch (err) {
+    console.error('끝말잇기 레벨업 메시지 전송 실패:', err);
+  }
+}
+
+function settleGameXp(game) {
+  if (EXCLUDED_GUILD_IDS.includes(game.guildId)) return; // 레벨 시스템 제외 서버(테스트 서버 등)는 내기/보상도 미적용
+  const result = settleWagerXp(game) || settleBotWinXp(game);
+  game.xpResult = result;
+  if (!result) return;
+
+  const client = game.message?.client;
+  if (!client) return;
+  for (const w of result.winnerResults) {
+    if (w.leveledUp) announceLevelUp(client, game.guildId, w.userId, w.newLevel).catch(() => {});
+  }
+}
 
 function endGame(game, games, loserId, reason, failWord = null) {
   clearTimeout(game.timeoutId);
@@ -244,6 +324,7 @@ function endGame(game, games, loserId, reason, failWord = null) {
   game.loser     = loserId;
   game.endReason = reason;
   game.failWord  = failWord;
+  settleGameXp(game);
   // 즉시 지우지 않고 잠시 남겨둬서 '재대결' 버튼이 원래 참가자 명단을 찾을 수 있게 함
   setTimeout(() => games.delete(game.id), REMATCH_EXPIRY_MS);
   game.message?.edit({ embeds: [buildFinishedEmbed(game)], components: buildFinishedComponents(game), attachments: [] }).catch(() => {});
@@ -301,6 +382,7 @@ async function createLobby(interaction, initialPlayers, hostId) {
     id: gameId,
     hostId,
     channelId: interaction.channelId,
+    guildId: interaction.guildId,
     players: initialPlayers,
     currentIdx: 0,
     used: new Set(),
@@ -311,6 +393,7 @@ async function createLobby(interaction, initialPlayers, hostId) {
     loser: null,
     endReason: null,
     failWord: null,
+    xpResult: null,
     message: null,
     timeoutId: null,
   };

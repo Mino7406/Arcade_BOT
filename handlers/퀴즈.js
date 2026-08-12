@@ -1,0 +1,365 @@
+// 퀴즈.js — 놀이터 채널에 하루 한 번, 초성퀴즈/상식퀴즈를 번갈아가며 자동 출제한다.
+// 문제는 하드코딩된 목록이 아니라 국립국어원 한국어기초사전 API(끝말잇기와 동일 API)에서
+// 그때그때 무작위로 가져오므로, 오래 운영해도 문제가 고정/반복되지 않는다.
+// - 초성퀴즈: 초성 + 뜻풀이 힌트를 보여줌 (쉬운 난이도 위주)
+// - 상식퀴즈: 초성 없이 뜻풀이만 보여줌 (어려운 난이도 위주)
+// 제한시간은 따로 없고, 다음 문제가 출제될 때까지 계속 열려있다. 다음 날 새 문제가 나갈 때
+// 그 전날 문제를 아직 아무도 못 맞혔다면 그 문제는 그대로 무효 처리(보상 없이 마감)한다 —
+// 그래야 두 문제가 동시에 유효해서 생기는 중복/혼선을 막을 수 있다.
+// API를 못 쓰는 경우(키 없음/장애)에만 아주 작은 비상용 목록으로 대체한다.
+
+const { EmbedBuilder } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
+const { applyXp, EXCLUDED_GUILD_IDS } = require('./레벨');
+
+const QUIZ_CHANNEL_ID = '1522174367075663872'; // 놀이터 채널 (index.js의 WORDCHAIN_RANKING_CHANNEL_ID와 동일)
+const WINDOW_START_HOUR = 12; // KST 기준 출제 가능 시작 시각
+const WINDOW_END_HOUR = 23; // KST 기준 출제 가능 마지막 시각 — 이 시각 넘어서 봇이 켜지면 그날은 건너뜀
+const RECENT_WORD_MEMORY = 30; // 최근 이만큼은(초성/상식 합쳐서) 다시 출제하지 않음
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+const STATE_PATH = path.join(__dirname, '..', '퀴즈.json');
+
+const CHOSUNG = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+const KOREAN_ONLY = /^[가-힣]+$/;
+
+// 단어를 검색할 때 사용할 시작 음절 시드(끝말잇기 봇 단어 선택과 같은 방식) — 매번 이 중 일부를 무작위로 골라 검색한다.
+const SEED_SYLLABLES = [
+  '가', '나', '다', '라', '마', '바', '사', '아', '자', '차', '카', '타', '파', '하',
+  '거', '너', '더', '러', '머', '버', '서', '어', '저', '처', '커', '터', '퍼', '허',
+  '고', '노', '도', '로', '모', '보', '소', '오', '조', '초', '코', '토', '포', '호',
+];
+
+// API를 아예 못 쓸 때만 쓰는 최소한의 비상용 목록(다양성의 주 출처가 아님).
+const FALLBACK_WORDS = [
+  ['사과', '빨갛고 동그란 과일'],
+  ['바나나', '노랗고 길쭉한 과일'],
+  ['컴퓨터', '문서 작업이나 게임을 할 때 쓰는 전자기기'],
+  ['고양이', '야옹 하고 우는 반려동물'],
+  ['우산', '비 올 때 머리 위에 쓰는 물건'],
+  ['냉장고', '음식을 차갑게 보관하는 가전제품'],
+  ['도서관', '책을 빌리거나 읽을 수 있는 공공시설'],
+  ['자전거', '두 바퀴로 페달을 밟아 타는 탈것'],
+  ['피아노', '건반을 눌러 소리를 내는 악기'],
+  ['운동화', '걷거나 뛸 때 신는 신발'],
+];
+
+// 두 모드가 XP뿐 아니라 단어 난이도도 똑같이 초/중급 위주로 뽑히게 통일한다 —
+// 상식퀴즈는 초성 힌트가 없다는 것만으로 이미 체감 난이도가 더 높다.
+const GRADE_PREFERENCE = ['초급', '중급'];
+
+const MODES = {
+  chosung: {
+    label: '초성퀴즈',
+    title: '📖 오늘의 퀴즈!',
+    gradePreference: GRADE_PREFERENCE,
+    xpReward: 600,
+    buildEmbed({ word, hint }) {
+      return new EmbedBuilder()
+        .setColor(0xFEE75C)
+        .setTitle(this.title)
+        .setDescription(
+          `초성 : \`${getChosung(word)}\`\n` +
+          `> ${hint}`,
+        )
+        .setFooter({ text: '✏️ 채팅으로 정답을 입력하면 자동으로 채점됩니다.' })
+        .setTimestamp();
+    },
+  },
+  sangsik: {
+    label: '상식퀴즈',
+    title: '📖 오늘의 퀴즈!',
+    gradePreference: GRADE_PREFERENCE,
+    xpReward: 600,
+    buildEmbed({ word, hint }) {
+      return new EmbedBuilder()
+        .setColor(0xEB459E)
+        .setTitle(this.title)
+        .setDescription(
+          `다음 뜻풀이에 해당하는 단어는? -# (${word.length}글자)\n` +
+          `> ${hint}`,
+        )
+        .setFooter({ text: '✏️ 채팅으로 정답을 입력하면 자동으로 채점됩니다.' })
+        .setTimestamp();
+    },
+  },
+};
+
+function getChosung(word) {
+  return [...word].map(ch => {
+    const code = ch.charCodeAt(0) - 0xAC00;
+    if (code < 0 || code > 11171) return ch;
+    return CHOSUNG[Math.floor(code / 588)];
+  }).join('');
+}
+
+function kstDateString(epochMs = Date.now()) {
+  const kst = new Date(epochMs + KST_OFFSET_MS);
+  return `${kst.getUTCFullYear()}-${String(kst.getUTCMonth() + 1).padStart(2, '0')}-${String(kst.getUTCDate()).padStart(2, '0')}`;
+}
+
+// 오늘(KST) 출제 가능 시간대의 시작/끝을 epoch ms로 반환.
+function windowBounds(epochMs) {
+  const kst = new Date(epochMs + KST_OFFSET_MS);
+  const y = kst.getUTCFullYear(), m = kst.getUTCMonth(), d = kst.getUTCDate();
+  const start = Date.UTC(y, m, d, WINDOW_START_HOUR, 0, 0) - KST_OFFSET_MS;
+  const end = Date.UTC(y, m, d, WINDOW_END_HOUR, 0, 0) - KST_OFFSET_MS;
+  return { start, end };
+}
+
+function loadState() {
+  try {
+    if (fs.existsSync(STATE_PATH)) return JSON.parse(fs.readFileSync(STATE_PATH, 'utf8'));
+  } catch { /* 무시하고 새 상태로 시작 */ }
+  return null;
+}
+
+function saveState(state) {
+  fs.writeFileSync(STATE_PATH, JSON.stringify(state), 'utf8');
+}
+
+// ── 한국어기초사전 API에서 문제 후보 조회 ───────────────────────────
+async function fetchCandidates(prefix) {
+  const apiKey = process.env.KRDICT_API_KEY;
+  if (!apiKey) return [];
+
+  try {
+    const url = `https://krdict.korean.go.kr/api/search?key=${apiKey}&q=${encodeURIComponent(prefix)}&method=start&pos=1&num=100&sort=popular&part=word&advanced=y&target=1`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return [];
+
+    const xml = await res.text();
+    const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map(m => m[1]);
+    return items
+      .map(item => ({
+        word: item.match(/<word>([^<]+)<\/word>/)?.[1]?.trim(),
+        grade: item.match(/<word_grade>([^<]*)<\/word_grade>/)?.[1]?.trim(),
+        definition: item.match(/<definition>([^<]+)<\/definition>/)?.[1]?.trim(),
+      }))
+      .filter(w =>
+        w.word && KOREAN_ONLY.test(w.word) && w.word[0] === prefix &&
+        w.word.length >= 2 && w.word.length <= 4 && w.definition,
+      );
+  } catch {
+    return [];
+  }
+}
+
+async function pickDynamicWord(recentWords, gradePreference) {
+  const seeds = [...SEED_SYLLABLES].sort(() => Math.random() - 0.5).slice(0, 6);
+  for (const seed of seeds) {
+    const candidates = await fetchCandidates(seed);
+    const preferred = candidates.filter(c => gradePreference.includes(c.grade) && !recentWords.includes(c.word));
+    const pool = preferred.length ? preferred : candidates.filter(c => !recentWords.includes(c.word));
+    if (pool.length) {
+      const pick = pool[Math.floor(Math.random() * pool.length)];
+      const hint = pick.definition.length > 100 ? `${pick.definition.slice(0, 100)}…` : pick.definition;
+      return { word: pick.word, hint };
+    }
+  }
+  return null;
+}
+
+async function pickWord(recentWords, gradePreference) {
+  const dynamic = await pickDynamicWord(recentWords, gradePreference);
+  if (dynamic) return dynamic;
+
+  const pool = FALLBACK_WORDS.filter(([w]) => !recentWords.includes(w));
+  const bank = pool.length ? pool : FALLBACK_WORDS;
+  const [word, hint] = bank[Math.floor(Math.random() * bank.length)];
+  return { word, hint };
+}
+
+// 전날 문제를 아무도 못 맞힌 채로 다음 문제를 낼 시점이 되면, 그 전 문제는 정답을 공개하며
+// 보상 없이 무효 처리한다(제한시간이 없어 계속 열어두면 새/헌 문제 정답이 동시에 유효해져 혼선이 생김).
+async function voidPreviousQuiz(client, state) {
+  const quiz = client.activeQuiz;
+  if (!quiz) return;
+  client.activeQuiz = null;
+  state.activeQuiz = null;
+  try {
+    const channel = await client.channels.fetch(quiz.channelId).catch(() => null);
+    await channel?.send(`⌛ **지난 ${MODES[quiz.mode]?.label ?? '퀴즈'} 정답은 ${quiz.word} 였습니다.** 아무도 맞히지 못해 보상 없이 마감되었습니다.`);
+  } catch (err) {
+    console.error('퀴즈 무효 처리 중 오류:', err);
+  }
+}
+
+// 실제로 채널에 문제를 올리는 부분(전날 문제 무효 처리 + 문제 확정 + 게시)만 떼어낸 함수.
+// fireQuiz(예약 경로)와 postCustomQuiz(관리자가 /퀴즈로 직접 만든 문제 경로)가 공유한다.
+// picked를 안 주면(예약 경로) 평소처럼 API에서 무작위로 고르고, 주면(관리자 직접 출제) 그걸 그대로 쓴다.
+async function postQuiz(client, state, modeKey, picked) {
+  const mode = MODES[modeKey];
+  await voidPreviousQuiz(client, state); // state.activeQuiz를 정리할 수 있으므로 아래 saveState보다 먼저 실행
+  saveState(state);
+
+  try {
+    const channel = await client.channels.fetch(QUIZ_CHANNEL_ID).catch(() => null);
+    if (!channel) return false;
+
+    picked = picked || await pickWord(state.recentWords || [], mode.gradePreference);
+    state.recentWords = [picked.word, ...(state.recentWords || [])].slice(0, RECENT_WORD_MEMORY);
+
+    const quiz = { channelId: QUIZ_CHANNEL_ID, guildId: channel.guildId, word: picked.word, mode: modeKey, xpReward: mode.xpReward };
+    client.activeQuiz = quiz;
+    state.activeQuiz = quiz;
+    saveState(state);
+
+    await channel.send({ embeds: [mode.buildEmbed(picked)] });
+    return true;
+  } catch (err) {
+    console.error('퀴즈 출제 중 오류:', err);
+    return false;
+  }
+}
+
+async function fireQuiz(client, modeKey) {
+  const state = loadState();
+  if (!state || state.posted) return; // 이미 다른 경로로 처리됨 (안전장치)
+  state.posted = true;
+  // posted를 먼저 저장해둬야, postQuiz 안의 await(채널 fetch 등)가 걸려있는 사이에 10분
+  // 하트비트(checkAndSchedule)가 끼어들어도 "아직 posted=false"로 잘못 읽고 fireQuiz를
+  // 한 번 더 예약하는 경합(중복 출제)을 막을 수 있다.
+  saveState(state);
+
+  await postQuiz(client, state, modeKey);
+}
+
+let armedTimer = null;
+let armedScheduledAt = null;
+
+function disarmTimer() {
+  if (armedTimer) clearTimeout(armedTimer);
+  armedTimer = null;
+  armedScheduledAt = null;
+}
+
+// 하루 한 번, 오늘(KST) 아직 스케줄이 없으면 출제 가능 시간대(WINDOW_START~END) 안에서 무작위 시각을 골라
+// setTimeout을 건다. 모드는 어제 출제된 모드의 반대로 자동 결정(첫 실행은 초성퀴즈부터). scheduledAt(고정
+// 시각)을 파일에 저장해두므로, 봇이 재시작돼도 같은 시각·같은 모드로 다시 예약되고(이미 지났으면 즉시
+// 출제) 하루에 두 번 출제되지 않는다. 아직 안 풀린 문제(activeQuiz)도 파일에 저장해두므로, 봇이
+// 재시작돼도 채점이 끊기지 않고 이어진다(다음 문제가 나갈 때 voidPreviousQuiz가 정리).
+// /퀴즈 중지로 paused 상태가 되면 예약을 걸지 않고(이미 나간 문제 채점은 계속 동작), /퀴즈 재개 시
+// 다시 정상적으로 예약을 재개한다.
+function checkAndSchedule(client) {
+  const now = Date.now();
+  const today = kstDateString(now);
+  let state = loadState();
+
+  if (state?.activeQuiz && !client.activeQuiz) client.activeQuiz = state.activeQuiz;
+
+  if (state?.paused) {
+    disarmTimer();
+    return;
+  }
+
+  if (!state || state.day !== today) {
+    const { start, end } = windowBounds(now);
+    const base = Math.max(start, now);
+    const scheduledAt = base >= end ? null : Math.round(base + Math.random() * (end - base));
+    const prevMode = state?.mode;
+    const mode = prevMode === 'chosung' ? 'sangsik' : 'chosung';
+    state = {
+      day: today, mode, scheduledAt, posted: scheduledAt === null, paused: false,
+      recentWords: state?.recentWords || [], activeQuiz: state?.activeQuiz || null,
+    };
+    saveState(state);
+  }
+
+  if (state.posted) return;
+  if (armedTimer && armedScheduledAt === state.scheduledAt) return; // 이미 예약돼 있음
+
+  if (armedTimer) clearTimeout(armedTimer);
+  armedScheduledAt = state.scheduledAt;
+  const delay = Math.max(0, state.scheduledAt - Date.now());
+  armedTimer = setTimeout(() => {
+    armedTimer = null;
+    fireQuiz(client, state.mode);
+  }, delay);
+}
+
+function startQuizScheduler(client) {
+  checkAndSchedule(client);
+  setInterval(() => checkAndSchedule(client), 10 * 60 * 1000); // 날짜 변경/재시작 복구 확인용 10분 하트비트
+}
+
+// ── 관리자 명령어(/퀴즈)에서 사용하는 제어 함수 ────────────────────────
+function pauseQuiz() {
+  const state = loadState() || {
+    day: kstDateString(), mode: 'chosung', scheduledAt: null, posted: true, recentWords: [], activeQuiz: null,
+  };
+  state.paused = true;
+  saveState(state);
+  disarmTimer();
+}
+
+function resumeQuiz(client) {
+  const state = loadState();
+  if (state) {
+    state.paused = false;
+    saveState(state);
+  }
+  checkAndSchedule(client);
+}
+
+// 예약 타이머를 끄고, 오늘 몫 출제를 "강제로 지금 낼" 준비를 한다(무작위 시각/기존 posted 여부 무시).
+// modeOverride를 주면 오늘의 모드 자체를 그걸로 바꿔서 내보낸다(다음 날 교대 기준도 그걸로 갱신됨).
+function prepareManualFire(modeOverride) {
+  disarmTimer();
+
+  const now = Date.now();
+  const today = kstDateString(now);
+  let state = loadState();
+  if (!state || state.day !== today) {
+    state = {
+      day: today, mode: modeOverride || 'chosung', scheduledAt: null, posted: false, paused: state?.paused || false,
+      recentWords: state?.recentWords || [], activeQuiz: state?.activeQuiz || null,
+    };
+  }
+
+  const modeKey = modeOverride && MODES[modeOverride] ? modeOverride : state.mode;
+  state.mode = modeKey;
+  state.posted = true;
+  saveState(state);
+  return { state, modeKey };
+}
+
+// 관리자가 /퀴즈에서 직접 입력한 단어·힌트로 문제를 출제한다(API로 무작위로 고르지 않음).
+async function postCustomQuiz(client, modeOverride, word, hint) {
+  const { state, modeKey } = prepareManualFire(modeOverride);
+  const ok = await postQuiz(client, state, modeKey, { word, hint });
+  return { ok, mode: modeKey };
+}
+
+function getQuizStatus() {
+  return loadState();
+}
+
+async function handleQuizMessage(message) {
+  const quiz = message.client.activeQuiz;
+  if (!quiz || message.author.bot || message.channelId !== quiz.channelId) return;
+  if (EXCLUDED_GUILD_IDS.includes(quiz.guildId)) return; // 레벨 시스템 제외 서버(테스트 서버 등)는 채점하지 않음
+
+  const normalize = s => s.replace(/\s+/g, '');
+  if (normalize(message.content) !== normalize(quiz.word)) return;
+
+  message.client.activeQuiz = null;
+  const state = loadState();
+  if (state) {
+    state.activeQuiz = null;
+    saveState(state);
+  }
+
+  const result = applyXp(quiz.guildId, message.author.id, quiz.xpReward);
+  const levelUpLine = result.leveledUp ? `\n🎊 ${message.author}님이 **${result.newLevel}레벨**을 달성했어요!` : '';
+  await message.reply({
+    content: `🎉 정답입니다! **${quiz.word}** (+${quiz.xpReward} XP)${levelUpLine}`,
+    allowedMentions: { repliedUser: false, users: result.leveledUp ? [message.author.id] : [] },
+  }).catch(() => {});
+}
+
+module.exports = {
+  startQuizScheduler, handleQuizMessage, QUIZ_CHANNEL_ID,
+  pauseQuiz, resumeQuiz, postCustomQuiz, getQuizStatus,
+};

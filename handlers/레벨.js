@@ -250,6 +250,7 @@ module.exports = {
   saveLevels,
   handleMessageXp,
   awardMatchCompletionXp,
+  applyXp,
   trackVoiceStateUpdate,
   initVoiceStates,
   startVoiceXpTicker,
@@ -260,5 +261,6 @@ module.exports = {
   XP_CHANNEL_ID,
   LEVEL_UP_ANNOUNCE_CHANNEL_ID,
   MATCH_BONUS_CHANNEL_ID,
+  EXCLUDED_GUILD_IDS,
   buildProgressBar,
 };
