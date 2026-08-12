@@ -14,8 +14,15 @@ const path = require('path');
 const { applyXp, EXCLUDED_GUILD_IDS } = require('./레벨');
 
 const QUIZ_CHANNEL_ID = '1522174367075663872'; // 놀이터 채널 (index.js의 WORDCHAIN_RANKING_CHANNEL_ID와 동일)
-const WINDOW_START_HOUR = 12; // KST 기준 출제 가능 시작 시각
-const WINDOW_END_HOUR = 23; // KST 기준 출제 가능 마지막 시각 — 이 시각 넘어서 봇이 켜지면 그날은 건너뜀
+// KST 기준 출제 가능 시간대: 낮 12시 ~ 다음날 새벽 5시(=29시). 유저들이 새벽 시간대에 몰려있는
+// 경우가 많아 자정을 넘겨서까지 출제되도록 잡음. 이 시각(다음날 05:00) 넘어서까지 봇이 안 켜져
+// 있었다면 그날 사이클은 건너뜀.
+const WINDOW_START_HOUR = 12;
+const WINDOW_END_HOUR = 29;
+// WINDOW_END_HOUR이 24시를 넘기므로(자정 이후로 이어짐), 자정~이 컷오프 사이는 아직 "전날
+// 사이클"이 진행 중인 것으로 취급해야 한다(그래야 새벽에 하트비트가 돌 때 아직 안 끝난 어제
+// 예약이 오늘 걸로 잘못 리셋되지 않음) — cycleDateString()에서 사용.
+const OVERNIGHT_CUTOFF_HOUR = WINDOW_END_HOUR > 24 ? WINDOW_END_HOUR - 24 : 0;
 const RECENT_WORD_MEMORY = 30; // 최근 이만큼은(초성/상식 합쳐서) 다시 출제하지 않음
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
@@ -94,17 +101,21 @@ function getChosung(word) {
   }).join('');
 }
 
-function kstDateString(epochMs = Date.now()) {
+// 순수 달력 날짜가 아니라 "이 시각이 어느 출제 사이클에 속하는지"를 반환한다. 출제 가능
+// 시간대가 자정을 넘겨 다음날 새벽까지 이어지므로, 자정~OVERNIGHT_CUTOFF_HOUR 사이는
+// 아직 전날 사이클로 취급한다(예: 새벽 2시는 어제 낮 12시에 시작된 사이클의 연장).
+function cycleDateString(epochMs = Date.now()) {
   const kst = new Date(epochMs + KST_OFFSET_MS);
+  if (kst.getUTCHours() < OVERNIGHT_CUTOFF_HOUR) kst.setUTCDate(kst.getUTCDate() - 1);
   return `${kst.getUTCFullYear()}-${String(kst.getUTCMonth() + 1).padStart(2, '0')}-${String(kst.getUTCDate()).padStart(2, '0')}`;
 }
 
-// 오늘(KST) 출제 가능 시간대의 시작/끝을 epoch ms로 반환.
-function windowBounds(epochMs) {
-  const kst = new Date(epochMs + KST_OFFSET_MS);
-  const y = kst.getUTCFullYear(), m = kst.getUTCMonth(), d = kst.getUTCDate();
-  const start = Date.UTC(y, m, d, WINDOW_START_HOUR, 0, 0) - KST_OFFSET_MS;
-  const end = Date.UTC(y, m, d, WINDOW_END_HOUR, 0, 0) - KST_OFFSET_MS;
+// 주어진 사이클 날짜(dayStr, cycleDateString이 반환하는 형식)의 출제 가능 시간대 시작/끝을
+// epoch ms로 반환. WINDOW_END_HOUR이 24를 넘으므로 end는 자동으로 다음날 시각이 된다.
+function windowBoundsForDay(dayStr) {
+  const [y, m, d] = dayStr.split('-').map(Number);
+  const start = Date.UTC(y, m - 1, d, WINDOW_START_HOUR, 0, 0) - KST_OFFSET_MS;
+  const end = Date.UTC(y, m - 1, d, WINDOW_END_HOUR, 0, 0) - KST_OFFSET_MS;
   return { start, end };
 }
 
@@ -235,8 +246,10 @@ function disarmTimer() {
   armedScheduledAt = null;
 }
 
-// 하루 한 번, 오늘(KST) 아직 스케줄이 없으면 출제 가능 시간대(WINDOW_START~END) 안에서 무작위 시각을 골라
-// setTimeout을 건다. 모드는 어제 출제된 모드의 반대로 자동 결정(첫 실행은 초성퀴즈부터). scheduledAt(고정
+// 하루 한 번, 이 사이클(cycleDateString, 자정을 넘겨도 05:00 전까지는 전날 사이클로 취급)에
+// 아직 스케줄이 없으면 출제 가능 시간대(WINDOW_START~END, 낮 12시~다음날 새벽 5시) 안에서
+// 무작위 시각을 골라 setTimeout을 건다. 모드는 어제 출제된 모드의 반대로 자동 결정(첫 실행은
+// 초성퀴즈부터). scheduledAt(고정
 // 시각)을 파일에 저장해두므로, 봇이 재시작돼도 같은 시각·같은 모드로 다시 예약되고(이미 지났으면 즉시
 // 출제) 하루에 두 번 출제되지 않는다. 아직 안 풀린 문제(activeQuiz)도 파일에 저장해두므로, 봇이
 // 재시작돼도 채점이 끊기지 않고 이어진다(다음 문제가 나갈 때 voidPreviousQuiz가 정리).
@@ -244,7 +257,7 @@ function disarmTimer() {
 // 다시 정상적으로 예약을 재개한다.
 function checkAndSchedule(client) {
   const now = Date.now();
-  const today = kstDateString(now);
+  const today = cycleDateString(now);
   let state = loadState();
 
   if (state?.activeQuiz && !client.activeQuiz) client.activeQuiz = state.activeQuiz;
@@ -255,7 +268,7 @@ function checkAndSchedule(client) {
   }
 
   if (!state || state.day !== today) {
-    const { start, end } = windowBounds(now);
+    const { start, end } = windowBoundsForDay(today);
     const base = Math.max(start, now);
     const scheduledAt = base >= end ? null : Math.round(base + Math.random() * (end - base));
     const prevMode = state?.mode;
@@ -287,7 +300,7 @@ function startQuizScheduler(client) {
 // ── 관리자 명령어(/퀴즈)에서 사용하는 제어 함수 ────────────────────────
 function pauseQuiz() {
   const state = loadState() || {
-    day: kstDateString(), mode: 'chosung', scheduledAt: null, posted: true, recentWords: [], activeQuiz: null,
+    day: cycleDateString(), mode: 'chosung', scheduledAt: null, posted: true, recentWords: [], activeQuiz: null,
   };
   state.paused = true;
   saveState(state);
@@ -309,7 +322,7 @@ function prepareManualFire(modeOverride) {
   disarmTimer();
 
   const now = Date.now();
-  const today = kstDateString(now);
+  const today = cycleDateString(now);
   let state = loadState();
   if (!state || state.day !== today) {
     state = {

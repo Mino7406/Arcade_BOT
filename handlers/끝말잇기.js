@@ -17,6 +17,20 @@ const KOREAN   = /^[가-힣]+$/;
 const WAGER_XP = 100;
 // 참가자 중 봇이 있는 게임에서 봇이 탈락했을 때 생존자 각자에게 지급하는 고정 XP(내기 아님).
 const BOT_WIN_XP = 60;
+// 악용 방지: 봇전 반복 플레이로 XP를 무한히 파밍하거나("🏳️ 포기"로 즉시 끝내는 것 포함),
+// 같은 상대와 즉석 내기를 연달아 반복해서 XP를 옮기는 것을 막기 위해 유저당 쿨다운을 둔다
+// (쿨다운 중이면 게임 자체는 정상 진행되지만 XP 정산만 생략됨 — 플레이를 막지는 않음).
+const XP_SETTLE_COOLDOWN_MS = 3 * 60 * 1000;
+const xpSettleCooldowns = new Map(); // userId → 마지막 XP 정산 시각
+
+function isOnCooldown(userId) {
+  const last = xpSettleCooldowns.get(userId);
+  return !!last && Date.now() - last < XP_SETTLE_COOLDOWN_MS;
+}
+
+function markCooldown(userId) {
+  xpSettleCooldowns.set(userId, Date.now());
+}
 
 // ── 두음법칙 변환 ─────────────────────────────────────────────────
 // 단어 첫머리의 'ㄹ/ㄴ' 초성은 뒤따르는 모음에 따라 'ㄴ' 또는 'ㅇ'으로
@@ -139,6 +153,10 @@ function buildWaitingEmbed(game) {
           '• 실제 사전에 있는 단어만 인정됩니다. (2글자 이상)\n' +
           '• 이미 사용된 단어는 사용할 수 없습니다.\n' +
           `• **${TURN_SEC}초** 내에 입력하지 않으면 탈락합니다.`,
+      },
+      {
+        name: '⚠️ XP 내기',
+        value: `참가자가 전부 사람이면 탈락자가 최대 ${WAGER_XP} XP를 잃고(레벨은 안 깎임) 생존자들이 나눠 받습니다. 봇이 참가하면 내기 대신, 봇을 이겼을 때 생존자에게 고정 XP가 지급됩니다.`,
       },
     )
     .setFooter({ text: '최소 2명이 참가해야 시작할 수 있습니다.' });
@@ -265,6 +283,7 @@ function settleWagerXp(game) {
 
   const survivors = game.players.map(p => p.id).filter(id => id !== game.loser);
   if (!survivors.length) return null;
+  if (isOnCooldown(game.loser) || survivors.some(isOnCooldown)) return null; // 같은 유저들이 연달아 내기를 반복해 XP를 옮기는 것 방지
 
   const loserLevelXp = levelFromXp(getXp(game.guildId, game.loser)).currentLevelXp;
   const wager = Math.min(WAGER_XP, loserLevelXp);
@@ -290,6 +309,8 @@ function settleBotWinXp(game) {
 
   const survivors = game.players.map(p => p.id).filter(id => id !== 'BOT');
   if (!survivors.length) return null;
+  if (survivors.some(isOnCooldown)) return null; // 봇전 반복 플레이로 XP를 무한히 파밍하는 것 방지
+
   const winnerResults = survivors.map(id => ({ userId: id, amount: BOT_WIN_XP, ...applyXp(game.guildId, id, BOT_WIN_XP) }));
   return { type: 'bot_win', winnerResults };
 }
@@ -310,6 +331,9 @@ function settleGameXp(game) {
   const result = settleWagerXp(game) || settleBotWinXp(game);
   game.xpResult = result;
   if (!result) return;
+
+  if (result.loserId) markCooldown(result.loserId);
+  for (const w of result.winnerResults) markCooldown(w.userId);
 
   const client = game.message?.client;
   if (!client) return;
