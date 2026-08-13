@@ -362,7 +362,7 @@ function armManualQuizTimeout(client, quiz, delayMs = MANUAL_QUIZ_TIME_LIMIT_MS)
     }
     try {
       const channel = await client.channels.fetch(quiz.channelId).catch(() => null);
-      await channel?.send(`⌛ **1시간이 지나 관리자가 낸 ${MODES[quiz.mode]?.label ?? '퀴즈'}가 마감되었습니다.** 정답은 **${quiz.word}** 였습니다.`);
+      await channel?.send(`⌛ **1시간이 지나 관리자가 낸 ${MODES[quiz.mode]?.label ?? '퀴즈'}가 마감되었습니다.**\n정답은 **${quiz.word}** 였습니다.`);
     } catch (err) {
       console.error('관리자 출제 문제 시간 초과 처리 중 오류:', err);
     }
