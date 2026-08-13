@@ -11,7 +11,7 @@ const TIMEOUT_MS = 5 * 60 * 1000;
 // 상한을 걸어(min(WAGER_XP, currentLevelXp)) 아무리 내기에서 져도 레벨이 떨어지지는 않게 한다.
 const WAGER_XP = 100;
 // 봇을 상대로 이겼을 때 지급하는 고정 XP(내기 아님, 사람에게서 빼앗지 않음).
-const BOT_WIN_XP = 60;
+const BOT_WIN_XP = 10;
 // 악용 방지: 봇전 반복 플레이로 XP를 무한히 파밍하거나, 같은 상대와 즉석 내기를 연달아
 // 반복해서 XP를 옮기는 것을 막기 위해 유저당 쿨다운을 둔다(쿨다운 중이면 게임은 정상 진행
 // 되지만 XP 정산만 생략됨 — 플레이 자체를 막지는 않음).
@@ -177,15 +177,17 @@ function buildEmbed(game) {
     const xReady = game.ready.X ? '✅ 준비완료' : '⌛ 대기 중';
     const oReady = game.ready.O ? '✅ 준비완료' : '⌛ 대기 중';
     desc += '⏳ 두 사람 모두 레디하면 시작됩니다.\n' +
-      `${xReady} ${xName}   ·   ${oReady} ${oName}\n` +
-      `⚠️ 이 대결은 **XP 내기**가 걸립니다 — 지는 사람이 최대 ${WAGER_XP} XP를 잃고(레벨은 안 깎임) 이긴 사람이 그만큼 받습니다.`;
+      `${xReady} ${xName}   ·   ${oReady} ${oName}\n\n` +
+      '⚠️ **XP 내기**\n' +
+      `• 📉 지는 사람이 **${WAGER_XP}** XP를 잃습니다.\n` +
+      `• 📈 이긴 사람이 **${WAGER_XP}** XP를 받습니다.`;
     if (game.infinite) {
-      desc += '\n**(무한모드)** 각자 최대 3개까지만 유지되고, 4번째를 두면 가장 오래된 조각이 사라집니다.';
+      desc += '\n**(♾️ 무한모드)**\n 각자 최대 3개까지만 유지되고, 4번째를 두면 가장 오래된 조각이 사라집니다.';
     }
   } else if (game.status === 'setup') {
-    desc += `⚙️ 아래 **시작** 버튼을 누르면 대결이 시작됩니다. (이기면 +${BOT_WIN_XP} XP)`;
+    desc += `⚙️ 아래 **시작** 버튼을 누르면 대결이 시작됩니다.\n(이기면 +${BOT_WIN_XP} XP)`;
     if (game.infinite) {
-      desc += '\n**(무한모드)** 각자 최대 3개까지만 유지되고, 4번째를 두면 가장 오래된 조각이 사라집니다.';
+      desc += '\n**(♾️ 무한모드)**\n 각자 최대 3개까지만 유지되고, 4번째를 두면 가장 오래된 조각이 사라집니다.';
     }
   } else if (game.status === 'finished') {
     if (game.winner === 'DRAW') {
@@ -197,18 +199,21 @@ function buildEmbed(game) {
 
       if (game.xpResult?.type === 'wager') {
         const { wager, winnerId, loserId } = game.xpResult;
-        desc += `\n🎲 내기 결과 : <@${loserId}> −${wager} XP → <@${winnerId}> +${wager} XP`;
+        desc += `\n🎲 **내기 결과**\n📉 <@${loserId}> **−${wager} XP**\n📈 <@${winnerId}> **+${wager} XP**`;
       } else if (game.xpResult?.type === 'bot_win') {
-        desc += `\n🎉 <@${game.xpResult.winnerId}>님 +${game.xpResult.amount} XP!`;
+        desc += `\n🎉 <@${game.xpResult.winnerId}>님 **+${game.xpResult.amount} XP** 획득!`;
       } else if (game.xpResult?.type === 'cooldown') {
         const cooldownMin = Math.ceil(XP_SETTLE_COOLDOWN_MS / 60000);
-        desc += `\n⏳ 연속 대결 쿨다운 중이라 이번 판은 XP 정산이 생략됐습니다. (직전 정산 후 ${cooldownMin}분 이내)`;
+        desc += `\n⏳ 연속 대결 쿨다운 중이라\n 이번 판은 XP 정산이 생략됐습니다.\n-# (직전 정산 후 ${cooldownMin}분 이내)`;
       }
     }
   } else {
     const turnName = game.currentTurn === 'X' ? xName : oName;
     const turnEmoji = game.currentTurn === 'X' ? '❌' : '⭕';
     desc += `${turnEmoji} **${turnName}의 차례**`;
+    if (game.infinite) {
+      desc += '\n-# 각자 최대 3개까지만 유지되며, 4번째를 두면 가장 오래된 조각이 사라집니다.';
+    }
   }
 
   const color =
@@ -218,13 +223,9 @@ function buildEmbed(game) {
 
   const embed = new EmbedBuilder()
     .setColor(color)
-    .setTitle(game.infinite ? '⚔️ 틱택토 (무한모드)' : '⚔️ 틱택토')
+    .setTitle(game.infinite ? '⚔️ 틱택토 (♾️ 무한모드)' : '⚔️ 틱택토')
     .setDescription(desc)
     .setTimestamp();
-
-  if (game.infinite && game.status === 'playing') {
-    embed.setFooter({ text: '각자 최대 3개까지만 유지되며, 4번째를 두면 가장 오래된 조각(회색)이 사라집니다.' });
-  }
 
   return embed;
 }
@@ -300,7 +301,7 @@ function buildFinishedRow(game) {
 function buildInfiniteToggleButton(game) {
   return new ButtonBuilder()
     .setCustomId(`ttt:toggleinf:${game.id}`)
-    .setLabel(game.infinite ? '무한모드: ON' : '무한모드: OFF')
+    .setLabel(game.infinite ? '♾️ 무한모드: ON' : '♾️ 무한모드: OFF')
     .setStyle(game.infinite ? ButtonStyle.Success : ButtonStyle.Secondary);
 }
 

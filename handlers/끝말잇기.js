@@ -16,7 +16,7 @@ const KOREAN   = /^[가-힣]+$/;
 // 살아남은 사람이 여럿이면 진 사람의 몫을 그만큼 나눠 가짐(틱택토와 동일한 방식).
 const WAGER_XP = 100;
 // 참가자 중 봇이 있는 게임에서 봇이 탈락했을 때 생존자 각자에게 지급하는 고정 XP(내기 아님).
-const BOT_WIN_XP = 60;
+const BOT_WIN_XP = 10;
 // 악용 방지: 봇전 반복 플레이로 XP를 무한히 파밍하거나("🏳️ 포기"로 즉시 끝내는 것 포함),
 // 같은 상대와 즉석 내기를 연달아 반복해서 XP를 옮기는 것을 막기 위해 유저당 쿨다운을 둔다
 // (쿨다운 중이면 게임 자체는 정상 진행되지만 XP 정산만 생략됨 — 플레이를 막지는 않음).
@@ -156,7 +156,9 @@ function buildWaitingEmbed(game) {
       },
       {
         name: '⚠️ XP 내기',
-        value: `참가자가 전부 사람이면 탈락자가 최대 ${WAGER_XP} XP를 잃고(레벨은 안 깎임) 생존자들이 나눠 받습니다. 봇이 참가하면 내기 대신, 봇을 이겼을 때 생존자에게 고정 XP가 지급됩니다.`,
+        value:
+          `• 참가자가 전부 사람이면 탈락자가 최대 ${WAGER_XP} XP를 잃고(레벨은 안 깎임) 생존자들이 나눠 받습니다.\n` +
+          '• 봇이 참가하면 내기 대신, 봇을 이겼을 때 생존자에게 고정 XP가 지급됩니다.',
       },
     )
     .setFooter({ text: '최소 2명이 참가해야 시작할 수 있습니다.' });
@@ -216,11 +218,11 @@ function formatXpResultLine(game) {
   const result = game.xpResult;
   if (!result) return '';
 
-  const winnerText = result.winnerResults.map(w => `<@${w.userId}> +${w.amount}`).join(', ');
+  const winnerLines = result.winnerResults.map(w => `📈 <@${w.userId}> **+${w.amount} XP**`).join('\n');
   if (result.type === 'wager') {
-    return `\n🎲 내기 결과 : <@${result.loserId}> −${result.wager} XP → ${winnerText} XP`;
+    return `\n🎲 **내기 결과**\n📉 <@${result.loserId}> **−${result.wager} XP**\n${winnerLines}`;
   }
-  return `\n🎉 봇을 이겨서 XP 획득 : ${winnerText} XP`;
+  return `\n🎉 **봇을 이겨서 XP 획득**\n${winnerLines}`;
 }
 
 // ── 컴포넌트 빌더 ──────────────────────────────────────────────

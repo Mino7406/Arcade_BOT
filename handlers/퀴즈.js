@@ -52,9 +52,9 @@ const FALLBACK_WORDS = [
   ['운동화', '걷거나 뛸 때 신는 신발'],
 ];
 
-// 두 모드가 XP뿐 아니라 단어 난이도도 똑같이 초/중급 위주로 뽑히게 통일한다 —
-// 상식퀴즈는 초성 힌트가 없다는 것만으로 이미 체감 난이도가 더 높다.
-const GRADE_PREFERENCE = ['초급', '중급'];
+// 두 모드가 XP뿐 아니라 단어 난이도도 똑같이 뽑히게 통일한다 — 상식퀴즈는 초성 힌트가
+// 없다는 것만으로 이미 체감 난이도가 더 높다. 고급 단어도 후보에 포함해 난이도를 올린다.
+const GRADE_PREFERENCE = ['초급', '중급', '고급'];
 
 // 보상은 고정값이 아니라 매 문제마다 100~300 XP 사이에서 무작위로 정해진다(정답자에게는
 // 실제로 지급된 금액을 채팅에 그대로 알려줌 — handleQuizMessage 참고).
@@ -156,7 +156,7 @@ async function fetchCandidates(prefix) {
       }))
       .filter(w =>
         w.word && KOREAN_ONLY.test(w.word) && w.word[0] === prefix &&
-        w.word.length >= 2 && w.word.length <= 4 && w.definition,
+        w.word.length >= 2 && w.word.length <= 6 && w.definition,
       );
   } catch {
     return [];

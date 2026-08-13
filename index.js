@@ -342,10 +342,8 @@ client.on('interactionCreate', async (interaction) => {
         if (!ADMIN_IDS.includes(interaction.user.id)) {
           await interaction.reply({ content: '❌ **권한이 없습니다.**', ephemeral: true });
         } else {
-          // 기존 패널을 그 자리에서 갱신(update)하지 않고, 삭제 후 새로 게시해 항상 채널 맨 아래로 올라오게 한다.
-          await interaction.deferUpdate();
-          await interaction.message.delete().catch(() => {});
-          await interaction.channel.send(buildSetupPanelPayload(interaction));
+          // 채널 맨 아래로 옮기지 않고, 기존 패널 메시지를 그 자리에서 갱신한다.
+          await interaction.update(buildSetupPanelPayload(interaction));
         }
       }
     }
