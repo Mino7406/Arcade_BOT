@@ -77,7 +77,7 @@ const MODES = {
           `초성 : \`${getChosung(word)}\`\n` +
           `> ${hint}`,
         )
-        .setFooter({ text: '✏️ 채팅으로 정답을 입력하면 자동으로 채점됩니다.' })
+        .setFooter({ text: '📝 채팅으로 정답을 입력하면 자동으로 채점됩니다.' })
         .setTimestamp();
     },
   },
@@ -90,10 +90,10 @@ const MODES = {
         .setColor(0xEB459E)
         .setTitle(this.title)
         .setDescription(
-          `다음 뜻풀이에 해당하는 단어는? **(${word.length}글자)**\n` +
+          `- 다음 뜻풀이에 해당하는 단어는? **(${word.length}글자)**\n\n` +
           `> ${hint}`,
         )
-        .setFooter({ text: '✏️ 채팅으로 정답을 입력하면 자동으로 채점됩니다.' })
+        .setFooter({ text: '📝 채팅으로 정답을 입력하면 자동으로 채점됩니다.' })
         .setTimestamp();
     },
   },
