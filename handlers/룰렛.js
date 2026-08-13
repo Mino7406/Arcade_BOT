@@ -255,15 +255,20 @@ async function spinLobby(interaction, lobby, lobbies) {
   clearTimeout(lobby.timeoutId);
   lobbies.delete(lobby.id);
 
+  // 이후 로직(스핀 계산, XP 정산, 채널 메시지 전송)이 3초를 넘기면 디스코드가 "상호작용 실패"로
+  // 처리해버리는데, 그 시점엔 이미 markPlayedToday/applyXp가 끝나 있어 유저는 기회만 날리고
+  // 결과도 못 보는 상황이 생길 수 있었다. 응답부터 먼저 확정해 이 경합을 없앤다.
+  await interaction.deferUpdate();
+
   // 로비가 열려있던 사이(다른 곳에서) 이미 오늘 플레이했거나 XP가 줄어들었을 수 있으므로 재검증.
   if (hasPlayedToday(lobby.guildId, lobby.userId)) {
-    await interaction.update({ content: '⏳ **오늘은 이미 룰렛을 돌렸습니다.**', embeds: [], components: [] });
+    await interaction.editReply({ content: '⏳ **오늘은 이미 룰렛을 돌렸습니다.**', embeds: [], components: [] });
     return;
   }
   const currentLevelXp = levelFromXp(getXp(lobby.guildId, lobby.userId)).currentLevelXp;
   const bet = Math.min(lobby.bet, currentLevelXp);
   if (bet < MIN_BET) {
-    await interaction.update({ content: '⚠️ **베팅 가능한 XP가 부족해졌습니다.**', embeds: [], components: [] });
+    await interaction.editReply({ content: '⚠️ **베팅 가능한 XP가 부족해졌습니다.**', embeds: [], components: [] });
     return;
   }
 
@@ -304,15 +309,21 @@ async function spinLobby(interaction, lobby, lobbies) {
     .setTimestamp();
 
   // 베팅 과정은 본인에게만 보였지만, 결과는 채널 전체에 공개 메시지로 실제 슬롯머신처럼
-  // 릴이 하나씩 순서대로 멈추는 연출과 함께 알린다.
-  await interaction.update({ content: '', embeds: [], components: [] });
-  const spinMessage = await interaction.channel.send({
-    embeds: [spinningEmbed],
-    components: [buildReelRow(lobby.id, ['🎰', '🎰', '🎰'])],
-  });
+  // 릴이 하나씩 순서대로 멈추는 연출과 함께 알린다. XP 정산은 이미 끝났으므로, 채널 공개
+  // 과정에서 오류가 나더라도(권한 문제 등) 최소한 본인에게는 결과를 보여준다.
+  try {
+    await interaction.editReply({ content: '', embeds: [], components: [] });
+    const spinMessage = await interaction.channel.send({
+      embeds: [spinningEmbed],
+      components: [buildReelRow(lobby.id, ['🎰', '🎰', '🎰'])],
+    });
 
-  await animateSpin(spinMessage, lobby.id, reels);
-  await spinMessage.edit({ embeds: [resultEmbed], components: [buildReelRow(lobby.id, reels, getMatchIndices(reels))] }).catch(() => {});
+    await animateSpin(spinMessage, lobby.id, reels);
+    await spinMessage.edit({ embeds: [resultEmbed], components: [buildReelRow(lobby.id, reels, getMatchIndices(reels))] }).catch(() => {});
+  } catch (err) {
+    console.error('룰렛 결과 공개 실패:', err);
+    await interaction.editReply({ content: '', embeds: [resultEmbed], components: [] }).catch(() => {});
+  }
 
   if (result.leveledUp) {
     announceLevelUp(interaction.client, lobby.guildId, lobby.userId, result.newLevel).catch(() => {});
