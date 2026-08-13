@@ -312,8 +312,12 @@ async function spinLobby(interaction, lobby, lobbies) {
   // 릴이 하나씩 순서대로 멈추는 연출과 함께 알린다. XP 정산은 이미 끝났으므로, 채널 공개
   // 과정에서 오류가 나더라도(권한 문제 등) 최소한 본인에게는 결과를 보여준다.
   try {
-    await interaction.editReply({ content: '', embeds: [], components: [] });
-    const spinMessage = await interaction.channel.send({
+    // content/embeds/components를 전부 비운 editReply는 디스코드가 "빈 메시지"로 보고 거부한다
+    // (DiscordAPIError[50006]) — 그냥 로비 메시지를 지워서 정리한다.
+    await interaction.deleteReply();
+    // interaction.channel은 캐시에 없으면 null일 수 있으므로(재시작 직후 등) fetch로 안전하게 가져온다.
+    const channel = interaction.channel ?? await interaction.client.channels.fetch(interaction.channelId);
+    const spinMessage = await channel.send({
       embeds: [spinningEmbed],
       components: [buildReelRow(lobby.id, ['🎰', '🎰', '🎰'])],
     });
