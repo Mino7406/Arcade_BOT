@@ -176,7 +176,7 @@ function buildEmbed(game) {
   if (game.status === 'waiting') {
     const xReady = game.ready.X ? '✅ 준비완료' : '⌛ 대기 중';
     const oReady = game.ready.O ? '✅ 준비완료' : '⌛ 대기 중';
-    desc += '⏳ 두 사람 모두 레디하면 시작됩니다.\n' +
+    desc += '⏳ 두 사람 모두 준비하면 시작됩니다.\n' +
       `${xReady} ${xName}   ·   ${oReady} ${oName}\n\n` +
       '⚠️ **XP 내기**\n' +
       `• 📉 지는 사람이 **${WAGER_XP}** XP를 잃습니다.\n` +
@@ -305,11 +305,11 @@ function buildInfiniteToggleButton(game) {
     .setStyle(game.infinite ? ButtonStyle.Success : ButtonStyle.Secondary);
 }
 
-// PvP 대결 신청 로비(레디 대기 중)에서 쓰는 버튼 행 — 레디 버튼은 누른 사람 본인의 준비
+// PvP 대결 신청 로비(준비 대기 중)에서 쓰는 버튼 행 — 준비 버튼은 누른 사람 본인의 준비
 // 상태만 토글하고(둘 다 준비되면 자동 시작), 라벨 자체는 고정이며 현재 준비 상태는 임베드에 표시.
 function buildChallengeRow(game) {
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`ttt:ready:${game.id}`).setLabel('✅ 레디').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`ttt:ready:${game.id}`).setLabel('✅ 준비').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`ttt:decline:${game.id}`).setLabel('❌ 거절').setStyle(ButtonStyle.Danger),
     buildInfiniteToggleButton(game),
   );
@@ -469,7 +469,7 @@ async function startTttCommand(interaction) {
     });
     game.message = await interaction.fetchReply();
 
-    // 60초 내로 둘 다 레디하지 않으면 만료
+    // 60초 내로 둘 다 준비하지 않으면 만료
     game.timeoutId = setTimeout(async () => {
       const g = games.get(gameId);
       if (!g || g.status !== 'waiting') return;
@@ -553,8 +553,8 @@ async function startRematch(interaction, prevXId, prevOId, infinite) {
     return;
   }
 
-  // 사람 상대 재대결은 즉시 시작하지 않고, 기존 레디 로비(ttt:ready/ttt:decline)를 그대로
-  // 재사용해 상대의 승낙을 받는다. 신청한 사람은 자동으로 레디 상태로 시작한다.
+  // 사람 상대 재대결은 즉시 시작하지 않고, 기존 준비 로비(ttt:ready/ttt:decline)를 그대로
+  // 재사용해 상대의 승낙을 받는다. 신청한 사람은 자동으로 준비 상태로 시작한다.
   const newX = prevOId;
   const newO = prevXId; // 선공/후공을 바꿔서 재대결
   const requesterMark = interaction.user.id === newX ? 'X' : 'O';
@@ -583,7 +583,7 @@ async function startRematch(interaction, prevXId, prevOId, infinite) {
   });
   game.message = await interaction.fetchReply();
 
-  // 60초 내로 상대가 레디하지 않으면 만료
+  // 60초 내로 상대가 준비하지 않으면 만료
   game.timeoutId = setTimeout(async () => {
     const g = games.get(gameId);
     if (!g || g.status !== 'waiting') return;
@@ -596,7 +596,7 @@ async function handleTttButton(interaction) {
   const { customId } = interaction;
   const games = getGames(interaction.client);
 
-  // ── 레디 ──────────────────────────────────────────────────
+  // ── 준비 ──────────────────────────────────────────────────
   // 두 참가자가 각자 자기 준비 상태를 토글하고, 둘 다 준비되면 그 순간 바로 시작한다.
   if (customId.startsWith('ttt:ready:')) {
     const gameId = customId.slice('ttt:ready:'.length);
@@ -643,7 +643,7 @@ async function handleTttButton(interaction) {
     return;
   }
 
-  // ── 무한모드 토글 (PvP 레디 로비 / 봇 설정 로비 공용) ────────────
+  // ── 무한모드 토글 (PvP 준비 로비 / 봇 설정 로비 공용) ────────────
   if (customId.startsWith('ttt:toggleinf:')) {
     const gameId = customId.slice('ttt:toggleinf:'.length);
     const game = games.get(gameId);
@@ -657,7 +657,7 @@ async function handleTttButton(interaction) {
     }
     game.infinite = !game.infinite;
     if (game.status === 'waiting') {
-      // 규칙이 바뀌었으니 양쪽 다 다시 레디해야 한다.
+      // 규칙이 바뀌었으니 양쪽 다 다시 준비해야 한다.
       game.ready.X = false;
       game.ready.O = false;
     }
