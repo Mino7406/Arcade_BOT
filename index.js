@@ -9,6 +9,7 @@ const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = requ
 const { handleRMatchSelect } = require('./handlers/불러오기');
 const { handleWcButton, handleWcMessage } = require('./handlers/끝말잇기');
 const { handleTttButton } = require('./handlers/틱택토');
+const { loadRoulette, saveRoulette, handleRouletteButton } = require('./handlers/룰렛');
 const { startQuizScheduler, handleQuizMessage } = require('./handlers/퀴즈');
 const { handleAdminSelect, handleAdminButton } = require('./commands/관리');
 const { handleQuizAdminButton, handleQuizCreateModal } = require('./commands/퀴즈');
@@ -193,6 +194,7 @@ async function onReady(c) {
   c.startedAt = new Date();
   await restoreMatches(c); // ⬅️ 추가: 저장된 내전/모집 복원
   loadLevels(); // ⬅️ 추가: 저장된 레벨/XP 복원
+  loadRoulette(); // 룰렛 일일 플레이 기록 복원
   initVoiceStates(c); // 재시작 전 이미 통화방에 있던 유저 추적 복원
   startVoiceXpTicker(c); // 통화방 체류 XP 1분 틱 시작
   await reconcileTempChannels(c); // 재시작 전 만들어둔 임시 음성채널 중 빈 방 정리
@@ -205,11 +207,12 @@ client.once('ready', onReady);
 
 client.on('interactionCreate', async (interaction) => {
   try {
-    // 끝말잇기/틱택토/레벨/랭킹은 다른 채널 허용 목록과 무관하게 이 채널에서만 사용 가능.
+    // 끝말잇기/틱택토/룰렛/레벨/랭킹은 다른 채널 허용 목록과 무관하게 이 채널에서만 사용 가능.
     const isWordchainOrRanking =
-      (interaction.isChatInputCommand() && ['끝말잇기', '틱택토', '레벨', '랭킹'].includes(interaction.commandName)) ||
+      (interaction.isChatInputCommand() && ['끝말잇기', '틱택토', '룰렛', '레벨', '랭킹'].includes(interaction.commandName)) ||
       interaction.customId?.startsWith('wc:') ||
       interaction.customId?.startsWith('ttt:') ||
+      interaction.customId?.startsWith('roulette:') ||
       interaction.customId?.startsWith('ranking:') ||
       interaction.customId?.startsWith('level:');
 
@@ -318,6 +321,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleWcButton(interaction);
       } else if (interaction.customId.startsWith('ttt:')) {
         await handleTttButton(interaction);
+      } else if (interaction.customId.startsWith('roulette:')) {
+        await handleRouletteButton(interaction);
       } else if (interaction.customId.startsWith('admin:')) {
         await handleAdminButton(interaction);
       } else if (interaction.customId.startsWith('quiz:')) {
@@ -418,6 +423,7 @@ setInterval(() => {
   if (!dataReady) return;
   try { saveAll(client); } catch (e) { console.error('자동 저장 실패:', e); }
   try { saveLevels(); } catch (e) { console.error('레벨 자동 저장 실패:', e); }
+  try { saveRoulette(); } catch (e) { console.error('룰렛 자동 저장 실패:', e); }
 }, 30_000);
 
 // ─── 종료 시 마지막으로 한 번 더 저장 ─────────────────────────
@@ -425,6 +431,7 @@ function shutdown() {
   if (dataReady) {
     try { saveAll(client); } catch (e) { console.error('종료 저장 실패:', e); }
     try { saveLevels(); } catch (e) { console.error('레벨 종료 저장 실패:', e); }
+    try { saveRoulette(); } catch (e) { console.error('룰렛 종료 저장 실패:', e); }
   }
   client.destroy();
   process.exit(0);
