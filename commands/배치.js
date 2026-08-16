@@ -25,6 +25,7 @@ const PLAYGROUND_COMMAND_LIST = [
   { name: '/틱택토', value: '틱택토 게임을 시작합니다 (상대방 없으면 봇과 대결)' },
   { name: '/레벨', value: '나 또는 다른 유저의 레벨/XP를 확인합니다' },
   { name: '/랭킹', value: '서버 XP 랭킹을 확인합니다' },
+  { name: '/룰렛', value: 'XP를 걸고 룰렛머신을 돌립니다 (하루 1회)' },
 ];
 
 function buildCommandListPayload() {
@@ -77,7 +78,7 @@ function buildSetupPanelPayload(interaction) {
     .setColor(0x57f287)
     .setTitle('🎡 놀이터 채널 안내')
     .setDescription(
-      '**끝말잇기, 틱택토, 레벨, 랭킹**은 놀이터 채널에서만 이용할 수 있어요.\n아래 버튼으로 바로 이동하세요.',
+      '**끝말잇기, 틱택토, 룰렛, 레벨, 랭킹**은 놀이터 채널에서만 이용할 수 있어요.\n아래 버튼으로 바로 이동하세요.',
     );
 
   const row1 = new ActionRowBuilder().addComponents(
