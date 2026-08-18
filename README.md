@@ -29,6 +29,7 @@
 ```
 Arcade_BOT/
 ├─ index.js                 # 엔트리 포인트: 클라이언트 초기화, 이벤트 라우팅, 자동 저장
+├─ config.js                # 서버/채널/관리자/이모지 ID 등 배포 환경에 종속된 상수 모음 (비밀값 아님)
 ├─ db.js                    # 내전/모집 매치 데이터를 JSON 파일로 저장/복원
 ├─ deploy-commands.js       # 슬래시 커맨드 등록 (전역 / 길드 단위)
 ├─ clear-guild-commands.js  # 길드 단위로 등록된 커맨드 전체 삭제
@@ -79,11 +80,30 @@ npm install
 TOKEN=디스코드_봇_토큰
 CLIENT_ID=디스코드_애플리케이션(클라이언트) ID
 GUILD_ID=길드_ID_1,길드_ID_2        # 커맨드를 길드 단위로 배포/삭제할 때 사용, 콤마로 여러 개 가능
-ALLOWED_CHANNEL_ID=채널_ID_1,채널_ID_2   # 내전/모집/팀 명령을 허용할 채널 목록, 콤마로 여러 개 가능(불러오기는 아래 MATCH_BONUS_CHANNEL_ID 채널 전용으로 별도 고정)
 KRDICT_API_KEY=국립국어원_한국어기초사전_오픈API_키   # 끝말잇기 단어 검증 및 초성퀴즈·상식퀴즈 문제 조회용, 없으면 끝말잇기는 검증을 통과시키고(fail-open) 퀴즈는 비상용 목록으로만 출제
 ```
 
-> `/끝말잇기`, `/랭킹`과 관련 버튼(`wc:*`, `ranking:*`)이 허용되는 채널 ID, 임시 음성채널 허브/카테고리 채널 ID, 레벨업 축하 채널 ID 등 일부 채널 ID는 `ALLOWED_CHANNEL_ID`가 아니라 코드에 상수로 하드코딩되어 있습니다(`index.js`의 `WORDCHAIN_RANKING_CHANNEL_ID`, `handlers/음성채널.js`의 `HUB_CHANNEL_ID`/`TEMP_CATEGORY_ID`, `handlers/레벨.js`의 `LEVEL_UP_ANNOUNCE_CHANNEL_ID`). 다른 서버에 배포할 때는 이 값들도 함께 수정해야 합니다.
+> `env`에는 토큰·API 키 같은 **비밀값만** 둡니다. 채널/길드/관리자/이모지 ID는 비밀이 아니라 "이 봇이 어느 서버의 어느 채널에서 도는가"를 나타내는 값이므로 [`config.js`](config.js)에 모아뒀습니다 — 아래 [설정 (`config.js`)](#설정-configjs) 참고.
+
+## 설정 (`config.js`)
+
+봇이 참조하는 하드코딩 ID는 전부 프로젝트 루트의 `config.js` 한 곳에 있습니다(순수 상수만 export하며 다른 모듈을 `require`하지 않습니다 — 순환참조 방지). 다른 서버에 배포할 때는 이 파일만 고치면 됩니다.
+
+| 상수 | 설명 |
+|---|---|
+| `PLAYGROUND_CHANNEL_ID` | 놀이터 채널. 아래 `LEVEL_UP_ANNOUNCE_CHANNEL_ID` / `QUIZ_CHANNEL_ID` / `WORDCHAIN_RANKING_CHANNEL_ID`가 모두 이 값을 참조합니다 |
+| `ALLOWED_CHANNEL_IDS` | 내전/모집/팀 상호작용을 허용할 채널 ID 배열. **비우면(`[]`) 채널 제한 없음** |
+| `GUILD_ID` / `HUB_CHANNEL_ID` / `TEMP_CATEGORY_ID` | 임시 음성채널의 대상 길드, 허브(트리거) 채널, 생성될 카테고리 |
+| `EXCLUDED_GUILD_IDS` | 레벨/XP 시스템을 적용하지 않을 길드(테스트 서버 등) |
+| `XP_CHANNEL_ID` | 채팅 XP를 인정할 채널 |
+| `LEVEL_UP_ANNOUNCE_CHANNEL_ID` | 레벨업 축하 메시지를 보낼 채널 (= 놀이터) |
+| `XP_CHANNEL_MULTIPLIERS` | 기본 배율이 아닌 XP 배율을 적용할 채널 (TTS 채널 0.06배) |
+| `MATCH_BONUS_CHANNEL_ID` | 내전/모집 완료 보너스 XP 채널(= 인증 채널). `/불러오기` 전용 채널이기도 함 |
+| `QUIZ_CHANNEL_ID` | 초성퀴즈·상식퀴즈 자동 출제 채널 (= 놀이터) |
+| `WORDCHAIN_RANKING_CHANNEL_ID` | 끝말잇기/틱택토/룰렛/레벨/랭킹 전용 채널 (= 놀이터) |
+| `ADMIN_IDS` | 관리자 유저 ID 목록 |
+| `GAME_EMOJIS` | `/내전`·`/모집` 게임 선택 메뉴의 게임별 커스텀 이모지 ID (두 커맨드가 공유) |
+| `STEAM_EMOJI_ID` | 직접 입력 게임의 Steam 역할 멘션 토글 버튼 이모지 |
 
 > `/랭킹`이 `guild.members.fetch({ user: [...] })`로 멤버 정보를 대량 조회하기 때문에 `GuildMembers` 특권 인텐트(privileged intent)가 필요합니다(`index.js`). [Discord Developer Portal](https://discord.com/developers/applications) → 해당 애플리케이션 → Bot → Privileged Gateway Intents에서 **Server Members Intent**를 켜야 합니다 — 안 켜면 봇 로그인 자체가 "Used disallowed intents" 에러로 실패합니다.
 
@@ -157,18 +177,18 @@ npm start
 - 끝말잇기/틱택토/레벨/랭킹은 놀이터 채널(`PLAYGROUND_CHANNEL_ID`)에서만 이용 가능하다는 안내 임베드와 해당 채널로 바로 이동하는 링크 버튼을 함께 게시
 - "🔄 새로고침" 버튼을 누르면 패널 메시지를 최신 상태로 그 자리에서 갱신(`interaction.update`)
 - 버튼 자체는 관리자 권한 없이 아무나 클릭 가능(안내 패널의 목적이 명령어 없이도 접근 가능하게 하는 것이므로) — 패널을 게시하는 `/배치` 실행만 관리자 전용
-- 패널을 게시한 채널이 `ALLOWED_CHANNEL_ID`에 포함되어 있어야 버튼 클릭 이후의 게임 선택/모달 등 후속 상호작용이 정상 동작함
+- 패널을 게시한 채널이 `config.js`의 `ALLOWED_CHANNEL_IDS`에 포함되어 있어야 버튼 클릭 이후의 게임 선택/모달 등 후속 상호작용이 정상 동작함
 
 ### 관리 (`/관리`, `commands/관리.js`, 관리자 전용)
 
 - `메시지삭제` 옵션에 메시지 ID/링크를 입력하면 해당 봇 메시지를 즉시 삭제
 - 옵션 없이 실행하면 내전/모집 관리 메뉴 표시 → 선택한 매치를 `⌛ 종료`(그레이아웃 처리 후 목록에서 제거) 또는 `🗑️ 삭제`
 - 목록은 명령어를 실행한 서버의 내전/모집만 표시(다른 서버 것과 섞이지 않음)
-- 관리자 판별은 `handlers/공용.js`의 `ADMIN_IDS`(하드코딩된 유저 ID 목록)로 처리됩니다
+- 관리자 판별은 `config.js`의 `ADMIN_IDS`(하드코딩된 유저 ID 목록)로 처리됩니다
 
 ### 끝말잇기 (`/끝말잇기`, `handlers/끝말잇기.js`)
 
-- `index.js`의 `WORDCHAIN_RANKING_CHANNEL_ID`로 지정된 채널에서만 사용 가능
+- `config.js`의 `WORDCHAIN_RANKING_CHANNEL_ID`로 지정된 채널에서만 사용 가능
 - 참가 버튼으로 대기열에 합류(최대 90초), 2명 이상이면 시작 가능, 사람이 1명뿐이면 봇과 대결 가능
 - 순서가 된 사람이 채팅으로 답을 입력하면 검증: 한글 여부, 최소 길이, 이전 단어 끝 글자와 일치(두음법칙 변환 반영), 중복 사용 여부, 국립국어원 한국어기초사전 API를 통한 실존 단어 여부
 - 20초 제한시간 초과, 규칙 위반, 사전에 없는 단어 등으로 게임 종료 시 사유와 함께 결과 임베드 표시
@@ -179,7 +199,7 @@ npm start
 
 ### 틱택토 (`/틱택토`, `handlers/틱택토.js`)
 
-- `index.js`의 `WORDCHAIN_RANKING_CHANNEL_ID`로 지정된 채널에서만 사용 가능
+- `config.js`의 `WORDCHAIN_RANKING_CHANNEL_ID`로 지정된 채널에서만 사용 가능
 - `상대방` 옵션 없이 실행하면 **봇전 설정 로비**(무한모드 토글 + `▶️ 시작`)가 먼저 뜸(60초 내 미시작 시 취소), 옵션으로 유저를 지정하면 **준비 로비**(둘 다 `✅ 준비`를 눌러야 시작, `❌ 거절`로 즉시 취소 가능)가 뜸(60초 내 둘 다 준비 안 하면 자동 만료) — 로비 단계에서 참가자 누구든 `무한모드: ON/OFF`를 토글할 수 있고, PvP 로비에서 토글하면 규칙이 바뀌었으므로 양쪽 준비 상태가 초기화됨
 - **무한모드**: 각자 최대 3개(❌/⭕)까지만 보드에 남고, 4번째를 두면 그 마크의 가장 오래된 조각이 사라짐(곧 사라질 조각은 흐린 회색 버튼으로 미리 표시) — 보드가 절대 다 차지 않아 무승부 없이 계속 이어짐. 봇 AI는 무한모드 전용 로직(깊이 4로 제한한 미니맥스 + 줄 단위 휴리스틱 평가)을 따로 씀 — 판이 끝없이 순환할 수 있어 일반 모드처럼 완전 탐색을 할 수 없기 때문
 - 참가자만 자신의 차례에 버튼으로 칸을 선택 가능, 한 수도 없이 5분이 지나면 시간 초과로 무승부 종료
@@ -190,7 +210,7 @@ npm start
 
 ### 룰렛 (`/룰렛`, `handlers/룰렛.js`)
 
-- `index.js`의 `WORDCHAIN_RANKING_CHANNEL_ID`로 지정된 채널에서만 사용 가능
+- `config.js`의 `WORDCHAIN_RANKING_CHANNEL_ID`로 지정된 채널에서만 사용 가능
 - 이름은 "룰렛"이지만 실제로는 **슬롯머신형**(3릴 심볼 매칭) 솔로(대 봇) 도박 게임 — PvP가 아니라 봇을 상대로 XP를 걸고 하루 한 번 스핀
 - `/룰렛` 실행 시 옵션 입력 없이 본인에게만 보이는(ephemeral) **로비 임베드**가 뜸 — 베팅 프리셋 버튼(10/50/100/200/300 XP)과 `🔺 최대` 버튼으로 베팅액을 고르면(현재 레벨 안에 쌓인 XP를 넘는 프리셋은 자동으로 비활성화되어 레벨 강등 자체가 불가능함) 그제서야 `🎰 돌리기` 버튼이 활성화됨, `❌ 취소`로 언제든 그만둘 수 있고 60초간 조작이 없으면 자동 만료
 - 로비를 시작한 본인만 그 로비의 버튼을 조작할 수 있음
@@ -232,7 +252,7 @@ npm start
 - 레벨업 시 지정된 채널에 축하 메시지 게시
 - 특정 서버(테스트 서버)는 시스템 자체가 비활성화됨
 - 내전/모집 완료 보너스 채널(`MATCH_BONUS_CHANNEL_ID`)에 올라온 일반 유저 메시지는 8시간 후 자동 삭제됨(`scheduleMessageDelete`, 봇 메시지는 제외) — 재시작해도 `data.json`에 삭제 예정 시각이 저장돼 있어 남은 시간만큼 다시 예약됨. 다만 이 예약은 `messageCreate` 이벤트에서만 걸리므로, 봇이 꺼져있던 동안 올라온 메시지는 예약 자체가 안 걸린 채로 남을 수 있음 — 봇 시작 시(`index.js`의 `reconcileMatchBonusMessages`) 이 채널의 최근 메시지(최대 500개 또는 24시간치)를 훑어 예약이 빠진 메시지를 찾아 다시 걸어줌
-- `/레벨`로 진행바 임베드 확인, `/랭킹`으로 서버 XP 순위 확인(`/레벨`, `/랭킹` 모두 `index.js`의 `WORDCHAIN_RANKING_CHANNEL_ID` 채널에서만 사용 가능)
+- `/레벨`로 진행바 임베드 확인, `/랭킹`으로 서버 XP 순위 확인(`/레벨`, `/랭킹` 모두 `config.js`의 `WORDCHAIN_RANKING_CHANNEL_ID` 채널에서만 사용 가능)
 - `/랭킹`은 서버를 나갔거나 멤버 조회가 안 되는(알 수 없는 사용자) 유저를 목록에서 완전히 제외함 — 페이지 단위가 아니라 전체 랭킹을 먼저 걸러낸 뒤 페이지를 나눠서, 나간 유저가 있어도 한 페이지가 5명 미만으로 비지 않음
 
 ## 주요 함수
@@ -426,8 +446,8 @@ npm start
 
 ## 권한
 
-- 관리자 기능(내전/모집 강제 관리, 봇 메시지 삭제, `/배치`, `/퀴즈` 등)은 `handlers/공용.js`의 `ADMIN_IDS`에 등록된 유저만 사용할 수 있습니다. `/퀴즈`는 `/관리`, `/배치`와 마찬가지로 `ALLOWED_CHANNEL_ID` 제한과 무관하게 아무 채널에서나 사용 가능합니다.
+- 관리자 기능(내전/모집 강제 관리, 봇 메시지 삭제, `/배치`, `/퀴즈` 등)은 `config.js`의 `ADMIN_IDS`에 등록된 유저만 사용할 수 있습니다(`handlers/공용.js`가 그대로 재export하므로 기존 `require('../handlers/공용')` 경로도 유효). `/퀴즈`는 `/관리`, `/배치`와 마찬가지로 `ALLOWED_CHANNEL_IDS` 제한과 무관하게 아무 채널에서나 사용 가능합니다.
 - 내전/모집의 일반 관리 메뉴(마감/수정/취소 등)는 해당 매치의 주최자 또는 `ADMIN_IDS`만 사용할 수 있습니다.
-- `ALLOWED_CHANNEL_ID`에 등록되지 않은 채널에서는 내전/모집/팀 관련 상호작용이 차단됩니다.
-- `/끝말잇기`, `/틱택토`, `/룰렛`, `/레벨`, `/랭킹`과 관련 버튼은 `ALLOWED_CHANNEL_ID`와 무관하게 `index.js`의 `WORDCHAIN_RANKING_CHANNEL_ID` 채널에서만 사용할 수 있습니다.
-- `/불러오기`(및 `불러오기:select`, `recruit:불러오기` 버튼)는 `ALLOWED_CHANNEL_ID`와 무관하게 완료 보너스 채널(`MATCH_BONUS_CHANNEL_ID`)에서만 사용할 수 있습니다 — 다른 채널에서 재게시하면 XP 보너스 자격 판정이 어긋나기 때문입니다.
+- `config.js`의 `ALLOWED_CHANNEL_IDS`에 등록되지 않은 채널에서는 내전/모집/팀 관련 상호작용이 차단됩니다. 배열이 비어 있으면(`[]`) 채널 제한을 걸지 않습니다.
+- `/끝말잇기`, `/틱택토`, `/룰렛`, `/레벨`, `/랭킹`과 관련 버튼은 `ALLOWED_CHANNEL_IDS`와 무관하게 `config.js`의 `WORDCHAIN_RANKING_CHANNEL_ID`(= 놀이터) 채널에서만 사용할 수 있습니다.
+- `/불러오기`(및 `불러오기:select`, `recruit:불러오기` 버튼)는 `ALLOWED_CHANNEL_IDS`와 무관하게 완료 보너스 채널(`MATCH_BONUS_CHANNEL_ID`)에서만 사용할 수 있습니다 — 다른 채널에서 재게시하면 XP 보너스 자격 판정이 어긋나기 때문입니다.

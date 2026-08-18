@@ -26,7 +26,8 @@ const { handleTempVoiceState, reconcileTempChannels } = require('./handlers/음�
 const { logCommandUsage } = require('./handlers/명령어로그');
 
 // 끝말잇기/틱택토/랭킹 명령어와 관련 버튼을 이 채널에서만 사용할 수 있게 제한한다.
-const WORDCHAIN_RANKING_CHANNEL_ID = '1522174367075663872';
+// ALLOWED_CHANNEL_IDS는 내전/모집/팀 상호작용을 허용할 채널 목록(비어 있으면 제한 없음).
+const { WORDCHAIN_RANKING_CHANNEL_ID, ALLOWED_CHANNEL_IDS: allowedChannels } = require('./config');
 
 const client = new Client({
   intents: [
@@ -245,8 +246,6 @@ client.on('interactionCreate', async (interaction) => {
       interaction.customId?.startsWith('quiz:');
 
     if (!isChannelExempt) {
-      const allowedChannel = process.env.ALLOWED_CHANNEL_ID;
-      const allowedChannels = allowedChannel ? allowedChannel.split(',').map(id => id.trim()) : [];
       if (allowedChannels.length > 0 && !allowedChannels.includes(interaction.channelId)) {
         if (interaction.isRepliable()) {
           await interaction.reply({ content: '❌ 이 채널에서는 사용할 수 없습니다.', ephemeral: true });

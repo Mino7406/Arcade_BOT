@@ -16,14 +16,13 @@ const {
   MessageFlags,
 } = require('discord.js');
 const { awardMatchCompletionXp, LEVEL_UP_ANNOUNCE_CHANNEL_ID } = require('./레벨');
+const { ADMIN_IDS, STEAM_EMOJI_ID } = require('../config');
 
 // 내전(naejeon)/모집(mojip) 두 시스템이 공유하는 게임 → 역할 이름 매핑.
 // (역할 멘션 대상 채널이 있으면 해당 역할을 핑한다.)
 const ROLE_NAMES = {
   lol: '롤', valorant: '발로란트', overwatch: '오버워치', pubg: '배그',
 };
-
-const ADMIN_IDS = ['457437911869161472', '1043750483522752512', '685917435601092643'];
 
 function getNaejeonMatches(client) {
   if (!client.naejeonMatches) client.naejeonMatches = new Map();
@@ -618,7 +617,7 @@ function buildPreviewComponents(type, data = null) {
   if (data && data.game === 'custom') {
     const steamToggle = new ButtonBuilder()
       .setCustomId(`${type}:toggle_steam`)
-      .setEmoji({ id: '1510954746012242021', name: 'Steam' })
+      .setEmoji({ id: STEAM_EMOJI_ID, name: 'Steam' })
       .setLabel(data.mentionSteam ? '멘션 ON' : '멘션 OFF')
       .setStyle(data.mentionSteam ? ButtonStyle.Success : ButtonStyle.Secondary);
     return [row1, new ActionRowBuilder().addComponents(autoCloseToggle, notifyButton), new ActionRowBuilder().addComponents(steamToggle)];

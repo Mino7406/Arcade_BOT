@@ -12,8 +12,8 @@ const { EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 const { applyXp, EXCLUDED_GUILD_IDS } = require('./레벨');
+const { QUIZ_CHANNEL_ID } = require('../config'); // 놀이터 채널 (config.js의 PLAYGROUND_CHANNEL_ID)
 
-const QUIZ_CHANNEL_ID = '1522174367075663872'; // 놀이터 채널 (index.js의 WORDCHAIN_RANKING_CHANNEL_ID와 동일)
 // KST 기준 출제 가능 시간대: 낮 12시 ~ 다음날 새벽 5시(=29시). 유저들이 새벽 시간대에 몰려있는
 // 경우가 많아 자정을 넘겨서까지 출제되도록 잡음. 이 시각(다음날 05:00) 넘어서까지 봇이 안 켜져
 // 있었다면 그날 사이클은 건너뜀.

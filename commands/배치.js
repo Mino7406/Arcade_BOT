@@ -7,9 +7,8 @@ const {
 } = require('discord.js');
 
 const { ADMIN_IDS } = require('../handlers/공용');
-
 // 끝말잇기/틱택토/레벨/랭킹은 이 채널(놀이터)에서만 사용 가능.
-const PLAYGROUND_CHANNEL_ID = '1522174367075663872';
+const { PLAYGROUND_CHANNEL_ID } = require('../config');
 
 // 안내 패널의 "명령어 보기" 버튼(index.js)에서 재사용.
 const COMMAND_LIST = [
