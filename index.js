@@ -1,7 +1,9 @@
-require('dotenv').config({ path: './env' });
+const path = require('path');
+// 실행 디렉터리(CWD)가 아니라 이 파일 기준으로 env를 찾는다 — systemd 등 다른 CWD에서 띄워도
+// 토큰을 놓치지 않게. (파일명이 '.env'가 아니라 'env'인 것은 의도된 것)
+require('dotenv').config({ path: path.join(__dirname, 'env') });
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const fs = require('fs');
-const path = require('path');
 const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleNaejeonNotifyModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload: buildNaejeonMessagePayload } = require('./handlers/내전');
 const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipNotifyModal, handleMojipMemberAdd, handleMojipMemberRemove, buildMojipMessagePayload } = require('./handlers/모집');
 const { armAutoEnd, AUTO_CLOSE_DELAY_MS, announceMatchCompletionXp, scheduleCancelledDelete, scheduleMessageDelete, deleteMentionMessage, armNotifyReminder, ADMIN_IDS } = require('./handlers/공용');
@@ -438,4 +440,8 @@ function shutdown() {
 process.on('SIGTERM', shutdown);
 process.on('SIGINT',  shutdown);
 
-client.login(process.env.TOKEN);
+// 토큰이 없거나 잘못된 경우 unhandled rejection으로 조용히 죽지 않도록 이유를 남기고 종료한다.
+client.login(process.env.TOKEN).catch(err => {
+  console.error('로그인 실패:', err);
+  process.exit(1);
+});

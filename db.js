@@ -5,6 +5,7 @@ const fs   = require('fs');
 const path = require('path');
 
 const DB_PATH = path.join(__dirname, 'data.json');
+const TMP_PATH = DB_PATH + '.tmp';
 
 // match 객체 안의 직렬화 불가 객체(Discord 객체)를 제거하고 JSON 문자열로 변환
 function matchToJSON(match) {
@@ -50,7 +51,11 @@ function saveAll(client) {
       });
     }
   }
-  fs.writeFileSync(DB_PATH, JSON.stringify(rows), 'utf8');
+  // 30초마다 파일 전체를 덮어쓰기 때문에, 쓰는 도중에 죽으면 data.json이 잘린 채 남아
+  // 다음 재시작 때 loadRows()가 파싱에 실패(→ [] 반환)하며 전체 데이터가 날아간다.
+  // 임시 파일에 먼저 다 쓰고 rename으로 교체해, 실패해도 기존 파일이 그대로 남게 한다.
+  fs.writeFileSync(TMP_PATH, JSON.stringify(rows), 'utf8');
+  fs.renameSync(TMP_PATH, DB_PATH);
 }
 
 // 저장된 모든 행을 읽어옴 (봇 시작 시 복원할 때 사용)
