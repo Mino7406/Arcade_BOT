@@ -26,7 +26,7 @@ const OVERNIGHT_CUTOFF_HOUR = WINDOW_END_HOUR > 24 ? WINDOW_END_HOUR - 24 : 0;
 const RECENT_WORD_MEMORY = 30; // 최근 이만큼은(초성/상식 합쳐서) 다시 출제하지 않음
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
-const STATE_PATH = path.join(__dirname, '..', '퀴즈.json');
+const STATE_PATH = path.join(__dirname, '..', 'quiz.json');
 
 const CHOSUNG = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
 const KOREAN_ONLY = /^[가-힣]+$/;
