@@ -167,7 +167,7 @@ function buildLobbyEmbed(lobby) {
       `💰 선택한 베팅: ${betLine}\n` +
       `📊 최대 베팅 가능: **${lobby.maxAvailable} XP**`,
     )
-    .setFooter({ text: '60초 안에 돌리지 않으면 자동으로 취소됩니다 · 하루에 한 번만 가능' })
+    .setFooter({ text: '⏰ 60초 안에 돌리지 않으면 자동으로 취소됩니다.' })
     .setTimestamp();
 }
 
@@ -227,7 +227,7 @@ async function startRouletteCommand(interaction) {
   const currentLevelXp = levelFromXp(getXp(guildId, userId)).currentLevelXp;
   if (currentLevelXp < MIN_BET) {
     await interaction.reply({
-      content: `⚠️ **베팅 가능한 XP가 부족합니다.** (최소 ${MIN_BET} XP 필요, 현재 레벨 안 보유 XP: ${currentLevelXp})`,
+      content: `⚠️ **베팅 가능한 XP가 부족합니다.**\n(최소 ${MIN_BET} XP 필요, 현재 레벨 안 보유 XP: ${currentLevelXp})`,
       ephemeral: true,
     });
     return;
@@ -294,7 +294,7 @@ async function spinLobby(interaction, lobby, lobbies) {
         ? `🎉 **JACKPOT!** (x${multiplier})`
         : `**${symbolLabel} 트리플 매칭!** (x${multiplier})`
       : kind === 'two'
-        ? `🙂 **더블 매칭** (x${multiplier})`
+        ? `🙂 **더블 매칭!** (x${multiplier})`
         : `😢 **꽝**`;
 
   const netLine = net >= 0 ? `📈 **+${net} XP**` : `📉 **${net} XP**`;
