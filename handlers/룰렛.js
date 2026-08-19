@@ -31,6 +31,9 @@ const SYMBOLS = [
 const TRIPLE_PAYOUTS = { '🍒': 2, '🍋': 2.5, '🍇': 3, '🔔': 4, '💎': 5, '7️⃣': 10 };
 const TWO_MATCH_PAYOUT = 1.2;
 
+// 결과 메시지에서 "레몬 트리플 매칭"처럼 어떤 심볼로 맞췄는지 보여주기 위한 이름표.
+const SYMBOL_NAMES = { '🍒': '체리', '🍋': '레몬', '🍇': '포도', '🔔': '종', '💎': '다이아몬드', '7️⃣': '세븐' };
+
 let roulette = {}; // { [guildId]: { [userId]: "YYYY-MM-DD"(KST, 마지막 플레이 날짜) } }
 
 function loadRoulette() {
@@ -86,11 +89,13 @@ function spinReel() {
 }
 
 // 릴 3개 결과로 배당 배율을 계산. { multiplier, kind } 반환 (kind: 'triple'|'two'|'none').
+// symbol: 트리플일 때 맞춘 심볼 — 결과 메시지에 "레몬 트리플 매칭"처럼 종류를 적는 데 사용.
+// 더블은 어떤 심볼이든 배당이 같아 종류를 표기하지 않으므로 symbol을 채우지 않는다.
 function resolvePayout(reels) {
   const [a, b, c] = reels;
-  if (a === b && b === c) return { multiplier: TRIPLE_PAYOUTS[a], kind: 'triple' };
-  if (a === b || b === c || a === c) return { multiplier: TWO_MATCH_PAYOUT, kind: 'two' };
-  return { multiplier: 0, kind: 'none' };
+  if (a === b && b === c) return { multiplier: TRIPLE_PAYOUTS[a], kind: 'triple', symbol: a };
+  if (a === b || b === c || a === c) return { multiplier: TWO_MATCH_PAYOUT, kind: 'two', symbol: null };
+  return { multiplier: 0, kind: 'none', symbol: null };
 }
 
 function sleep(ms) {
@@ -275,19 +280,21 @@ async function spinLobby(interaction, lobby, lobbies) {
   markPlayedToday(lobby.guildId, lobby.userId);
 
   const reels = [spinReel(), spinReel(), spinReel()];
-  const { multiplier, kind } = resolvePayout(reels);
+  const { multiplier, kind, symbol } = resolvePayout(reels);
   const payout = Math.round(bet * multiplier);
   const net = payout - bet;
 
   const result = applyXp(lobby.guildId, lobby.userId, net);
 
+  const symbolLabel = symbol ? `${symbol} ${SYMBOL_NAMES[symbol]}` : '';
+
   const resultLine =
     kind === 'triple'
-      ? reels[0] === '7️⃣'
+      ? symbol === '7️⃣'
         ? `🎉 **JACKPOT!** (x${multiplier})`
-        : `🎊 **트리플 매칭!** (x${multiplier})`
+        : `**${symbolLabel} 트리플 매칭!** (x${multiplier})`
       : kind === 'two'
-        ? `🙂 **2개 매칭** (x${multiplier})`
+        ? `🙂 **더블 매칭** (x${multiplier})`
         : `😢 **꽝**`;
 
   const netLine = net >= 0 ? `📈 **+${net} XP**` : `📉 **${net} XP**`;
