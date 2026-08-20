@@ -14,14 +14,14 @@ const path = require('path');
 const { applyXp, EXCLUDED_GUILD_IDS } = require('./레벨');
 const { QUIZ_CHANNEL_ID } = require('../config'); // 놀이터 채널 (config.js의 PLAYGROUND_CHANNEL_ID)
 
-// KST 기준 출제 가능 시간대: 낮 12시 ~ 다음날 새벽 5시(=29시). 유저들이 새벽 시간대에 몰려있는
-// 경우가 많아 자정을 넘겨서까지 출제되도록 잡음. 이 시각(다음날 05:00) 넘어서까지 봇이 안 켜져
-// 있었다면 그날 사이클은 건너뜀.
-const WINDOW_START_HOUR = 12;
-const WINDOW_END_HOUR = 29;
-// WINDOW_END_HOUR이 24시를 넘기므로(자정 이후로 이어짐), 자정~이 컷오프 사이는 아직 "전날
-// 사이클"이 진행 중인 것으로 취급해야 한다(그래야 새벽에 하트비트가 돌 때 아직 안 끝난 어제
-// 예약이 오늘 걸로 잘못 리셋되지 않음) — cycleDateString()에서 사용.
+// KST 기준 출제 가능 시간대: 오전 10시 ~ 밤 11시. 이 시각(23:00)까지 봇이 안 켜져 있었다면
+// 그날 사이클은 건너뜀.
+const WINDOW_START_HOUR = 10;
+const WINDOW_END_HOUR = 23;
+// WINDOW_END_HOUR을 24시 넘게(예: 29 = 다음날 05시) 잡으면 시간대가 자정을 넘어가므로, 그때는
+// 자정~이 컷오프 사이를 아직 "전날 사이클"이 진행 중인 것으로 취급해야 한다(그래야 하트비트가
+// 아직 안 끝난 어제 예약을 오늘 걸로 잘못 리셋하지 않음) — cycleDateString()에서 사용.
+// 지금처럼 END가 24시 이하면 0이 되어 사이클 = 그냥 KST 달력 날짜다.
 const OVERNIGHT_CUTOFF_HOUR = WINDOW_END_HOUR > 24 ? WINDOW_END_HOUR - 24 : 0;
 const RECENT_WORD_MEMORY = 30; // 최근 이만큼은(초성/상식 합쳐서) 다시 출제하지 않음
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
@@ -108,8 +108,9 @@ function getChosung(word) {
 }
 
 // 순수 달력 날짜가 아니라 "이 시각이 어느 출제 사이클에 속하는지"를 반환한다. 출제 가능
-// 시간대가 자정을 넘겨 다음날 새벽까지 이어지므로, 자정~OVERNIGHT_CUTOFF_HOUR 사이는
-// 아직 전날 사이클로 취급한다(예: 새벽 2시는 어제 낮 12시에 시작된 사이클의 연장).
+// 시간대가 자정을 넘겨 다음날 새벽까지 이어지도록 설정된 경우, 자정~OVERNIGHT_CUTOFF_HOUR
+// 사이는 아직 전날 사이클로 취급한다. 현재 설정(10~23시)에서는 컷오프가 0이라 KST 달력 날짜와
+// 같고, 사이클은 매일 자정에 넘어간다.
 function cycleDateString(epochMs = Date.now()) {
   const kst = new Date(epochMs + KST_OFFSET_MS);
   if (kst.getUTCHours() < OVERNIGHT_CUTOFF_HOUR) kst.setUTCDate(kst.getUTCDate() - 1);
@@ -117,7 +118,7 @@ function cycleDateString(epochMs = Date.now()) {
 }
 
 // 주어진 사이클 날짜(dayStr, cycleDateString이 반환하는 형식)의 출제 가능 시간대 시작/끝을
-// epoch ms로 반환. WINDOW_END_HOUR이 24를 넘으므로 end는 자동으로 다음날 시각이 된다.
+// epoch ms로 반환. WINDOW_END_HOUR을 24 넘게 잡으면 end는 자동으로 다음날 시각이 된다.
 function windowBoundsForDay(dayStr) {
   const [y, m, d] = dayStr.split('-').map(Number);
   const start = Date.UTC(y, m - 1, d, WINDOW_START_HOUR, 0, 0) - KST_OFFSET_MS;
@@ -247,6 +248,27 @@ async function fireQuiz(client, modeKey) {
   await postQuiz(client, state, modeKey); // slotKey 기본값 'activeQuiz'
 }
 
+// 출제 시각은 Math.random()이 아니라 "사이클 날짜 + 시드" 해시로 뽑는다. 그래야 봇을 몇 시에
+// 켜든 그날 예약 시각이 항상 같은 값으로 계산되고, 예전처럼 "봇을 켠 시각 이후"로만 추첨돼서
+// 매일 비슷한 시간대에 문제가 나가는 쏠림이 생기지 않는다.
+const MIN_CATCHUP_DELAY_MS = 5 * 60 * 1000; // 만회 출제도 최소 이만큼은 뒤로 — 부팅 직후 출제 방지
+
+// 문자열 → 32비트 정수 해시(FNV-1a).
+function hash32(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+// [from, to) 구간 안에서 key로부터 결정적으로 한 시점을 고른다. 구간이 비어있으면 null.
+function deterministicTimeIn(from, to, key) {
+  if (to <= from) return null;
+  return Math.round(from + (hash32(key) / 0x100000000) * (to - from));
+}
+
 let armedTimer = null;
 let armedScheduledAt = null;
 
@@ -256,12 +278,15 @@ function disarmTimer() {
   armedScheduledAt = null;
 }
 
-// 하루 한 번, 이 사이클(cycleDateString, 자정을 넘겨도 05:00 전까지는 전날 사이클로 취급)에
-// 아직 스케줄이 없으면 출제 가능 시간대(WINDOW_START~END, 낮 12시~다음날 새벽 5시) 안에서
-// 무작위 시각을 골라 setTimeout을 건다. 모드는 어제 출제된 모드의 반대로 자동 결정(첫 실행은
-// 초성퀴즈부터). scheduledAt(고정
-// 시각)을 파일에 저장해두므로, 봇이 재시작돼도 같은 시각·같은 모드로 다시 예약되고(이미 지났으면 즉시
-// 출제) 하루에 두 번 출제되지 않는다. 아직 안 풀린 문제(activeQuiz/activeManualQuiz)도 파일에
+// 하루 한 번, 이 사이클(cycleDateString)에 아직 스케줄이 없으면 출제 가능 시간대
+// (WINDOW_START~END, 오전 10시~밤 11시) 안에서 시각을 골라 setTimeout을 건다. 시각은
+// Math.random()이 아니라 "사이클 날짜 + 시드" 해시(deterministicTimeIn)로 정해지므로, 봇을 몇
+// 시에 켜든 그날 예약 시각은 항상 같다 — 예전에는 "봇을 켠 시각 ~ 시간대 끝" 사이에서만
+// 추첨해서, 매일 비슷한 시간에 봇을 켜면 출제 시각도 계속 비슷한 대로 몰렸다. 그 시각에 봇이
+// 꺼져 있어 놓쳤다면 즉시 출제하지 않고 남은 시간대 안에서 다시 잡고(최소 5분 뒤), 시간대가
+// 끝났으면 그날은 건너뛴다. 모드는 어제 출제된 모드의 반대로 자동 결정(첫 실행은
+// 초성퀴즈부터). scheduledAt(고정 시각)을 파일에 저장해두므로, 봇이 재시작돼도 같은 시각·같은
+// 모드로 다시 예약되고 하루에 두 번 출제되지 않는다. 아직 안 풀린 문제(activeQuiz/activeManualQuiz)도 파일에
 // 저장해두므로, 봇이 재시작돼도 채점이 끊기지 않고 이어진다(다음 문제가 같은 슬롯에 나갈 때
 // voidQuiz가 정리). /퀴즈 중지로 paused 상태가 되면 예약을 걸지 않고(이미 나간 문제 채점은 계속
 // 동작), /퀴즈 재개 시 다시 정상적으로 예약을 재개한다. paused는 자동 출제에만 영향을 주며,
@@ -292,21 +317,53 @@ function checkAndSchedule(client) {
     return;
   }
 
-  if (!state || state.day !== today) {
-    const { start, end } = windowBoundsForDay(today);
-    const base = Math.max(start, now);
-    const scheduledAt = base >= end ? null : Math.round(base + Math.random() * (end - base));
-    const prevMode = state?.mode;
-    const mode = prevMode === 'chosung' ? 'sangsik' : 'chosung';
+  if (!state) {
     state = {
-      day: today, mode, scheduledAt, posted: scheduledAt === null, paused: false,
-      recentWords: state?.recentWords || [], activeQuiz: state?.activeQuiz || null,
-      activeManualQuiz: state?.activeManualQuiz || null,
+      day: null, mode: null, scheduledAt: null, posted: true, paused: false,
+      recentWords: [], activeQuiz: null, activeManualQuiz: null,
+    };
+  }
+  // 시드는 최초 1회만 만들어 파일에 남긴다 — 출제 시각이 "사이클 날짜 + 시드" 해시로 정해지므로
+  // 시드가 고정돼 있어야 봇을 언제 켜든 그날 예약 시각이 같게 나온다(시드를 쓰는 이유는 서버마다
+  // 시각 패턴이 달라지게, 또 코드만 보고 출제 시각을 예측하지 못하게 하기 위함).
+  if (!state.seed) {
+    state.seed = Math.random().toString(36).slice(2, 10);
+    saveState(state);
+  }
+
+  const { start, end } = windowBoundsForDay(today);
+
+  if (state.day !== today) {
+    const prevMode = state.mode;
+    state = {
+      ...state,
+      day: today,
+      mode: prevMode === 'chosung' ? 'sangsik' : 'chosung',
+      scheduledAt: deterministicTimeIn(start, end, `${today}#${state.seed}`),
+      posted: false,
+      catchupCount: 0,
+      paused: false,
     };
     saveState(state);
   }
 
   if (state.posted) return;
+
+  // 예약 시각이 이미 지났다면(그 시각에 봇이 꺼져 있었던 경우) 켜자마자 바로 출제하지 않고,
+  // 남은 시간대 안에서 다시 결정적으로 시각을 고른다 — 즉시 출제하면 "봇 켠 시각 = 출제 시각"이
+  // 되어, 매일 비슷한 때에 봇을 켜는 운영에서는 출제 시각도 계속 비슷해진다.
+  // 시간대(END)가 이미 끝났으면 그날은 출제 없이 건너뛴다.
+  if (state.scheduledAt === null || state.scheduledAt <= now) {
+    state.catchupCount = (state.catchupCount || 0) + 1;
+    const retryAt = deterministicTimeIn(now + MIN_CATCHUP_DELAY_MS, end, `${today}#${state.seed}#${state.catchupCount}`);
+    state.scheduledAt = retryAt;
+    if (retryAt === null) state.posted = true; // 남은 시간대가 없음 → 이번 사이클 종료
+    saveState(state);
+    if (state.posted) {
+      disarmTimer();
+      return;
+    }
+  }
   if (armedTimer && armedScheduledAt === state.scheduledAt) return; // 이미 예약돼 있음
 
   if (armedTimer) clearTimeout(armedTimer);
