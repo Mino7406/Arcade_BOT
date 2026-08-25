@@ -96,7 +96,7 @@ function buildSetupPanelPayload(interaction) {
       .setLabel('🎡 놀이터 바로가기')
       .setStyle(ButtonStyle.Link)
       .setURL(`https://discord.com/channels/${interaction.guild.id}/${PLAYGROUND_CHANNEL_ID}`),
-    new ButtonBuilder().setCustomId('recruit:관리').setLabel('⚙️ 관리').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('recruit:관리').setLabel('⚙️ 관리').setStyle(ButtonStyle.Danger),
   );
 
   return { embeds: [embed, playgroundEmbed], components: [row1, row2] };
