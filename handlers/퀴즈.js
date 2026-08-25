@@ -77,7 +77,7 @@ const MODES = {
           `초성 : \`${getChosung(word)}\`\n` +
           `> ${hint}`,
         )
-        .setFooter({ text: '📝 채팅으로 정답을 입력하면 자동으로 채점됩니다.' })
+        .setFooter({ text: '✏️ 채팅으로 정답을 입력하면 자동으로 채점됩니다.' })
         .setTimestamp();
     },
   },
@@ -93,7 +93,7 @@ const MODES = {
           `다음 뜻풀이에 해당하는 단어는? **(${word.length}글자)**\n` +
           `> ${hint}`,
         )
-        .setFooter({ text: '📝 채팅으로 정답을 입력하면 자동으로 채점됩니다.' })
+        .setFooter({ text: '✏️ 채팅으로 정답을 입력하면 자동으로 채점됩니다.' })
         .setTimestamp();
     },
   },
@@ -474,7 +474,7 @@ async function handleQuizMessage(message) {
     const result = applyXp(quiz.guildId, message.author.id, quiz.xpReward);
     const levelUpLine = result.leveledUp ? `\n${message.author}님이 ${result.newLevel}레벨을 달성했어요. 🎉` : '';
     await message.reply({
-      content: `🎉 정답입니다! **${quiz.word}** (+${quiz.xpReward} XP)${levelUpLine}`,
+      content: `💯 정답입니다! **${quiz.word}** (+${quiz.xpReward} XP)${levelUpLine}`,
       allowedMentions: { repliedUser: false, users: result.leveledUp ? [message.author.id] : [] },
     }).catch(() => {});
     return; // 한 메시지는 한 슬롯만 채점

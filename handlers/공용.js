@@ -395,51 +395,6 @@ async function toggleAutoCloseWhileClosed(matchesMap, msgId, match, label, enabl
   armAutoEnd(matchesMap, msgId, match, label, remaining);
 }
 
-// /관리 의 "⌛ 종료"와 동일한 회색 "종료됨" 임베드를 만든다.
-function buildEndedEmbed(match, label) {
-  const { game, gameInfo, title, datetime, organizer, description } = match.data;
-  const max = parseInt(match.data.players) || 0;
-  const participantText = match.participants.length > 0
-    ? `\`\`\`\n${match.participants.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n')}\n\`\`\``
-    : '*참가자가 없습니다.*';
-
-  const embed = new EmbedBuilder()
-    .setColor(0x808080)
-    .setDescription([
-      titleHeader(game, gameInfo, title),
-      `🎮 **게임**　　${gameInfo.name}`,
-      `📅 **일시**　　${datetime}`,
-      `👑 **주최자**　**\`${organizer.displayName}\`**`,
-      `📊 **상태**　　⚫ 종료됨`,
-    ].join('\n'));
-
-  if (description) embed.addFields({ name: '📝 메모', value: description });
-
-  return embed
-    .addFields({ name: `👥 참가자  ${match.participants.length} / ${max}명`, value: participantText })
-    .setFooter({ text: `⌛ ${label}이 종료되었습니다.` })
-    .setTimestamp();
-}
-
-// 매치를 "종료됨" 상태로 만든다: 임베드/버튼을 종료 화면으로 교체하고 관리 목록에서 제거한다.
-// /관리 의 수동 "⌛ 종료" 버튼에서 사용한다 (8시간 자동 처리는 메시지를 바로 삭제하며 이 함수를 쓰지 않는다).
-async function endMatch(matchesMap, msgId, match, label) {
-  clearAutoEndTimer(match);
-  clearNotifyTimer(match); // 종료된 매치는 알림을 보내지 않으므로 남은 예약 타이머를 취소한다.
-  match.closed = true;
-  match.closedAt = null;
-  await announceMatchCompletionXp(match);
-  await deleteMentionMessage(match.message.client, match);
-  await match.message.edit({
-    content: '',
-    embeds: [buildEndedEmbed(match, label)],
-    components: [],
-    attachments: [],
-    allowedMentions: { parse: [] },
-  });
-  matchesMap.delete(msgId);
-}
-
 // 내전/모집이 마감될 때마다 호출. 보너스 XP 지급 후 레벨업한 사람이 있으면 XP 채널에 알린다.
 async function announceMatchCompletionXp(match) {
   const leveledUp = awardMatchCompletionXp(match);
@@ -655,8 +610,6 @@ module.exports = {
   markClosed,
   markReopened,
   toggleAutoCloseWhileClosed,
-  buildEndedEmbed,
-  endMatch,
   announceMatchCompletionXp,
   parseNotifyTime,
   formatNotifyTime,

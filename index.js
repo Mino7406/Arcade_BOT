@@ -13,13 +13,12 @@ const { handleWcButton, handleWcMessage } = require('./handlers/끝말잇기');
 const { handleTttButton } = require('./handlers/틱택토');
 const { loadRoulette, saveRoulette, handleRouletteButton } = require('./handlers/룰렛');
 const { startQuizScheduler, handleQuizMessage } = require('./handlers/퀴즈');
-const { handleAdminSelect, handleAdminButton } = require('./commands/관리');
 const { handleQuizAdminButton, handleQuizCreateModal } = require('./commands/퀴즈');
 const { buildGameSelectPayload: buildNaejeonGameSelectPayload } = require('./commands/내전');
 const { buildGameSelectPayload: buildMojipGameSelectPayload } = require('./commands/모집');
 const { buildReloadListPayload } = require('./commands/불러오기');
 const { buildTeamMatchListPayload } = require('./commands/팀');
-const { buildCommandListPayload, buildSetupPanelPayload } = require('./commands/배치');
+const { buildCommandListPayload, buildSetupPanelPayload, buildAdminMenuPayload, handlePanelButton, handlePanelMatchDeleteSelect, handlePanelBotMessageDeleteModal } = require('./commands/패널');
 const { handleLevelShareButton } = require('./commands/레벨');
 const { handleRankingPageButton, handleRankingShareButton } = require('./commands/랭킹');
 const { saveAll, loadRows } = require('./db'); // ⬅️ 추가: SQLite 저장 모듈
@@ -241,10 +240,9 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     const isChannelExempt =
-      (interaction.isChatInputCommand() && ['관리', '배치', '퀴즈'].includes(interaction.commandName)) ||
+      (interaction.isChatInputCommand() && ['패널', '퀴즈'].includes(interaction.commandName)) ||
       isWordchainOrRanking ||
       isReload ||
-      interaction.customId?.startsWith('admin:') ||
       interaction.customId?.startsWith('quiz:');
 
     if (!isChannelExempt) {
@@ -270,9 +268,7 @@ client.on('interactionCreate', async (interaction) => {
       }
 
     } else if (interaction.isStringSelectMenu()) {
-      if (interaction.customId === 'admin:select') {
-        await handleAdminSelect(interaction);
-      } else if (interaction.customId === 'naejeon:game_select') {
+      if (interaction.customId === 'naejeon:game_select') {
         await handleGameSelect(interaction);
       } else if (interaction.customId.startsWith('naejeon:team_assign:')) {
         await handleTeamAssign(interaction);
@@ -288,6 +284,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleTeamAssignSelect(interaction);
       } else if (interaction.customId === '불러오기:select') {
         await handleRMatchSelect(interaction);
+      } else if (interaction.customId.startsWith('panel:매치삭제select:')) {
+        await handlePanelMatchDeleteSelect(interaction);
       }
 
     } else if (interaction.isModalSubmit()) {
@@ -309,6 +307,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleMojipNotifyModal(interaction);
       } else if (interaction.customId.startsWith('quiz:create_modal:')) {
         await handleQuizCreateModal(interaction);
+      } else if (interaction.customId.startsWith('panel:봇메시지삭제모달:')) {
+        await handlePanelBotMessageDeleteModal(interaction);
       }
 
     } else if (interaction.isButton()) {
@@ -324,8 +324,6 @@ client.on('interactionCreate', async (interaction) => {
         await handleTttButton(interaction);
       } else if (interaction.customId.startsWith('roulette:')) {
         await handleRouletteButton(interaction);
-      } else if (interaction.customId.startsWith('admin:')) {
-        await handleAdminButton(interaction);
       } else if (interaction.customId.startsWith('quiz:')) {
         await handleQuizAdminButton(interaction);
       } else if (interaction.customId.startsWith('level:share:')) {
@@ -344,13 +342,14 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply(buildTeamMatchListPayload(interaction));
       } else if (interaction.customId === 'recruit:명령어') {
         await interaction.reply(buildCommandListPayload());
-      } else if (interaction.customId === 'recruit:새로고침') {
+      } else if (interaction.customId === 'recruit:관리') {
         if (!ADMIN_IDS.includes(interaction.user.id)) {
           await interaction.reply({ content: '❌ **권한이 없습니다.**', ephemeral: true });
         } else {
-          // 채널 맨 아래로 옮기지 않고, 기존 패널 메시지를 그 자리에서 갱신한다.
-          await interaction.update(buildSetupPanelPayload(interaction));
+          await interaction.reply(buildAdminMenuPayload(interaction.message.id));
         }
+      } else if (interaction.customId.startsWith('panel:')) {
+        await handlePanelButton(interaction);
       }
     }
   } catch (error) {
