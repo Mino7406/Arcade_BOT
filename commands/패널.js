@@ -10,7 +10,7 @@ const {
   TextInputStyle,
 } = require('discord.js');
 
-const { ADMIN_IDS, disarmAutoEnd, clearNotifyTimer, deleteMentionMessage, announceMatchCompletionXp, getCancelledDeletions } = require('../handlers/공용');
+const { ADMIN_IDS, AUTO_CLOSE_DELAY_MS, disarmAutoEnd, clearNotifyTimer, deleteMentionMessage, announceMatchCompletionXp, getCancelledDeletions } = require('../handlers/공용');
 // 끝말잇기/틱택토/레벨/랭킹은 이 채널(놀이터)에서만 사용 가능.
 const { PLAYGROUND_CHANNEL_ID } = require('../config');
 
@@ -156,6 +156,21 @@ async function purgeUserMessages(channel) {
   return deleted;
 }
 
+// deleteAt(epoch ms) 시점까지 남은 시간을 "약 N시간 후 자동삭제"로 표현한다.
+// 내전/모집 마감 후 자동삭제, 취소된 게시글 자동삭제 표시에서 공용으로 쓴다.
+function formatHoursLeft(deleteAt) {
+  const hoursLeft = Math.max(0, Math.ceil((deleteAt - Date.now()) / (60 * 60 * 1000)));
+  return `약 ${hoursLeft}시간 후 자동삭제`;
+}
+
+// 내전/모집 셀렉트 옵션의 상태 문구 — 모집 중이면 그대로, 마감됐다면 자동삭제(autoClose) 켜짐
+// 여부에 따라 "🔒 마감됨"만 표시하거나 취소된 게시글과 동일하게 남은 시간까지 함께 보여준다.
+function formatMatchStatus(match) {
+  if (!match.closed) return '🟢 모집중';
+  if (!match.data?.autoClose || !match.closedAt) return '🔒 마감됨';
+  return `🔒 마감됨 · ${formatHoursLeft(match.closedAt + AUTO_CLOSE_DELAY_MS)}`;
+}
+
 // 현재 서버에서 삭제 가능한 항목(진행 중/마감된 내전·모집 + 취소되어 자동삭제 대기 중인 게시글)을
 // 모두 모은다. 셀렉트 목록 생성과 "전체 삭제" 양쪽에서 공유한다. 취소된 게시글은 naejeonMatches/
 // mojipMatches가 아니라 client.cancelledDeletions에 채널ID만 기록돼 있어(handlers/공용.js 참고)
@@ -171,7 +186,7 @@ async function collectGuildMatchEntries(interaction) {
     entries.push({
       type: 'naejeon', msgId,
       label:       `[내전] ${match.data.title}`.slice(0, 100),
-      description: `${match.data.organizer?.displayName ?? '?'} · ${match.data.datetime} · ${match.closed ? '🔒 마감됨' : '🟢 모집중'}`.slice(0, 100),
+      description: `${match.data.organizer?.displayName ?? '?'} · ${match.data.datetime} · ${formatMatchStatus(match)}`.slice(0, 100),
       confirmText: `"${match.data.title}" 내전`,
     });
   }
@@ -180,7 +195,7 @@ async function collectGuildMatchEntries(interaction) {
     entries.push({
       type: 'mojip', msgId,
       label:       `[모집] ${match.data.title}`.slice(0, 100),
-      description: `${match.data.organizer?.displayName ?? '?'} · ${match.data.datetime} · ${match.closed ? '🔒 마감됨' : '🟢 모집중'}`.slice(0, 100),
+      description: `${match.data.organizer?.displayName ?? '?'} · ${match.data.datetime} · ${formatMatchStatus(match)}`.slice(0, 100),
       confirmText: `"${match.data.title}" 모집`,
     });
   }
@@ -188,11 +203,10 @@ async function collectGuildMatchEntries(interaction) {
     const channel = interaction.client.channels.cache.get(info.channelId)
       || await interaction.client.channels.fetch(info.channelId).catch(() => null);
     if (!channel || channel.guildId !== interaction.guildId) continue;
-    const hoursLeft = Math.max(0, Math.ceil((info.deleteAt - Date.now()) / (60 * 60 * 1000)));
     entries.push({
       type: 'cancelled', msgId,
       label:       `[취소됨] #${channel.name}`.slice(0, 100),
-      description: `🔴 취소됨 · 약 ${hoursLeft}시간 후 자동삭제`.slice(0, 100),
+      description: `🔴 취소됨 · ${formatHoursLeft(info.deleteAt)}`.slice(0, 100),
       confirmText: `취소된 게시글 (#${channel.name})`,
     });
   }
