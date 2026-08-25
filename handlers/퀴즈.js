@@ -56,10 +56,10 @@ const FALLBACK_WORDS = [
 // 없다는 것만으로 이미 체감 난이도가 더 높다. 고급 단어도 후보에 포함해 난이도를 올린다.
 const GRADE_PREFERENCE = ['초급', '중급', '고급'];
 
-// 보상은 고정값이 아니라 매 문제마다 100~300 XP 사이에서 무작위로 정해진다(정답자에게는
+// 보상은 고정값이 아니라 매 문제마다 100~200 XP 사이에서 무작위로 정해진다(정답자에게는
 // 실제로 지급된 금액을 채팅에 그대로 알려줌 — handleQuizMessage 참고).
 const XP_REWARD_MIN = 100;
-const XP_REWARD_MAX = 300;
+const XP_REWARD_MAX = 200;
 function rollXpReward() {
   return XP_REWARD_MIN + Math.floor(Math.random() * (XP_REWARD_MAX - XP_REWARD_MIN + 1));
 }
