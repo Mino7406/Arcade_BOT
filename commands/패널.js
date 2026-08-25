@@ -96,7 +96,7 @@ function buildSetupPanelPayload(interaction) {
       .setLabel('🎡 놀이터 바로가기')
       .setStyle(ButtonStyle.Link)
       .setURL(`https://discord.com/channels/${interaction.guild.id}/${PLAYGROUND_CHANNEL_ID}`),
-    new ButtonBuilder().setCustomId('recruit:관리').setLabel('⚙️ 관리').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId('recruit:관리').setLabel('⚙️ 관리').setStyle(ButtonStyle.Secondary),
   );
 
   return { embeds: [embed, playgroundEmbed], components: [row1, row2] };
@@ -111,10 +111,10 @@ function buildAdminMenuPayload(panelMessageId, notice) {
     content: (notice ? `${notice}\n\n` : '') + '⚙️ **패널 관리**',
     components: [
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`panel:새로고침:${panelMessageId}`).setLabel('🔄 새로고침').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`panel:메시지삭제:${panelMessageId}`).setLabel('🧹 채널 청소').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId(`panel:매치삭제:${panelMessageId}`).setLabel('🗑️ 내전/모집 삭제').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId(`panel:봇메시지삭제:${panelMessageId}`).setLabel('🤖 봇 메시지 삭제').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`panel:새로고침:${panelMessageId}`).setLabel('🔄 새로고침').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`panel:메시지삭제:${panelMessageId}`).setLabel('🧹 채널 청소').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`panel:매치삭제:${panelMessageId}`).setLabel('🗑️ 내전/모집 삭제').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`panel:봇메시지삭제:${panelMessageId}`).setLabel('🤖 봇 메시지 삭제').setStyle(ButtonStyle.Primary),
       ),
     ],
     ephemeral: true,
