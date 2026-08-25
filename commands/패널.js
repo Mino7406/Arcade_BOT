@@ -113,8 +113,10 @@ function buildAdminMenuPayload(panelMessageId, notice) {
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`panel:새로고침:${panelMessageId}`).setLabel('🔄 새로고침').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`panel:메시지삭제:${panelMessageId}`).setLabel('🧹 채널 청소').setStyle(ButtonStyle.Success),
+      ),
+      new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`panel:매치삭제:${panelMessageId}`).setLabel('🗑️ 내전/모집 삭제').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`panel:봇메시지삭제:${panelMessageId}`).setLabel('🤖 봇 메시지 삭제').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`panel:봇메시지삭제:${panelMessageId}`).setLabel('🤖 봇 메시지 삭제').setStyle(ButtonStyle.Secondary),
       ),
     ],
     ephemeral: true,
