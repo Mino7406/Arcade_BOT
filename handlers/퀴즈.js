@@ -474,7 +474,7 @@ async function handleQuizMessage(message) {
     const result = applyXp(quiz.guildId, message.author.id, quiz.xpReward);
     const levelUpLine = result.leveledUp ? `\n${message.author}님이 ${result.newLevel}레벨을 달성했어요. 🎉` : '';
     await message.reply({
-      content: `💯 정답입니다! **${quiz.word}** (+${quiz.xpReward} XP)${levelUpLine}`,
+      content: `⭕ 정답입니다! **${quiz.word}** (+${quiz.xpReward} XP)${levelUpLine}`,
       allowedMentions: { repliedUser: false, users: result.leveledUp ? [message.author.id] : [] },
     }).catch(() => {});
     return; // 한 메시지는 한 슬롯만 채점
