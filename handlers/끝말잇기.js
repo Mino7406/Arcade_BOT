@@ -417,6 +417,14 @@ function buildRematchRequestComponents(game) {
   ];
 }
 
+// 지난 판 결과는 그대로 남겨두고, 재대결은 새 메시지로 시작한다 — 예전엔 결과 메시지를
+// 통째로 덮어써서 방금 한 판의 기록이 사라졌다. 다 쓴 '재대결' 버튼만 떼어낸다.
+// 성공하면 true, 메시지를 못 올려 시작하지 못했으면 false를 돌려준다(호출한 쪽이 잠금 해제).
+async function postRematchMessage(interaction, payload) {
+  await interaction.update({ components: [] });
+  return interaction.channel.send(payload);
+}
+
 async function startRematchRequest(interaction, humanPlayers, hadBot) {
   const games = getGames(interaction.client);
   const gameId = interaction.id;
@@ -434,25 +442,33 @@ async function startRematchRequest(interaction, humanPlayers, hadBot) {
   };
   games.set(gameId, game);
 
-  await interaction.update({
-    content: '',
-    embeds: [buildRematchRequestEmbed(game)],
-    components: buildRematchRequestComponents(game),
-    attachments: [],
-  });
-  game.message = await interaction.fetchReply();
+  try {
+    game.message = await postRematchMessage(interaction, {
+      embeds: [buildRematchRequestEmbed(game)],
+      components: buildRematchRequestComponents(game),
+    });
+  } catch (err) {
+    console.error('끝말잇기 재대결 신청 메시지 전송 실패:', err);
+    games.delete(gameId);
+    await interaction.followUp({ content: '⚠️ **재대결 신청을 올리지 못했습니다.** 잠시 후 다시 시도해주세요.', ephemeral: true }).catch(() => {});
+    return false;
+  }
 
   // 60초 내로 전원 수락하지 않으면 만료
   game.timeoutId = setTimeout(async () => {
     const g = games.get(gameId);
     if (!g || g.status !== 'rematch_pending') return;
     games.delete(gameId);
-    await g.message.edit({ content: '⏰ **재대결 신청이 만료되었습니다.**', embeds: [], components: [], attachments: [] }).catch(() => {});
+    await g.message?.edit({ content: '⏰ **재대결 신청이 만료되었습니다.**', embeds: [], components: [], attachments: [] }).catch(() => {});
   }, 60_000);
+  return true;
 }
 
 // 전원 수락(혹은 애초에 사람 상대가 없어 승낙이 필요 없는) 경우 실제 게임을 시작한다.
-async function startRematchGame(interaction, gameId, humanPlayers, hadBot) {
+// replaceMessage=true면 누른 메시지를 그대로 게임판으로 바꾼다(재대결 신청 → 게임판).
+// false면 누른 메시지는 결과 그대로 두고 새 메시지로 시작한다(봇전처럼 승낙 없이 바로 시작할 때 —
+// 이때 누른 메시지는 '지난 판 결과'라서 덮어쓰면 안 된다).
+async function startRematchGame(interaction, gameId, humanPlayers, hadBot, { replaceMessage = true } = {}) {
   const games = getGames(interaction.client);
 
   const players = humanPlayers.map(p => ({ id: p.id, name: p.name }));
@@ -486,14 +502,28 @@ async function startRematchGame(interaction, gameId, humanPlayers, hadBot) {
   };
   games.set(gameId, game);
 
-  await interaction.update({
+  const payload = {
     content: '🔄 **재대결이 시작됐습니다!**',
     embeds: [buildPlayingEmbed(game)],
     components: buildPlayingComponents(game),
-    attachments: [],
-  });
-  game.message = await interaction.fetchReply();
+  };
+
+  try {
+    if (replaceMessage) {
+      await interaction.update({ ...payload, attachments: [] });
+      game.message = await interaction.fetchReply();
+    } else {
+      game.message = await postRematchMessage(interaction, payload);
+    }
+  } catch (err) {
+    console.error('끝말잇기 재대결 시작 실패:', err);
+    games.delete(gameId);
+    await interaction.followUp({ content: '⚠️ **재대결을 시작하지 못했습니다.** 잠시 후 다시 시도해주세요.', ephemeral: true }).catch(() => {});
+    return false;
+  }
+
   startTurn(game, games);
+  return true;
 }
 
 // ── 게임 종료 / XP 정산 ────────────────────────────────────────
@@ -930,12 +960,13 @@ async function handleWcButton(interaction) {
     const humanPlayers = oldGame.players.filter(p => p.id !== 'BOT').map(p => ({ id: p.id, name: p.name }));
     const others = humanPlayers.filter(p => p.id !== interaction.user.id);
 
-    if (others.length === 0) {
-      // 승낙받을 사람 상대가 없음(봇하고만 했던 게임) — 바로 시작
-      await startRematchGame(interaction, interaction.id, humanPlayers, hadBot);
-    } else {
-      await startRematchRequest(interaction, humanPlayers, hadBot);
-    }
+    // 승낙받을 사람 상대가 없으면(봇하고만 했던 게임) 바로 시작한다. 이때 누른 메시지는
+    // '지난 판 결과'라서 덮어쓰면 안 되므로 새 메시지로 시작한다(replaceMessage: false).
+    const started = others.length === 0
+      ? await startRematchGame(interaction, interaction.id, humanPlayers, hadBot, { replaceMessage: false })
+      : await startRematchRequest(interaction, humanPlayers, hadBot);
+
+    if (!started) oldGame.rematchStarted = false; // 못 올렸으면 다시 누를 수 있게 풀어준다
     return;
   }
 
