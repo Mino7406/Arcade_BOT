@@ -263,7 +263,7 @@ function buildWaitingEmbed(game) {
           `• **${TURN_SEC}초** 내에 입력하지 않으면 탈락합니다.`,
       },
       {
-        name: '⚠️ XP 내기',
+        name: '🎲 XP 내기',
         value:
           `• 참가자가 전부 사람이면 탈락자가 최대 ${WAGER_XP} XP를 잃고(레벨은 안 깎임) 생존자들이 나눠 받습니다.\n` +
           `• 봇이 참가하면 내기 대신, 봇을 이겼을 때 생존자에게 ${BOT_WIN_XP_MIN}~${BOT_WIN_XP_MAX} XP가 지급됩니다.\n` +

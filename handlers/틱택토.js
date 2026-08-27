@@ -184,7 +184,7 @@ function buildEmbed(game) {
     const oReady = game.ready.O ? '✅ 준비완료' : '⌛ 대기 중';
     desc += '⏳ 두 사람 모두 준비하면 시작됩니다.\n' +
       `${xReady} ${xName}   ·   ${oReady} ${oName}\n\n` +
-      '⚠️ **XP 내기**\n' +
+      '🎲 **XP 내기**\n' +
       `• 📉 지는 사람이 **${WAGER_XP}** XP를 잃습니다.\n` +
       `• 📈 이긴 사람이 **${WAGER_XP}** XP를 받습니다.`;
     if (game.infinite) {
