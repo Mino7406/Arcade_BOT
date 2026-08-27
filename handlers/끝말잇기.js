@@ -16,9 +16,9 @@ const KOREAN   = /^[가-힣]+$/;
 // 살아남은 사람이 여럿이면 진 사람의 몫을 그만큼 나눠 가짐(틱택토와 동일한 방식).
 const WAGER_XP = 100;
 // 참가자 중 봇이 있는 게임에서 봇이 탈락했을 때 생존자에게 지급하는 XP(내기 아님).
-// 고정값이 아니라 매 판 50~100 사이에서 무작위로 정해지며, 생존자가 여럿이면 모두 같은 금액을 받는다.
-const BOT_WIN_XP_MIN = 50;
-const BOT_WIN_XP_MAX = 100;
+// 고정값이 아니라 매 판 10~50 사이에서 무작위로 정해지며, 생존자가 여럿이면 모두 같은 금액을 받는다.
+const BOT_WIN_XP_MIN = 10;
+const BOT_WIN_XP_MAX = 50;
 function rollBotWinXp() {
   return BOT_WIN_XP_MIN + Math.floor(Math.random() * (BOT_WIN_XP_MAX - BOT_WIN_XP_MIN + 1));
 }

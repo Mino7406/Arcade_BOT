@@ -11,9 +11,9 @@ const TIMEOUT_MS = 5 * 60 * 1000;
 // 상한을 걸어(min(WAGER_XP, currentLevelXp)) 아무리 내기에서 져도 레벨이 떨어지지는 않게 한다.
 const WAGER_XP = 100;
 // 봇을 상대로 이겼을 때 지급하는 보상 XP(내기 아님, 사람에게서 빼앗지 않음).
-// 고정값이 아니라 매 판 50~100 사이에서 무작위로 정해진다.
-const BOT_WIN_XP_MIN = 50;
-const BOT_WIN_XP_MAX = 100;
+// 고정값이 아니라 매 판 10~50 사이에서 무작위로 정해진다.
+const BOT_WIN_XP_MIN = 10;
+const BOT_WIN_XP_MAX = 50;
 function rollBotWinXp() {
   return BOT_WIN_XP_MIN + Math.floor(Math.random() * (BOT_WIN_XP_MAX - BOT_WIN_XP_MIN + 1));
 }
