@@ -480,3 +480,4 @@ npm start
 - `/끝말잇기`, `/틱택토`, `/룰렛`, `/레벨`, `/랭킹`과 관련 버튼은 `ALLOWED_CHANNEL_IDS`와 무관하게 `config.js`의 `WORDCHAIN_RANKING_CHANNEL_ID`(= 놀이터) 채널에서만 사용할 수 있습니다.
 - `/불러오기`(및 `불러오기:select`, `recruit:불러오기` 버튼)는 `ALLOWED_CHANNEL_IDS`와 무관하게 완료 보너스 채널(`MATCH_BONUS_CHANNEL_ID`)에서만 사용할 수 있습니다 — 다른 채널에서 재게시하면 XP 보너스 자격 판정이 어긋나기 때문입니다.
 - **테스트 서버 예외**: `env`의 `TEST_GUILD_ID`에 적은 길드에서는 위 채널 제한 세 가지(`WORDCHAIN_RANKING_CHANNEL_ID` / `MATCH_BONUS_CHANNEL_ID` / `ALLOWED_CHANNEL_IDS`)를 **전부 건너뜁니다** — 기능을 확인하려면 아무 채널에서나 쓸 수 있어야 하기 때문입니다. 풀리는 것은 채널 제한뿐이며, 관리자 전용 제한(`ADMIN_IDS`)과 레벨/XP 제외(`EXCLUDED_GUILD_IDS`)는 테스트 서버에서도 그대로 적용됩니다. `TEST_GUILD_ID`를 비워두면 모든 서버에 평소 제한이 걸립니다
+- 끝말잇기가 정답/오답에 붙이는 ✅/❌ 리액션에는 봇에게 **반응 추가**와 **메시지 기록 보기** 권한이 **둘 다** 필요합니다(디스코드는 리액션에 메시지 기록 보기까지 요구합니다). 없으면 리액션만 안 달리고 게임 자체는 정상 진행되며, 사유가 콘솔 로그에 남습니다 — 테스트 서버처럼 채널 제한을 푼 곳에서 처음 겪기 쉽습니다

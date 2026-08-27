@@ -591,6 +591,27 @@ async function editWithRetry(message, payload, delays = FINISH_EDIT_RETRY_DELAYS
   setTimeout(() => editWithRetry(message, payload, rest), wait);
 }
 
+// 리액션은 실패해도 게임 진행에는 지장이 없지만, 조용히 삼켜버리면 "왜 체크 표시가 안 달리지?"를
+// 추적할 수가 없다. 대개 그 채널에서 봇에게 '반응 추가' 또는 '메시지 기록 보기' 권한이 없는
+// 경우다(리액션에는 두 권한이 모두 필요하다). 로그가 쏟아지지 않게 10분에 한 번만 남긴다.
+const REACT_ERROR_LOG_INTERVAL_MS = 10 * 60 * 1000;
+let lastReactErrorLog = 0;
+
+async function react(message, emoji) {
+  try {
+    await message.react(emoji);
+  } catch (err) {
+    const now = Date.now();
+    if (now - lastReactErrorLog < REACT_ERROR_LOG_INTERVAL_MS) return;
+    lastReactErrorLog = now;
+    console.error(
+      `끝말잇기 리액션(${emoji}) 실패 — 채널 ${message.channelId}에서 봇에게 '반응 추가'와 `
+      + `'메시지 기록 보기' 권한이 있는지 확인하세요:`,
+      err?.message ?? err,
+    );
+  }
+}
+
 // ── 상황판 위치 유지 ──────────────────────────────────────────
 // 사람들이 단어를 칠 때마다 상황판 임베드가 한 칸씩 위로 밀려, 판이 길어지면 스크롤을
 // 올려야 현재 차례를 볼 수 있게 된다. 그래서 상황판 아래로 새 메시지가 쌓였으면
@@ -982,13 +1003,13 @@ async function handleWcMessage(message) {
 
     try {
       if (game.lastChar && !getAcceptableStarts(game.lastChar).includes(word[0])) {
-        await message.react('❌').catch(() => {});
+        await react(message, '❌');
         endGame(game, games, currentPlayer.id, 'wrong_start', word);
         return;
       }
 
       if (game.used.has(word)) {
-        await message.react('❌').catch(() => {});
+        await react(message, '❌');
         endGame(game, games, currentPlayer.id, 'duplicate', word);
         return;
       }
@@ -996,7 +1017,7 @@ async function handleWcMessage(message) {
       const exists = await checkWordExists(word);
       if (games.get(game.id) !== game || game.status !== 'playing') return; // 검증 대기 중 취소/포기 등으로 이미 종료됨
       if (!exists) {
-        await message.react('❌').catch(() => {});
+        await react(message, '❌');
         endGame(game, games, currentPlayer.id, 'not_in_dict', word);
         return;
       }
@@ -1007,7 +1028,7 @@ async function handleWcMessage(message) {
       game.lastChar = word[word.length - 1];
       game.currentIdx = (game.currentIdx + 1) % game.players.length;
 
-      await message.react('✅').catch(() => {});
+      await react(message, '✅');
       await refreshBoard(game);
 
       startTurn(game, games);
