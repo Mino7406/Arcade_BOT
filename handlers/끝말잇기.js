@@ -577,6 +577,11 @@ async function editWithRetry(message, payload, delays = FINISH_EDIT_RETRY_DELAYS
   } catch (err) {
     if (!delays.length) {
       console.error('끝말잇기 종료 임베드 갱신 최종 실패:', err);
+      // 원본 메시지를 끝내 못 고치면(예: 메시지가 삭제된 경우) 재시도로는 영영 못 푼다.
+      // 그러면 아무도 결과를 볼 수 없으므로 같은 채널에 새 메시지로라도 결과를 남긴다.
+      // attachments는 편집 전용 옵션이라 새로 보낼 때는 빼야 한다.
+      const { attachments, ...sendable } = payload;
+      await message.channel?.send(sendable).catch(() => {});
       return;
     }
   }
