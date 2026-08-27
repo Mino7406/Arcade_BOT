@@ -27,12 +27,14 @@ function rollBotWinXp() {
 // 악용 방지: 봇전 반복 플레이로 XP를 무한히 파밍하거나("🏳️ 포기"로 즉시 끝내는 것 포함),
 // 같은 상대와 즉석 내기를 연달아 반복해서 XP를 옮기는 것을 막기 위해 유저당 쿨다운을 둔다
 // (쿨다운 중이면 게임 자체는 정상 진행되지만 XP 정산만 생략됨 — 플레이를 막지는 않음).
-const XP_SETTLE_COOLDOWN_MS = 5 * 60 * 1000;
-const xpSettleCooldowns = new Map(); // userId → 마지막 XP 정산 시각
+// 정산 시각은 유저당 하나로 공용이고, 판정 기준(내기/봇전)만 다르게 본다.
+const WAGER_SETTLE_COOLDOWN_MS = 3 * 60 * 1000; // 사람 vs 사람 내기 정산
+const BOT_SETTLE_COOLDOWN_MS   = 5 * 60 * 1000; // 봇전 보상 정산
+const xpSettleCooldowns = new Map(); // userId → 마지막 XP 정산 시각(내기·봇전 공용)
 
-function isOnCooldown(userId) {
+function isOnCooldown(userId, cooldownMs) {
   const last = xpSettleCooldowns.get(userId);
-  return !!last && Date.now() - last < XP_SETTLE_COOLDOWN_MS;
+  return !!last && Date.now() - last < cooldownMs;
 }
 
 function markCooldown(userId) {
@@ -338,7 +340,7 @@ function formatXpResultLine(game) {
   if (!result) return '';
 
   if (result.type === 'cooldown') {
-    const cooldownMin = Math.ceil(XP_SETTLE_COOLDOWN_MS / 60000);
+    const cooldownMin = Math.ceil((result.cooldownMs ?? BOT_SETTLE_COOLDOWN_MS) / 60000);
     return `\n⏳ 연속 대결 쿨다운 중이라 이번 판은 XP 정산이 생략됐습니다.\n-# (직전 정산 후 ${cooldownMin}분 이내)`;
   }
 
@@ -560,7 +562,9 @@ function settleWagerXp(game) {
 
   const survivors = game.players.map(p => p.id).filter(id => id !== game.loser);
   if (!survivors.length) return null;
-  if (isOnCooldown(game.loser) || survivors.some(isOnCooldown)) return { type: 'cooldown' }; // 같은 유저들이 연달아 내기를 반복해 XP를 옮기는 것 방지
+  if (isOnCooldown(game.loser, WAGER_SETTLE_COOLDOWN_MS) || survivors.some(id => isOnCooldown(id, WAGER_SETTLE_COOLDOWN_MS))) {
+    return { type: 'cooldown', cooldownMs: WAGER_SETTLE_COOLDOWN_MS }; // 같은 유저들이 연달아 내기를 반복해 XP를 옮기는 것 방지
+  }
 
   const loserLevelXp = levelFromXp(getXp(game.guildId, game.loser)).currentLevelXp;
   const wager = Math.min(WAGER_XP, loserLevelXp);
@@ -586,7 +590,9 @@ function settleBotWinXp(game) {
 
   const survivors = game.players.map(p => p.id).filter(id => id !== 'BOT');
   if (!survivors.length) return null;
-  if (survivors.some(isOnCooldown)) return { type: 'cooldown' }; // 봇전 반복 플레이로 XP를 무한히 파밍하는 것 방지
+  if (survivors.some(id => isOnCooldown(id, BOT_SETTLE_COOLDOWN_MS))) {
+    return { type: 'cooldown', cooldownMs: BOT_SETTLE_COOLDOWN_MS }; // 봇전 반복 플레이로 XP를 무한히 파밍하는 것 방지
+  }
 
   // 판마다 한 번만 굴린 금액을 기준으로 하되, 생존자별 하루(KST) 누적 상한이 남은 만큼만
   // 따로 잘라서 지급한다 — 한 명은 한도가 남고 한 명은 다 찼을 수 있어 금액이 갈릴 수 있다.
