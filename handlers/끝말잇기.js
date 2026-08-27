@@ -117,34 +117,52 @@ async function lookupKrdict(word) {
   }
 }
 
+// 표준국어대사전 응답의 <word>는 CDATA로 감싸여 온다.
+function stripCdata(text) {
+  return String(text).replace(/^\s*<!\[CDATA\[/, '').replace(/\]\]>\s*$/, '').trim();
+}
+
+// 오류 로그가 단어마다 쏟아지지 않도록 같은 사유는 10분에 한 번만 남긴다.
+const STDICT_ERROR_LOG_INTERVAL_MS = 10 * 60 * 1000;
+let lastStdictErrorLog = { code: null, at: 0 };
+
+function logStdictError(code, message) {
+  const now = Date.now();
+  if (lastStdictErrorLog.code === code && now - lastStdictErrorLog.at < STDICT_ERROR_LOG_INTERVAL_MS) return;
+  lastStdictErrorLog = { code, at: now };
+  console.error(`표준국어대사전 API 오류 [${code}] ${message} — 복구될 때까지 기초사전 판정만 사용됩니다.`);
+}
+
 async function lookupStdict(word) {
   const apiKey = process.env.STDICT_API_KEY;
   if (!apiKey) return null;
 
   try {
-    const url = `https://stdict.korean.go.kr/api/search.do?key=${apiKey}&q=${encodeURIComponent(word)}&req_type=json&type_search=search&num=20`;
+    // JSON(req_type=json)은 키 오류·파라미터 오류를 전부 '빈 본문'으로 뭉뚱그려 돌려줘서
+    // '검색 결과 없음'과 구분할 수 없다. XML은 결과가 없으면 <total>0</total>, 오류면
+    // <error_code>를 주므로 둘을 정확히 나눌 수 있어 XML로 조회한다.
+    const url = `https://stdict.korean.go.kr/api/search.do?key=${apiKey}&q=${encodeURIComponent(word)}&req_type=xml&type_search=search&num=20`;
     const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
     if (!res.ok) return null;
 
-    // 검색 결과가 없으면 이 API는 HTTP 200에 빈 본문을 돌려준다(키가 잘못됐을 때도 똑같다).
-    // 둘을 구분할 수 없지만 '없음'으로 처리해도 안전하다 — 최종 판정이 "한 사전이라도 있으면
-    // 인정"이라, 표준대사전이 '없음'이면 기초사전 결과만으로 정해지기 때문(= 키 넣기 전과 동일).
-    const body = (await res.text()).trim();
-    if (!body) return false;
+    const xml = (await res.text()).trim();
+    if (!xml) return null; // 정체를 알 수 없는 빈 응답 → 조회 실패로 취급
 
-    let data;
-    try {
-      data = JSON.parse(body);
-    } catch {
+    // 키 만료 같은 오류는 '그 단어가 없음'과 전혀 다르므로 조회 실패로 처리한다.
+    // (그래야 기초사전에만 있는 단어가 엉뚱하게 탈락하지 않는다)
+    const errorCode = xml.match(/<error_code>([^<]*)<\/error_code>/);
+    if (errorCode) {
+      logStdictError(errorCode[1], xml.match(/<message>([^<]*)<\/message>/)?.[1] ?? '');
       return null;
     }
 
-    const items = data?.channel?.item;
-    if (!items) return Number(data?.channel?.total ?? 0) > 0;
+    const total = xml.match(/<total>(\d+)<\/total>/);
+    if (!total) return null;
+    if (Number(total[1]) === 0) return false;
 
     // 검색이 넓게 잡히더라도 표제어가 정확히 일치하는 것만 인정한다.
-    const list = Array.isArray(items) ? items : [items];
-    return list.some(item => normalizeEntry(item.word) === word);
+    return [...xml.matchAll(/<word>([\s\S]*?)<\/word>/g)]
+      .some(m => normalizeEntry(stripCdata(m[1])) === word);
   } catch {
     return null;
   }
