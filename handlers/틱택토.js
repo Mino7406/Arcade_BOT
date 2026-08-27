@@ -507,6 +507,25 @@ async function startTttCommand(interaction) {
   }, 60_000);
 }
 
+// 지난 판 결과 보드는 그대로 남겨두고, 재대결은 새 메시지로 시작한다 — 예전엔 결과 보드를
+// 통째로 덮어써서 방금 끝난 판의 최종 보드와 XP 정산 내역이 사라졌다.
+// 다 쓴 '재대결 / 종료' 버튼만 떼어낸다.
+async function postRematchMessage(interaction, payload) {
+  await interaction.update({ components: [] });
+  return interaction.channel.send(payload);
+}
+
+// 재대결이 성사되지 못하면(거절·만료) 지난 판 결과 보드에 재대결 버튼을 되살려
+// 그 자리에서 다시 신청할 수 있게 한다. 원래 게임은 이미 map에서 지워졌으므로,
+// 버튼을 다시 만드는 데 필요한 값은 재대결을 시작할 때 game.rematchSource에 담아둔다.
+async function restoreRematchButton(game) {
+  const source = game?.rematchSource;
+  if (!source?.message) return;
+  await source.message.edit({
+    components: [buildFinishedRow({ players: { X: source.xId, O: source.oId }, infinite: source.infinite })],
+  }).catch(() => {});
+}
+
 // 참가자 둘이 거의 동시에 '재대결'을 누르면 신청이 두 개 만들어지고 둘 다 같은 메시지를
 // 붙잡는다. 그러면 밀려난 쪽의 60초 만료 타이머가 살아 있다가, 그 사이 시작된 게임 화면을
 // '만료되었습니다'로 덮어써 지워버린다. 결과 메시지 하나당 재대결은 하나만 만들게 막는다.
@@ -542,6 +561,7 @@ async function startRematch(interaction, prevXId, prevOId, infinite) {
       board: Array(9).fill(''),
       players: { X: prevXId, O: 'BOT' },
       sourceMessageId: interaction.message.id, // 이 결과 메시지에서 시작된 재대결임을 표시(중복 신청 차단용)
+      rematchSource: { message: interaction.message, xId: prevXId, oId: prevOId, infinite }, // 거절·만료 시 재대결 버튼을 되살릴 지난 판
       guildId: interaction.guildId,
       currentTurn: 'X',
       status: 'setup',
@@ -553,14 +573,14 @@ async function startRematch(interaction, prevXId, prevOId, infinite) {
     };
     games.set(gameId, game);
 
-    await interaction.update({ content: '', embeds: [buildEmbed(game)], components: [buildBotSetupRow(game)] });
-    game.message = await interaction.fetchReply();
+    game.message = await postRematchMessage(interaction, { embeds: [buildEmbed(game)], components: [buildBotSetupRow(game)] });
 
     game.timeoutId = setTimeout(async () => {
       const g = games.get(gameId);
       if (!g || g.status !== 'setup') return;
       games.delete(gameId);
       await g.message.edit({ content: '⏰ **설정 시간이 초과되어 게임이 취소되었습니다.**', embeds: [], components: [] }).catch(() => {});
+      await restoreRematchButton(g);
     }, 60_000);
     return;
   }
@@ -587,6 +607,7 @@ async function startRematch(interaction, prevXId, prevOId, infinite) {
     board: Array(9).fill(''),
     players: { X: newX, O: newO },
     sourceMessageId: interaction.message.id, // 이 결과 메시지에서 시작된 재대결임을 표시(중복 신청 차단용)
+    rematchSource: { message: interaction.message, xId: prevXId, oId: prevOId, infinite }, // 거절·만료 시 재대결 버튼을 되살릴 지난 판
     guildId: interaction.guildId,
     currentTurn: 'X',
     status: 'waiting',
@@ -599,12 +620,11 @@ async function startRematch(interaction, prevXId, prevOId, infinite) {
   };
   games.set(gameId, game);
 
-  await interaction.update({
+  game.message = await postRematchMessage(interaction, {
     content: `🔄 <@${opponentId}>님, <@${interaction.user.id}>님이 재대결을 신청했습니다!`,
     embeds: [buildEmbed(game)],
     components: [buildChallengeRow(game)],
   });
-  game.message = await interaction.fetchReply();
 
   // 60초 내로 상대가 준비하지 않으면 만료
   game.timeoutId = setTimeout(async () => {
@@ -612,6 +632,7 @@ async function startRematch(interaction, prevXId, prevOId, infinite) {
     if (!g || g.status !== 'waiting') return;
     games.delete(gameId);
     await g.message.edit({ content: '⏰ **재대결 신청이 만료되었습니다.**', embeds: [], components: [] }).catch(() => {});
+    await restoreRematchButton(g);
   }, 60_000);
 }
 
@@ -663,6 +684,7 @@ async function handleTttButton(interaction) {
     clearTimeout(game.timeoutId);
     games.delete(gameId);
     await interaction.update({ content: `❌ **<@${interaction.user.id}>님이 대결을 거절했습니다.**`, embeds: [], components: [] });
+    await restoreRematchButton(game);
     return;
   }
 

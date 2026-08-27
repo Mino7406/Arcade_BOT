@@ -417,6 +417,15 @@ function buildRematchRequestComponents(game) {
   ];
 }
 
+// 재대결이 성사되지 못하면(거절·만료·메시지 전송 실패) 지난 판 결과 메시지에 재대결 버튼을
+// 되살려 그 자리에서 다시 신청할 수 있게 한다. 종료 후 5분이 지나 이미 정리된 판이면
+// 버튼을 되살려봐야 누를 수 없으므로 그냥 둔다.
+async function restoreRematchButton(games, game) {
+  if (!game || !games.has(game.id)) return;
+  game.rematchStarted = false;
+  await game.message?.edit({ components: buildFinishedComponents(game) }).catch(() => {});
+}
+
 // 지난 판 결과는 그대로 남겨두고, 재대결은 새 메시지로 시작한다 — 예전엔 결과 메시지를
 // 통째로 덮어써서 방금 한 판의 기록이 사라졌다. 다 쓴 '재대결' 버튼만 떼어낸다.
 // 성공하면 true, 메시지를 못 올려 시작하지 못했으면 false를 돌려준다(호출한 쪽이 잠금 해제).
@@ -425,7 +434,7 @@ async function postRematchMessage(interaction, payload) {
   return interaction.channel.send(payload);
 }
 
-async function startRematchRequest(interaction, humanPlayers, hadBot) {
+async function startRematchRequest(interaction, oldGame, humanPlayers, hadBot) {
   const games = getGames(interaction.client);
   const gameId = interaction.id;
 
@@ -437,6 +446,7 @@ async function startRematchRequest(interaction, humanPlayers, hadBot) {
     humanPlayers,
     hadBot,
     accepted: new Set([interaction.user.id]),
+    sourceGame: oldGame, // 거절·만료 시 재대결 버튼을 되살릴 지난 판
     message: null,
     timeoutId: null,
   };
@@ -460,6 +470,7 @@ async function startRematchRequest(interaction, humanPlayers, hadBot) {
     if (!g || g.status !== 'rematch_pending') return;
     games.delete(gameId);
     await g.message?.edit({ content: '⏰ **재대결 신청이 만료되었습니다.**', embeds: [], components: [], attachments: [] }).catch(() => {});
+    await restoreRematchButton(games, g.sourceGame);
   }, 60_000);
   return true;
 }
@@ -964,9 +975,9 @@ async function handleWcButton(interaction) {
     // '지난 판 결과'라서 덮어쓰면 안 되므로 새 메시지로 시작한다(replaceMessage: false).
     const started = others.length === 0
       ? await startRematchGame(interaction, interaction.id, humanPlayers, hadBot, { replaceMessage: false })
-      : await startRematchRequest(interaction, humanPlayers, hadBot);
+      : await startRematchRequest(interaction, oldGame, humanPlayers, hadBot);
 
-    if (!started) oldGame.rematchStarted = false; // 못 올렸으면 다시 누를 수 있게 풀어준다
+    if (!started) await restoreRematchButton(games, oldGame); // 못 올렸으면 버튼을 되살려 다시 누를 수 있게
     return;
   }
 
@@ -1009,6 +1020,7 @@ async function handleWcButton(interaction) {
     clearTimeout(game.timeoutId);
     games.delete(gameId);
     await interaction.update({ content: `❌ **<@${interaction.user.id}>님이 재대결을 거절했습니다.**`, embeds: [], components: [], attachments: [] });
+    await restoreRematchButton(games, game.sourceGame);
     return;
   }
 }
