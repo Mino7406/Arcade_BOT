@@ -426,6 +426,17 @@ setInterval(() => {
   try { saveRoulette(); } catch (e) { console.error('룰렛 자동 저장 실패:', e); }
 }, 30_000);
 
+// ─── 예기치 못한 예외로 봇 전체가 죽지 않도록 ─────────────────
+// 타이머 콜백(예: 끝말잇기 턴 타이머)에서 예외가 나면 uncaughtException으로 프로세스가
+// 그대로 종료돼, 진행 중이던 게임 임베드가 전부 '진행 중'인 채 얼어붙고 아무 반응도
+// 하지 않게 된다. 원인은 로그로 남기되 프로세스는 계속 살려둔다.
+process.on('uncaughtException', (err) => {
+  console.error('처리되지 않은 예외:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('처리되지 않은 Promise 거부:', reason);
+});
+
 // ─── 종료 시 마지막으로 한 번 더 저장 ─────────────────────────
 function shutdown() {
   if (dataReady) {

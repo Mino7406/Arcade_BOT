@@ -35,10 +35,11 @@ function markCooldown(userId) {
 // ── 두음법칙 변환 ─────────────────────────────────────────────────
 // 단어 첫머리의 'ㄹ/ㄴ' 초성은 뒤따르는 모음에 따라 'ㄴ' 또는 'ㅇ'으로
 // 바뀌어 표기됩니다 (예: 력 → 역, 로 → 노). 끝말잇기에서는 이전 단어가
-// 이런 글자로 끝나면, 다음 단어는 원래 글자 또는 두음법칙 변환형
-// 둘 중 하나로 시작해도 인정해야 합니다.
+// 이런 글자로 끝나면, 두음법칙으로 서로 바뀔 수 있는 글자는 모두 같은 글자로 보고
+// 어느 쪽으로 시작해도 인정합니다 — 정방향(력 → 역)뿐 아니라 역방향(역 → 력/녁)도 포함.
 const DUEUM_YA_VOWELS = new Set([2, 6, 7, 12, 17, 20]); // ㅑㅕㅖㅛㅠㅣ
 const DUEUM_A_VOWELS  = new Set([0, 1, 8, 11, 13, 18]); // ㅏㅐㅗㅚㅜㅡ
+const DUEUM_INITIALS  = [2, 5, 11]; // 두음법칙에 관여하는 초성 ㄴ/ㄹ/ㅇ
 
 function dueumConvert(char) {
   const code = char.charCodeAt(0) - 0xAC00;
@@ -60,9 +61,28 @@ function dueumConvert(char) {
   return String.fromCharCode(0xAC00 + newInitial * 21 * 28 + medial * 28 + final);
 }
 
+// 같은 중성/종성을 유지한 채 초성만 ㄴ/ㄹ/ㅇ으로 바꾼 글자
+function withInitial(char, initial) {
+  const code = char.charCodeAt(0) - 0xAC00;
+  if (code < 0 || code > 11171) return null;
+
+  const medial = Math.floor((code % (21 * 28)) / 28);
+  const final = code % 28;
+  return String.fromCharCode(0xAC00 + initial * 21 * 28 + medial * 28 + final);
+}
+
+// 두음법칙 변환형이 같은 글자들은 한 묶음으로 보고 전부 인정한다.
+// 예) 역/력/녁 → 모두 '역'으로 변환되므로 서로 통용, 노/로 → 모두 '노'
 function getAcceptableStarts(lastChar) {
-  const converted = dueumConvert(lastChar);
-  return converted ? [lastChar, converted] : [lastChar];
+  const canonical = dueumConvert(lastChar) ?? lastChar;
+  const starts = [lastChar];
+
+  for (const initial of DUEUM_INITIALS) {
+    const candidate = withInitial(lastChar, initial);
+    if (!candidate || starts.includes(candidate)) continue;
+    if ((dueumConvert(candidate) ?? candidate) === canonical) starts.push(candidate);
+  }
+  return starts;
 }
 
 // ── 한국어기초사전 API 검증 ──────────────────────────────────────
@@ -149,8 +169,9 @@ function buildWaitingEmbed(game) {
         name: '📋 규칙',
         value:
           '• 이전 단어의 **마지막 글자**로 시작하는 단어를 입력하세요.\n' +
-          '• 두음법칙 변환형(예: 력→역, 로→노)도 인정됩니다.\n' +
-          '• 실제 사전에 있는 단어만 인정됩니다. (2글자 이상)\n' +
+          '• 두음법칙으로 통하는 글자(력↔역, 로↔노)도 인정됩니다.\n' +
+          '• 한글 2글자 이상만 단어로 인정되며, 그 외 잡담 메시지는 무시됩니다.\n' +
+          '• 실제 사전에 있는 단어만 인정됩니다.\n' +
           '• 이미 사용된 단어는 사용할 수 없습니다.\n' +
           `• **${TURN_SEC}초** 내에 입력하지 않으면 탈락합니다.`,
       },
@@ -185,27 +206,39 @@ function buildPlayingEmbed(game) {
     .setTimestamp();
 }
 
+// 종료 사유 문구. 예전엔 객체 리터럴이라 모든 사유가 한꺼번에 평가됐는데, wrong_start 문구가
+// getAcceptableStarts(game.lastChar)를 호출하는 탓에 첫 단어에서 진 판(= lastChar가 null)에서는
+// 임베드를 만들다가 예외가 나서 게임이 '진행 중'인 채로 얼어붙었다. 해당 사유만 계산하도록 바꿈.
+function describeEndReason(game) {
+  switch (game.endReason) {
+    case 'timeout':
+      return `⏰ ${TURN_SEC}초 내에 단어를 입력하지 못했습니다.`;
+    case 'wrong_start': {
+      const starts = game.lastChar ? getAcceptableStarts(game.lastChar).join('`/`') : '';
+      return `❌ \`${game.failWord}\`은(는) \`${starts}\`(으)로 시작하지 않습니다.`;
+    }
+    case 'duplicate':
+      return `🔁 \`${game.failWord}\`은(는) 이미 사용된 단어입니다.`;
+    case 'not_in_dict':
+      return `📖 \`${game.failWord}\`은(는) 사전에 없는 단어입니다.`;
+    case 'gave_up':
+      return '🏳️ 단어를 이을 수 없어 포기했습니다.';
+    case 'cancelled':
+      return '❌ 방장이 게임을 취소했습니다.';
+    default:
+      return '게임 종료';
+  }
+}
+
 function buildFinishedEmbed(game) {
   const loserPlayer = game.players.find(p => p.id === game.loser);
   const loserName = loserPlayer?.name ?? '알 수 없음';
-
-  const REASONS = {
-    timeout:     `⏰ ${TURN_SEC}초 내에 단어를 입력하지 못했습니다.`,
-    wrong_start: `❌ \`${game.failWord}\`은(는) \`${getAcceptableStarts(game.lastChar).join('\`/\`')}\`(으)로 시작하지 않습니다.`,
-    duplicate:   `🔁 \`${game.failWord}\`은(는) 이미 사용된 단어입니다.`,
-    not_korean:  `🚫 \`${game.failWord}\`은(는) 한국어 단어가 아닙니다.`,
-    too_short:   `🚫 한 글자 단어(\`${game.failWord}\`)는 사용할 수 없습니다.`,
-    not_in_dict: `📖 \`${game.failWord}\`은(는) 사전에 없는 단어입니다.`,
-    gave_up:     `🏳️ 단어를 이을 수 없어 포기했습니다.`,
-    cancelled:   `❌ 방장이 게임을 취소했습니다.`,
-  };
-
   const recent = game.history.slice(-10).join(' → ') || '(없음)';
 
   const embed = new EmbedBuilder()
     .setColor(0xED4245)
     .setDescription(
-      `# 🔤 끝말잇기 종료\n**탈락** : \`${loserName}\`\n**이유** : ${REASONS[game.endReason] || '게임 종료'}\n\n` +
+      `# 🔤 끝말잇기 종료\n${game.endReason === 'cancelled' ? '' : `**탈락** : \`${loserName}\`\n`}**이유** : ${describeEndReason(game)}\n\n` +
       `총 **${game.history.length}개** 단어 사용` +
       formatXpResultLine(game),
     );
@@ -217,6 +250,11 @@ function buildFinishedEmbed(game) {
 function formatXpResultLine(game) {
   const result = game.xpResult;
   if (!result) return '';
+
+  if (result.type === 'cooldown') {
+    const cooldownMin = Math.ceil(XP_SETTLE_COOLDOWN_MS / 60000);
+    return `\n⏳ 연속 대결 쿨다운 중이라 이번 판은 XP 정산이 생략됐습니다.\n-# (직전 정산 후 ${cooldownMin}분 이내)`;
+  }
 
   const winnerLines = result.winnerResults.map(w => `📈 <@${w.userId}> **+${w.amount} XP**`).join('\n');
   if (result.type === 'wager') {
@@ -362,6 +400,7 @@ async function startRematchGame(interaction, gameId, humanPlayers, hadBot) {
     endReason: null,
     failWord: null,
     xpResult: null,
+    verifying: false,
     message: null,
     timeoutId: null,
   };
@@ -387,7 +426,7 @@ function settleWagerXp(game) {
 
   const survivors = game.players.map(p => p.id).filter(id => id !== game.loser);
   if (!survivors.length) return null;
-  if (isOnCooldown(game.loser) || survivors.some(isOnCooldown)) return null; // 같은 유저들이 연달아 내기를 반복해 XP를 옮기는 것 방지
+  if (isOnCooldown(game.loser) || survivors.some(isOnCooldown)) return { type: 'cooldown' }; // 같은 유저들이 연달아 내기를 반복해 XP를 옮기는 것 방지
 
   const loserLevelXp = levelFromXp(getXp(game.guildId, game.loser)).currentLevelXp;
   const wager = Math.min(WAGER_XP, loserLevelXp);
@@ -413,7 +452,7 @@ function settleBotWinXp(game) {
 
   const survivors = game.players.map(p => p.id).filter(id => id !== 'BOT');
   if (!survivors.length) return null;
-  if (survivors.some(isOnCooldown)) return null; // 봇전 반복 플레이로 XP를 무한히 파밍하는 것 방지
+  if (survivors.some(isOnCooldown)) return { type: 'cooldown' }; // 봇전 반복 플레이로 XP를 무한히 파밍하는 것 방지
 
   const winnerResults = survivors.map(id => ({ userId: id, amount: BOT_WIN_XP, ...applyXp(game.guildId, id, BOT_WIN_XP) }));
   return { type: 'bot_win', winnerResults };
@@ -434,7 +473,7 @@ function settleGameXp(game) {
   if (EXCLUDED_GUILD_IDS.includes(game.guildId)) return; // 레벨 시스템 제외 서버(테스트 서버 등)는 내기/보상도 미적용
   const result = settleWagerXp(game) || settleBotWinXp(game);
   game.xpResult = result;
-  if (!result) return;
+  if (!result || result.type === 'cooldown') return;
 
   if (result.loserId) markCooldown(result.loserId);
   for (const w of result.winnerResults) markCooldown(w.userId);
@@ -448,14 +487,32 @@ function settleGameXp(game) {
 
 function endGame(game, games, loserId, reason, failWord = null) {
   clearTimeout(game.timeoutId);
+  game.timeoutId = null;
   game.status    = 'finished';
   game.loser     = loserId;
   game.endReason = reason;
   game.failWord  = failWord;
-  settleGameXp(game);
+
+  // 정산이나 임베드 생성에서 예외가 나도 게임은 반드시 종료 화면으로 마무리돼야 한다.
+  // (예전엔 여기서 터지면 임베드가 '진행 중'인 채로 얼어붙고 이후 입력이 전부 무시됐고,
+  //  타이머 콜백에서 터진 경우엔 uncaughtException으로 봇 프로세스까지 죽었다)
+  try {
+    settleGameXp(game);
+  } catch (err) {
+    console.error('끝말잇기 XP 정산 실패:', err);
+  }
+
   // 즉시 지우지 않고 잠시 남겨둬서 '재대결' 버튼이 원래 참가자 명단을 찾을 수 있게 함
   setTimeout(() => games.delete(game.id), REMATCH_EXPIRY_MS);
-  game.message?.edit({ embeds: [buildFinishedEmbed(game)], components: buildFinishedComponents(game), attachments: [] }).catch(() => {});
+
+  let payload;
+  try {
+    payload = { embeds: [buildFinishedEmbed(game)], components: buildFinishedComponents(game), attachments: [] };
+  } catch (err) {
+    console.error('끝말잇기 종료 임베드 생성 실패:', err);
+    payload = { content: '🔤 **끝말잇기가 종료되었습니다.**', embeds: [], components: [], attachments: [] };
+  }
+  game.message?.edit(payload).catch(() => {});
 }
 
 async function botPlay(game, games) {
@@ -522,6 +579,7 @@ async function createLobby(interaction, initialPlayers, hostId) {
     endReason: null,
     failWord: null,
     xpResult: null,
+    verifying: false,
     message: null,
     timeoutId: null,
   };
@@ -653,7 +711,7 @@ async function handleWcButton(interaction) {
     }
     clearTimeout(game.timeoutId);
     if (game.status === 'playing') {
-      endGame(game, games, game.hostId, 'cancelled');
+      endGame(game, games, null, 'cancelled');
       await interaction.deferUpdate();
     } else {
       games.delete(gameId);
@@ -763,54 +821,61 @@ async function handleWcMessage(message) {
     if (currentPlayer.id === 'BOT' || currentPlayer.id !== message.author.id) continue;
 
     const word = message.content.trim();
-    if (!word) continue; // 스티커/첨부파일 등 텍스트 없는 메시지는 시도로 취급하지 않음
+    // 차례인 사람이 보냈더라도 '완성형 한글 2글자 이상'인 메시지만 단어 시도로 취급한다.
+    // (ㅋㅋ·이모지·영어 같은 잡담 때문에 그 자리에서 탈락하지 않도록. 제한 시간은 그대로
+    //  흐르므로 잡담으로 시간을 끌 수는 없다)
+    if (!KOREAN.test(word) || word.length < 2) continue;
+    if (game.verifying) continue; // 앞 메시지를 아직 검증 중 — 한 차례에 한 단어만 처리한다
 
-    if (!KOREAN.test(word)) {
-      await message.react('❌').catch(() => {});
-      endGame(game, games, currentPlayer.id, 'not_korean', word);
-      return;
+    // 사전 검증(최대 3초)을 기다리는 사이에 턴 타이머가 만료되면, 제한 시간 안에 답했는데도
+    // '시간 초과'로 탈락하는 문제가 있어 처리 시작 시점에 타이머를 멈춘다.
+    // (단어가 유효하면 아래 startTurn이 다음 차례 타이머를 다시 건다.)
+    game.verifying = true;
+    clearTimeout(game.timeoutId);
+    game.timeoutId = null;
+
+    try {
+      if (game.lastChar && !getAcceptableStarts(game.lastChar).includes(word[0])) {
+        await message.react('❌').catch(() => {});
+        endGame(game, games, currentPlayer.id, 'wrong_start', word);
+        return;
+      }
+
+      if (game.used.has(word)) {
+        await message.react('❌').catch(() => {});
+        endGame(game, games, currentPlayer.id, 'duplicate', word);
+        return;
+      }
+
+      const exists = await checkWordExists(word);
+      if (games.get(game.id) !== game || game.status !== 'playing') return; // 검증 대기 중 취소/포기 등으로 이미 종료됨
+      if (!exists) {
+        await message.react('❌').catch(() => {});
+        endGame(game, games, currentPlayer.id, 'not_in_dict', word);
+        return;
+      }
+
+      game.used.add(word);
+      game.history.push(word);
+      game.lastWord = word;
+      game.lastChar = word[word.length - 1];
+      game.currentIdx = (game.currentIdx + 1) % game.players.length;
+
+      await message.react('✅').catch(() => {});
+      await game.message?.edit({
+        embeds: [buildPlayingEmbed(game)],
+        components: buildPlayingComponents(game),
+        attachments: [],
+      }).catch(() => {});
+
+      startTurn(game, games);
+    } catch (err) {
+      console.error('끝말잇기 단어 처리 실패:', err);
+      // 예외 때문에 타이머가 끊긴 채로 게임이 멈춰버리지 않도록 현재 차례 타이머를 다시 건다.
+      if (games.get(game.id) === game && game.status === 'playing' && !game.timeoutId) startTurn(game, games);
+    } finally {
+      game.verifying = false;
     }
-
-    if (word.length < 2) {
-      await message.react('❌').catch(() => {});
-      endGame(game, games, currentPlayer.id, 'too_short', word);
-      return;
-    }
-
-    if (game.lastChar && !getAcceptableStarts(game.lastChar).includes(word[0])) {
-      await message.react('❌').catch(() => {});
-      endGame(game, games, currentPlayer.id, 'wrong_start', word);
-      return;
-    }
-
-    if (game.used.has(word)) {
-      await message.react('❌').catch(() => {});
-      endGame(game, games, currentPlayer.id, 'duplicate', word);
-      return;
-    }
-
-    const exists = await checkWordExists(word);
-    if (games.get(game.id) !== game || game.status !== 'playing') return; // 검증 대기 중 타임아웃 등으로 이미 종료됨
-    if (!exists) {
-      await message.react('❌').catch(() => {});
-      endGame(game, games, currentPlayer.id, 'not_in_dict', word);
-      return;
-    }
-
-    game.used.add(word);
-    game.history.push(word);
-    game.lastWord = word;
-    game.lastChar = word[word.length - 1];
-    game.currentIdx = (game.currentIdx + 1) % game.players.length;
-
-    await message.react('✅').catch(() => {});
-    await game.message.edit({
-      embeds: [buildPlayingEmbed(game)],
-      components: buildPlayingComponents(game),
-      attachments: [],
-    }).catch(() => {});
-
-    startTurn(game, games);
     return;
   }
 }
