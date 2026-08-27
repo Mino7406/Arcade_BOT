@@ -10,8 +10,13 @@ const TIMEOUT_MS = 5 * 60 * 1000;
 // 유저끼리 대결할 때 자동으로 거는 내기 XP. 실제로는 진 사람의 "현재 레벨 안에 쌓인 XP"로
 // 상한을 걸어(min(WAGER_XP, currentLevelXp)) 아무리 내기에서 져도 레벨이 떨어지지는 않게 한다.
 const WAGER_XP = 100;
-// 봇을 상대로 이겼을 때 지급하는 고정 XP(내기 아님, 사람에게서 빼앗지 않음).
-const BOT_WIN_XP = 10;
+// 봇을 상대로 이겼을 때 지급하는 보상 XP(내기 아님, 사람에게서 빼앗지 않음).
+// 고정값이 아니라 매 판 50~100 사이에서 무작위로 정해진다.
+const BOT_WIN_XP_MIN = 50;
+const BOT_WIN_XP_MAX = 100;
+function rollBotWinXp() {
+  return BOT_WIN_XP_MIN + Math.floor(Math.random() * (BOT_WIN_XP_MAX - BOT_WIN_XP_MIN + 1));
+}
 // 악용 방지: 봇전 반복 플레이로 XP를 무한히 파밍하거나, 같은 상대와 즉석 내기를 연달아
 // 반복해서 XP를 옮기는 것을 막기 위해 유저당 쿨다운을 둔다(쿨다운 중이면 게임은 정상 진행
 // 되지만 XP 정산만 생략됨 — 플레이 자체를 막지는 않음).
@@ -185,7 +190,7 @@ function buildEmbed(game) {
       desc += '\n**(♾️ 무한모드)**\n 각자 최대 3개까지만 유지되고, 4번째를 두면 가장 오래된 조각이 사라집니다.';
     }
   } else if (game.status === 'setup') {
-    desc += `⚙️ 아래 **시작** 버튼을 누르면 대결이 시작됩니다.\n(이기면 +${BOT_WIN_XP} XP)`;
+    desc += `⚙️ 아래 **시작** 버튼을 누르면 대결이 시작됩니다.\n(이기면 +${BOT_WIN_XP_MIN}~${BOT_WIN_XP_MAX} XP)`;
     if (game.infinite) {
       desc += '\n**(♾️ 무한모드)**\n 각자 최대 3개까지만 유지되고, 4번째를 두면 가장 오래된 조각이 사라집니다.';
     }
@@ -350,7 +355,7 @@ function settleWagerXp(game) {
   return { type: 'wager', wager, winnerId, loserId, winnerResult, loserResult };
 }
 
-// 사람이 봇을 이겼을 때 고정 XP를 지급한다(봇이 이기거나 무승부면 지급 없음).
+// 사람이 봇을 이겼을 때 보상 XP를 지급한다(봇이 이기거나 무승부면 지급 없음).
 function settleBotWinXp(game) {
   if (!game.guildId || game.winner === 'DRAW') return null;
   const loserMark = game.winner === 'X' ? 'O' : 'X';
@@ -359,8 +364,9 @@ function settleBotWinXp(game) {
   // 봇전 반복 플레이로 XP를 무한히 파밍하는 것 방지 — 이유를 xpResult에 남겨서 화면에 안내한다.
   if (isOnCooldown(winnerId)) return { type: 'cooldown' };
 
-  const result = applyXp(game.guildId, winnerId, BOT_WIN_XP);
-  return { type: 'bot_win', amount: BOT_WIN_XP, winnerId, winnerResult: result };
+  const amount = rollBotWinXp();
+  const result = applyXp(game.guildId, winnerId, amount);
+  return { type: 'bot_win', amount, winnerId, winnerResult: result };
 }
 
 async function announceLevelUp(client, guildId, userId, newLevel) {

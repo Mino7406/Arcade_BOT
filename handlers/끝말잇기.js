@@ -15,8 +15,13 @@ const KOREAN   = /^[가-힣]+$/;
 // 상한을 걸어(min(WAGER_XP, currentLevelXp)) 내기에서 져도 레벨이 떨어지지는 않게 한다.
 // 살아남은 사람이 여럿이면 진 사람의 몫을 그만큼 나눠 가짐(틱택토와 동일한 방식).
 const WAGER_XP = 100;
-// 참가자 중 봇이 있는 게임에서 봇이 탈락했을 때 생존자 각자에게 지급하는 고정 XP(내기 아님).
-const BOT_WIN_XP = 10;
+// 참가자 중 봇이 있는 게임에서 봇이 탈락했을 때 생존자에게 지급하는 XP(내기 아님).
+// 고정값이 아니라 매 판 50~100 사이에서 무작위로 정해지며, 생존자가 여럿이면 모두 같은 금액을 받는다.
+const BOT_WIN_XP_MIN = 50;
+const BOT_WIN_XP_MAX = 100;
+function rollBotWinXp() {
+  return BOT_WIN_XP_MIN + Math.floor(Math.random() * (BOT_WIN_XP_MAX - BOT_WIN_XP_MIN + 1));
+}
 // 악용 방지: 봇전 반복 플레이로 XP를 무한히 파밍하거나("🏳️ 포기"로 즉시 끝내는 것 포함),
 // 같은 상대와 즉석 내기를 연달아 반복해서 XP를 옮기는 것을 막기 위해 유저당 쿨다운을 둔다
 // (쿨다운 중이면 게임 자체는 정상 진행되지만 XP 정산만 생략됨 — 플레이를 막지는 않음).
@@ -257,7 +262,7 @@ function buildWaitingEmbed(game) {
         name: '⚠️ XP 내기',
         value:
           `• 참가자가 전부 사람이면 탈락자가 최대 ${WAGER_XP} XP를 잃고(레벨은 안 깎임) 생존자들이 나눠 받습니다.\n` +
-          '• 봇이 참가하면 내기 대신, 봇을 이겼을 때 생존자에게 고정 XP가 지급됩니다.',
+          `• 봇이 참가하면 내기 대신, 봇을 이겼을 때 생존자에게 ${BOT_WIN_XP_MIN}~${BOT_WIN_XP_MAX} XP가 지급됩니다.`,
       },
     )
     .setFooter({ text: '최소 2명이 참가해야 시작할 수 있습니다.' });
@@ -565,7 +570,7 @@ function settleWagerXp(game) {
   return { type: 'wager', wager, loserId: game.loser, loserResult, winnerResults };
 }
 
-// 참가자 중 봇이 있었고 봇이 탈락했다면(=사람들이 이김) 생존자(사람) 각자에게 고정 XP를 지급.
+// 참가자 중 봇이 있었고 봇이 탈락했다면(=사람들이 이김) 생존자(사람)에게 무작위 보상 XP를 지급.
 // 사람이 탈락한 경우(봇이 살아남은 경우)는 지급하지 않음 — 봇전은 보상만 있고 패널티는 없음.
 function settleBotWinXp(game) {
   if (!game.guildId || game.endReason === 'cancelled') return null;
@@ -575,7 +580,9 @@ function settleBotWinXp(game) {
   if (!survivors.length) return null;
   if (survivors.some(isOnCooldown)) return { type: 'cooldown' }; // 봇전 반복 플레이로 XP를 무한히 파밍하는 것 방지
 
-  const winnerResults = survivors.map(id => ({ userId: id, amount: BOT_WIN_XP, ...applyXp(game.guildId, id, BOT_WIN_XP) }));
+  // 판마다 한 번만 굴려서 생존자 모두 같은 금액을 받게 한다(같은 판인데 사람마다 다르면 억울하다).
+  const amount = rollBotWinXp();
+  const winnerResults = survivors.map(id => ({ userId: id, amount, ...applyXp(game.guildId, id, amount) }));
   return { type: 'bot_win', winnerResults };
 }
 
