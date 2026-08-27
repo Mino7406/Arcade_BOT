@@ -507,6 +507,17 @@ async function startTttCommand(interaction) {
   }, 60_000);
 }
 
+// 참가자 둘이 거의 동시에 '재대결'을 누르면 신청이 두 개 만들어지고 둘 다 같은 메시지를
+// 붙잡는다. 그러면 밀려난 쪽의 60초 만료 타이머가 살아 있다가, 그 사이 시작된 게임 화면을
+// '만료되었습니다'로 덮어써 지워버린다. 결과 메시지 하나당 재대결은 하나만 만들게 막는다.
+// (끝말잇기와 달리 원래 게임은 끝나는 순간 지워지므로, 그 게임 대신 결과 메시지를 기준으로 센다)
+function hasRematchFrom(games, messageId) {
+  for (const game of games.values()) {
+    if (game.sourceMessageId === messageId) return true;
+  }
+  return false;
+}
+
 // 재대결: 원래 게임은 끝나는 순간 map에서 지워지므로, ttt:rematch 버튼의 customId에
 // 담아둔 정보(X/O였던 유저, 무한모드 여부)만으로 새 게임을 만든다. 사람 상대였던 경우
 // 선공/후공을 서로 바꿔서(X↔O) 매번 같은 사람만 먼저 두지 않게 한다.
@@ -520,11 +531,17 @@ async function startRematch(interaction, prevXId, prevOId, infinite) {
       return;
     }
 
+    if (hasRematchFrom(games, interaction.message.id)) {
+      await interaction.reply({ content: '⚠️ **이미 재대결 신청이 진행 중입니다.**', ephemeral: true });
+      return;
+    }
+
     // 봇전 재대결도 곧바로 시작하지 않고, 무한모드를 다시 고를 수 있는 설정 로비를 보여준다.
     const game = {
       id: gameId,
       board: Array(9).fill(''),
       players: { X: prevXId, O: 'BOT' },
+      sourceMessageId: interaction.message.id, // 이 결과 메시지에서 시작된 재대결임을 표시(중복 신청 차단용)
       guildId: interaction.guildId,
       currentTurn: 'X',
       status: 'setup',
@@ -553,6 +570,11 @@ async function startRematch(interaction, prevXId, prevOId, infinite) {
     return;
   }
 
+  if (hasRematchFrom(games, interaction.message.id)) {
+    await interaction.reply({ content: '⚠️ **이미 재대결 신청이 진행 중입니다.**', ephemeral: true });
+    return;
+  }
+
   // 사람 상대 재대결은 즉시 시작하지 않고, 기존 준비 로비(ttt:ready/ttt:decline)를 그대로
   // 재사용해 상대의 승낙을 받는다. 신청한 사람은 자동으로 준비 상태로 시작한다.
   const newX = prevOId;
@@ -564,6 +586,7 @@ async function startRematch(interaction, prevXId, prevOId, infinite) {
     id: gameId,
     board: Array(9).fill(''),
     players: { X: newX, O: newO },
+    sourceMessageId: interaction.message.id, // 이 결과 메시지에서 시작된 재대결임을 표시(중복 신청 차단용)
     guildId: interaction.guildId,
     currentTurn: 'X',
     status: 'waiting',
