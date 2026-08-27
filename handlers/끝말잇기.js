@@ -479,6 +479,7 @@ async function startRematchGame(interaction, gameId, humanPlayers, hadBot) {
     failWord: null,
     xpResult: null,
     verifying: false,
+    messagesSinceBoard: 0,
     message: null,
     timeoutId: null,
   };
@@ -590,6 +591,46 @@ async function editWithRetry(message, payload, delays = FINISH_EDIT_RETRY_DELAYS
   setTimeout(() => editWithRetry(message, payload, rest), wait);
 }
 
+// ── 상황판 위치 유지 ──────────────────────────────────────────
+// 사람들이 단어를 칠 때마다 상황판 임베드가 한 칸씩 위로 밀려, 판이 길어지면 스크롤을
+// 올려야 현재 차례를 볼 수 있게 된다. 그래서 상황판 아래로 새 메시지가 쌓였으면
+// 기존 상황판을 지우고 맨 아래에 다시 올린다(채널에는 항상 상황판이 하나만 남는다).
+async function moveBoardDown(game, payload) {
+  const old = game.message;
+  const channel = old?.channel;
+  if (!channel) return false;
+
+  // attachments는 편집 전용 옵션이라 새로 보낼 때는 뺀다.
+  const { attachments, ...sendable } = payload;
+  try {
+    // 새로 올린 뒤에 지운다 — 순서를 바꾸면 올리기에 실패했을 때 상황판이 아예 사라진다.
+    const posted = await channel.send(sendable);
+    game.message = posted;
+    game.messagesSinceBoard = 0;
+    await old.delete().catch(() => {});
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function refreshBoard(game) {
+  const payload = {
+    embeds: [buildPlayingEmbed(game)],
+    components: buildPlayingComponents(game),
+    attachments: [],
+  };
+  if (game.messagesSinceBoard && await moveBoardDown(game, payload)) return;
+  await game.message?.edit(payload).catch(() => {});
+}
+
+// 결과 화면도 마찬가지로 맨 아래에 보여야 한다. 내리는 데 실패하면 원래 자리에서라도
+// 반드시 갱신되도록 재시도 경로(editWithRetry)로 넘긴다.
+async function finishBoard(game, payload) {
+  if (game.messagesSinceBoard && await moveBoardDown(game, payload)) return;
+  await editWithRetry(game.message, payload);
+}
+
 function endGame(game, games, loserId, reason, failWord = null) {
   clearTimeout(game.timeoutId);
   game.timeoutId = null;
@@ -617,7 +658,7 @@ function endGame(game, games, loserId, reason, failWord = null) {
     console.error('끝말잇기 종료 임베드 생성 실패:', err);
     payload = { content: '🔤 **끝말잇기가 종료되었습니다.**', embeds: [], components: [], attachments: [] };
   }
-  editWithRetry(game.message, payload);
+  finishBoard(game, payload);
 }
 
 async function botPlay(game, games) {
@@ -637,11 +678,7 @@ async function botPlay(game, games) {
   g.lastChar = word[word.length - 1];
   g.currentIdx = (g.currentIdx + 1) % g.players.length;
 
-  await g.message?.edit({
-    embeds: [buildPlayingEmbed(g)],
-    components: buildPlayingComponents(g),
-    attachments: [],
-  }).catch(() => {});
+  await refreshBoard(g);
 
   startTurn(g, games);
 }
@@ -685,6 +722,7 @@ async function createLobby(interaction, initialPlayers, hostId) {
     failWord: null,
     xpResult: null,
     verifying: false,
+    messagesSinceBoard: 0,
     message: null,
     timeoutId: null,
   };
@@ -922,6 +960,9 @@ async function handleWcMessage(message) {
     if (game.status !== 'playing') continue;
     if (game.channelId !== message.channelId) continue;
 
+    // 상황판이 몇 칸이나 밀렸는지 센다(잡담도 포함 — 밀려나는 건 매한가지다).
+    game.messagesSinceBoard = (game.messagesSinceBoard ?? 0) + 1;
+
     const currentPlayer = game.players[game.currentIdx];
     if (currentPlayer.id === 'BOT' || currentPlayer.id !== message.author.id) continue;
 
@@ -967,11 +1008,7 @@ async function handleWcMessage(message) {
       game.currentIdx = (game.currentIdx + 1) % game.players.length;
 
       await message.react('✅').catch(() => {});
-      await game.message?.edit({
-        embeds: [buildPlayingEmbed(game)],
-        components: buildPlayingComponents(game),
-        attachments: [],
-      }).catch(() => {});
+      await refreshBoard(game);
 
       startTurn(game, games);
     } catch (err) {
