@@ -85,24 +85,84 @@ function getAcceptableStarts(lastChar) {
   return starts;
 }
 
-// ── 한국어기초사전 API 검증 ──────────────────────────────────────
-// 키가 없거나 API 호출이 실패하면 통과 처리(fail-open)하여
-// 인프라 문제로 게임이 부당하게 끝나지 않도록 합니다.
-async function checkWordExists(word) {
+// ── 사전 검증 ────────────────────────────────────────────────────
+// 한국어기초사전(KRDICT)은 외국인 학습자용이라 표제어가 5만 개 남짓이라서, 실제로 쓰는
+// 말인데도 "사전에 없는 단어"로 탈락하는 일이 잦다(예: 미적분, 삼투압, 곽란). 그래서
+// 표제어가 훨씬 많은(약 42만) 표준국어대사전(STDICT)도 함께 조회해 둘 중 하나라도
+// 있으면 인정한다. STDICT_API_KEY는 선택 사항이라 없으면 예전처럼 기초사전만 쓴다.
+//
+// 각 조회는 찾음(true) / 없음(false) / 조회 실패(null)를 돌려주고, 조회에 성공한 사전이
+// 하나도 없으면 인프라 문제로 게임이 부당하게 끝나지 않도록 통과시킨다(fail-open).
+const wordExistsCache = new Map(); // 단어 → 존재 여부 (확정된 결과만 저장)
+
+// 표준국어대사전 표제어에는 붙임표/사이표가 들어간다(미적-분, 삼투-압) — 떼고 비교한다.
+function normalizeEntry(entry) {
+  return String(entry ?? '').replace(/[-^ㆍ·\s]/g, '');
+}
+
+async function lookupKrdict(word) {
   const apiKey = process.env.KRDICT_API_KEY;
-  if (!apiKey) return true;
+  if (!apiKey) return null;
 
   try {
     const url = `https://krdict.korean.go.kr/api/search?key=${apiKey}&q=${encodeURIComponent(word)}&method=exact&part=word&advanced=y&target=1`;
     const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
-    if (!res.ok) return true;
+    if (!res.ok) return null;
 
     const xml = await res.text();
     const match = xml.match(/<total>(\d+)<\/total>/);
-    return match ? Number(match[1]) > 0 : true;
+    return match ? Number(match[1]) > 0 : null;
   } catch {
+    return null;
+  }
+}
+
+async function lookupStdict(word) {
+  const apiKey = process.env.STDICT_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const url = `https://stdict.korean.go.kr/api/search.do?key=${apiKey}&q=${encodeURIComponent(word)}&req_type=json&type_search=search&num=20`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) return null;
+
+    // 검색 결과가 없으면 이 API는 HTTP 200에 빈 본문을 돌려준다(키가 잘못됐을 때도 똑같다).
+    // 둘을 구분할 수 없지만 '없음'으로 처리해도 안전하다 — 최종 판정이 "한 사전이라도 있으면
+    // 인정"이라, 표준대사전이 '없음'이면 기초사전 결과만으로 정해지기 때문(= 키 넣기 전과 동일).
+    const body = (await res.text()).trim();
+    if (!body) return false;
+
+    let data;
+    try {
+      data = JSON.parse(body);
+    } catch {
+      return null;
+    }
+
+    const items = data?.channel?.item;
+    if (!items) return Number(data?.channel?.total ?? 0) > 0;
+
+    // 검색이 넓게 잡히더라도 표제어가 정확히 일치하는 것만 인정한다.
+    const list = Array.isArray(items) ? items : [items];
+    return list.some(item => normalizeEntry(item.word) === word);
+  } catch {
+    return null;
+  }
+}
+
+async function checkWordExists(word) {
+  const cached = wordExistsCache.get(word);
+  if (cached !== undefined) return cached;
+
+  const results = await Promise.all([lookupKrdict(word), lookupStdict(word)]);
+  if (results.some(r => r === true)) {
+    wordExistsCache.set(word, true);
     return true;
   }
+  if (results.every(r => r === null)) return true; // 전부 조회 실패 → 통과 (결과를 캐시하지 않음)
+
+  wordExistsCache.set(word, false);
+  return false;
 }
 
 // ── 봇 단어 선택 (API 기반) ───────────────────────────────────────
