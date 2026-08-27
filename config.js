@@ -8,8 +8,25 @@
 // /패널의 놀이터 바로가기 버튼이 모두 이 한 채널을 가리킨다.
 const PLAYGROUND_CHANNEL_ID = '1522174367075663872';
 
+// ─── 테스트 서버 ──────────────────────────────────────────────
+// 여기 적힌 길드에서는 채널 제한을 걸지 않는다(아무 채널에서나 기능을 확인할 수 있게).
+// 다른 값들과 달리 env에서 읽는 이유는, 테스트 서버가 배포 환경마다 다르고 공개 저장소에
+// 남길 필요도 없는 값이기 때문. env의 TEST_GUILD_ID에 콤마로 여러 개 적을 수 있고,
+// 비워두면 테스트 서버가 없는 것으로 본다(=모든 서버에 평소 제한이 그대로 적용됨).
+const TEST_GUILD_IDS = (process.env.TEST_GUILD_ID || '')
+  .split(',')
+  .map(id => id.trim())
+  .filter(Boolean);
+
+function isTestGuild(guildId) {
+  return !!guildId && TEST_GUILD_IDS.includes(guildId);
+}
+
+
 module.exports = {
   PLAYGROUND_CHANNEL_ID,
+  TEST_GUILD_IDS,
+  isTestGuild,
 
   // ─── 내전/모집/팀 명령을 허용할 채널 목록 ──────────────────────
   // 비우면([]) 채널 제한 없음. (/패널, /퀴즈와 놀이터·불러오기 전용 상호작용은 이 목록과 무관)

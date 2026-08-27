@@ -28,7 +28,7 @@ const { logCommandUsage } = require('./handlers/명령어로그');
 
 // 끝말잇기/틱택토/랭킹 명령어와 관련 버튼을 이 채널에서만 사용할 수 있게 제한한다.
 // ALLOWED_CHANNEL_IDS는 내전/모집/팀 상호작용을 허용할 채널 목록(비어 있으면 제한 없음).
-const { WORDCHAIN_RANKING_CHANNEL_ID, ALLOWED_CHANNEL_IDS: allowedChannels } = require('./config');
+const { WORDCHAIN_RANKING_CHANNEL_ID, ALLOWED_CHANNEL_IDS: allowedChannels, isTestGuild } = require('./config');
 
 const client = new Client({
   intents: [
@@ -209,6 +209,10 @@ client.once('ready', onReady);
 
 client.on('interactionCreate', async (interaction) => {
   try {
+    // 테스트 서버(env의 TEST_GUILD_ID)에서는 아래 채널 제한을 전부 건너뛴다 —
+    // 기능을 확인하려면 아무 채널에서나 쓸 수 있어야 하기 때문.
+    const skipChannelLimits = isTestGuild(interaction.guildId);
+
     // 끝말잇기/틱택토/룰렛/레벨/랭킹은 다른 채널 허용 목록과 무관하게 이 채널에서만 사용 가능.
     const isWordchainOrRanking =
       (interaction.isChatInputCommand() && ['끝말잇기', '틱택토', '룰렛', '레벨', '랭킹'].includes(interaction.commandName)) ||
@@ -218,7 +222,7 @@ client.on('interactionCreate', async (interaction) => {
       interaction.customId?.startsWith('ranking:') ||
       interaction.customId?.startsWith('level:');
 
-    if (isWordchainOrRanking && interaction.channelId !== WORDCHAIN_RANKING_CHANNEL_ID) {
+    if (isWordchainOrRanking && !skipChannelLimits && interaction.channelId !== WORDCHAIN_RANKING_CHANNEL_ID) {
       if (interaction.isRepliable()) {
         await interaction.reply({ content: '❌ 이 채널에서는 사용할 수 없습니다.', ephemeral: true });
       }
@@ -232,7 +236,7 @@ client.on('interactionCreate', async (interaction) => {
       interaction.customId === '불러오기:select' ||
       interaction.customId === 'recruit:불러오기';
 
-    if (isReload && interaction.channelId !== MATCH_BONUS_CHANNEL_ID) {
+    if (isReload && !skipChannelLimits && interaction.channelId !== MATCH_BONUS_CHANNEL_ID) {
       if (interaction.isRepliable()) {
         await interaction.reply({ content: '❌ 이 채널에서는 사용할 수 없습니다.', ephemeral: true });
       }
@@ -245,7 +249,7 @@ client.on('interactionCreate', async (interaction) => {
       isReload ||
       interaction.customId?.startsWith('quiz:');
 
-    if (!isChannelExempt) {
+    if (!isChannelExempt && !skipChannelLimits) {
       if (allowedChannels.length > 0 && !allowedChannels.includes(interaction.channelId)) {
         if (interaction.isRepliable()) {
           await interaction.reply({ content: '❌ 이 채널에서는 사용할 수 없습니다.', ephemeral: true });

@@ -80,9 +80,10 @@ CLIENT_ID=디스코드_애플리케이션(클라이언트) ID
 GUILD_ID=길드_ID_1,길드_ID_2        # 커맨드를 길드 단위로 배포/삭제할 때 사용, 콤마로 여러 개 가능
 KRDICT_API_KEY=국립국어원_한국어기초사전_오픈API_키   # 끝말잇기 단어 검증 및 초성퀴즈·상식퀴즈 문제 조회용, 없으면 끝말잇기는 검증을 통과시키고(fail-open) 퀴즈는 비상용 목록으로만 출제
 STDICT_API_KEY=국립국어원_표준국어대사전_오픈API_키   # (선택) 끝말잇기 단어 검증 보강용. 기초사전은 학습자용이라 표제어가 5만 개 남짓이라 미적분·삼투압 같은 멀쩡한 단어가 빠져 있음 — 표제어 약 42만의 표준국어대사전을 함께 조회해 둘 중 하나라도 있으면 인정한다. 없으면 기초사전만 사용
+TEST_GUILD_ID=테스트_서버_길드_ID       # (선택) 이 서버에서는 채널 제한을 걸지 않음. 콤마로 여러 개 가능, 비우면 모든 서버에 평소 제한 그대로
 ```
 
-> `env`에는 토큰·API 키 같은 **비밀값만** 둡니다. 채널/길드/관리자/이모지 ID는 비밀이 아니라 "이 봇이 어느 서버의 어느 채널에서 도는가"를 나타내는 값이므로 [`config.js`](config.js)에 모아뒀습니다 — 아래 [설정 (`config.js`)](#설정-configjs) 참고.
+> `env`에는 토큰·API 키 같은 **비밀값만** 둡니다. 채널/길드/관리자/이모지 ID는 비밀이 아니라 "이 봇이 어느 서버의 어느 채널에서 도는가"를 나타내는 값이므로 [`config.js`](config.js)에 모아뒀습니다 — 아래 [설정 (`config.js`)](#설정-configjs) 참고. 예외는 `TEST_GUILD_ID` 하나로, 테스트 서버는 배포 환경마다 다르고 공개 저장소에 남길 이유도 없어서 env에 둡니다(`config.js`가 `process.env`에서 읽습니다).
 
 > `env` 파일은 실행 디렉터리(CWD)가 아니라 `index.js` 위치 기준으로 읽습니다(`path.join(__dirname, 'env')`). systemd 등 다른 디렉터리에서 띄워도 토큰을 놓치지 않습니다.
 
@@ -94,6 +95,7 @@ STDICT_API_KEY=국립국어원_표준국어대사전_오픈API_키   # (선택) 
 |---|---|
 | `PLAYGROUND_CHANNEL_ID` | 놀이터 채널. 아래 `LEVEL_UP_ANNOUNCE_CHANNEL_ID` / `QUIZ_CHANNEL_ID` / `WORDCHAIN_RANKING_CHANNEL_ID`가 모두 이 값을 참조합니다 |
 | `ALLOWED_CHANNEL_IDS` | 내전/모집/팀 상호작용을 허용할 채널 ID 배열. **비우면(`[]`) 채널 제한 없음** |
+| `TEST_GUILD_IDS` / `isTestGuild(guildId)` | env의 `TEST_GUILD_ID`(콤마 구분)를 읽어 만든 테스트 서버 목록과 판별 함수. 이 길드에서는 채널 제한을 걸지 않음 |
 | `GUILD_ID` / `HUB_CHANNEL_ID` / `TEMP_CATEGORY_ID` | 임시 음성채널의 대상 길드, 허브(트리거) 채널, 생성될 카테고리 |
 | `EXCLUDED_GUILD_IDS` | 레벨/XP 시스템을 적용하지 않을 길드(테스트 서버 등) |
 | `XP_CHANNEL_ID` | 채팅 XP를 인정할 채널 |
@@ -477,3 +479,4 @@ npm start
 - `config.js`의 `ALLOWED_CHANNEL_IDS`에 등록되지 않은 채널에서는 내전/모집/팀 관련 상호작용이 차단됩니다. 배열이 비어 있으면(`[]`) 채널 제한을 걸지 않습니다.
 - `/끝말잇기`, `/틱택토`, `/룰렛`, `/레벨`, `/랭킹`과 관련 버튼은 `ALLOWED_CHANNEL_IDS`와 무관하게 `config.js`의 `WORDCHAIN_RANKING_CHANNEL_ID`(= 놀이터) 채널에서만 사용할 수 있습니다.
 - `/불러오기`(및 `불러오기:select`, `recruit:불러오기` 버튼)는 `ALLOWED_CHANNEL_IDS`와 무관하게 완료 보너스 채널(`MATCH_BONUS_CHANNEL_ID`)에서만 사용할 수 있습니다 — 다른 채널에서 재게시하면 XP 보너스 자격 판정이 어긋나기 때문입니다.
+- **테스트 서버 예외**: `env`의 `TEST_GUILD_ID`에 적은 길드에서는 위 채널 제한 세 가지(`WORDCHAIN_RANKING_CHANNEL_ID` / `MATCH_BONUS_CHANNEL_ID` / `ALLOWED_CHANNEL_IDS`)를 **전부 건너뜁니다** — 기능을 확인하려면 아무 채널에서나 쓸 수 있어야 하기 때문입니다. 풀리는 것은 채널 제한뿐이며, 관리자 전용 제한(`ADMIN_IDS`)과 레벨/XP 제외(`EXCLUDED_GUILD_IDS`)는 테스트 서버에서도 그대로 적용됩니다. `TEST_GUILD_ID`를 비워두면 모든 서버에 평소 제한이 걸립니다
