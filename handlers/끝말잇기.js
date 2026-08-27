@@ -5,6 +5,7 @@ const {
   ButtonStyle,
 } = require('discord.js');
 const { applyXp, getXp, levelFromXp, LEVEL_UP_ANNOUNCE_CHANNEL_ID, EXCLUDED_GUILD_IDS } = require('./레벨');
+const { getRemainingBotXp, addBotMatchXp, DAILY_BOT_MATCH_XP_CAP, timeUntilKstMidnight } = require('./봇전한도');
 
 const TURN_MS  = 20_000;
 const TURN_SEC = TURN_MS / 1000;
@@ -16,16 +17,17 @@ const KOREAN   = /^[가-힣]+$/;
 // 살아남은 사람이 여럿이면 진 사람의 몫을 그만큼 나눠 가짐(틱택토와 동일한 방식).
 const WAGER_XP = 100;
 // 참가자 중 봇이 있는 게임에서 봇이 탈락했을 때 생존자에게 지급하는 XP(내기 아님).
-// 고정값이 아니라 매 판 10~50 사이에서 무작위로 정해지며, 생존자가 여럿이면 모두 같은 금액을 받는다.
+// 고정값이 아니라 매 판 10~30 사이에서 무작위로 정해지며, 생존자가 여럿이면 모두 같은 금액을 받는다.
+// (단, 아래 봇전한도 모듈의 하루 누적 상한에 걸리면 그만큼만 지급된다.)
 const BOT_WIN_XP_MIN = 10;
-const BOT_WIN_XP_MAX = 50;
+const BOT_WIN_XP_MAX = 30;
 function rollBotWinXp() {
   return BOT_WIN_XP_MIN + Math.floor(Math.random() * (BOT_WIN_XP_MAX - BOT_WIN_XP_MIN + 1));
 }
 // 악용 방지: 봇전 반복 플레이로 XP를 무한히 파밍하거나("🏳️ 포기"로 즉시 끝내는 것 포함),
 // 같은 상대와 즉석 내기를 연달아 반복해서 XP를 옮기는 것을 막기 위해 유저당 쿨다운을 둔다
 // (쿨다운 중이면 게임 자체는 정상 진행되지만 XP 정산만 생략됨 — 플레이를 막지는 않음).
-const XP_SETTLE_COOLDOWN_MS = 3 * 60 * 1000;
+const XP_SETTLE_COOLDOWN_MS = 5 * 60 * 1000;
 const xpSettleCooldowns = new Map(); // userId → 마지막 XP 정산 시각
 
 function isOnCooldown(userId) {
@@ -262,7 +264,8 @@ function buildWaitingEmbed(game) {
         name: '⚠️ XP 내기',
         value:
           `• 참가자가 전부 사람이면 탈락자가 최대 ${WAGER_XP} XP를 잃고(레벨은 안 깎임) 생존자들이 나눠 받습니다.\n` +
-          `• 봇이 참가하면 내기 대신, 봇을 이겼을 때 생존자에게 ${BOT_WIN_XP_MIN}~${BOT_WIN_XP_MAX} XP가 지급됩니다.`,
+          `• 봇이 참가하면 내기 대신, 봇을 이겼을 때 생존자에게 ${BOT_WIN_XP_MIN}~${BOT_WIN_XP_MAX} XP가 지급됩니다.\n` +
+          `• 봇전 보상은 하루 최대 ${DAILY_BOT_MATCH_XP_CAP} XP까지만 받을 수 있습니다(틱택토와 합산).`,
       },
     )
     .setFooter({ text: '최소 2명이 참가해야 시작할 수 있습니다.' });
@@ -339,11 +342,16 @@ function formatXpResultLine(game) {
     return `\n⏳ 연속 대결 쿨다운 중이라 이번 판은 XP 정산이 생략됐습니다.\n-# (직전 정산 후 ${cooldownMin}분 이내)`;
   }
 
+  if (result.type === 'bot_daily_cap') {
+    return `\n🚫 오늘 봇전으로 받을 수 있는 XP(하루 ${DAILY_BOT_MATCH_XP_CAP})를 모두 받아 이번 판은 지급되지 않았습니다.\n-# (약 ${timeUntilKstMidnight()} 후 초기화)`;
+  }
+
   const winnerLines = result.winnerResults.map(w => `📈 <@${w.userId}> **+${w.amount} XP**`).join('\n');
   if (result.type === 'wager') {
     return `\n🎲 **내기 결과**\n📉 <@${result.loserId}> **−${result.wager} XP**\n${winnerLines}`;
   }
-  return `\n🎉 **봇을 이겨서 XP 획득**\n${winnerLines}`;
+  const capNote = result.capped ? `\n-# 하루 봇전 XP 한도(${DAILY_BOT_MATCH_XP_CAP})에 걸려 일부만 지급됐습니다.` : '';
+  return `\n🎉 **봇을 이겨서 XP 획득**\n${winnerLines}${capNote}`;
 }
 
 // ── 컴포넌트 빌더 ──────────────────────────────────────────────
@@ -580,10 +588,20 @@ function settleBotWinXp(game) {
   if (!survivors.length) return null;
   if (survivors.some(isOnCooldown)) return { type: 'cooldown' }; // 봇전 반복 플레이로 XP를 무한히 파밍하는 것 방지
 
-  // 판마다 한 번만 굴려서 생존자 모두 같은 금액을 받게 한다(같은 판인데 사람마다 다르면 억울하다).
-  const amount = rollBotWinXp();
-  const winnerResults = survivors.map(id => ({ userId: id, amount, ...applyXp(game.guildId, id, amount) }));
-  return { type: 'bot_win', winnerResults };
+  // 판마다 한 번만 굴린 금액을 기준으로 하되, 생존자별 하루(KST) 누적 상한이 남은 만큼만
+  // 따로 잘라서 지급한다 — 한 명은 한도가 남고 한 명은 다 찼을 수 있어 금액이 갈릴 수 있다.
+  const rolled = rollBotWinXp();
+  const winnerResults = [];
+  let capped = false;
+  for (const id of survivors) {
+    const grant = Math.min(rolled, getRemainingBotXp(game.guildId, id));
+    if (grant <= 0) { capped = true; continue; }
+    if (grant < rolled) capped = true;
+    addBotMatchXp(game.guildId, id, grant);
+    winnerResults.push({ userId: id, amount: grant, ...applyXp(game.guildId, id, grant) });
+  }
+  if (!winnerResults.length) return { type: 'bot_daily_cap' }; // 생존자 전원이 오늘 한도를 다 채움
+  return { type: 'bot_win', winnerResults, capped };
 }
 
 async function announceLevelUp(client, guildId, userId, newLevel) {
@@ -601,7 +619,7 @@ function settleGameXp(game) {
   if (EXCLUDED_GUILD_IDS.includes(game.guildId)) return; // 레벨 시스템 제외 서버(테스트 서버 등)는 내기/보상도 미적용
   const result = settleWagerXp(game) || settleBotWinXp(game);
   game.xpResult = result;
-  if (!result || result.type === 'cooldown') return;
+  if (!result || result.type === 'cooldown' || result.type === 'bot_daily_cap') return;
 
   if (result.loserId) markCooldown(result.loserId);
   for (const w of result.winnerResults) markCooldown(w.userId);

@@ -5,6 +5,7 @@ const {
   ButtonStyle,
 } = require('discord.js');
 const { applyXp, getXp, levelFromXp, LEVEL_UP_ANNOUNCE_CHANNEL_ID, EXCLUDED_GUILD_IDS } = require('./레벨');
+const { getRemainingBotXp, addBotMatchXp, DAILY_BOT_MATCH_XP_CAP, timeUntilKstMidnight } = require('./봇전한도');
 
 const TIMEOUT_MS = 5 * 60 * 1000;
 // 유저끼리 대결할 때 자동으로 거는 내기 XP. 실제로는 진 사람의 "현재 레벨 안에 쌓인 XP"로
@@ -190,7 +191,7 @@ function buildEmbed(game) {
       desc += '\n**(♾️ 무한모드)**\n 각자 최대 3개까지만 유지되고, 4번째를 두면 가장 오래된 조각이 사라집니다.';
     }
   } else if (game.status === 'setup') {
-    desc += `⚙️ 아래 **시작** 버튼을 누르면 대결이 시작됩니다.\n(이기면 +${BOT_WIN_XP_MIN}~${BOT_WIN_XP_MAX} XP)`;
+    desc += `⚙️ 아래 **시작** 버튼을 누르면 대결이 시작됩니다.\n(이기면 +${BOT_WIN_XP_MIN}~${BOT_WIN_XP_MAX} XP)\n-# 봇전 보상은 하루 최대 ${DAILY_BOT_MATCH_XP_CAP} XP (끝말잇기와 합산)`;
     if (game.infinite) {
       desc += '\n**(♾️ 무한모드)**\n 각자 최대 3개까지만 유지되고, 4번째를 두면 가장 오래된 조각이 사라집니다.';
     }
@@ -207,6 +208,9 @@ function buildEmbed(game) {
         desc += `\n🎲 **내기 결과**\n📉 <@${loserId}> **−${wager} XP**\n📈 <@${winnerId}> **+${wager} XP**`;
       } else if (game.xpResult?.type === 'bot_win') {
         desc += `\n🎉 <@${game.xpResult.winnerId}>님 **+${game.xpResult.amount} XP** 획득!`;
+        if (game.xpResult.capped) desc += `\n-# 하루 봇전 XP 한도(${DAILY_BOT_MATCH_XP_CAP})에 걸려 일부만 지급됐습니다.`;
+      } else if (game.xpResult?.type === 'bot_daily_cap') {
+        desc += `\n🚫 오늘 봇전 XP 한도(하루 ${DAILY_BOT_MATCH_XP_CAP})를 모두 채워\n 이번 판은 지급되지 않았습니다.\n-# (약 ${timeUntilKstMidnight()} 후 초기화)`;
       } else if (game.xpResult?.type === 'cooldown') {
         const cooldownMin = Math.ceil(XP_SETTLE_COOLDOWN_MS / 60000);
         desc += `\n⏳ 연속 대결 쿨다운 중이라\n 이번 판은 XP 정산이 생략됐습니다.\n-# (직전 정산 후 ${cooldownMin}분 이내)`;
@@ -364,9 +368,16 @@ function settleBotWinXp(game) {
   // 봇전 반복 플레이로 XP를 무한히 파밍하는 것 방지 — 이유를 xpResult에 남겨서 화면에 안내한다.
   if (isOnCooldown(winnerId)) return { type: 'cooldown' };
 
-  const amount = rollBotWinXp();
+  // 하루(KST) 누적 상한(끝말잇기와 합산). 남은 한도가 없으면 이번 판은 지급하지 않고,
+  // 굴린 금액보다 한도가 적으면 그만큼만 준다.
+  const remaining = getRemainingBotXp(game.guildId, winnerId);
+  if (remaining <= 0) return { type: 'bot_daily_cap' };
+
+  const rolled = rollBotWinXp();
+  const amount = Math.min(rolled, remaining);
+  addBotMatchXp(game.guildId, winnerId, amount);
   const result = applyXp(game.guildId, winnerId, amount);
-  return { type: 'bot_win', amount, winnerId, winnerResult: result };
+  return { type: 'bot_win', amount, winnerId, winnerResult: result, capped: amount < rolled };
 }
 
 async function announceLevelUp(client, guildId, userId, newLevel) {
@@ -384,7 +395,7 @@ function settleGameXp(game) {
   if (EXCLUDED_GUILD_IDS.includes(game.guildId)) return; // 레벨 시스템 제외 서버(테스트 서버 등)는 내기/보상도 미적용
   const result = settleWagerXp(game) || settleBotWinXp(game);
   game.xpResult = result;
-  if (!result || result.type === 'cooldown') return;
+  if (!result || result.type === 'cooldown' || result.type === 'bot_daily_cap') return;
 
   markCooldown(result.winnerId);
   if (result.loserId) markCooldown(result.loserId);

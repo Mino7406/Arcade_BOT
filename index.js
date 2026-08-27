@@ -12,6 +12,7 @@ const { handleRMatchSelect } = require('./handlers/불러오기');
 const { handleWcButton, handleWcMessage } = require('./handlers/끝말잇기');
 const { handleTttButton } = require('./handlers/틱택토');
 const { loadRoulette, saveRoulette, handleRouletteButton } = require('./handlers/룰렛');
+const { loadBotMatchXp, saveBotMatchXp } = require('./handlers/봇전한도');
 const { startQuizScheduler, handleQuizMessage } = require('./handlers/퀴즈');
 const { handleQuizAdminButton, handleQuizCreateModal } = require('./commands/퀴즈');
 const { buildGameSelectPayload: buildNaejeonGameSelectPayload } = require('./commands/내전');
@@ -197,6 +198,7 @@ async function onReady(c) {
   await restoreMatches(c); // ⬅️ 추가: 저장된 내전/모집 복원
   loadLevels(); // ⬅️ 추가: 저장된 레벨/XP 복원
   loadRoulette(); // 룰렛 일일 플레이 기록 복원
+  loadBotMatchXp(); // 끝말잇기·틱택토 봇전 일일 XP 한도 기록 복원
   initVoiceStates(c); // 재시작 전 이미 통화방에 있던 유저 추적 복원
   startVoiceXpTicker(c); // 통화방 체류 XP 1분 틱 시작
   await reconcileTempChannels(c); // 재시작 전 만들어둔 임시 음성채널 중 빈 방 정리
@@ -428,6 +430,7 @@ setInterval(() => {
   try { saveAll(client); } catch (e) { console.error('자동 저장 실패:', e); }
   try { saveLevels(); } catch (e) { console.error('레벨 자동 저장 실패:', e); }
   try { saveRoulette(); } catch (e) { console.error('룰렛 자동 저장 실패:', e); }
+  try { saveBotMatchXp(); } catch (e) { console.error('봇전 XP 한도 자동 저장 실패:', e); }
 }, 30_000);
 
 // ─── 예기치 못한 예외로 봇 전체가 죽지 않도록 ─────────────────
@@ -447,6 +450,7 @@ function shutdown() {
     try { saveAll(client); } catch (e) { console.error('종료 저장 실패:', e); }
     try { saveLevels(); } catch (e) { console.error('레벨 종료 저장 실패:', e); }
     try { saveRoulette(); } catch (e) { console.error('룰렛 종료 저장 실패:', e); }
+    try { saveBotMatchXp(); } catch (e) { console.error('봇전 XP 한도 종료 저장 실패:', e); }
   }
   client.destroy();
   process.exit(0);
