@@ -563,6 +563,28 @@ function settleGameXp(game) {
   }
 }
 
+// 종료 화면 갱신만큼은 반드시 성공해야 한다 — 여기서 한 번 실패하고 끝나면 게임은 이미
+// 끝났는데 임베드만 '진행 중'으로 남아, 아무도 상황을 알 수 없고 이후 입력도 전부 무시된다
+// (순간적인 통신 장애로 실제로 이런 일이 있었다). 간격을 늘려가며 몇 번 더 시도한다.
+const FINISH_EDIT_RETRY_DELAYS_MS = [3_000, 15_000, 60_000];
+
+async function editWithRetry(message, payload, delays = FINISH_EDIT_RETRY_DELAYS_MS) {
+  if (!message) return;
+
+  try {
+    await message.edit(payload);
+    return;
+  } catch (err) {
+    if (!delays.length) {
+      console.error('끝말잇기 종료 임베드 갱신 최종 실패:', err);
+      return;
+    }
+  }
+
+  const [wait, ...rest] = delays;
+  setTimeout(() => editWithRetry(message, payload, rest), wait);
+}
+
 function endGame(game, games, loserId, reason, failWord = null) {
   clearTimeout(game.timeoutId);
   game.timeoutId = null;
@@ -590,7 +612,7 @@ function endGame(game, games, loserId, reason, failWord = null) {
     console.error('끝말잇기 종료 임베드 생성 실패:', err);
     payload = { content: '🔤 **끝말잇기가 종료되었습니다.**', embeds: [], components: [], attachments: [] };
   }
-  game.message?.edit(payload).catch(() => {});
+  editWithRetry(game.message, payload);
 }
 
 async function botPlay(game, games) {
