@@ -480,6 +480,7 @@ async function startRematchGame(interaction, gameId, humanPlayers, hadBot) {
     xpResult: null,
     verifying: false,
     messagesSinceBoard: 0,
+    rematchStarted: false,
     message: null,
     timeoutId: null,
   };
@@ -744,6 +745,7 @@ async function createLobby(interaction, initialPlayers, hostId) {
     xpResult: null,
     verifying: false,
     messagesSinceBoard: 0,
+    rematchStarted: false,
     message: null,
     timeoutId: null,
   };
@@ -914,6 +916,15 @@ async function handleWcButton(interaction) {
       await interaction.reply({ content: '⚠️ **이전 게임 참가자만 재대결을 시작할 수 있습니다.**', ephemeral: true });
       return;
     }
+
+    // 참가자 둘이 거의 동시에 누르면 신청이 두 개 만들어지고, 둘 다 같은 메시지를 붙잡는다.
+    // 그러면 밀려난 쪽이 60초 뒤 '만료' 처리를 하면서 그 사이 시작된 게임 화면을 지워버린다.
+    // 한 판당 재대결 신청은 하나만 만들어지게 막는다.
+    if (oldGame.rematchStarted) {
+      await interaction.reply({ content: '⚠️ **이미 재대결 신청이 진행 중입니다.**', ephemeral: true });
+      return;
+    }
+    oldGame.rematchStarted = true;
 
     const hadBot = oldGame.players.some(p => p.id === 'BOT');
     const humanPlayers = oldGame.players.filter(p => p.id !== 'BOT').map(p => ({ id: p.id, name: p.name }));
