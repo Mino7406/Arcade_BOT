@@ -8,8 +8,8 @@ const fs = require('fs');
 // 예전 위치(루트)에 남아있던 JSON 저장 파일이 있다면 DB/ 폴더로 옮긴다(내용은 그대로, 위치만
 // 이동). 콘솔에 명령어를 입력할 수 없는 호스팅(버튼으로만 시작/재시작)에서도 봇을 켤 때마다
 // 자동으로 처리되도록, 아래 다른 모듈을 require하기 전에(=그 모듈들이 DB/ 파일을 읽기 전에)
-// 가장 먼저 실행한다. 옮길 파일이 없으면 아무 일도 하지 않는다(migrate-db.js 참고).
-require('./migrate-db').migrateOldDbFiles();
+// 가장 먼저 실행한다. 옮길 파일이 없으면 아무 일도 하지 않는다(migrate.js 참고).
+require('./migrate').migrateOldDbFiles();
 
 const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleNaejeonNotifyModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload: buildNaejeonMessagePayload } = require('./handlers/내전');
 const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipNotifyModal, handleMojipMemberAdd, handleMojipMemberRemove, buildMojipMessagePayload } = require('./handlers/모집');

@@ -1,11 +1,11 @@
-// migrate-db.js — 예전 위치(프로젝트 루트)에 흩어져 있던 JSON 저장 파일들을 새 위치(DB/ 폴더,
+// migrate.js — 예전 위치(프로젝트 루트)에 흩어져 있던 JSON 저장 파일들을 새 위치(DB/ 폴더,
 // 일부는 새 이름)로 옮긴다. 내용은 전혀 읽거나 다시 쓰지 않고 fs.renameSync(파일시스템 레벨
 // 이동)만 하므로 손상될 일이 없다. 이미 옮겨진 파일은 건너뛰므로 여러 번 실행해도 안전하다
 // (idempotent) — 그래서 index.js가 봇을 켤 때마다 자동으로 호출한다. 콘솔에 명령어를 직접
 // 입력할 수 없는 호스팅(버튼으로만 시작/재시작하는 디스호스트류)에서도 별도 조작 없이
 // 알아서 옮겨지고, 옮길 파일이 없으면 그냥 조용히 넘어간다.
 //
-// 셸에 접근할 수 있다면 `node migrate-db.js`로 직접 실행해 결과를 바로 확인할 수도 있다.
+// 셸에 접근할 수 있다면 `node migrate.js`로 직접 실행해 결과를 바로 확인할 수도 있다.
 //
 //   data.json           → DB/N-M.json        (내전 N / 모집 M 매치)
 //   data.json.tmp       → DB/N-M.json.tmp
@@ -71,7 +71,7 @@ function logResults(results) {
   }
 }
 
-// `node migrate-db.js`로 직접 실행했을 때만 콘솔에 찍는다 — index.js가 require해서 자동
+// `node migrate.js`로 직접 실행했을 때만 콘솔에 찍는다 — index.js가 require해서 자동
 // 호출할 때는 조용히(로그 없이) 처리한다.
 if (require.main === module) {
   logResults(migrateOldDbFiles());
