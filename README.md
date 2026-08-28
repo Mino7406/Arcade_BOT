@@ -29,7 +29,6 @@
 Arcade_BOT/
 ├─ index.js                 # 엔트리 포인트: 클라이언트 초기화, 이벤트 라우팅, 자동 저장
 ├─ config.js                # 서버/채널/관리자/이모지 ID 등 배포 환경에 종속된 상수 모음 (비밀값 아님)
-├─ db.js                    # 내전/모집 매치 데이터를 JSON 파일로 저장/복원
 ├─ deploy-commands.js       # 슬래시 커맨드 등록 (전역 / 길드 단위)
 ├─ clear-guild-commands.js  # 길드 단위로 등록된 커맨드 전체 삭제
 ├─ migrate-db.js            # 예전 루트에 흩어져 있던 JSON 저장 파일을 DB/ 폴더로 이동(내용 변경 없음). index.js가 켤 때마다 자동 호출, 셸 접근 시 직접 실행도 가능
@@ -57,7 +56,7 @@ Arcade_BOT/
 │  ├─ 레벨.js
 │  ├─ 로그.js                # 명령어/버튼/선택 메뉴/모달 제출 상호작용 로그 기록
 │  ├─ 음성채널.js             # 허브 채널 입장 시 임시 음성채널 자동 생성/삭제
-│  └─ 공용.js                # 내전/모집/팀 공용 유틸 (관리자 목록, 임베드 빌더, 자동 종료 타이머 등)
+│  └─ 공용.js                # 내전/모집/팀 공용 유틸 (관리자 목록, 임베드 빌더, 자동 종료 타이머, 내전/모집 매치 저장·복원 등)
 ├─ DB/                      # fs 기반 JSON 저장 파일 전부 (자동 생성, 폴더째 gitignore)
 │  ├─ N-M.json               # 진행 중인 내전(N)/모집(M) 매치
 │  ├─ N-M.json.tmp           # N-M.json 원자적 저장용 임시 파일(정상 종료 시 남지 않음)
@@ -304,6 +303,9 @@ npm start
 | `notifyOrganizerOnClose(match, label)` *(내부)* | 정원 자동 마감 시 주최자에게 게시글 제목과 링크를 DM으로 전송 (DM 차단 등 실패는 무시) |
 | `announceMatchCompletionXp(match)` | 마감된 매치에 보너스 XP 지급 + 레벨업 유저 축하 메시지 게시 |
 | `buildModal` / `buildPreviewEmbed` / `buildPreviewComponents` / `buildCancelComponents` / `buildLeaveButton` | 내전/모집이 공유하는 모달·임베드·버튼 빌더 (`type` 파라미터로 분기) |
+| `matchToJSON(match)` *(내부)* | 직렬화 불가능한 필드(메시지 참조, 타이머 등)를 제외하고 매치를 JSON 변환 |
+| `saveAll(client)` | 모든 내전/모집 매치를 `DB/N-M.json`에 저장 (예전엔 프로젝트 루트의 `db.js`였음 — 내전/모집 둘 다 대상이라 어느 한쪽에도 속하지 않아 이 공용 파일로 옮김) |
+| `loadRows()` | `DB/N-M.json`을 읽어 매치 배열로 반환 (없거나 오류 시 빈 배열) |
 
 ### `handlers/내전.js` — 내전
 
@@ -455,14 +457,6 @@ npm start
 
 `process.on('uncaughtException')` / `process.on('unhandledRejection')`으로 예기치 못한 예외를 로그만 남기고 프로세스는 살려둡니다 — 타이머 콜백(예: 끝말잇기 턴 타이머)에서 예외가 나면 봇이 통째로 죽어 진행 중이던 게임 임베드가 전부 얼어붙기 때문입니다.
 
-### `db.js` — 영속화
-
-| 함수 | 설명 |
-|---|---|
-| `matchToJSON(match)` | 직렬화 불가능한 필드(메시지 참조, 타이머 등)를 제외하고 매치를 JSON 변환 |
-| `saveAll(client)` | 모든 내전/모집 매치를 `DB/N-M.json`에 저장 |
-| `loadRows()` | `DB/N-M.json`을 읽어 매치 배열로 반환 (없거나 오류 시 빈 배열) |
-
 ## 상호작용 로그 (`handlers/로그.js`)
 
 - (예전 이름: `handlers/명령어로그.js` / `command-log.json` — 슬래시 커맨드만 남기다가, 버튼·선택 메뉴·모달 제출까지 전부 남기도록 넓히면서 이름도 바꿨습니다)
@@ -470,7 +464,7 @@ npm start
 - 코드를 몰라도 파일만 열어보면 바로 읽히도록 필드명을 한글로 씁니다. 각 항목: `시각`(KST 기준 `YYYY-MM-DD HH:mm:ss`), `유형`(`명령어`/`버튼`/`선택 메뉴`/`모달 제출`), `유저`(`표시이름(유저ID)` 형태), `채널`(`#채널이름` 또는 DM이면 `DM`), `내용`(무엇을 했는지 한 줄 요약 — 예: `/끝말잇기 명령어 사용`, `wc:join:169... 버튼 클릭`)
 - 매 호출마다 파일 전체를 읽어 배열에 append 후 다시 쓰며, 파일이 무한정 커지지 않도록 최근 `MAX_ENTRIES`(5000)건만 보관하고 오래된 순으로 버립니다.
 
-## 데이터 저장 (`db.js`)
+## 데이터 저장 (`handlers/공용.js`의 `saveAll`/`loadRows`)
 
 - SQLite 등 별도 DB 엔진 없이, `fs`로 `DB/N-M.json`에 내전/모집 매치를 직렬화해 저장합니다(Discord 메시지 참조·타이머 등 직렬화 불가능한 필드는 저장 전 제외).
 - `DB/levels.json`에는 길드별 유저 XP가 저장됩니다.
