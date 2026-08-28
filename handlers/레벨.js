@@ -100,6 +100,27 @@ function applyXp(guildId, userId, amount) {
   return { leveledUp: false };
 }
 
+// 관리자가 /xp로 직접 XP를 가감할 때 쓴다. 음수로 빼도 최종 XP가 0 밑으로는 내려가지 않게
+// 막는다(음수 XP는 levelFromXp/진행바 계산을 깨뜨린다). 적용 전후 값과 레벨 변화를 함께 돌려준다.
+function adjustXp(guildId, userId, delta) {
+  const guildLevels = getGuildLevels(guildId);
+  const oldXp = guildLevels[userId] || 0;
+  const oldLevel = levelFromXp(oldXp).level;
+  const newXp = Math.max(0, oldXp + delta);
+  guildLevels[userId] = newXp;
+  const newLevel = levelFromXp(newXp).level;
+
+  return {
+    oldXp,
+    newXp,
+    appliedDelta: newXp - oldXp, // 0에서 잘렸으면 요청한 delta와 다를 수 있음
+    oldLevel,
+    newLevel,
+    leveledUp: newLevel > oldLevel,
+    leveledDown: newLevel < oldLevel,
+  };
+}
+
 function randomBaseXp() {
   return Math.floor(Math.random() * (XP_MAX - XP_MIN + 1)) + XP_MIN;
 }
@@ -248,6 +269,7 @@ module.exports = {
   handleMessageXp,
   awardMatchCompletionXp,
   applyXp,
+  adjustXp,
   trackVoiceStateUpdate,
   initVoiceStates,
   startVoiceXpTicker,

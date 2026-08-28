@@ -257,7 +257,7 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     const isChannelExempt =
-      (interaction.isChatInputCommand() && ['패널', '퀴즈'].includes(interaction.commandName)) ||
+      (interaction.isChatInputCommand() && ['패널', '퀴즈', 'xp'].includes(interaction.commandName)) ||
       isWordchainOrRanking ||
       isReload ||
       interaction.customId?.startsWith('quiz:');
