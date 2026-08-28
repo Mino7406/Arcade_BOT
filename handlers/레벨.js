@@ -12,7 +12,8 @@ const {
   MATCH_BONUS_CHANNEL_ID,
 } = require('../config');
 
-const LEVELS_PATH = path.join(__dirname, '..', 'levels.json');
+const LEVELS_PATH = path.join(__dirname, '..', 'DB', 'levels.json');
+fs.mkdirSync(path.dirname(LEVELS_PATH), { recursive: true });
 
 const COOLDOWN_MS = 60 * 1000;
 // TTS 채널(XP_CHANNEL_MULTIPLIERS 대상)은 음소거/미접속 상태로 텍스트만 계속 쳐도

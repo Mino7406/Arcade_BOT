@@ -25,7 +25,7 @@ const { handleRankingPageButton, handleRankingShareButton } = require('./command
 const { saveAll, loadRows } = require('./db'); // ⬅️ 추가: SQLite 저장 모듈
 const { loadLevels, saveLevels, handleMessageXp, trackVoiceStateUpdate, initVoiceStates, startVoiceXpTicker, LEVEL_UP_ANNOUNCE_CHANNEL_ID, MATCH_BONUS_CHANNEL_ID } = require('./handlers/레벨');
 const { handleTempVoiceState, reconcileTempChannels } = require('./handlers/음성채널');
-const { logCommandUsage } = require('./handlers/명령어로그');
+const { logInteraction } = require('./handlers/로그');
 
 // 끝말잇기/틱택토/랭킹 명령어와 관련 버튼을 이 채널에서만 사용할 수 있게 제한한다.
 // ALLOWED_CHANNEL_IDS는 내전/모집/팀 상호작용을 허용할 채널 목록(비어 있으면 제한 없음).
@@ -54,7 +54,7 @@ for (const file of commandFiles) {
 }
 
 // ─── DB에서 내전/모집 복원 ────────────────────────────────────
-// 봇이 켜질 때 data.json에 저장돼 있던 내전/모집을 다시 메모리로 불러옵니다.
+// 봇이 켜질 때 N-M.json에 저장돼 있던 내전/모집을 다시 메모리로 불러옵니다.
 async function restoreMatches(c) {
   if (!c.naejeonMatches) c.naejeonMatches = new Map();
   if (!c.mojipMatches)   c.mojipMatches   = new Map();
@@ -151,7 +151,7 @@ async function restoreMatches(c) {
 // ─── 인증 채널 자동 삭제 예약 복구 ────────────────────────────
 // scheduleMessageDelete는 messageCreate 이벤트에서만 걸리는데, 봇이 꺼져있던 동안
 // (재시작 등) 인증 채널에 올라온 메시지는 그 이벤트를 아예 못 받아 예약이 안 걸린 채로
-// 남는다. data.json 복원(restoreMatches)은 "이미 예약돼 있던" 항목만 되살릴 뿐 이런
+// 남는다. N-M.json 복원(restoreMatches)은 "이미 예약돼 있던" 항목만 되살릴 뿐 이런
 // 누락은 못 잡으므로, 재시작 시 최근 메시지 기록을 직접 훑어서 예약이 빠진 메시지를 찾아
 // 다시 건다. 최대 500개(5페이지) 또는 24시간(자동삭제 기준 8시간의 3배)치까지만 훑고,
 // 그보다 오래된 건 예외적인 경우로 보고 포기한다(무한정 과거까지 훑지 않기 위함).
@@ -211,6 +211,10 @@ client.once('ready', onReady);
 
 client.on('interactionCreate', async (interaction) => {
   try {
+    // 채널 제한 등으로 막히는 시도까지 포함해, 명령어/버튼/선택 메뉴/모달 제출을 전부 기록한다.
+    // (아래에서 무엇이 됐든 판단하기 전에 가장 먼저 남겨야 실제로 들어온 입력을 놓치지 않음)
+    logInteraction(interaction);
+
     // 테스트 서버(config.js의 TEST_GUILD_IDS)에서는 아래 채널 제한을 전부 건너뛴다 —
     // 기능을 확인하려면 아무 채널에서나 쓸 수 있어야 하기 때문.
     const skipChannelLimits = isTestGuild(interaction.guildId);
@@ -263,7 +267,6 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.isChatInputCommand()) {
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
-      logCommandUsage(interaction);
       await command.execute(interaction);
 
     } else if (interaction.isUserSelectMenu()) {
@@ -424,7 +427,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 // ─── 자동 저장 (30초마다) ─────────────────────────────────────
 // 봇이 갑자기 죽어도(크래시) 최대 30초 전 상태까지는 보존됩니다.
 // dataReady가 true가 되기 전(복원 완료 전)에는 저장을 건너뛴다 — 안 그러면
-// 아직 비어있는 메모리 상태로 기존 data.json/levels.json을 덮어써 초기화시킨다.
+// 아직 비어있는 메모리 상태로 기존 N-M.json/levels.json을 덮어써 초기화시킨다.
 setInterval(() => {
   if (!dataReady) return;
   try { saveAll(client); } catch (e) { console.error('자동 저장 실패:', e); }

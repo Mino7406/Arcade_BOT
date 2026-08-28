@@ -7,7 +7,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const STORE_PATH = path.join(__dirname, '..', 'botmatch-xp.json');
+const STORE_PATH = path.join(__dirname, '..', 'DB', 'botmatch-xp.json');
+fs.mkdirSync(path.dirname(STORE_PATH), { recursive: true });
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 // 유저 한 명이 하루에 봇전(끝말잇기 + 틱택토 합산)으로 받을 수 있는 최대 보상 XP.

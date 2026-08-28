@@ -7,7 +7,8 @@ const path = require('path');
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { applyXp, getXp, levelFromXp, LEVEL_UP_ANNOUNCE_CHANNEL_ID, EXCLUDED_GUILD_IDS } = require('./레벨');
 
-const ROULETTE_PATH = path.join(__dirname, '..', 'roulette.json');
+const ROULETTE_PATH = path.join(__dirname, '..', 'DB', 'roulette.json');
+fs.mkdirSync(path.dirname(ROULETTE_PATH), { recursive: true });
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 const MIN_BET = 10;

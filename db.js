@@ -4,8 +4,13 @@
 const fs   = require('fs');
 const path = require('path');
 
-const DB_PATH = path.join(__dirname, 'data.json');
+// 흩어져 있던 JSON 저장 파일들을 DB/ 폴더 하나로 모아둔다(다른 모듈들도 동일).
+// 파일명 N-M.json은 이 파일이 담는 두 매치 타입, 내전(N)/모집(M)의 앞글자를 딴 것.
+const DB_DIR  = path.join(__dirname, 'DB');
+const DB_PATH = path.join(DB_DIR, 'N-M.json');
 const TMP_PATH = DB_PATH + '.tmp';
+
+fs.mkdirSync(DB_DIR, { recursive: true });
 
 // match 객체 안의 직렬화 불가 객체(Discord 객체)를 제거하고 JSON 문자열로 변환
 function matchToJSON(match) {
@@ -14,7 +19,7 @@ function matchToJSON(match) {
   return JSON.stringify({ ...rest, data: cleanData });
 }
 
-// 현재 메모리의 모든 내전/모집을 data.json에 저장
+// 현재 메모리의 모든 내전/모집을 N-M.json에 저장
 function saveAll(client) {
   const rows = [];
   const dump = (map, type) => {
@@ -51,7 +56,7 @@ function saveAll(client) {
       });
     }
   }
-  // 30초마다 파일 전체를 덮어쓰기 때문에, 쓰는 도중에 죽으면 data.json이 잘린 채 남아
+  // 30초마다 파일 전체를 덮어쓰기 때문에, 쓰는 도중에 죽으면 N-M.json이 잘린 채 남아
   // 다음 재시작 때 loadRows()가 파싱에 실패(→ [] 반환)하며 전체 데이터가 날아간다.
   // 임시 파일에 먼저 다 쓰고 rename으로 교체해, 실패해도 기존 파일이 그대로 남게 한다.
   fs.writeFileSync(TMP_PATH, JSON.stringify(rows), 'utf8');

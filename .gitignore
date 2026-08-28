@@ -1,11 +1,4 @@
 node_modules/
 .env
 env
-data.json
-data.json.tmp
-levels.json
-command-log.json
-voiceRooms.json
-quiz.json
-roulette.json
-botmatch-xp.json
+DB/
