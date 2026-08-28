@@ -230,6 +230,22 @@ async function findBotWord(game) {
   return unused[Math.floor(Math.random() * unused.length)];
 }
 
+// ── 한방단어(다음 사람이 이을 수 없는 단어) 차단 ─────────────────
+// 마지막 글자가 흔치 않아 사실상 그 자리에서 상대를 막아버리는 단어("한방단어", 예: 스퀴즈)는
+// 정상적인 끝말잇기 승부를 무너뜨리므로 막는다. 두음법칙까지 반영한 시작 글자들로 사전을
+// 조회해, 아직 쓰지 않은 다른 단어가 하나라도 있어야 인정한다(봇 단어 찾기와 같은 API·풀 사용).
+// 조회에 전부 실패하면(KRDICT_API_KEY 없음 등) 부당하게 막지 않도록 통과시킨다(fail-open).
+async function hasContinuation(game, word) {
+  const lastChar = word[word.length - 1];
+  const prefixes = getAcceptableStarts(lastChar);
+  const results = await Promise.all(prefixes.map(fetchWordsStartingWith));
+  if (results.every(r => !r)) return null; // 전부 조회 실패 → 알 수 없음
+
+  const usedAfter = new Set(game.used);
+  usedAfter.add(word);
+  return results.flat().filter(Boolean).some(w => !usedAfter.has(w));
+}
+
 function getGames(client) {
   if (!client.wcGames) client.wcGames = new Map();
   return client.wcGames;
@@ -260,6 +276,7 @@ function buildWaitingEmbed(game) {
           '• 한글 2글자 이상만 단어로 인정되며, 그 외 잡담 메시지는 무시됩니다.\n' +
           '• 실제 사전에 있는 단어만 인정됩니다.\n' +
           '• 이미 사용된 단어는 사용할 수 없습니다.\n' +
+          '• 다음 사람이 이을 단어가 없는 **한방단어**는 사용할 수 없습니다.\n' +
           `• **${TURN_SEC}초** 내에 입력하지 않으면 탈락합니다.`,
       },
       {
@@ -309,6 +326,8 @@ function describeEndReason(game) {
       return `🔁 \`${game.failWord}\`은(는) 이미 사용된 단어입니다.`;
     case 'not_in_dict':
       return `📖 \`${game.failWord}\`은(는) 사전에 없는 단어입니다.`;
+    case 'dead_end':
+      return `☠️ \`${game.failWord}\`은(는) 다음 사람이 이을 단어가 없는 **한방단어**라 사용할 수 없습니다.`;
     case 'gave_up':
       return '🏳️ 단어를 이을 수 없어 포기했습니다.';
     case 'cancelled':
@@ -1099,11 +1118,16 @@ async function handleWcMessage(message) {
         return;
       }
 
-      const exists = await checkWordExists(word);
+      const [exists, continuation] = await Promise.all([checkWordExists(word), hasContinuation(game, word)]);
       if (games.get(game.id) !== game || game.status !== 'playing') return; // 검증 대기 중 취소/포기 등으로 이미 종료됨
       if (!exists) {
         await react(message, '❌');
         endGame(game, games, currentPlayer.id, 'not_in_dict', word);
+        return;
+      }
+      if (continuation === false) {
+        await react(message, '❌');
+        endGame(game, games, currentPlayer.id, 'dead_end', word);
         return;
       }
 
