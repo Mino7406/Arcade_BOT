@@ -1,6 +1,6 @@
 require('dotenv').config({ path: './env' });
 const { REST, Routes } = require('discord.js');
-const { GUILD_ID } = require('./config');
+const { GUILD_ID, TEST_GUILD_IDS } = require('./config');
 
 const rest = new REST().setToken(process.env.TOKEN);
 
@@ -11,7 +11,12 @@ const rest = new REST().setToken(process.env.TOKEN);
       process.exit(1);
     }
 
-    const guildIds = GUILD_ID.split(',').map(id => id.trim());
+    const guildIds = [
+      ...new Set([
+        ...GUILD_ID.split(',').map(id => id.trim()),
+        ...(TEST_GUILD_IDS || []),
+      ].filter(Boolean)),
+    ];
     for (const guildId of guildIds) {
       console.log(`⏳ 길드 ${guildId} 커맨드 초기화 중...`);
       await rest.put(
