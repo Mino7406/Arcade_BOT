@@ -9,7 +9,7 @@ const { getRemainingBotXp, addBotMatchXp, DAILY_BOT_MATCH_XP_CAP, timeUntilKstMi
 
 const TURN_MS  = 20_000;
 const TURN_SEC = TURN_MS / 1000;
-const JOIN_MS  = 90_000;
+const JOIN_MS  = 120_000;
 const REMATCH_EXPIRY_MS = 5 * 60_000; // 종료된 게임은 5분간 재대결 버튼으로 이어할 수 있음
 const KOREAN   = /^[가-힣]+$/;
 // 사람끼리만 참가한 게임에서 자동으로 거는 내기 XP. 진 사람의 "현재 레벨 안에 쌓인 XP"로
@@ -264,7 +264,7 @@ function buildWaitingEmbed(game) {
 
   const embed = new EmbedBuilder()
     .setColor(0x5865F2)
-    .setDescription('# 🔤 끝말잇기\n참가자를 기다리는 중입니다.');
+    .setDescription(`# 🔤 끝말잇기\n참가자를 기다리는 중입니다.\n-# ${JOIN_MS / 60_000}분 내 시작하지 않으면 자동 취소됩니다`);
   return embed
     .addFields(
       { name: `👥 참가자  ${game.players.length}명`, value: participantText },
