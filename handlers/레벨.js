@@ -44,6 +44,10 @@ const VOICE_XP_TICK_MS = VOICE_XP_TICK_MINUTES * 60 * 1000;
 const VOICE_XP_MULTIPLIER = 0.02;
 
 let levels = {}; // { [guildId]: { [userId]: xp } }
+// loadLevels()가 아직 안 돌았으면 levels는 빈 객체다. 이 상태로 saveLevels()가 나가면
+// 디스크의 levels.json을 통째로 비워버린다(모든 서버 XP 소실). 그래서 복원 완료 전에는
+// 저장을 막고, /xp처럼 즉시 저장하는 경로는 isLevelsLoaded()로 미리 걸러낸다.
+let loaded = false;
 const cooldowns = new Map(); // `${guildId}:${userId}` → 마지막 XP 지급 시각
 const voiceXpCarry = new Map(); // `${guildId}:${userId}` → 반올림 후 남은 소수점 이월분 (다음 틱에 더해짐)
 const activeVoiceUsers = new Set(); // `${guildId}:${userId}` — 현재 음성 채널에서 음소거/헤드셋오프가 아닌 상태로 활동 중
@@ -56,9 +60,15 @@ function loadLevels() {
   } catch {
     levels = {};
   }
+  loaded = true; // 파일이 없어서 빈 채로 시작하는 것도 "복원 완료"로 본다
+}
+
+function isLevelsLoaded() {
+  return loaded;
 }
 
 function saveLevels() {
+  if (!loaded) return; // 복원 전에는 저장하지 않는다 — 빈 메모리로 파일을 덮어써 전체가 날아간다
   fs.writeFileSync(LEVELS_PATH, JSON.stringify(levels), 'utf8');
 }
 
@@ -284,6 +294,7 @@ function buildProgressBar(current, needed, length = 20) {
 module.exports = {
   loadLevels,
   saveLevels,
+  isLevelsLoaded,
   handleMessageXp,
   awardMatchCompletionXp,
   applyXp,

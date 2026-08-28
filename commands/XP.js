@@ -18,16 +18,30 @@ const {
   setXp,
   xpForLevelStart,
   saveLevels,
+  isLevelsLoaded,
+  EXCLUDED_GUILD_IDS,
 } = require('../handlers/레벨');
 
 // 한 번에 조정 가능한 XP 폭 / 레벨 상한. 오타로 터무니없는 값이 들어가는 것만 막는 안전장치.
 const MAX_ABS = 10_000_000;
 const MAX_LEVEL = 1000;
 
-async function denyIfNotAdmin(interaction) {
-  if (ADMIN_IDS.includes(interaction.user.id)) return false;
-  await interaction.reply({ content: '❌ **권한이 없습니다.**', ephemeral: true });
-  return true;
+// 조정 전 공통 관문 — 막히면 true. 순서 주의: 권한을 먼저 봐서 비관리자에게 내부 상태를 흘리지 않는다.
+async function denyGuard(interaction) {
+  if (!ADMIN_IDS.includes(interaction.user.id)) {
+    await interaction.reply({ content: '❌ **권한이 없습니다.**', ephemeral: true });
+    return true;
+  }
+  if (EXCLUDED_GUILD_IDS.includes(interaction.guildId)) {
+    await interaction.reply({ content: '⚠️ **이 서버는 레벨 시스템이 비활성화돼 있어 XP를 조정할 수 없습니다.**', ephemeral: true });
+    return true;
+  }
+  if (!isLevelsLoaded()) {
+    // 복원 전에는 levels가 빈 객체라, 여기서 조정+저장하면 levels.json이 통째로 비워진다.
+    await interaction.reply({ content: '⚠️ **레벨 데이터를 복원하는 중입니다. 잠시 후 다시 시도하세요.**', ephemeral: true });
+    return true;
+  }
+  return false;
 }
 
 function persist() {
@@ -111,7 +125,7 @@ module.exports = {
     .setDescription('[관리자 전용] 유저의 XP/레벨을 버튼으로 수동 조정합니다.'),
 
   async execute(interaction) {
-    if (await denyIfNotAdmin(interaction)) return;
+    if (await denyGuard(interaction)) return;
     await interaction.reply({
       content: '조정할 유저를 선택하세요.',
       components: [buildPickRow()],
@@ -122,14 +136,14 @@ module.exports = {
 
 // ── 유저 선택 ────────────────────────────────────────────────
 async function handleXpUserSelect(interaction) {
-  if (await denyIfNotAdmin(interaction)) return;
+  if (await denyGuard(interaction)) return;
   const targetId = interaction.values[0];
   await interaction.update(await buildPanel(interaction, targetId));
 }
 
 // ── 버튼(➕/➖/🎚️) → 모달 오픈 ───────────────────────────────
 async function handleXpButton(interaction) {
-  if (await denyIfNotAdmin(interaction)) return;
+  if (await denyGuard(interaction)) return;
   const [, action, targetId] = interaction.customId.split(':');
 
   if (action === 'add' || action === 'sub') {
@@ -172,7 +186,7 @@ async function handleXpButton(interaction) {
 
 // ── 모달 제출 → 실제 조정 & 화면 갱신 ────────────────────────
 async function handleXpModal(interaction) {
-  if (await denyIfNotAdmin(interaction)) return;
+  if (await denyGuard(interaction)) return;
   const [, kind, targetId] = interaction.customId.split(':');
 
   if (kind === 'addModal' || kind === 'subModal') {

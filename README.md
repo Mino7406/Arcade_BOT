@@ -275,6 +275,7 @@ npm start
   - `🎚️ 레벨 조정` → 목표 레벨 입력 모달 → `setXp`로 그 레벨의 시작 XP(`xpForLevelStart`)로 맞춤
   - 조정할 때마다 `saveLevels()`로 즉시 저장하고, 패널을 갱신하며 방금 결과(적용된 XP, 레벨 변화, 0에서 잘렸으면 실제 적용값)를 상단에 안내. 패널의 유저 선택 메뉴로 대상만 바꿔 계속 조정 가능
   - 최종 XP가 0 밑으로는 내려가지 않게 잘라냄(음수 XP는 레벨·진행바 계산을 깨뜨림). `/패널`·`/퀴즈`처럼 채널 제한을 받지 않아 아무 채널에서나 사용 가능
+  - **조정 전 공통 관문(`denyGuard`)**: 관리자 확인 → `EXCLUDED_GUILD_IDS`(레벨 시스템 제외 서버)면 거부 → `isLevelsLoaded()`가 false면(재시작 직후 `loadLevels()` 완료 전) 거부. 마지막 조건이 없으면 빈 메모리 상태로 `saveLevels()`가 나가 `DB/levels.json`이 통째로 비워질 수 있음(`saveLevels()` 자체도 복원 전에는 no-op)
 - `/랭킹`은 서버를 나갔거나 멤버 조회가 안 되는(알 수 없는 사용자) 유저를 목록에서 완전히 제외함 — 페이지 단위가 아니라 전체 랭킹을 먼저 걸러낸 뒤 페이지를 나눠서, 나간 유저가 있어도 한 페이지가 5명 미만으로 비지 않음
 
 ## 주요 함수
@@ -285,7 +286,8 @@ npm start
 
 | 함수 | 설명 |
 |---|---|
-| `loadLevels()` / `saveLevels()` | `DB/levels.json`에서 XP 데이터를 불러오거나 저장 |
+| `loadLevels()` / `saveLevels()` | `DB/levels.json`에서 XP 데이터를 불러오거나 저장. `saveLevels()`는 `loadLevels()` 완료 전에는 no-op(빈 메모리로 파일을 덮어써 전체가 날아가는 것 방지) |
+| `isLevelsLoaded()` | `loadLevels()`가 한 번이라도 실행됐는지 — `/xp`가 조정·저장 전에 확인 |
 | `xpNeededForLevel(level)` | 레벨 `L→L+1`에 필요한 XP 계산 (`5L²+50L+100`) |
 | `levelFromXp(xp)` | 누적 XP → 현재 레벨/레벨 내 XP/다음 레벨 필요 XP |
 | `getXp(guildId, userId)` | 특정 유저의 누적 XP 조회 |
