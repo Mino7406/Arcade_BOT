@@ -191,7 +191,7 @@ function buildEmbed(game) {
       desc += '\n**(♾️ 무한모드)**\n 각자 최대 3개까지만 유지되고, 4번째를 두면 가장 오래된 조각이 사라집니다.';
     }
   } else if (game.status === 'setup') {
-    desc += `⚙️ 아래 **시작** 버튼을 누르면 대결이 시작됩니다.\n(이기면 +${BOT_WIN_XP_MIN}~${BOT_WIN_XP_MAX} XP)\n-# 봇전 보상은 하루 최대 ${DAILY_BOT_MATCH_XP_CAP} XP (끝말잇기와 합산)`;
+    desc += `⚙️ 아래 **시작** 버튼을 누르면 대결이 시작됩니다.\n(이기면 +${BOT_WIN_XP_MIN}~${BOT_WIN_XP_MAX} XP)\n-# 봇전 보상은 하루 최대 ${DAILY_BOT_MATCH_XP_CAP} XP까지만 받을 수 있습니다. `;
     if (game.infinite) {
       desc += '\n**(♾️ 무한모드)**\n 각자 최대 3개까지만 유지되고, 4번째를 두면 가장 오래된 조각이 사라집니다.';
     }

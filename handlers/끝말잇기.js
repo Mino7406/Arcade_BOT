@@ -264,7 +264,7 @@ function buildWaitingEmbed(game) {
 
   const embed = new EmbedBuilder()
     .setColor(0x5865F2)
-    .setDescription(`# 🔤 끝말잇기\n참가자를 기다리는 중입니다.\n-# ${JOIN_MS / 60_000}분 내 시작하지 않으면 자동 취소됩니다`);
+    .setDescription(`# 🔤 끝말잇기\n참가자를 기다리는 중입니다.\n-# (${JOIN_MS / 60_000}분 내 시작하지 않으면 자동 취소됩니다)`);
   return embed
     .addFields(
       { name: `👥 참가자  ${game.players.length}명`, value: participantText },
@@ -282,9 +282,9 @@ function buildWaitingEmbed(game) {
       {
         name: '🎲 XP 내기',
         value:
-          `• 참가자가 전부 사람이면 탈락자가 최대 ${WAGER_XP} XP를 잃고(레벨은 안 깎임) 생존자들이 나눠 받습니다.\n` +
+          `• 참가자가 전부 사람이면 탈락자가 최대 ${WAGER_XP} XP를 잃고(강등보호 작동) 생존자들이 나눠 받습니다.\n` +
           `• 봇이 참가하면 내기 대신, 봇을 이겼을 때 생존자에게 ${BOT_WIN_XP_MIN}~${BOT_WIN_XP_MAX} XP가 지급됩니다.\n` +
-          `• 봇전 보상은 하루 최대 ${DAILY_BOT_MATCH_XP_CAP} XP까지만 받을 수 있습니다(틱택토와 합산).`,
+          `• 봇전 보상은 하루 최대 ${DAILY_BOT_MATCH_XP_CAP} XP까지만 받을 수 있습니다.`,
       },
     )
     .setFooter({ text: '최소 2명이 참가해야 시작할 수 있습니다.' });
