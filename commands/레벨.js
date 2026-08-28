@@ -13,7 +13,7 @@ function buildLevelEmbed(guildId, targetUser, displayName) {
       `## ${displayName}\n` +
       `## LEVEL ${level}\n` +
       `${bar}\n` +
-      `**${currentLevelXp} / ${neededXp}** XP`,
+      `**${currentLevelXp} / ${neededXp}** XP　(누적 \`${xp}\` XP)`,
     )
     .setTimestamp();
 }
