@@ -105,20 +105,38 @@ function applyXp(guildId, userId, amount) {
 function adjustXp(guildId, userId, delta) {
   const guildLevels = getGuildLevels(guildId);
   const oldXp = guildLevels[userId] || 0;
+  return writeXp(guildLevels, userId, oldXp, Math.max(0, oldXp + delta), delta);
+}
+
+// /xp의 "레벨 조정"용 — 누적 XP를 지정한 값으로 덮어쓴다(0 미만·소수점은 정리). 반환 모양은 adjustXp와 동일.
+function setXp(guildId, userId, targetXp) {
+  const guildLevels = getGuildLevels(guildId);
+  const oldXp = guildLevels[userId] || 0;
+  const newXp = Math.max(0, Math.floor(targetXp));
+  return writeXp(guildLevels, userId, oldXp, newXp, newXp - oldXp);
+}
+
+function writeXp(guildLevels, userId, oldXp, newXp, requestedDelta) {
   const oldLevel = levelFromXp(oldXp).level;
-  const newXp = Math.max(0, oldXp + delta);
   guildLevels[userId] = newXp;
   const newLevel = levelFromXp(newXp).level;
-
   return {
     oldXp,
     newXp,
-    appliedDelta: newXp - oldXp, // 0에서 잘렸으면 요청한 delta와 다를 수 있음
+    requestedDelta,
+    appliedDelta: newXp - oldXp, // 0에서 잘렸으면 요청값과 다를 수 있음
     oldLevel,
     newLevel,
     leveledUp: newLevel > oldLevel,
     leveledDown: newLevel < oldLevel,
   };
+}
+
+// 레벨 L의 시작 지점(그 레벨에 갓 도달한 상태)의 누적 XP.
+function xpForLevelStart(level) {
+  let total = 0;
+  for (let l = 0; l < level; l++) total += xpNeededForLevel(l);
+  return total;
 }
 
 function randomBaseXp() {
@@ -270,6 +288,8 @@ module.exports = {
   awardMatchCompletionXp,
   applyXp,
   adjustXp,
+  setXp,
+  xpForLevelStart,
   trackVoiceStateUpdate,
   initVoiceStates,
   startVoiceXpTicker,

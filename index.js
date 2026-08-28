@@ -29,6 +29,7 @@ const { buildTeamMatchListPayload } = require('./commands/팀');
 const { buildCommandListPayload, buildSetupPanelPayload, buildAdminMenuPayload, handlePanelButton, handlePanelMatchDeleteSelect, handlePanelBotMessageDeleteModal } = require('./commands/패널');
 const { handleLevelShareButton } = require('./commands/레벨');
 const { handleRankingPageButton, handleRankingShareButton } = require('./commands/랭킹');
+const { handleXpUserSelect, handleXpButton, handleXpModal } = require('./commands/xp');
 const { loadLevels, saveLevels, handleMessageXp, trackVoiceStateUpdate, initVoiceStates, startVoiceXpTicker, LEVEL_UP_ANNOUNCE_CHANNEL_ID, MATCH_BONUS_CHANNEL_ID } = require('./handlers/레벨');
 const { handleTempVoiceState, reconcileTempChannels } = require('./handlers/음성채널');
 const { logInteraction } = require('./handlers/로그');
@@ -260,7 +261,8 @@ client.on('interactionCreate', async (interaction) => {
       (interaction.isChatInputCommand() && ['패널', '퀴즈', 'xp'].includes(interaction.commandName)) ||
       isWordchainOrRanking ||
       isReload ||
-      interaction.customId?.startsWith('quiz:');
+      interaction.customId?.startsWith('quiz:') ||
+      interaction.customId?.startsWith('xp:');
 
     if (!isChannelExempt && !skipChannelLimits) {
       if (allowedChannels.length > 0 && !allowedChannels.includes(interaction.channelId)) {
@@ -281,6 +283,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleNaejeonMemberAdd(interaction);
       } else if (interaction.customId.startsWith('mojip:member_add_select:')) {
         await handleMojipMemberAdd(interaction);
+      } else if (interaction.customId === 'xp:pick') {
+        await handleXpUserSelect(interaction);
       }
 
     } else if (interaction.isStringSelectMenu()) {
@@ -325,6 +329,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleQuizCreateModal(interaction);
       } else if (interaction.customId.startsWith('panel:봇메시지삭제모달:')) {
         await handlePanelBotMessageDeleteModal(interaction);
+      } else if (interaction.customId.startsWith('xp:')) {
+        await handleXpModal(interaction);
       }
 
     } else if (interaction.isButton()) {
@@ -348,6 +354,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleRankingPageButton(interaction);
       } else if (interaction.customId.startsWith('ranking:share:')) {
         await handleRankingShareButton(interaction);
+      } else if (interaction.customId.startsWith('xp:')) {
+        await handleXpButton(interaction);
       } else if (interaction.customId === 'recruit:내전') {
         await interaction.reply(buildNaejeonGameSelectPayload());
       } else if (interaction.customId === 'recruit:모집') {
