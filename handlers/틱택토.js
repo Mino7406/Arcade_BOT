@@ -177,7 +177,7 @@ function buildEmbed(game) {
   const xName = game.players.X === 'BOT' ? '🤖 봇' : `<@${game.players.X}>`;
   const oName = game.players.O === 'BOT' ? '🤖 봇' : `<@${game.players.O}>`;
 
-  let desc = `❌ ${xName}  **vs**  ⭕ ${oName}\n\n`;
+  let desc = `# ${game.infinite ? '⚔️ 틱택토 (♾️ 무한모드)' : '⚔️ 틱택토'}\n❌ ${xName}  **vs**  ⭕ ${oName}\n\n`;
 
   if (game.status === 'waiting') {
     const xReady = game.ready.X ? '✅ 준비완료' : '⌛ 대기 중';
@@ -232,7 +232,6 @@ function buildEmbed(game) {
 
   const embed = new EmbedBuilder()
     .setColor(color)
-    .setTitle(game.infinite ? '⚔️ 틱택토 (♾️ 무한모드)' : '⚔️ 틱택토')
     .setDescription(desc)
     .setTimestamp();
 
