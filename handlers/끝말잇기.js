@@ -774,9 +774,33 @@ function endGame(game, games, loserId, reason, failWord = null) {
   finishBoard(game, payload);
 }
 
+// 봇은 매번 인기순 상위 100개 풀에서 아직 안 쓴 단어를 고르므로 사실상 막히는 일이 없어,
+// 그냥 두면 봇전은 늘 사람이 먼저 실수해서 지는 판으로만 끝난다. 그래서 판이 어느 정도
+// 길어지면 봇이 확률적으로 스스로 포기해(gave_up) 사람이 이길 여지를 만든다. 판 초반에 바로
+// 포기하면 XP 파밍 수단이 되므로(하루 한도가 있긴 하다), 최소 단어 수를 넘긴 뒤부터 봇 차례마다
+// 포기 확률이 조금씩 커지고 상한에서 멈춘다.
+const BOT_CONCEDE_AFTER_WORDS = 8;    // 이만큼 단어가 쌓이기 전에는 봇이 포기하지 않음
+const BOT_CONCEDE_STEP        = 0.05; // 그 뒤 봇 차례마다 포기 확률이 이만큼씩 증가
+const BOT_CONCEDE_MAX_CHANCE  = 0.3;  // 포기 확률 상한
+
+function shouldBotConcede(game) {
+  const wordsPlayed = game.history.length;
+  if (wordsPlayed < BOT_CONCEDE_AFTER_WORDS) return false;
+  const chance = Math.min(
+    BOT_CONCEDE_MAX_CHANCE,
+    (wordsPlayed - BOT_CONCEDE_AFTER_WORDS + 1) * BOT_CONCEDE_STEP,
+  );
+  return Math.random() < chance;
+}
+
 async function botPlay(game, games) {
   const g = games.get(game.id);
   if (!g || g.status !== 'playing') return;
+
+  if (shouldBotConcede(g)) {
+    endGame(g, games, 'BOT', 'gave_up');
+    return;
+  }
 
   const word = await findBotWord(g);
   if (games.get(g.id) !== g || g.status !== 'playing') return; // 검색 대기 중 이미 종료됨
