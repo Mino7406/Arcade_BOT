@@ -220,7 +220,8 @@ client.on('interactionCreate', async (interaction) => {
   try {
     // 채널 제한 등으로 막히는 시도까지 포함해, 명령어/버튼/선택 메뉴/모달 제출을 전부 기록한다.
     // (아래에서 무엇이 됐든 판단하기 전에 가장 먼저 남겨야 실제로 들어온 입력을 놓치지 않음)
-    logInteraction(interaction);
+    // 로그 기록 실패(디스크 문제 등)가 실제 상호작용 처리까지 막아버리면 안 되므로 따로 감싼다.
+    try { logInteraction(interaction); } catch (err) { console.error('상호작용 로그 기록 실패:', err); }
 
     // 테스트 서버(config.js의 TEST_GUILD_IDS)에서는 아래 채널 제한을 전부 건너뛴다 —
     // 기능을 확인하려면 아무 채널에서나 쓸 수 있어야 하기 때문.
