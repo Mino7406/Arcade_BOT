@@ -16,19 +16,19 @@ const { PLAYGROUND_CHANNEL_ID } = require('../config');
 
 // 안내 패널의 "명령어 보기" 버튼(index.js)에서 재사용.
 const COMMAND_LIST = [
-  { name: '/내전', value: '게임 내전을 생성합니다' },
-  { name: '/모집', value: '게임 모집을 생성합니다' },
-  { name: '/불러오기', value: '진행 중인 내전/모집 게시글을 다시 불러옵니다' },
-  { name: '/팀', value: '내전 참가자를 팀으로 배정합니다' },
+  { name: '/내전', value: '게임 내전을 생성합니다.' },
+  { name: '/모집', value: '게임 모집을 생성합니다.' },
+  { name: '/불러오기', value: '진행 중인 내전/모집 게시글을 다시 불러옵니다.' },
+  { name: '/팀', value: '내전 참가자를 팀으로 배정합니다.' },
 ];
 
 // 놀이터 채널에서만 사용 가능한 명령어(PLAYGROUND_CHANNEL_ID). 위 목록과 구분선으로 구역을 나눠 표시한다.
 const PLAYGROUND_COMMAND_LIST = [
-  { name: '/끝말잇기', value: '끝말잇기 게임을 시작합니다' },
-  { name: '/틱택토', value: '틱택토 게임을 시작합니다 (상대방 없으면 봇과 대결)' },
-  { name: '/레벨', value: '나 또는 다른 유저의 레벨/XP를 확인합니다' },
-  { name: '/랭킹', value: '서버 XP 랭킹을 확인합니다' },
-  { name: '/룰렛', value: 'XP를 걸고 룰렛머신을 돌립니다 (하루 1회)' },
+  { name: '/끝말잇기', value: '끝말잇기 게임을 시작합니다.' },
+  { name: '/틱택토', value: '틱택토 게임을 시작합니다.' },
+  { name: '/레벨', value: '나 또는 다른 유저의 레벨/XP를 확인합니다.' },
+  { name: '/랭킹', value: '서버 XP 랭킹을 확인합니다.' },
+  { name: '/룰렛', value: 'XP를 걸고 룰렛머신을 돌립니다. (하루 1회)' },
 ];
 
 function buildCommandListPayload() {
