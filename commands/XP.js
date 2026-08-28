@@ -86,7 +86,7 @@ function buildPanelEmbed(guildId, targetId, targetUser, displayName, notice) {
       `**LEVEL ${level}**\n${bar}\n**${currentLevelXp} / ${neededXp}** XP　(누적 \`${xp}\` XP)` +
       (notice ? `\n\n${notice}` : ''),
     )
-    .setFooter({ text: '신중하게 입력해주세요.' })
+    .setFooter({ text: '아래 버튼으로 XP를 조정할 수 있습니다.' })
     .setTimestamp();
   if (targetUser) embed.setThumbnail(targetUser.displayAvatarURL({ size: 256 }));
   return embed;
