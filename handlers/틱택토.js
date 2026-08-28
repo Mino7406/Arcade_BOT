@@ -787,6 +787,10 @@ async function handleTttButton(interaction) {
       const botIdx = pickBotMove(game);
       applyMove(game, games, botIdx, 'O');
       await game.message.edit({ content: '', embeds: [buildEmbed(game)], components: buildBoard(game) }).catch(() => {});
+      // 봇이 두고 나면 다시 사람 차례 — 이 턴에도 5분 타이머를 새로 걸어야 한다.
+      // (안 걸면 beginGame 때 건 타이머 하나로 온 게임을 재는 꼴이 돼, 봇전은 판 시작 후
+      //  5분이 지나면 사람 차례에 무승부로 끝나버린다. 사람 vs 사람은 아래에서 매 턴 갱신됨)
+      if (game.status !== 'finished') resetTimeout(game, games);
       return;
     }
 
