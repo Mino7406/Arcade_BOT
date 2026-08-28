@@ -575,7 +575,7 @@ function buildPreviewComponents(type, data = null) {
       .setEmoji({ id: STEAM_EMOJI_ID, name: 'Steam' })
       .setLabel(data.mentionSteam ? '멘션 ON' : '멘션 OFF')
       .setStyle(data.mentionSteam ? ButtonStyle.Success : ButtonStyle.Secondary);
-    return [row1, new ActionRowBuilder().addComponents(autoCloseToggle, notifyButton), new ActionRowBuilder().addComponents(steamToggle)];
+    return [row1, new ActionRowBuilder().addComponents(autoCloseToggle, notifyButton, steamToggle)];
   }
   return [row1, new ActionRowBuilder().addComponents(autoCloseToggle, notifyButton)];
 }
