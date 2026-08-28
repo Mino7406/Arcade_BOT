@@ -63,13 +63,22 @@ function describeOptions(interaction) {
   return ` (${options.map(opt => `${opt.name}=${opt.value}`).join(', ')})`;
 }
 
+// 로그에는 커스텀ID 대신 버튼에 실제로 보이는 글자(이모지 + 라벨)를 남긴다.
+// interaction.component는 눌린 버튼 컴포넌트다(메시지에서 customId로 찾아옴).
+// 이모지만 있고 라벨이 없는 버튼(예: 틱택토 칸 ⬜)도 있으므로, 둘 다 없으면 커스텀ID로 fallback.
+function buttonName(interaction) {
+  const c = interaction.component;
+  const parts = [c?.emoji?.name, c?.label].filter(Boolean);
+  return parts.length ? parts.join(' ') : interaction.customId;
+}
+
 // interaction 하나를 보고 "무엇을 했는지"를 유형 + 사람이 읽을 수 있는 한 줄로 정리한다.
 function describeInteraction(interaction) {
   if (interaction.isChatInputCommand()) {
     return { 유형: '명령어', 내용: `/${interaction.commandName} 명령어 사용${describeOptions(interaction)}` };
   }
   if (interaction.isButton()) {
-    return { 유형: '버튼', 내용: `${interaction.customId} 버튼 클릭` };
+    return { 유형: '버튼', 내용: `'${buttonName(interaction)}' 버튼 클릭` };
   }
   if (interaction.isStringSelectMenu() || interaction.isUserSelectMenu()) {
     const values = interaction.values?.length ? ` → ${interaction.values.join(', ')}` : '';
@@ -88,6 +97,14 @@ function logInteraction(interaction) {
   if (!interaction.user) return;
 
   const { 유형, 내용 } = describeInteraction(interaction);
+  logAction(interaction, 유형, 내용);
+}
+
+// interactionCreate 자동 로그(logInteraction) 말고, 핸들러가 "실제로 무슨 일이 일어났는지"를
+// 직접 한 줄로 남기고 싶을 때 쓴다. 예: /xp가 조정에 성공하면 대상·증감·전후값을 기록.
+function logAction(interaction, 유형, 내용) {
+  if (!interaction?.user) return;
+
   const channel = interaction.channel;
   const 채널 = interaction.guildId ? `#${channel?.name ?? interaction.channelId}` : 'DM';
 
@@ -100,4 +117,4 @@ function logInteraction(interaction) {
   });
 }
 
-module.exports = { logInteraction };
+module.exports = { logInteraction, logAction };

@@ -21,6 +21,7 @@ const {
   isLevelsLoaded,
   EXCLUDED_GUILD_IDS,
 } = require('../handlers/레벨');
+const { logAction } = require('../handlers/로그');
 
 // 한 번에 조정 가능한 XP 폭 / 레벨 상한. 오타로 터무니없는 값이 들어가는 것만 막는 안전장치.
 const MAX_ABS = 10_000_000;
@@ -99,12 +100,25 @@ async function resolveTarget(interaction, targetId) {
 }
 
 async function buildPanel(interaction, targetId, notice) {
-  const { user, displayName } = await resolveTarget(interaction, targetId);
+  return buildPanelView(interaction, targetId, await resolveTarget(interaction, targetId), notice);
+}
+
+function buildPanelView(interaction, targetId, { user, displayName }, notice) {
   return {
     content: '',
     embeds: [buildPanelEmbed(interaction.guildId, targetId, user, displayName, notice)],
     components: [buildPickRow(targetId), buildActionRow(targetId)],
   };
+}
+
+// 로그 파일(DB/log.json)에 남길 감사 한 줄. 레벨이 그대로면 Lv.만, 바뀌면 전→후로 표기.
+function xpLogLine(result) {
+  const sign = result.appliedDelta >= 0 ? '+' : '';
+  const lv = result.oldLevel === result.newLevel
+    ? `Lv.${result.newLevel}`
+    : `Lv.${result.oldLevel}→${result.newLevel}`;
+  const clip = result.appliedDelta !== result.requestedDelta ? ` [요청 ${result.requestedDelta}]` : '';
+  return `${sign}${result.appliedDelta} XP (${result.oldXp}→${result.newXp}, ${lv})${clip}`;
 }
 
 function formatAdjustNotice(result) {
@@ -202,7 +216,9 @@ async function handleXpModal(interaction) {
     const delta = kind === 'addModal' ? n : -n;
     const result = adjustXp(interaction.guildId, targetId, delta);
     persist();
-    await interaction.update(await buildPanel(interaction, targetId, formatAdjustNotice(result)));
+    const target = await resolveTarget(interaction, targetId);
+    logAction(interaction, 'XP 조정', `${target.displayName}(${targetId}) ${xpLogLine(result)}`);
+    await interaction.update(buildPanelView(interaction, targetId, target, formatAdjustNotice(result)));
     return;
   }
 
@@ -218,10 +234,12 @@ async function handleXpModal(interaction) {
     }
     const result = setXp(interaction.guildId, targetId, xpForLevelStart(lv));
     persist();
+    const target = await resolveTarget(interaction, targetId);
+    logAction(interaction, 'XP 조정', `${target.displayName}(${targetId}) 레벨설정→${lv} : ${xpLogLine(result)}`);
     const notice =
       `🎚️ 레벨 **${result.oldLevel} → ${result.newLevel}** 로 설정\n` +
       `(누적 \`${result.oldXp}\` → \`${result.newXp}\` XP)`;
-    await interaction.update(await buildPanel(interaction, targetId, notice));
+    await interaction.update(buildPanelView(interaction, targetId, target, notice));
     return;
   }
 }
