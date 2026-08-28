@@ -69,7 +69,7 @@ function buildActionRow(targetId) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`xp:add:${targetId}`).setEmoji('➕').setLabel('XP').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`xp:sub:${targetId}`).setEmoji('➖').setLabel('XP').setStyle(ButtonStyle.Danger),
-    new ButtonBuilder().setCustomId(`xp:level:${targetId}`).setEmoji('🎚️').setLabel('레벨 조정').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`xp:level:${targetId}`).setEmoji('🔄').setLabel('레벨 조정').setStyle(ButtonStyle.Primary),
   );
 }
 
@@ -86,7 +86,7 @@ function buildPanelEmbed(guildId, targetId, targetUser, displayName, notice) {
       `**LEVEL ${level}**\n${bar}\n**${currentLevelXp} / ${neededXp}** XP　(누적 \`${xp}\` XP)` +
       (notice ? `\n\n${notice}` : ''),
     )
-    .setFooter({ text: '➕/➖ XP 조정 · 🎚️ 레벨 조정' })
+    .setFooter({ text: '신중하게 입력해주세요.' })
     .setTimestamp();
   if (targetUser) embed.setThumbnail(targetUser.displayAvatarURL({ size: 256 }));
   return embed;
