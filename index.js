@@ -211,7 +211,7 @@ client.once('ready', onReady);
 
 client.on('interactionCreate', async (interaction) => {
   try {
-    // 테스트 서버(env의 TEST_GUILD_ID)에서는 아래 채널 제한을 전부 건너뛴다 —
+    // 테스트 서버(config.js의 TEST_GUILD_IDS)에서는 아래 채널 제한을 전부 건너뛴다 —
     // 기능을 확인하려면 아무 채널에서나 쓸 수 있어야 하기 때문.
     const skipChannelLimits = isTestGuild(interaction.guildId);
 

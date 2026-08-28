@@ -2,6 +2,7 @@ require('dotenv').config({ path: './env' });
 const { REST, Routes } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+const { GUILD_ID } = require('./config');
 
 const commands = [];
 const commandsPath = path.join(__dirname, 'commands');
@@ -16,15 +17,14 @@ for (const file of commandFiles) {
 
 const rest = new REST().setToken(process.env.TOKEN);
 
-// node deploy-commands.js → GUILD_ID의 각 길드에 즉시 등록
+// node deploy-commands.js → config.js의 GUILD_ID(각 길드)에 즉시 등록
 (async () => {
   try {
-    const guildIdEnv = process.env.GUILD_ID;
-    if (!guildIdEnv) {
-      console.error('❌ .env에 GUILD_ID가 없습니다.');
+    if (!GUILD_ID) {
+      console.error('❌ config.js에 GUILD_ID가 없습니다.');
       process.exit(1);
     }
-    const guildIds = guildIdEnv.split(',').map(id => id.trim());
+    const guildIds = GUILD_ID.split(',').map(id => id.trim());
     for (const guildId of guildIds) {
       console.log(`⏳ 길드(${guildId})에 ${commands.length}개 커맨드 등록 중...`);
       await rest.put(
