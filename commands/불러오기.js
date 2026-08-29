@@ -11,7 +11,7 @@ function buildReloadListPayload(interaction) {
     if (match.guildId !== interaction.guildId) continue;
     options.push({
       label:       `[내전] ${match.data.title}`.slice(0, 100),
-      description: `${match.data.organizer?.displayName ?? '?'} · ${match.data.datetime} · ${match.closed ? '🔒 마감됨' : '🟢 모집중'}`.slice(0, 100),
+      description: `${match.data.organizer?.displayName ?? '?'} · ${match.data.datetime} · ${match.closed ? '🔒 마감됨' : '🟢 모집 중'}`.slice(0, 100),
       value:       `naejeon:${msgId}`,
     });
   }
@@ -19,7 +19,7 @@ function buildReloadListPayload(interaction) {
     if (match.guildId !== interaction.guildId) continue;
     options.push({
       label:       `[모집] ${match.data.title}`.slice(0, 100),
-      description: `${match.data.organizer?.displayName ?? '?'} · ${match.data.datetime} · ${match.closed ? '🔒 마감됨' : '🟢 모집중'}`.slice(0, 100),
+      description: `${match.data.organizer?.displayName ?? '?'} · ${match.data.datetime} · ${match.closed ? '🔒 마감됨' : '🟢 모집 중'}`.slice(0, 100),
       value:       `mojip:${msgId}`,
     });
   }
@@ -33,7 +33,7 @@ function buildReloadListPayload(interaction) {
     components: [
       new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
-          .setCustomId('불러오기:select')
+          .setCustomId('reload:select')
           .setPlaceholder('내전 / 모집 선택...')
           .addOptions(options.slice(0, 25)),
       ),

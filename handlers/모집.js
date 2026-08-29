@@ -10,9 +10,11 @@ const {
 const {
   ADMIN_IDS, titleHeader, markClosed, markReopened, toggleAutoCloseWhileClosed, announceMatchCompletionXp,
   ROLE_NAMES, buildPreviewEmbed, scheduleCancelledDelete, deleteMentionMessage, AUTO_CLOSE_DELAY_MS,
+  getClientMap, getMojipMatches: getMojips,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
   buildNotifyModal: buildNotifyModalBase, parseNotifyTime, formatNotifyTimeSmart, isNotify12HourInput, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
 } = require('./공용');
+const { displayNameFromInteraction } = require('./이름');
 
 const GAMES = {
   lol:       { name: '리그 오브 레전드', emoji: '<:Lol:1510933684750913626>',    defaultPlayers: 5,   color: 0xC89B3C },
@@ -197,14 +199,8 @@ function buildManageMenu(match, msgId) {
   ];
 }
 
-function getMojips(client) {
-  if (!client.mojipMatches) client.mojipMatches = new Map();
-  return client.mojipMatches;
-}
-
 function getPending(client) {
-  if (!client.pendingMojip) client.pendingMojip = new Map();
-  return client.pendingMojip;
+  return getClientMap(client, 'pendingMojip');
 }
 
 // ─── 핸들러 ───────────────────────────────────────────────────
@@ -230,7 +226,7 @@ async function handleMojipModal(interaction) {
     return;
   }
 
-  const data = { game, gameInfo, title, datetime, players, description, autoClose: true, organizer: { id: interaction.user.id, displayName: interaction.member?.displayName || interaction.user.globalName || interaction.user.username }, _previewInteraction: interaction };
+  const data = { game, gameInfo, title, datetime, players, description, autoClose: true, organizer: { id: interaction.user.id, displayName: displayNameFromInteraction(interaction) }, _previewInteraction: interaction };
   getPending(interaction.client).set(interaction.user.id, data);
 
   await interaction.reply({
@@ -346,14 +342,10 @@ async function handleMojipButton(interaction) {
       await interaction.reply({ content: '❌ **모집 인원이 가득 찼습니다!**', ephemeral: true });
       return;
     }
-    match.participants.push({ id: interaction.user.id, displayName: interaction.member?.displayName || interaction.user.globalName || interaction.user.username });
+    match.participants.push({ id: interaction.user.id, displayName: displayNameFromInteraction(interaction) });
     if (match.participants.length >= maxPlayers) markClosed(getMojips(interaction.client), interaction.message.id, match, '모집');
     await interaction.deferUpdate();
-    await match.message.edit({
-      embeds: [buildPublicEmbed(match.data, match.participants, match.closed)],
-      components: buildPublicComponents(match.participants, maxPlayers, match.closed),
-      attachments: [],
-    });
+    await match.message.edit(buildMojipMessagePayload(match));
     if (match.closed) await announceMatchCompletionXp(match);
     await interaction.followUp({
       content: '✅ **참가 완료!** 명단에 등록되었습니다.\n취소하려면 아래 버튼을 눌러주세요.',
@@ -380,11 +372,7 @@ async function handleMojipButton(interaction) {
     const maxPlayers = parseInt(match.data.players) || 0;
     const reopened = match.closed && match.participants.length < maxPlayers;
     if (reopened) markReopened(match);
-    await match.message.edit({
-      embeds: [buildPublicEmbed(match.data, match.participants, match.closed)],
-      components: buildPublicComponents(match.participants, maxPlayers, match.closed),
-      attachments: [],
-    });
+    await match.message.edit(buildMojipMessagePayload(match));
     await interaction.update({ content: '❌ **참가가 취소되었습니다.**', components: [] });
     return;
   }
@@ -437,11 +425,7 @@ async function handleMojipButton(interaction) {
       return;
     }
     markClosed(getMojips(interaction.client), msgId, match, '모집', false);
-    await match.message.edit({
-      embeds: [buildPublicEmbed(match.data, match.participants, true)],
-      components: buildPublicComponents(match.participants, maxPlayers, true),
-      attachments: [],
-    });
+    await match.message.edit(buildMojipMessagePayload(match));
     await announceMatchCompletionXp(match);
     await interaction.update({
       content: '✅ **모집이 마감되었습니다.**',
@@ -459,12 +443,7 @@ async function handleMojipButton(interaction) {
       return;
     }
     markClosed(getMojips(interaction.client), msgId, match, '모집', false);
-    const maxPlayers = parseInt(match.data.players) || 0;
-    await match.message.edit({
-      embeds: [buildPublicEmbed(match.data, match.participants, true)],
-      components: buildPublicComponents(match.participants, maxPlayers, true),
-      attachments: [],
-    });
+    await match.message.edit(buildMojipMessagePayload(match));
     await announceMatchCompletionXp(match);
     await interaction.update({
       content: '✅ **모집이 마감되었습니다.**',
@@ -482,12 +461,7 @@ async function handleMojipButton(interaction) {
       return;
     }
     markReopened(match);
-    const maxPlayers = parseInt(match.data.players) || 0;
-    await match.message.edit({
-      embeds: [buildPublicEmbed(match.data, match.participants, false)],
-      components: buildPublicComponents(match.participants, maxPlayers, false),
-      attachments: [],
-    });
+    await match.message.edit(buildMojipMessagePayload(match));
     await interaction.update({
       content: '🔓 **모집 마감이 해제되었습니다.**',
       components: buildManageMenu(match, msgId),
@@ -633,7 +607,7 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:match_edit:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: `**⚠️ 만료된 모집입니다.**`, components: [] });
+      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, components: [] });
       return;
     }
     const editModal = buildModal(match.data.game, match.data);
@@ -717,7 +691,6 @@ async function handleMojipButton(interaction) {
         new ActionRowBuilder().addComponents(sel),
         new ActionRowBuilder().addComponents(
           new ButtonBuilder()
-
             .setCustomId(`mojip:manage_back:${msgId}`)
             .setLabel('↩️ 관리로')
             .setStyle(ButtonStyle.Secondary),
@@ -880,13 +853,8 @@ async function handleMojipMatchEditModal(interaction) {
   }
 
   match.data = { ...match.data, gameInfo, title, datetime, players, description };
-  const maxPlayers = parseInt(players) || 0;
 
-  await match.message.edit({
-    embeds: [buildPublicEmbed(match.data, match.participants, match.closed)],
-    components: buildPublicComponents(match.participants, maxPlayers, match.closed),
-    attachments: [],
-  });
+  await match.message.edit(buildMojipMessagePayload(match));
 
   await interaction.reply({ content: '✅ **모집 정보가 수정되었습니다.**', ephemeral: true });
 }
@@ -1000,11 +968,7 @@ async function handleMojipMemberAdd(interaction) {
   }
   const justClosed = !match.closed && match.participants.length >= maxPlayers;
   if (justClosed) markClosed(getMojips(interaction.client), msgId, match, '모집');
-  await match.message.edit({
-    embeds: [buildPublicEmbed(match.data, match.participants, match.closed)],
-    components: buildPublicComponents(match.participants, maxPlayers, match.closed),
-    attachments: [],
-  });
+  await match.message.edit(buildMojipMessagePayload(match));
   if (justClosed) await announceMatchCompletionXp(match);
   const lines = [];
   if (added.length > 0)   lines.push(`✅ 추가됨: ${added.map(n => `**${n}**`).join(', ')}`);
@@ -1025,11 +989,7 @@ async function handleMojipMemberRemove(interaction) {
   const maxPlayers = parseInt(match.data.players) || 0;
   const reopened = match.closed && match.participants.length < maxPlayers;
   if (reopened) markReopened(match);
-  await match.message.edit({
-    embeds: [buildPublicEmbed(match.data, match.participants, match.closed)],
-    components: buildPublicComponents(match.participants, maxPlayers, match.closed),
-    attachments: [],
-  });
+  await match.message.edit(buildMojipMessagePayload(match));
   const resultLines = [`➖ 제거됨: ${removed.map(n => `**${n}**`).join(', ')}`];
   if (reopened) resultLines.push('🔓 **참가자 미달로 마감이 자동 해제되었습니다.**');
   await interaction.update({

@@ -4,35 +4,37 @@ const {
   ButtonBuilder,
   ButtonStyle,
 } = require('discord.js');
-const { applyXp, getXp, levelFromXp, LEVEL_UP_ANNOUNCE_CHANNEL_ID, EXCLUDED_GUILD_IDS } = require('./레벨');
-const { getRemainingBotXp, addBotMatchXp, DAILY_BOT_MATCH_XP_CAP, timeUntilKstMidnight } = require('./봇전한도');
+const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp } = require('./레벨링');
+const {
+  getRemainingBotXp, addBotMatchXp, DAILY_BOT_MATCH_XP_CAP, timeUntilKstMidnight,
+  WAGER_XP, BOT_WIN_XP_MIN, BOT_WIN_XP_MAX, rollBotWinXp,
+} = require('./봇전한도');
+const { displayNameFromInteraction } = require('./이름');
 
 const TIMEOUT_MS = 5 * 60 * 1000;
 // 대기 로비를 열어두는 시간 — 끝말잇기와 동일하게 2분. 그 안에 시작하지 않으면 자동 취소된다.
 const LOBBY_MS = 2 * 60 * 1000;
-// 유저끼리 대결할 때 자동으로 거는 내기 XP. 실제로는 진 사람의 "현재 레벨 안에 쌓인 XP"로
-// 상한을 걸어(min(WAGER_XP, currentLevelXp)) 아무리 내기에서 져도 레벨이 떨어지지는 않게 한다.
-const WAGER_XP = 100;
-// 봇을 상대로 이겼을 때 지급하는 보상 XP(내기 아님, 사람에게서 빼앗지 않음).
-// 고정값이 아니라 매 판 10~30 사이에서 무작위로 정해진다.
-const BOT_WIN_XP_MIN = 10;
-const BOT_WIN_XP_MAX = 30;
-function rollBotWinXp() {
-  return BOT_WIN_XP_MIN + Math.floor(Math.random() * (BOT_WIN_XP_MAX - BOT_WIN_XP_MIN + 1));
-}
 // 악용 방지: 봇전 반복 플레이로 XP를 무한히 파밍하거나, 같은 상대와 즉석 내기를 연달아
 // 반복해서 XP를 옮기는 것을 막기 위해 유저당 쿨다운을 둔다(쿨다운 중이면 게임은 정상 진행
-// 되지만 XP 정산만 생략됨 — 플레이 자체를 막지는 않음).
-const XP_SETTLE_COOLDOWN_MS = 3 * 60 * 1000;
-const xpSettleCooldowns = new Map(); // userId → 마지막 XP 정산 시각
+// 되지만 XP 정산만 생략됨 — 플레이 자체를 막지는 않음). 정산 시각은 유저당 하나로 공용이고,
+// 판정 기준(내기/봇전)만 다르게 본다 — 끝말잇기와 동일한 구조·값.
+const WAGER_SETTLE_COOLDOWN_MS = 3 * 60 * 1000; // 사람 vs 사람 내기 정산
+const BOT_SETTLE_COOLDOWN_MS   = 5 * 60 * 1000; // 봇전 보상 정산
+const xpSettleCooldowns = new Map(); // userId → 마지막 XP 정산 시각(내기·봇전 공용)
 
-function isOnCooldown(userId) {
+function isOnCooldown(userId, cooldownMs) {
   const last = xpSettleCooldowns.get(userId);
-  return !!last && Date.now() - last < XP_SETTLE_COOLDOWN_MS;
+  return !!last && Date.now() - last < cooldownMs;
 }
 
 function markCooldown(userId) {
-  xpSettleCooldowns.set(userId, Date.now());
+  const now = Date.now();
+  // 정산이 끝난 판마다만 불리므로(자주 호출되지 않음), 이참에 만료된 항목을 청소해
+  // 맵이 과거 플레이어들로 무한히 커지지 않게 한다.
+  for (const [id, last] of xpSettleCooldowns) {
+    if (now - last > BOT_SETTLE_COOLDOWN_MS) xpSettleCooldowns.delete(id);
+  }
+  xpSettleCooldowns.set(userId, now);
 }
 
 const WINS = [
@@ -44,10 +46,6 @@ const WINS = [
 function getGames(client) {
   if (!client.tttGames) client.tttGames = new Map();
   return client.tttGames;
-}
-
-function getDisplayName(interaction) {
-  return interaction.member?.displayName || interaction.user.globalName || interaction.user.username;
 }
 
 function checkWinner(board) {
@@ -285,7 +283,7 @@ function buildEmbed(game) {
       } else if (game.xpResult?.type === 'bot_daily_cap') {
         desc += `\n🚫 오늘 봇전 XP 한도(하루 ${DAILY_BOT_MATCH_XP_CAP})를 모두 채워\n 이번 판은 지급되지 않았습니다.\n-# (약 ${timeUntilKstMidnight()} 후 초기화)`;
       } else if (game.xpResult?.type === 'cooldown') {
-        const cooldownMin = Math.ceil(XP_SETTLE_COOLDOWN_MS / 60000);
+        const cooldownMin = Math.ceil((game.xpResult.cooldownMs ?? BOT_SETTLE_COOLDOWN_MS) / 60000);
         desc += `\n⏳ 연속 대결 쿨다운 중이라\n 이번 판은 XP 정산이 생략됐습니다.\n-# (직전 정산 후 ${cooldownMin}분 이내)`;
       }
     }
@@ -412,7 +410,9 @@ function settleWagerXp(game) {
   if (winnerId === 'BOT' || loserId === 'BOT') return null; // 봇이 낀 경기는 아래 settleBotWinXp가 처리
   // 같은 유저가 연달아 내기를 반복해 XP를 옮기는 것 방지 — 재대결로 곧바로 다시 붙었을 때도
   // 걸릴 수 있으므로, 조용히 넘기지 않고 xpResult에 이유를 남겨서 화면에 안내한다.
-  if (isOnCooldown(winnerId) || isOnCooldown(loserId)) return { type: 'cooldown' };
+  if (isOnCooldown(winnerId, WAGER_SETTLE_COOLDOWN_MS) || isOnCooldown(loserId, WAGER_SETTLE_COOLDOWN_MS)) {
+    return { type: 'cooldown', cooldownMs: WAGER_SETTLE_COOLDOWN_MS };
+  }
 
   const loserLevelXp = levelFromXp(getXp(game.guildId, loserId)).currentLevelXp;
   const wager = Math.min(WAGER_XP, loserLevelXp);
@@ -430,7 +430,7 @@ function settleBotWinXp(game) {
   const winnerId = game.players[game.winner];
   if (game.players[loserMark] !== 'BOT' || winnerId === 'BOT') return null;
   // 봇전 반복 플레이로 XP를 무한히 파밍하는 것 방지 — 이유를 xpResult에 남겨서 화면에 안내한다.
-  if (isOnCooldown(winnerId)) return { type: 'cooldown' };
+  if (isOnCooldown(winnerId, BOT_SETTLE_COOLDOWN_MS)) return { type: 'cooldown', cooldownMs: BOT_SETTLE_COOLDOWN_MS };
 
   // 하루(KST) 누적 상한(끝말잇기와 합산). 남은 한도가 없으면 이번 판은 지급하지 않고,
   // 굴린 금액보다 한도가 적으면 그만큼만 준다.
@@ -444,19 +444,8 @@ function settleBotWinXp(game) {
   return { type: 'bot_win', amount, winnerId, winnerResult: result, capped: amount < rolled };
 }
 
-async function announceLevelUp(client, guildId, userId, newLevel) {
-  try {
-    const channel = await client.channels.fetch(LEVEL_UP_ANNOUNCE_CHANNEL_ID).catch(() => null);
-    if (channel?.guildId === guildId) {
-      await channel.send({ content: `<@${userId}>님이 ${newLevel}레벨을 달성했어요. 🎉`, allowedMentions: { users: [userId] } });
-    }
-  } catch (err) {
-    console.error('틱택토 레벨업 메시지 전송 실패:', err);
-  }
-}
-
 function settleGameXp(game) {
-  if (EXCLUDED_GUILD_IDS.includes(game.guildId)) return; // 레벨 시스템 제외 서버(테스트 서버 등)는 내기/보상도 미적용
+  if (isExcludedGuild(game.guildId)) return; // 레벨 시스템 제외 서버(테스트 서버 등)는 내기/보상도 미적용
   const result = settleWagerXp(game) || settleBotWinXp(game);
   game.xpResult = result;
   if (!result || result.type === 'cooldown' || result.type === 'bot_daily_cap') return;
@@ -533,7 +522,7 @@ async function startTttCommand(interaction) {
     id: gameId,
     hostId: interaction.user.id,
     guildId: interaction.guildId,
-    lobbyPlayers: [{ id: interaction.user.id, name: getDisplayName(interaction) }],
+    lobbyPlayers: [{ id: interaction.user.id, name: displayNameFromInteraction(interaction) }],
     board: Array(9).fill(''),
     players: null,
     currentTurn: 'X',
@@ -613,7 +602,7 @@ async function startRematch(interaction, prevXId, prevOId, infinite) {
     id: gameId,
     hostId: interaction.user.id,
     guildId: interaction.guildId,
-    lobbyPlayers: [{ id: interaction.user.id, name: getDisplayName(interaction) }],
+    lobbyPlayers: [{ id: interaction.user.id, name: displayNameFromInteraction(interaction) }],
     sourceMessageId: interaction.message.id, // 이 결과 메시지에서 시작된 재대결임을 표시(중복 신청 차단용)
     rematchSource: { message: interaction.message, xId: prevXId, oId: prevOId, infinite }, // 취소·만료 시 재대결 버튼을 되살릴 지난 판
     board: Array(9).fill(''),
@@ -668,7 +657,7 @@ async function handleTttButton(interaction) {
       await interaction.reply({ content: '⚠️ **정원(2명)이 이미 찼습니다.**', ephemeral: true });
       return;
     }
-    game.lobbyPlayers.push({ id: interaction.user.id, name: getDisplayName(interaction) });
+    game.lobbyPlayers.push({ id: interaction.user.id, name: displayNameFromInteraction(interaction) });
     await interaction.update({ embeds: [buildLobbyEmbed(game)], components: buildLobbyComponents(game) });
     return;
   }

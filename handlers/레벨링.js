@@ -1,4 +1,4 @@
-// 레벨.js — MEE6과 동일한 방식의 레벨/XP 시스템
+// 레벨링.js — MEE6과 동일한 방식의 레벨/XP 시스템
 // 메시지 1개당 15~25 XP 랜덤 지급, 유저당 60초 쿨다운, 레벨업 요구치 공식도 MEE6와 동일.
 
 const fs = require('fs');
@@ -6,6 +6,7 @@ const path = require('path');
 
 const {
   EXCLUDED_GUILD_IDS,
+  isExcludedGuild,
   XP_CHANNEL_ID,
   LEVEL_UP_ANNOUNCE_CHANNEL_ID,
   XP_CHANNEL_MULTIPLIERS,
@@ -160,7 +161,7 @@ function handleMessageXp(message) {
   const multiplier = XP_CHANNEL_MULTIPLIERS[message.channelId];
   if (!isMainChannel && multiplier === undefined) return null;
   const guildId = message.guildId;
-  if (EXCLUDED_GUILD_IDS.includes(guildId)) return null;
+  if (isExcludedGuild(guildId)) return null;
   const userId = message.author.id;
   const key = `${guildId}:${userId}`;
 
@@ -188,7 +189,7 @@ function awardMatchCompletionXp(match) {
   if (!match.message || match.message.channelId !== MATCH_BONUS_CHANNEL_ID) return [];
 
   const guildId = match.guildId;
-  if (!guildId || EXCLUDED_GUILD_IDS.includes(guildId)) return [];
+  if (!guildId || isExcludedGuild(guildId)) return [];
 
   if (!match.xpAwardedUserIds) match.xpAwardedUserIds = {};
 
@@ -222,19 +223,20 @@ function isVoiceStateActive(state) {
 // voiceStateUpdate 이벤트에서 호출: 유저의 활동 상태(입장/퇴장/음소거 전환)를 갱신한다.
 function trackVoiceStateUpdate(oldState, newState) {
   const guildId = newState.guild?.id;
-  if (!guildId || EXCLUDED_GUILD_IDS.includes(guildId)) return;
+  if (!guildId || isExcludedGuild(guildId)) return;
   const key = `${guildId}:${newState.id}`;
   if (isVoiceStateActive(newState)) {
     activeVoiceUsers.add(key);
   } else {
     activeVoiceUsers.delete(key);
+    voiceXpCarry.delete(key); // 통화방을 나갔으면 이월분(1 XP 미만)은 버리고 맵도 비운다 — 무한 누적 방지
   }
 }
 
 // 봇 재시작 시 이미 음성 채널에 있던 유저들을 추적 대상에 다시 등록한다.
 function initVoiceStates(client) {
   for (const guild of client.guilds.cache.values()) {
-    if (EXCLUDED_GUILD_IDS.includes(guild.id)) continue;
+    if (isExcludedGuild(guild.id)) continue;
     for (const state of guild.voiceStates.cache.values()) {
       const key = `${guild.id}:${state.id}`;
       if (isVoiceStateActive(state)) {
@@ -246,10 +248,36 @@ function initVoiceStates(client) {
   }
 }
 
+// 레벨업 축하 메시지를 놀이터(레벨업 안내) 채널에 보낸다. 메시지 XP·통화방 XP·내전/모집 완료
+// 보너스·룰렛·끝말잇기·틱택토가 모두 이 함수를 공유한다(예전엔 각자 복붙한 사본이 흩어져 있었다).
+// 안내 채널이 대상 길드에 속하지 않으면(다른 서버에서 레벨업) 보내지 않는다. 전송 실패는 무시.
+async function announceLevelUp(client, guildId, userId, newLevel) {
+  try {
+    const channel = await client.channels.fetch(LEVEL_UP_ANNOUNCE_CHANNEL_ID).catch(() => null);
+    if (channel?.guildId !== guildId) return;
+    await channel.send({
+      content: `<@${userId}>님이 ${newLevel}레벨을 달성했어요. 🎉`,
+      allowedMentions: { users: [userId] },
+    });
+  } catch (err) {
+    console.error('레벨업 축하 메시지 전송 실패:', err);
+  }
+}
+
+// 지난 XP 지급 시각 맵(cooldowns)에서 쿨다운이 끝난 지 오래된 항목을 청소한다. 이 맵은
+// 메시지를 보낸 적 있는 모든 유저가 영구히 쌓이므로, 1분 틱마다 쓸모없어진 항목을 비운다.
+const COOLDOWN_STALE_MS = Math.max(COOLDOWN_MS, TTS_CHANNEL_COOLDOWN_MS);
+function sweepCooldowns(now = Date.now()) {
+  for (const [key, last] of cooldowns) {
+    if (now - last > COOLDOWN_STALE_MS) cooldowns.delete(key);
+  }
+}
+
 // 1분마다 그 시점에 활동 중인 유저들에게 통화방 체류 XP를 지급한다.
-// 레벨업한 유저는 메인 XP 채널에 축하 메시지를 보낸다.
+// 레벨업한 유저는 레벨업 안내 채널에 축하 메시지를 보낸다.
 function startVoiceXpTicker(client) {
   setInterval(async () => {
+    sweepCooldowns();
     for (const key of activeVoiceUsers) {
       const [guildId, userId] = key.split(':');
       const raw = randomBaseXp() * VOICE_XP_TICK_MINUTES * VOICE_XP_MULTIPLIER + (voiceXpCarry.get(key) || 0);
@@ -258,17 +286,7 @@ function startVoiceXpTicker(client) {
       if (gained <= 0) continue;
       const result = applyXp(guildId, userId, gained);
       if (!result.leveledUp) continue;
-      try {
-        const channel = await client.channels.fetch(LEVEL_UP_ANNOUNCE_CHANNEL_ID);
-        if (channel?.guildId === guildId) {
-          await channel.send({
-            content: `<@${userId}>님이 ${result.newLevel}레벨을 달성했어요. 🎉`,
-            allowedMentions: { users: [userId] },
-          });
-        }
-      } catch (error) {
-        console.error('통화방 레벨업 메시지 전송 실패:', error);
-      }
+      await announceLevelUp(client, guildId, userId, result.newLevel);
     }
   }, VOICE_XP_TICK_MS);
 }
@@ -304,6 +322,7 @@ module.exports = {
   trackVoiceStateUpdate,
   initVoiceStates,
   startVoiceXpTicker,
+  announceLevelUp,
   levelFromXp,
   getXp,
   getLeaderboard,
@@ -312,5 +331,6 @@ module.exports = {
   LEVEL_UP_ANNOUNCE_CHANNEL_ID,
   MATCH_BONUS_CHANNEL_ID,
   EXCLUDED_GUILD_IDS,
+  isExcludedGuild,
   buildProgressBar,
 };

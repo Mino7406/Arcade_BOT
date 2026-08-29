@@ -6,13 +6,23 @@
 
 const fs = require('fs');
 const path = require('path');
+const { kstDateString, timeUntilKstMidnight } = require('./시간');
 
 const STORE_PATH = path.join(__dirname, '..', 'DB', 'botmatch-xp.json');
 fs.mkdirSync(path.dirname(STORE_PATH), { recursive: true });
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 // 유저 한 명이 하루에 봇전(끝말잇기 + 틱택토 합산)으로 받을 수 있는 최대 보상 XP.
 const DAILY_BOT_MATCH_XP_CAP = 100;
+
+// 끝말잇기·틱택토 봇전 공용 보상 상수(예전엔 두 파일에 같은 값이 복붙돼 있었다).
+// 사람끼리 대결 시 자동으로 거는 내기 XP(진 사람의 현재 레벨 안 XP로 상한을 걸어 레벨은 안 떨어짐).
+const WAGER_XP = 100;
+// 봇을 이겼을 때 지급하는 보상 XP 범위(고정값 아님, 매 판 무작위).
+const BOT_WIN_XP_MIN = 10;
+const BOT_WIN_XP_MAX = 30;
+function rollBotWinXp() {
+  return BOT_WIN_XP_MIN + Math.floor(Math.random() * (BOT_WIN_XP_MAX - BOT_WIN_XP_MIN + 1));
+}
 
 let store = {}; // { [guildId]: { [userId]: { date: "YYYY-MM-DD"(KST), earned: number } } }
 
@@ -28,21 +38,6 @@ function loadBotMatchXp() {
 
 function saveBotMatchXp() {
   fs.writeFileSync(STORE_PATH, JSON.stringify(store), 'utf8');
-}
-
-function kstDateString(epochMs = Date.now()) {
-  const kst = new Date(epochMs + KST_OFFSET_MS);
-  return `${kst.getUTCFullYear()}-${String(kst.getUTCMonth() + 1).padStart(2, '0')}-${String(kst.getUTCDate()).padStart(2, '0')}`;
-}
-
-// 다음 KST 자정까지 남은 시간을 "N시간 M분" 형태로 반환 (한도 초기화 안내용).
-function timeUntilKstMidnight(epochMs = Date.now()) {
-  const kst = new Date(epochMs + KST_OFFSET_MS);
-  const nextMidnightKst = Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate() + 1) - KST_OFFSET_MS;
-  const remainingMs = nextMidnightKst - epochMs;
-  const hours = Math.floor(remainingMs / (60 * 60 * 1000));
-  const minutes = Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
-  return `${hours}시간 ${minutes}분`;
 }
 
 // 오늘(KST) 이 유저가 이미 받은 봇전 보상 XP. 날짜가 바뀌었으면 0으로 본다.
@@ -73,6 +68,10 @@ function addBotMatchXp(guildId, userId, amount) {
 
 module.exports = {
   DAILY_BOT_MATCH_XP_CAP,
+  WAGER_XP,
+  BOT_WIN_XP_MIN,
+  BOT_WIN_XP_MAX,
+  rollBotWinXp,
   loadBotMatchXp,
   saveBotMatchXp,
   getRemainingBotXp,

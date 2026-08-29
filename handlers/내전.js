@@ -8,11 +8,12 @@ const {
 } = require('discord.js');
 
 const {
-  ADMIN_IDS, getNaejeonMatches: getMatches, shuffleIntoTeams, buildTeamResultEmbed, titleHeader, markClosed, markReopened, toggleAutoCloseWhileClosed, announceMatchCompletionXp,
+  ADMIN_IDS, getClientMap, getNaejeonMatches: getMatches, shuffleIntoTeams, buildTeamResultEmbed, titleHeader, markClosed, markReopened, toggleAutoCloseWhileClosed, announceMatchCompletionXp,
   ROLE_NAMES, buildPreviewEmbed, scheduleCancelledDelete, deleteMentionMessage, AUTO_CLOSE_DELAY_MS,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
   buildNotifyModal: buildNotifyModalBase, parseNotifyTime, formatNotifyTimeSmart, isNotify12HourInput, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
 } = require('./공용');
+const { displayNameFromInteraction } = require('./이름');
 
 const GAMES = {
   lol:       { name: '리그 오브 레전드', emoji: '<:Lol:1510933684750913626>',    defaultPlayers: 10,   color: 0xC89B3C },
@@ -279,8 +280,7 @@ function buildTeamDoneRow(matchMsgId) {
 }
 
 function getPending(client) {
-  if (!client.pendingNaejeon) client.pendingNaejeon = new Map();
-  return client.pendingNaejeon;
+  return getClientMap(client, 'pendingNaejeon');
 }
 
 // ─── 핸들러 ───────────────────────────────────────────────────
@@ -306,7 +306,7 @@ async function handleNaejeonModal(interaction) {
     return;
   }
 
-  const data = { game, gameInfo, title, datetime, players, description, autoClose: true, organizer: { id: interaction.user.id, displayName: interaction.member?.displayName || interaction.user.globalName || interaction.user.username }, _previewInteraction: interaction };
+  const data = { game, gameInfo, title, datetime, players, description, autoClose: true, organizer: { id: interaction.user.id, displayName: displayNameFromInteraction(interaction) }, _previewInteraction: interaction };
   getPending(interaction.client).set(interaction.user.id, data);
 
   await interaction.reply({
@@ -444,7 +444,7 @@ async function handleNaejeonButton(interaction) {
       await interaction.reply({ content: '❌ **모집 인원이 가득 찼습니다!**', ephemeral: true });
       return;
     }
-    match.participants.push({ id: interaction.user.id, displayName: interaction.member?.displayName || interaction.user.globalName || interaction.user.username });
+    match.participants.push({ id: interaction.user.id, displayName: displayNameFromInteraction(interaction) });
     if (match.participants.length >= maxPlayers) markClosed(getMatches(interaction.client), interaction.message.id, match, '내전');
     await interaction.deferUpdate();
     await match.message.edit(buildPublicMessagePayload(match));
@@ -668,7 +668,7 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:match_mention:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: `**⚠️ 만료된 내전입니다.**`, components: [] });
+      await interaction.update({ content: `⚠️ **만료된 내전입니다.**`, components: [] });
       return;
     }
     if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {

@@ -33,7 +33,7 @@ const PLAYGROUND_COMMAND_LIST = [
 
 function buildCommandListPayload() {
   const embed = new EmbedBuilder()
-    .setColor(0x5865f2)
+    .setColor(0x5865F2)
     .setTitle('📖 명령어 목록')
     .addFields(
       ...COMMAND_LIST.map(c => ({ name: `\`${c.name}\``, value: c.value, inline: true })),
@@ -47,7 +47,7 @@ function buildCommandListPayload() {
 // /패널 최초 게시와 "🔄 새로고침" 버튼(index.js)에서 함께 사용.
 function buildSetupPanelPayload(interaction) {
   const embed = new EmbedBuilder()
-    .setColor(0x5865f2)
+    .setColor(0x5865F2)
     .setTitle('게임모집 채널에 오신 걸 환영합니다!')
     .setDescription(
       [
@@ -78,7 +78,7 @@ function buildSetupPanelPayload(interaction) {
     .setTimestamp();
 
   const playgroundEmbed = new EmbedBuilder()
-    .setColor(0x57f287)
+    .setColor(0x57F287)
     .setTitle('🎡 놀이터 채널 안내')
     .setDescription(
       '**끝말잇기, 틱택토, 룰렛, 레벨, 랭킹**은 놀이터 채널에서만 이용할 수 있어요.\n아래 버튼으로 바로 이동하세요.',
@@ -111,12 +111,12 @@ function buildAdminMenuPayload(panelMessageId, notice) {
     content: (notice ? `${notice}\n\n` : '') + '⚙️ **패널 관리**',
     components: [
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`panel:새로고침:${panelMessageId}`).setLabel('🔄 새로고침').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId(`panel:메시지삭제:${panelMessageId}`).setLabel('🧹 채널 청소').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`panel:refresh:${panelMessageId}`).setLabel('🔄 새로고침').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`panel:purge:${panelMessageId}`).setLabel('🧹 채널 청소').setStyle(ButtonStyle.Success),
       ),
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`panel:매치삭제:${panelMessageId}`).setLabel('🗑️ 내전/모집 삭제').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`panel:봇메시지삭제:${panelMessageId}`).setLabel('🤖 봇 메시지 삭제').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`panel:match_delete:${panelMessageId}`).setLabel('🗑️ 내전/모집 삭제').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`panel:bot_msg_delete:${panelMessageId}`).setLabel('🤖 봇 메시지 삭제').setStyle(ButtonStyle.Secondary),
       ),
     ],
     ephemeral: true,
@@ -125,7 +125,7 @@ function buildAdminMenuPayload(panelMessageId, notice) {
 
 function buildBackRow(panelMessageId) {
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`panel:메뉴:${panelMessageId}`).setLabel('↩️ 돌아가기').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`panel:menu:${panelMessageId}`).setLabel('↩️ 돌아가기').setStyle(ButtonStyle.Secondary),
   );
 }
 
@@ -168,7 +168,7 @@ function formatHoursLeft(deleteAt) {
 // 내전/모집 셀렉트 옵션의 상태 문구 — 모집 중이면 그대로, 마감됐다면 자동삭제(autoClose) 켜짐
 // 여부에 따라 "🔒 마감됨"만 표시하거나 취소된 게시글과 동일하게 남은 시간까지 함께 보여준다.
 function formatMatchStatus(match) {
-  if (!match.closed) return '🟢 모집중';
+  if (!match.closed) return '🟢 모집 중';
   if (!match.data?.autoClose || !match.closedAt) return '🔒 마감됨';
   return `🔒 마감됨 · ${formatHoursLeft(match.closedAt + AUTO_CLOSE_DELAY_MS)}`;
 }
@@ -263,13 +263,13 @@ async function buildMatchDeleteListPayload(interaction, panelMessageId) {
     components: [
       new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
-          .setCustomId(`panel:매치삭제select:${panelMessageId}`)
+          .setCustomId(`panel:match_delete_select:${panelMessageId}`)
           .setPlaceholder('내전 / 모집 선택...')
           .addOptions(entries.slice(0, 25).map(e => ({ label: e.label, description: e.description, value: `${e.type}:${e.msgId}` }))),
       ),
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`panel:매치전체삭제:${panelMessageId}`).setLabel('🗑️ 전체 삭제').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId(`panel:메뉴:${panelMessageId}`).setLabel('↩️ 돌아가기').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`panel:match_delete_all:${panelMessageId}`).setLabel('🗑️ 전체 삭제').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`panel:menu:${panelMessageId}`).setLabel('↩️ 돌아가기').setStyle(ButtonStyle.Secondary),
       ),
     ],
   };
@@ -280,8 +280,8 @@ function buildMatchDeleteConfirmPayload(panelMessageId, type, msgId, confirmText
     content: `⚠️ **${confirmText}을 삭제하시겠습니까?**`,
     components: [
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`panel:매치삭제확인:${panelMessageId}:${type}:${msgId}`).setLabel('✅ 삭제').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId(`panel:메뉴:${panelMessageId}`).setLabel('↩️ 취소').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`panel:match_delete_confirm:${panelMessageId}:${type}:${msgId}`).setLabel('✅ 삭제').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`panel:menu:${panelMessageId}`).setLabel('↩️ 취소').setStyle(ButtonStyle.Secondary),
       ),
     ],
   };
@@ -292,8 +292,8 @@ function buildMatchDeleteAllConfirmPayload(panelMessageId, count) {
     content: `⚠️ **현재 서버의 내전/모집 ${count}건을 전부 삭제하시겠습니까?**`,
     components: [
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`panel:매치전체삭제확인:${panelMessageId}`).setLabel('✅ 전체 삭제').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId(`panel:메뉴:${panelMessageId}`).setLabel('↩️ 취소').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`panel:match_delete_all_confirm:${panelMessageId}`).setLabel('✅ 전체 삭제').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`panel:menu:${panelMessageId}`).setLabel('↩️ 취소').setStyle(ButtonStyle.Secondary),
       ),
     ],
   };
@@ -311,7 +311,7 @@ function parseMessageRef(input) {
 // "🤖 봇 메시지 삭제" 클릭 시 뜨는 모달 — ID/링크 하나만 입력받는다.
 function buildBotMessageDeleteModal(panelMessageId) {
   return new ModalBuilder()
-    .setCustomId(`panel:봇메시지삭제모달:${panelMessageId}`)
+    .setCustomId(`panel:bot_msg_delete_modal:${panelMessageId}`)
     .setTitle('봇 메시지 삭제')
     .addComponents(
       new ActionRowBuilder().addComponents(
@@ -354,12 +354,12 @@ async function handlePanelButton(interaction) {
 
   const [, action, panelMessageId, ...extra] = interaction.customId.split(':');
 
-  if (action === '메뉴') {
+  if (action === 'menu') {
     await interaction.update(buildAdminMenuPayload(panelMessageId));
     return;
   }
 
-  if (action === '새로고침') {
+  if (action === 'refresh') {
     await interaction.deferUpdate();
     const panelMessage = await interaction.channel.messages.fetch(panelMessageId).catch(() => null);
     if (!panelMessage) {
@@ -371,20 +371,20 @@ async function handlePanelButton(interaction) {
     return;
   }
 
-  if (action === '메시지삭제') {
+  if (action === 'purge') {
     await interaction.deferUpdate();
     await purgeUserMessages(interaction.channel);
     await interaction.editReply(buildAdminMenuPayload(panelMessageId, '🧹 **채널의 모든 유저 메시지를 삭제하였습니다.**'));
     return;
   }
 
-  if (action === '매치삭제') {
+  if (action === 'match_delete') {
     await interaction.deferUpdate();
     await interaction.editReply(await buildMatchDeleteListPayload(interaction, panelMessageId));
     return;
   }
 
-  if (action === '매치삭제확인') {
+  if (action === 'match_delete_confirm') {
     const [type, msgId] = extra;
     await interaction.deferUpdate();
     const deleted = await deleteMatchEntry(interaction, type, msgId);
@@ -392,14 +392,14 @@ async function handlePanelButton(interaction) {
     return;
   }
 
-  if (action === '매치전체삭제') {
+  if (action === 'match_delete_all') {
     await interaction.deferUpdate();
     const entries = await collectGuildMatchEntries(interaction);
     await interaction.editReply(buildMatchDeleteAllConfirmPayload(panelMessageId, entries.length));
     return;
   }
 
-  if (action === '매치전체삭제확인') {
+  if (action === 'match_delete_all_confirm') {
     await interaction.deferUpdate();
     const entries = await collectGuildMatchEntries(interaction);
     let count = 0;
@@ -410,7 +410,7 @@ async function handlePanelButton(interaction) {
     return;
   }
 
-  if (action === '봇메시지삭제') {
+  if (action === 'bot_msg_delete') {
     await interaction.showModal(buildBotMessageDeleteModal(panelMessageId));
   }
 }

@@ -17,6 +17,8 @@
 
 const fs = require('fs');
 const path = require('path');
+const { KST_OFFSET_MS } = require('./시간');
+const { displayNameFromInteraction } = require('./이름');
 
 const LOG_PATH = path.join(__dirname, '..', 'DB', 'log.json');
 fs.mkdirSync(path.dirname(LOG_PATH), { recursive: true });
@@ -25,7 +27,7 @@ fs.mkdirSync(path.dirname(LOG_PATH), { recursive: true });
 const MAX_ENTRIES = 5000;
 
 function nowKstStr() {
-  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const kst = new Date(Date.now() + KST_OFFSET_MS);
   const YYYY = kst.getUTCFullYear();
   const MM = String(kst.getUTCMonth() + 1).padStart(2, '0');
   const DD = String(kst.getUTCDate()).padStart(2, '0');
@@ -35,26 +37,30 @@ function nowKstStr() {
   return `${YYYY}-${MM}-${DD} ${HH}:${mm}:${ss}`;
 }
 
+// 로그 배열을 메모리에 들고 있는다. 예전엔 상호작용 한 번마다 log.json 전체(최대 5000개)를
+// 다시 읽고 파싱했는데(writeEntry → readLogs), 버튼을 누를 때마다 수천 개 객체를 파싱/직렬화하는
+// 낭비였다. 시작 시 한 번만 읽고, 이후로는 메모리 배열에 push한 뒤 파일로 덮어쓴다
+// (파일이 사람이 읽는 감사 로그라 pretty-print는 유지, 크래시 대비 write-through도 유지).
+let logs = null;
+
 function readLogs() {
+  if (logs) return logs;
   try {
-    if (!fs.existsSync(LOG_PATH)) return [];
-    return JSON.parse(fs.readFileSync(LOG_PATH, 'utf8'));
+    logs = fs.existsSync(LOG_PATH) ? JSON.parse(fs.readFileSync(LOG_PATH, 'utf8')) : [];
+    if (!Array.isArray(logs)) logs = [];
   } catch {
-    return [];
+    logs = [];
   }
+  return logs;
 }
 
 function writeEntry(entry) {
-  const logs = readLogs();
-  logs.push(entry);
-  if (logs.length > MAX_ENTRIES) logs.splice(0, logs.length - MAX_ENTRIES);
-  fs.writeFileSync(LOG_PATH, JSON.stringify(logs, null, 2), 'utf8');
+  const arr = readLogs();
+  arr.push(entry);
+  if (arr.length > MAX_ENTRIES) arr.splice(0, arr.length - MAX_ENTRIES);
+  fs.writeFileSync(LOG_PATH, JSON.stringify(arr, null, 2), 'utf8');
 }
 
-// 다른 게임 핸들러들과 같은 규칙: 서버 별명 → 글로벌 표시 이름 → 유저명 순으로 사용.
-function getDisplayName(interaction) {
-  return interaction.member?.displayName || interaction.user.globalName || interaction.user.username;
-}
 
 // 명령어 옵션(/틱택토 상대방:@누구 등)을 "이름=값, 이름=값" 형태로 짧게 풀어 쓴다.
 function describeOptions(interaction) {
@@ -111,7 +117,7 @@ function logAction(interaction, 유형, 내용) {
   writeEntry({
     시각: nowKstStr(),
     유형,
-    유저: `${getDisplayName(interaction)}(${interaction.user.id})`,
+    유저: `${displayNameFromInteraction(interaction)}(${interaction.user.id})`,
     채널,
     내용,
   });

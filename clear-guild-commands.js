@@ -1,4 +1,6 @@
-require('dotenv').config({ path: './env' });
+const path = require('path');
+// 실행 디렉터리(CWD)가 아니라 이 파일 기준으로 env를 찾는다(index.js와 동일).
+require('dotenv').config({ path: path.join(__dirname, 'env') });
 const { REST, Routes } = require('discord.js');
 const { GUILD_ID, TEST_GUILD_IDS } = require('./config');
 

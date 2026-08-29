@@ -4,8 +4,8 @@ const {
 } = require('discord.js');
 const { ADMIN_IDS } = require('../handlers/공용');
 const { pauseQuiz, resumeQuiz, postCustomQuiz, getQuizStatus } = require('../handlers/퀴즈');
+const { KST_OFFSET_MS } = require('../handlers/시간');
 
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const MODE_LABELS = { chosung: '초성퀴즈', sangsik: '상식퀴즈' };
 const WORD_ONLY = /^[가-힣]{2,10}$/;
 

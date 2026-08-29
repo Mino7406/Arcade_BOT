@@ -5,11 +5,11 @@
 const fs = require('fs');
 const path = require('path');
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { applyXp, getXp, levelFromXp, LEVEL_UP_ANNOUNCE_CHANNEL_ID, EXCLUDED_GUILD_IDS } = require('./레벨');
+const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp } = require('./레벨링');
+const { kstDateString, timeUntilKstMidnight } = require('./시간');
 
 const ROULETTE_PATH = path.join(__dirname, '..', 'DB', 'roulette.json');
 fs.mkdirSync(path.dirname(ROULETTE_PATH), { recursive: true });
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 const MIN_BET = 10;
 const MAX_BET = 300;
@@ -33,7 +33,7 @@ const TRIPLE_PAYOUTS = { '🍒': 2, '🍋': 2.5, '🍇': 3, '🔔': 4, '💎': 5
 const TWO_MATCH_PAYOUT = 1.2;
 
 // 결과 메시지에서 "레몬 트리플 매칭"처럼 어떤 심볼로 맞췄는지 보여주기 위한 이름표.
-const SYMBOL_NAMES = { '🍒': '체리', '🍋': '레몬', '🍇': '포도', '🔔': '종', '💎': '다이아몬드', '7️⃣': '세븐' };
+const SYMBOL_NAMES = { '🍒': '체리', '🍋': '레몬', '🍇': '포도', '🔔': '벨', '💎': '다이아몬드', '7️⃣': '세븐' };
 
 let roulette = {}; // { [guildId]: { [userId]: "YYYY-MM-DD"(KST, 마지막 플레이 날짜) } }
 
@@ -54,21 +54,6 @@ function saveRoulette() {
 function getGuildRoulette(guildId) {
   if (!roulette[guildId]) roulette[guildId] = {};
   return roulette[guildId];
-}
-
-function kstDateString(epochMs = Date.now()) {
-  const kst = new Date(epochMs + KST_OFFSET_MS);
-  return `${kst.getUTCFullYear()}-${String(kst.getUTCMonth() + 1).padStart(2, '0')}-${String(kst.getUTCDate()).padStart(2, '0')}`;
-}
-
-// 다음 KST 자정까지 남은 시간을 "N시간 M분" 형태로 반환.
-function timeUntilKstMidnight(epochMs = Date.now()) {
-  const kst = new Date(epochMs + KST_OFFSET_MS);
-  const nextMidnightKst = Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate() + 1) - KST_OFFSET_MS;
-  const remainingMs = nextMidnightKst - epochMs;
-  const hours = Math.floor(remainingMs / (60 * 60 * 1000));
-  const minutes = Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
-  return `${hours}시간 ${minutes}분`;
 }
 
 function hasPlayedToday(guildId, userId) {
@@ -147,17 +132,6 @@ function getLobbies(client) {
   return client.rouletteLobbies;
 }
 
-async function announceLevelUp(client, guildId, userId, newLevel) {
-  try {
-    const channel = await client.channels.fetch(LEVEL_UP_ANNOUNCE_CHANNEL_ID).catch(() => null);
-    if (channel?.guildId === guildId) {
-      await channel.send({ content: `<@${userId}>님이 ${newLevel}레벨을 달성했어요. 🎉`, allowedMentions: { users: [userId] } });
-    }
-  } catch (err) {
-    console.error('룰렛 레벨업 메시지 전송 실패:', err);
-  }
-}
-
 function buildLobbyEmbed(lobby) {
   const betLine = lobby.bet ? `**${lobby.bet} XP**` : '*아직 선택 안 함*';
   return new EmbedBuilder()
@@ -212,7 +186,7 @@ async function startRouletteCommand(interaction) {
   const guildId = interaction.guildId;
   const userId = interaction.user.id;
 
-  if (EXCLUDED_GUILD_IDS.includes(guildId)) {
+  if (isExcludedGuild(guildId)) {
     await interaction.reply({ content: '⚠️ **이 서버에서는 룰렛을 이용할 수 없습니다.**', ephemeral: true });
     return;
   }

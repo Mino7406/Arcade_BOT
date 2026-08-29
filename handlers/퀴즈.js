@@ -11,7 +11,8 @@
 const { EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const { applyXp, EXCLUDED_GUILD_IDS } = require('./레벨');
+const { applyXp, isExcludedGuild } = require('./레벨링');
+const { KST_OFFSET_MS } = require('./시간');
 const { QUIZ_CHANNEL_ID } = require('../config'); // 놀이터 채널 (config.js의 PLAYGROUND_CHANNEL_ID)
 
 // KST 기준 출제 가능 시간대: 오전 10시 ~ 밤 11시. 이 시각(23:00)까지 봇이 안 켜져 있었다면
@@ -24,7 +25,6 @@ const WINDOW_END_HOUR = 23;
 // 지금처럼 END가 24시 이하면 0이 되어 사이클 = 그냥 KST 달력 날짜다.
 const OVERNIGHT_CUTOFF_HOUR = WINDOW_END_HOUR > 24 ? WINDOW_END_HOUR - 24 : 0;
 const RECENT_WORD_MEMORY = 30; // 최근 이만큼은(초성/상식 합쳐서) 다시 출제하지 않음
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 const STATE_PATH = path.join(__dirname, '..', 'DB', 'quiz.json');
 fs.mkdirSync(path.dirname(STATE_PATH), { recursive: true });
@@ -165,8 +165,18 @@ async function fetchCandidates(prefix) {
   }
 }
 
+// 배열에서 무작위 n개를 고른다(Fisher-Yates — 끝말잇기 봇 단어 선택과 같은 편향 없는 셔플).
+function pickRandom(arr, n) {
+  const pool = [...arr];
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, n);
+}
+
 async function pickDynamicWord(recentWords, gradePreference) {
-  const seeds = [...SEED_SYLLABLES].sort(() => Math.random() - 0.5).slice(0, 6);
+  const seeds = pickRandom(SEED_SYLLABLES, 6);
   for (const seed of seeds) {
     const candidates = await fetchCandidates(seed);
     const preferred = candidates.filter(c => gradePreference.includes(c.grade) && !recentWords.includes(c.word));
@@ -462,7 +472,7 @@ async function handleQuizMessage(message) {
     const quiz = client[slotKey];
     if (!quiz || message.channelId !== quiz.channelId) continue;
     if (normalize(quiz.word) !== guess) continue;
-    if (EXCLUDED_GUILD_IDS.includes(quiz.guildId)) return; // 레벨 시스템 제외 서버(테스트 서버 등)는 채점하지 않음
+    if (isExcludedGuild(quiz.guildId)) return; // 레벨 시스템 제외 서버(테스트 서버 등)는 채점하지 않음
 
     if (quiz.timeoutId) clearTimeout(quiz.timeoutId);
     client[slotKey] = null;
@@ -473,7 +483,7 @@ async function handleQuizMessage(message) {
     }
 
     const result = applyXp(quiz.guildId, message.author.id, quiz.xpReward);
-    const levelUpLine = result.leveledUp ? `\n${message.author}님이 ${result.newLevel}레벨을 달성했어요. 🎉` : '';
+    const levelUpLine = result.leveledUp ? `\n<@${message.author.id}>님이 ${result.newLevel}레벨을 달성했어요. 🎉` : '';
     await message.reply({
       content: `⭕ 정답입니다! **${quiz.word}** (+${quiz.xpReward} XP)${levelUpLine}`,
       allowedMentions: { repliedUser: false, users: result.leveledUp ? [message.author.id] : [] },

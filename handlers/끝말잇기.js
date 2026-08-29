@@ -4,26 +4,20 @@ const {
   ButtonBuilder,
   ButtonStyle,
 } = require('discord.js');
-const { applyXp, getXp, levelFromXp, LEVEL_UP_ANNOUNCE_CHANNEL_ID, EXCLUDED_GUILD_IDS } = require('./레벨');
-const { getRemainingBotXp, addBotMatchXp, DAILY_BOT_MATCH_XP_CAP, timeUntilKstMidnight } = require('./봇전한도');
+const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp } = require('./레벨링');
+const {
+  getRemainingBotXp, addBotMatchXp, DAILY_BOT_MATCH_XP_CAP, timeUntilKstMidnight,
+  WAGER_XP, BOT_WIN_XP_MIN, BOT_WIN_XP_MAX, rollBotWinXp,
+} = require('./봇전한도');
+const { displayNameFromInteraction } = require('./이름');
 
 const TURN_MS  = 20_000;
 const TURN_SEC = TURN_MS / 1000;
 const JOIN_MS  = 120_000;
 const REMATCH_EXPIRY_MS = 5 * 60_000; // 종료된 게임은 5분간 재대결 버튼으로 이어할 수 있음
 const KOREAN   = /^[가-힣]+$/;
-// 사람끼리만 참가한 게임에서 자동으로 거는 내기 XP. 진 사람의 "현재 레벨 안에 쌓인 XP"로
-// 상한을 걸어(min(WAGER_XP, currentLevelXp)) 내기에서 져도 레벨이 떨어지지는 않게 한다.
-// 살아남은 사람이 여럿이면 진 사람의 몫을 그만큼 나눠 가짐(틱택토와 동일한 방식).
-const WAGER_XP = 100;
-// 참가자 중 봇이 있는 게임에서 봇이 탈락했을 때 생존자에게 지급하는 XP(내기 아님).
-// 고정값이 아니라 매 판 10~30 사이에서 무작위로 정해지며, 생존자가 여럿이면 모두 같은 금액을 받는다.
-// (단, 아래 봇전한도 모듈의 하루 누적 상한에 걸리면 그만큼만 지급된다.)
-const BOT_WIN_XP_MIN = 10;
-const BOT_WIN_XP_MAX = 30;
-function rollBotWinXp() {
-  return BOT_WIN_XP_MIN + Math.floor(Math.random() * (BOT_WIN_XP_MAX - BOT_WIN_XP_MIN + 1));
-}
+// WAGER_XP(사람끼리 내기 XP), BOT_WIN_XP_MIN/MAX·rollBotWinXp(봇전 보상)는 틱택토와 공용이라
+// 봇전한도.js에 모았다. 살아남은 사람이 여럿이면 진 사람의 몫을 그만큼 나눠 가짐(틱택토와 동일).
 // 악용 방지: 봇전 반복 플레이로 XP를 무한히 파밍하거나("🏳️ 포기"로 즉시 끝내는 것 포함),
 // 같은 상대와 즉석 내기를 연달아 반복해서 XP를 옮기는 것을 막기 위해 유저당 쿨다운을 둔다
 // (쿨다운 중이면 게임 자체는 정상 진행되지만 XP 정산만 생략됨 — 플레이를 막지는 않음).
@@ -38,7 +32,13 @@ function isOnCooldown(userId, cooldownMs) {
 }
 
 function markCooldown(userId) {
-  xpSettleCooldowns.set(userId, Date.now());
+  const now = Date.now();
+  // 정산이 끝난 판마다만 불리므로(자주 호출되지 않음), 이참에 만료된 항목을 청소해
+  // 맵이 과거 플레이어들로 무한히 커지지 않게 한다.
+  for (const [id, last] of xpSettleCooldowns) {
+    if (now - last > BOT_SETTLE_COOLDOWN_MS) xpSettleCooldowns.delete(id);
+  }
+  xpSettleCooldowns.set(userId, now);
 }
 
 // ── 두음법칙 변환 ─────────────────────────────────────────────────
@@ -103,6 +103,16 @@ function getAcceptableStarts(lastChar) {
 // 각 조회는 찾음(true) / 없음(false) / 조회 실패(null)를 돌려주고, 조회에 성공한 사전이
 // 하나도 없으면 인프라 문제로 게임이 부당하게 끝나지 않도록 통과시킨다(fail-open).
 const wordExistsCache = new Map(); // 단어 → 존재 여부 (확정된 결과만 저장)
+// 몇 달씩 켜져 있어도 서로 다른 단어가 무한히 쌓이지 않도록 상한을 둔다.
+// 넘으면 가장 오래 전에 넣은 항목부터(Map은 삽입 순서를 유지) 버린다.
+const WORD_CACHE_MAX = 5000;
+
+function cacheWordExists(word, exists) {
+  if (wordExistsCache.size >= WORD_CACHE_MAX) {
+    wordExistsCache.delete(wordExistsCache.keys().next().value);
+  }
+  wordExistsCache.set(word, exists);
+}
 
 // 표준국어대사전 표제어에는 붙임표/사이표가 들어간다(미적-분, 삼투-압) — 떼고 비교한다.
 function normalizeEntry(entry) {
@@ -183,12 +193,12 @@ async function checkWordExists(word) {
 
   const results = await Promise.all([lookupKrdict(word), lookupStdict(word)]);
   if (results.some(r => r === true)) {
-    wordExistsCache.set(word, true);
+    cacheWordExists(word, true);
     return true;
   }
   if (results.every(r => r === null)) return true; // 전부 조회 실패 → 통과 (결과를 캐시하지 않음)
 
-  wordExistsCache.set(word, false);
+  cacheWordExists(word, false);
   return false;
 }
 
@@ -250,10 +260,6 @@ async function hasContinuation(game, word) {
 function getGames(client) {
   if (!client.wcGames) client.wcGames = new Map();
   return client.wcGames;
-}
-
-function getDisplayName(interaction) {
-  return interaction.member?.displayName || interaction.user.globalName || interaction.user.username;
 }
 
 // ── 임베드 빌더 ────────────────────────────────────────────────
@@ -628,19 +634,8 @@ function settleBotWinXp(game) {
   return { type: 'bot_win', winnerResults, capped };
 }
 
-async function announceLevelUp(client, guildId, userId, newLevel) {
-  try {
-    const channel = await client.channels.fetch(LEVEL_UP_ANNOUNCE_CHANNEL_ID).catch(() => null);
-    if (channel?.guildId === guildId) {
-      await channel.send({ content: `<@${userId}>님이 ${newLevel}레벨을 달성했어요. 🎉`, allowedMentions: { users: [userId] } });
-    }
-  } catch (err) {
-    console.error('끝말잇기 레벨업 메시지 전송 실패:', err);
-  }
-}
-
 function settleGameXp(game) {
-  if (EXCLUDED_GUILD_IDS.includes(game.guildId)) return; // 레벨 시스템 제외 서버(테스트 서버 등)는 내기/보상도 미적용
+  if (isExcludedGuild(game.guildId)) return; // 레벨 시스템 제외 서버(테스트 서버 등)는 내기/보상도 미적용
   const result = settleWagerXp(game) || settleBotWinXp(game);
   game.xpResult = result;
   if (!result || result.type === 'cooldown' || result.type === 'bot_daily_cap') return;
@@ -888,7 +883,7 @@ async function createLobby(interaction, initialPlayers, hostId) {
 async function startWcCommand(interaction) {
   await createLobby(
     interaction,
-    [{ id: interaction.user.id, name: getDisplayName(interaction) }],
+    [{ id: interaction.user.id, name: displayNameFromInteraction(interaction) }],
     interaction.user.id,
   );
 }
@@ -911,7 +906,7 @@ async function handleWcButton(interaction) {
       await interaction.reply({ content: '⚠️ **이미 참가 중입니다.**', ephemeral: true });
       return;
     }
-    game.players.push({ id: interaction.user.id, name: getDisplayName(interaction) });
+    game.players.push({ id: interaction.user.id, name: displayNameFromInteraction(interaction) });
     await interaction.update({ embeds: [buildWaitingEmbed(game)], components: buildWaitingComponents(game), attachments: [] });
     return;
   }

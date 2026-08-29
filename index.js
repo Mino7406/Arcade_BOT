@@ -30,7 +30,7 @@ const { buildCommandListPayload, buildSetupPanelPayload, buildAdminMenuPayload, 
 const { handleLevelShareButton } = require('./commands/레벨');
 const { handleRankingPageButton, handleRankingShareButton } = require('./commands/랭킹');
 const { handleXpUserSelect, handleXpButton, handleXpModal } = require('./commands/XP');
-const { loadLevels, saveLevels, handleMessageXp, trackVoiceStateUpdate, initVoiceStates, startVoiceXpTicker, LEVEL_UP_ANNOUNCE_CHANNEL_ID, MATCH_BONUS_CHANNEL_ID } = require('./handlers/레벨');
+const { loadLevels, saveLevels, handleMessageXp, trackVoiceStateUpdate, initVoiceStates, startVoiceXpTicker, announceLevelUp, MATCH_BONUS_CHANNEL_ID } = require('./handlers/레벨링');
 const { handleTempVoiceState, reconcileTempChannels } = require('./handlers/음성채널');
 const { logInteraction } = require('./handlers/로그');
 
@@ -247,7 +247,7 @@ client.on('interactionCreate', async (interaction) => {
     // XP 보너스 자격이 어긋나므로, 이 채널에서만 쓸 수 있게 막는다.
     const isReload =
       (interaction.isChatInputCommand() && interaction.commandName === '불러오기') ||
-      interaction.customId === '불러오기:select' ||
+      interaction.customId === 'reload:select' ||
       interaction.customId === 'recruit:불러오기';
 
     if (isReload && !skipChannelLimits && interaction.channelId !== MATCH_BONUS_CHANNEL_ID) {
@@ -302,9 +302,9 @@ client.on('interactionCreate', async (interaction) => {
         await handleTeamMatchSelect(interaction);
       } else if (interaction.customId.startsWith('team:assign_setup:') || interaction.customId.startsWith('team:pub_assign:')) {
         await handleTeamAssignSelect(interaction);
-      } else if (interaction.customId === '불러오기:select') {
+      } else if (interaction.customId === 'reload:select') {
         await handleRMatchSelect(interaction);
-      } else if (interaction.customId.startsWith('panel:매치삭제select:')) {
+      } else if (interaction.customId.startsWith('panel:match_delete_select:')) {
         await handlePanelMatchDeleteSelect(interaction);
       }
 
@@ -327,7 +327,7 @@ client.on('interactionCreate', async (interaction) => {
         await handleMojipNotifyModal(interaction);
       } else if (interaction.customId.startsWith('quiz:create_modal:')) {
         await handleQuizCreateModal(interaction);
-      } else if (interaction.customId.startsWith('panel:봇메시지삭제모달:')) {
+      } else if (interaction.customId.startsWith('panel:bot_msg_delete_modal:')) {
         await handlePanelBotMessageDeleteModal(interaction);
       } else if (interaction.customId.startsWith('xp:')) {
         await handleXpModal(interaction);
@@ -403,13 +403,7 @@ client.on('messageCreate', async (message) => {
   try {
     const result = handleMessageXp(message);
     if (result?.leveledUp) {
-      const channel = message.guild.channels.cache.get(LEVEL_UP_ANNOUNCE_CHANNEL_ID);
-      if (channel) {
-        await channel.send({
-          content: `<@${message.author.id}>님이 ${result.newLevel}레벨을 달성했어요. 🎉`,
-          allowedMentions: { users: [message.author.id] },
-        });
-      }
+      await announceLevelUp(message.client, message.guild.id, message.author.id, result.newLevel);
     }
   } catch (error) {
     console.error(error);

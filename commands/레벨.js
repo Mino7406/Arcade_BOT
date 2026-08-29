@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { getXp, levelFromXp, buildProgressBar } = require('../handlers/레벨');
+const { getXp, levelFromXp, buildProgressBar } = require('../handlers/레벨링');
+const { displayNameFromMember } = require('../handlers/이름');
 
 function buildLevelEmbed(guildId, targetUser, displayName) {
   const xp = getXp(guildId, targetUser.id);
@@ -38,7 +39,7 @@ module.exports = {
   async execute(interaction) {
     const targetUser = interaction.options.getUser('유저') || interaction.user;
     const targetMember = interaction.options.getMember('유저') || interaction.member;
-    const displayName = targetMember?.displayName || targetUser.globalName || targetUser.username;
+    const displayName = displayNameFromMember(targetMember, targetUser);
 
     const embed = buildLevelEmbed(interaction.guildId, targetUser, displayName);
 

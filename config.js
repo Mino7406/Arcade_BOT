@@ -13,8 +13,18 @@ const PLAYGROUND_CHANNEL_ID = '1522174367075663872';
 // 비워두면([]) 테스트 서버가 없는 것으로 본다(=모든 서버에 평소 제한이 그대로 적용됨).
 const TEST_GUILD_IDS = ['1282694117255548960'];
 
+// 레벨/XP 시스템(레벨.js·룰렛·퀴즈·끝말잇기·틱택토)을 적용하지 않을 길드. 현재는 TEST_GUILD_IDS와
+// 값이 같지만 "테스트용이라 채널 제한을 푼다"(isTestGuild)와 "레벨 시스템을 끈다"(isExcludedGuild)는
+// 목적이 달라 별도 키로 둔다.
+const EXCLUDED_GUILD_IDS = ['1282694117255548960'];
+
 function isTestGuild(guildId) {
   return !!guildId && TEST_GUILD_IDS.includes(guildId);
+}
+
+// 여러 파일에서 EXCLUDED_GUILD_IDS.includes(...)로 흩어져 있던 판정을 이 헬퍼로 통일한다.
+function isExcludedGuild(guildId) {
+  return !!guildId && EXCLUDED_GUILD_IDS.includes(guildId);
 }
 
 
@@ -22,6 +32,7 @@ module.exports = {
   PLAYGROUND_CHANNEL_ID,
   TEST_GUILD_IDS,
   isTestGuild,
+  isExcludedGuild,
 
   // ─── 내전/모집/팀 명령을 허용할 채널 목록 ──────────────────────
   // 비우면([]) 채널 제한 없음. (/패널, /퀴즈와 놀이터·불러오기 전용 상호작용은 이 목록과 무관)
@@ -36,8 +47,8 @@ module.exports = {
   TEMP_CATEGORY_ID: '1339928155359543308',
 
   // ─── 레벨/XP (handlers/레벨.js) ───────────────────────────────
-  // 테스트 서버 등 레벨 시스템을 적용하지 않을 길드
-  EXCLUDED_GUILD_IDS: ['1282694117255548960'],
+  // 테스트 서버 등 레벨 시스템을 적용하지 않을 길드 (판정은 isExcludedGuild 헬퍼 사용 권장)
+  EXCLUDED_GUILD_IDS,
   // XP 지급을 감지할 채널 (이 채널의 메시지만 XP로 인정)
   XP_CHANNEL_ID: '1340523443413844048',
   // 레벨업 축하 메시지를 보낼 채널

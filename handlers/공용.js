@@ -17,7 +17,8 @@ const {
   SeparatorSpacingSize,
   MessageFlags,
 } = require('discord.js');
-const { awardMatchCompletionXp, LEVEL_UP_ANNOUNCE_CHANNEL_ID } = require('./레벨');
+const { awardMatchCompletionXp, announceLevelUp } = require('./레벨링');
+const { KST_OFFSET_MS } = require('./시간');
 const { ADMIN_IDS, STEAM_EMOJI_ID } = require('../config');
 
 // 내전(naejeon)/모집(mojip) 두 시스템이 공유하는 게임 → 역할 이름 매핑.
@@ -26,9 +27,19 @@ const ROLE_NAMES = {
   lol: '롤', valorant: '발로란트', overwatch: '오버워치', pubg: '배그',
 };
 
+// client에 lazy 생성하는 Map을 돌려주는 공통 헬퍼. 예전엔 내전/모집/취소·삭제 예약마다
+// 같은 "없으면 new Map()" 패턴이 파일마다 복붙돼 있었다.
+function getClientMap(client, prop) {
+  if (!client[prop]) client[prop] = new Map();
+  return client[prop];
+}
+
 function getNaejeonMatches(client) {
-  if (!client.naejeonMatches) client.naejeonMatches = new Map();
-  return client.naejeonMatches;
+  return getClientMap(client, 'naejeonMatches');
+}
+
+function getMojipMatches(client) {
+  return getClientMap(client, 'mojipMatches');
 }
 
 function shuffleIntoTeams(participants) {
@@ -75,7 +86,6 @@ async function deleteMentionMessage(client, match) {
 // 알림을 원하는 사람만 채우는 별도 필드에 이 두 고정 포맷만 강제한다 — 오전/오후를 붙이면
 // 12시간제로, 안 붙이면 24시간제로 해석해 "저녁 8시"를 "8:00"으로 잘못 입력하는 실수를 줄인다.
 const NOTIFY_TIME_REGEX = /^(\d{1,2})\/(\d{1,2})\s+(오전|오후)?\s*(\d{1,2}):(\d{2})$/;
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 // "M/D HH:mm" 또는 "M/D 오전/오후 h:mm"(KST) → epoch ms. 형식이 안 맞거나(시:분 범위 초과 포함)
 // 존재하지 않는 날짜(예: 2/30)면 null. 연도 입력이 없으므로 올해 기준으로 계산하고,
@@ -270,8 +280,7 @@ function disarmAutoEnd(match) {
 }
 
 function getCancelledDeletions(client) {
-  if (!client.cancelledDeletions) client.cancelledDeletions = new Map();
-  return client.cancelledDeletions;
+  return getClientMap(client, 'cancelledDeletions');
 }
 
 // 취소된(🔴 취소됨) 임베드를 취소 시각(cancelledAt) 기준 3시간 후 자동 삭제한다.
@@ -300,8 +309,7 @@ function scheduleCancelledDelete(client, msgId, channelId, cancelledAt = Date.no
 }
 
 function getPendingMessageDeletions(client) {
-  if (!client.pendingMessageDeletions) client.pendingMessageDeletions = new Map();
-  return client.pendingMessageDeletions;
+  return getClientMap(client, 'pendingMessageDeletions');
 }
 
 // 특정 채널에 올라온 일반 메시지(내전/모집과 무관한 유저 채팅 등)를 deleteAt(기본 8시간 후)
@@ -397,19 +405,14 @@ async function toggleAutoCloseWhileClosed(matchesMap, msgId, match, label, enabl
   armAutoEnd(matchesMap, msgId, match, label, remaining);
 }
 
-// 내전/모집이 마감될 때마다 호출. 보너스 XP 지급 후 레벨업한 사람이 있으면 XP 채널에 알린다.
+// 내전/모집이 마감될 때마다 호출. 보너스 XP 지급 후 레벨업한 사람이 있으면 레벨업 안내 채널에 알린다.
 async function announceMatchCompletionXp(match) {
   const leveledUp = awardMatchCompletionXp(match);
   if (leveledUp.length === 0) return;
   const client = match?.message?.client;
   if (!client) return;
-  const channel = client.channels.cache.get(LEVEL_UP_ANNOUNCE_CHANNEL_ID) || await client.channels.fetch(LEVEL_UP_ANNOUNCE_CHANNEL_ID).catch(() => null);
-  if (!channel) return;
   for (const { userId, newLevel } of leveledUp) {
-    await channel.send({
-      content: `<@${userId}>님이 ${newLevel}레벨을 달성했어요. 🎉`,
-      allowedMentions: { users: [userId] },
-    }).catch(() => {});
+    await announceLevelUp(client, match.guildId, userId, newLevel);
   }
 }
 
@@ -667,7 +670,9 @@ module.exports = {
   ADMIN_IDS,
   AUTO_CLOSE_DELAY_MS,
   ROLE_NAMES,
+  getClientMap,
   getNaejeonMatches,
+  getMojipMatches,
   getCancelledDeletions,
   scheduleCancelledDelete,
   scheduleMessageDelete,

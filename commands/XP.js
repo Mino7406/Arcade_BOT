@@ -19,9 +19,10 @@ const {
   xpForLevelStart,
   saveLevels,
   isLevelsLoaded,
-  EXCLUDED_GUILD_IDS,
-} = require('../handlers/레벨');
+  isExcludedGuild,
+} = require('../handlers/레벨링');
 const { logAction } = require('../handlers/로그');
+const { displayNameFromMember } = require('../handlers/이름');
 
 // 한 번에 조정 가능한 XP 폭 / 레벨 상한. 오타로 터무니없는 값이 들어가는 것만 막는 안전장치.
 const MAX_ABS = 10_000_000;
@@ -33,7 +34,7 @@ async function denyGuard(interaction) {
     await interaction.reply({ content: '❌ **권한이 없습니다.**', ephemeral: true });
     return true;
   }
-  if (EXCLUDED_GUILD_IDS.includes(interaction.guildId)) {
+  if (isExcludedGuild(interaction.guildId)) {
     await interaction.reply({ content: '⚠️ **이 서버는 레벨 시스템이 비활성화돼 있어 XP를 조정할 수 없습니다.**', ephemeral: true });
     return true;
   }
@@ -95,7 +96,7 @@ function buildPanelEmbed(guildId, targetId, targetUser, displayName, notice) {
 async function resolveTarget(interaction, targetId) {
   const member = await interaction.guild.members.fetch(targetId).catch(() => null);
   const user = member?.user || await interaction.client.users.fetch(targetId).catch(() => null);
-  const displayName = member?.displayName || user?.globalName || user?.username || '알 수 없는 유저';
+  const displayName = displayNameFromMember(member, user);
   return { user, displayName };
 }
 
