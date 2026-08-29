@@ -230,10 +230,11 @@ async function findBotWord(game) {
   return unused[Math.floor(Math.random() * unused.length)];
 }
 
-// ── 한방단어(다음 사람이 이을 수 없는 단어) 차단 ─────────────────
+// ── 한방단어(다음 사람이 이을 수 없는 단어) 판정 ─────────────────
 // 마지막 글자가 흔치 않아 사실상 그 자리에서 상대를 막아버리는 단어("한방단어", 예: 스퀴즈)는
-// 정상적인 끝말잇기 승부를 무너뜨리므로 막는다. 두음법칙까지 반영한 시작 글자들로 사전을
-// 조회해, 아직 쓰지 않은 다른 단어가 하나라도 있어야 인정한다(봇 단어 찾기와 같은 API·풀 사용).
+// 정상적인 끝말잇기 승부를 무너뜨리므로 인정하지 않는다(탈락은 아니고, 안내 후 같은 차례로
+// 다시 20초 기회를 준다 — 호출부 참고). 두음법칙까지 반영한 시작 글자들로 사전을 조회해,
+// 아직 쓰지 않은 다른 단어가 하나라도 있어야 인정한다(봇 단어 찾기와 같은 API·풀 사용).
 // 조회에 전부 실패하면(KRDICT_API_KEY 없음 등) 부당하게 막지 않도록 통과시킨다(fail-open).
 async function hasContinuation(game, word) {
   const lastChar = word[word.length - 1];
@@ -276,7 +277,7 @@ function buildWaitingEmbed(game) {
           '• 한글 2글자 이상만 단어로 인정되며, 그 외 잡담 메시지는 무시됩니다.\n' +
           '• 실제 사전에 있는 단어만 인정됩니다.\n' +
           '• 이미 사용된 단어는 사용할 수 없습니다.\n' +
-          '• 다음 사람이 이을 단어가 없는 **한방단어**는 사용할 수 없습니다.\n' +
+          '• 다음 사람이 이을 단어가 없는 **한방단어**는 인정되지 않으며, 다시 시도할 수 있습니다.\n' +
           `• **${TURN_SEC}초** 내에 입력하지 않으면 탈락합니다.`,
       },
       {
@@ -326,8 +327,6 @@ function describeEndReason(game) {
       return `🔁 \`${game.failWord}\`은(는) 이미 사용된 단어입니다.`;
     case 'not_in_dict':
       return `📖 \`${game.failWord}\`은(는) 사전에 없는 단어입니다.`;
-    case 'dead_end':
-      return `☠️ \`${game.failWord}\`은(는) 다음 사람이 이을 단어가 없는 **한방단어**라 사용할 수 없습니다.`;
     case 'gave_up':
       return '🏳️ 단어를 이을 수 없어 포기했습니다.';
     case 'cancelled':
@@ -1150,8 +1149,17 @@ async function handleWcMessage(message) {
         return;
       }
       if (continuation === false) {
-        await react(message, '❌');
-        endGame(game, games, currentPlayer.id, 'dead_end', word);
+        // 한방단어는 그 자리에서 탈락시키지 않는다. 안내만 하고, 같은 차례로 20초 타이머를
+        // 다시 걸어 다른 단어를 시도할 기회를 준다. (단어는 인정하지 않으므로 used/history 미반영)
+        // 채팅 메시지 맥락이라 진짜 '나만 보기'(ephemeral)는 불가 — 해당 플레이어에게 답장으로
+        // 붙이고 제한 시간이 지나면 지워 채널을 어지럽히지 않는다.
+        await react(message, '⚠️');
+        const notice = await message.reply(
+          `⚠️ \`${word}\`은(는) 다음 사람이 이을 단어가 없는 **한방단어**예요. `
+          + `다른 단어로 다시 시도하세요. (${TURN_SEC}초)`,
+        ).catch(() => null);
+        if (notice) setTimeout(() => notice.delete().catch(() => {}), TURN_MS);
+        startTurn(game, games);
         return;
       }
 
