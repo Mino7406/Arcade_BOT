@@ -93,7 +93,7 @@ function minimax(board, isBotTurn) {
 // 그러면 봇전이 언제나 무승부 아니면 봇 승리로만 끝나 사람이 이길 길이 없다. 그래서 봇 차례마다
 // 낮은 확률로 최선수 대신 아무 빈칸에나 두는 "실수"를 섞어, 가끔 사람이 파고들 틈을 만든다.
 // 확률이 낮아 대부분의 수는 여전히 제대로 둔다(반복 파밍은 그대로 쿨다운·하루 한도로 차단).
-const BOT_BLUNDER_CHANCE = 0.25;
+const BOT_BLUNDER_CHANCE = 0.18;
 
 function randomEmptyCell(board) {
   const empty = [];

@@ -776,8 +776,8 @@ function endGame(game, games, loserId, reason, failWord = null) {
 // 포기하면 XP 파밍 수단이 되므로(하루 한도가 있긴 하다), 최소 단어 수를 넘긴 뒤부터 봇 차례마다
 // 포기 확률이 조금씩 커지고 상한에서 멈춘다.
 const BOT_CONCEDE_AFTER_WORDS = 8;    // 이만큼 단어가 쌓이기 전에는 봇이 포기하지 않음
-const BOT_CONCEDE_STEP        = 0.05; // 그 뒤 봇 차례마다 포기 확률이 이만큼씩 증가
-const BOT_CONCEDE_MAX_CHANCE  = 0.3;  // 포기 확률 상한
+const BOT_CONCEDE_STEP        = 0.04; // 그 뒤 봇 차례마다 포기 확률이 이만큼씩 증가
+const BOT_CONCEDE_MAX_CHANCE  = 0.22; // 포기 확률 상한
 
 function shouldBotConcede(game) {
   const wordsPlayed = game.history.length;
