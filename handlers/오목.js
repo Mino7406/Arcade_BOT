@@ -457,11 +457,14 @@ function buildEmbed(game) {
 
   if (game.status === 'finished') {
     if (game.winner === 'DRAW') {
-      desc += '**🤝 무승부!**';
+      desc += game.endReason === 'timeout'
+        ? '**⏰ 시간 초과로 종료되었습니다.**'
+        : '**🤝 무승부!**';
     } else {
       const winName = game.winner === 'B' ? bName : wName;
       const winEmoji = game.winner === 'B' ? '⚫' : '⚪';
       desc += `**🏆 ${winEmoji} ${winName} 승리!**`;
+      if (game.endReason === 'resign' && game.resignedBy) desc += `\n🏳️ <@${game.resignedBy}>님이 기권했습니다.`;
       if (game.lastMove) desc += `  \n-# 마지막 수: ${coordLabel(game.lastMove.x, game.lastMove.y)} · 총 ${game.moveCount}수`;
 
       if (game.xpResult?.type === 'wager') {
@@ -496,6 +499,15 @@ function buildEmbed(game) {
     .setTimestamp();
 }
 
+// 진행 중 보드에 붙는 버튼 — 자기 차례가 아니어도 참가자면 누를 수 있는 기권.
+function buildPlayingComponents(game) {
+  return [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`omok:resign:${game.id}`).setLabel('🏳️ 기권').setStyle(ButtonStyle.Danger),
+    ),
+  ];
+}
+
 // 종료 후 재대결/종료 버튼 — 게임이 map에서 지워지므로 필요한 정보는 customId에 담는다.
 function buildFinishedRow(bId, wId) {
   return new ActionRowBuilder().addComponents(
@@ -504,14 +516,89 @@ function buildFinishedRow(bId, wId) {
   );
 }
 
-function boardPayload(game) {
+function playingPayload(game) {
   return {
     content: '',
     embeds: [buildEmbed(game)],
     files: [boardFile(game)],
-    components: game.status === 'finished' ? [buildFinishedRow(game.players.B, game.players.W)] : [],
+    components: buildPlayingComponents(game),
     attachments: [],
   };
+}
+
+function finishedPayload(game) {
+  return {
+    content: '',
+    embeds: [buildEmbed(game)],
+    files: [boardFile(game)],
+    components: [buildFinishedRow(game.players.B, game.players.W)],
+    attachments: [],
+  };
+}
+
+// ── 보드를 항상 맨 아래에 유지 (끝말잇기 moveBoardDown과 동일) ──────────
+// 좌표를 채팅으로 입력하는 게임이라, 착수할 때마다 보드 임베드가 위로 밀린다. 아래로 새
+// 메시지가 쌓였으면(messagesSinceBoard) 기존 보드를 지우고 맨 아래에 다시 올린다.
+async function moveBoardDown(game, payload) {
+  const old = game.message;
+  const channel = old?.channel;
+  if (!channel) return false;
+  const { attachments, ...sendable } = payload; // attachments는 편집 전용
+  try {
+    const posted = await channel.send(sendable); // 새로 올린 뒤 지운다(순서 바꾸면 실패 시 보드가 사라짐)
+    game.message = posted;
+    game.messagesSinceBoard = 0;
+    await old.delete().catch(() => {});
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function refreshBoard(game) {
+  const payload = playingPayload(game);
+  if (game.messagesSinceBoard && await moveBoardDown(game, payload)) return;
+  await game.message?.edit(payload).catch(() => {});
+}
+
+// 종료 화면도 맨 아래에 보여야 한다. 내리기 실패 시 원래 자리에서라도 반드시 갱신되도록 재시도.
+const FINISH_EDIT_RETRY_DELAYS_MS = [3_000, 15_000, 60_000];
+async function editWithRetry(message, payload, delays = FINISH_EDIT_RETRY_DELAYS_MS) {
+  if (!message) return;
+  try {
+    await message.edit(payload);
+    return;
+  } catch (err) {
+    if (!delays.length) {
+      console.error('오목 종료 임베드 갱신 최종 실패:', err);
+      const { attachments, ...sendable } = payload;
+      await message.channel?.send(sendable).catch(() => {});
+      return;
+    }
+  }
+  const [wait, ...rest] = delays;
+  setTimeout(() => editWithRetry(message, payload, rest), wait);
+}
+
+async function finishBoard(game) {
+  const payload = finishedPayload(game);
+  if (game.messagesSinceBoard && await moveBoardDown(game, payload)) return;
+  await editWithRetry(game.message, payload);
+}
+
+// 게임을 끝내고(승패/기권/시간 초과) map에서 제거, 필요하면 XP 정산.
+// winner: 'B' | 'W' | 'DRAW'.  endReason: 'five' | 'resign' | 'timeout' | 'full'.
+function finishGame(game, games, winner, endReason, extra = {}) {
+  game.status = 'finished';
+  game.winner = winner;
+  game.endReason = endReason;
+  Object.assign(game, extra);
+  clearTimeout(game.timeoutId);
+  game.timeoutId = null;
+  games.delete(game.id);
+  if (winner !== 'DRAW') {
+    try { settleGameXp(game); } catch (err) { console.error('오목 XP 정산 실패:', err); }
+  }
 }
 
 // ── 대기 로비 (틱택토와 동일한 형태, 무한모드 토글만 없음) ──────────
@@ -576,25 +663,15 @@ function assignColors(game) {
 }
 
 // ── 게임 진행 ───────────────────────────────────────────────
+// 착수만 반영한다(승패 시 finishGame 호출). 화면 갱신은 호출부에서 refreshBoard/finishBoard로.
 function applyMove(game, games, x, y, color) {
   game.board[cellIdx(x, y)] = color;
   game.lastMove = { x, y };
   game.moveCount++;
 
-  if (isWin(game.board, x, y, color)) {
-    game.status = 'finished';
-    game.winner = color;
-    clearTimeout(game.timeoutId);
-    games.delete(game.id);
-    settleGameXp(game);
-  } else if (isFull(game.board)) {
-    game.status = 'finished';
-    game.winner = 'DRAW';
-    clearTimeout(game.timeoutId);
-    games.delete(game.id);
-  } else {
-    game.turn = other(color);
-  }
+  if (isWin(game.board, x, y, color)) finishGame(game, games, color, 'five');
+  else if (isFull(game.board)) finishGame(game, games, 'DRAW', 'full');
+  else game.turn = other(color);
 }
 
 function resetTimeout(game, games) {
@@ -602,16 +679,8 @@ function resetTimeout(game, games) {
   game.timeoutId = setTimeout(async () => {
     const g = games.get(game.id);
     if (!g || g.status !== 'playing') return;
-    g.status = 'finished';
-    g.winner = 'DRAW'; // 시간 초과는 무효 종료 — XP 정산 없음(틱택토와 동일)
-    games.delete(g.id);
-    await g.message.edit({
-      content: '⏰ **시간 초과로 게임이 종료되었습니다.**',
-      embeds: [buildEmbed(g)],
-      files: [boardFile(g)],
-      components: [buildFinishedRow(g.players.B, g.players.W)],
-      attachments: [],
-    }).catch(() => {});
+    finishGame(g, games, 'DRAW', 'timeout'); // 시간 초과는 무효 종료 — XP 정산 없음(틱택토와 동일)
+    await finishBoard(g);
   }, TURN_MS);
 }
 
@@ -619,8 +688,9 @@ async function botTurn(game, games) {
   const blunder = Math.random() < BOT_BLUNDER_CHANCE;
   const mv = pickBotMove(game.board, 'W', blunder);
   applyMove(game, games, mv.x, mv.y, 'W');
-  await game.message.edit(boardPayload(game)).catch(() => {});
-  if (game.status !== 'finished') resetTimeout(game, games);
+  if (game.status === 'finished') { await finishBoard(game); return; }
+  await refreshBoard(game);
+  resetTimeout(game, games);
 }
 
 async function beginGame(interaction, game, games) {
@@ -631,8 +701,9 @@ async function beginGame(interaction, game, games) {
   game.board = Array(225).fill('');
   game.lastMove = null;
   game.moveCount = 0;
+  game.messagesSinceBoard = 0;
 
-  await interaction.update(boardPayload(game));
+  await interaction.update(playingPayload(game));
   game.message = await interaction.fetchReply();
   resetTimeout(game, games);
 }
@@ -649,8 +720,11 @@ function newGame(interaction, id) {
     turn: 'B',
     status: 'waiting',
     winner: null,
+    endReason: null,
+    resignedBy: null,
     lastMove: null,
     moveCount: 0,
+    messagesSinceBoard: 0,
     message: null,
     timeoutId: null,
   };
@@ -673,10 +747,90 @@ async function startOmokCommand(interaction) {
   }, LOBBY_MS);
 }
 
-// 재대결: 원래 게임은 끝나는 순간 지워지므로, customId에 담아둔 흑/백 유저로 새 대기 로비를 연다.
-async function startRematch(interaction, prevBId, prevWId) {
+// ── 재대결 (끝말잇기와 같은 승낙/거절 흐름) ──────────────────────
+function buildRematchRequestEmbed(game) {
+  return new EmbedBuilder()
+    .setColor(0x5865F2)
+    .setDescription(
+      '# 🔄 오목 재대결 신청\n' +
+      `<@${game.opponentId}>님이 수락하면 바로 시작됩니다.\n\n` +
+      `✅ <@${game.challengerId}>  (신청)\n` +
+      `${game.accepted.has(game.opponentId) ? '✅' : '⌛'} <@${game.opponentId}>`,
+    )
+    .setFooter({ text: '1분 내 수락하지 않으면 자동 만료됩니다.' })
+    .setTimestamp();
+}
+
+function buildRematchRequestComponents(game) {
+  return [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`omok:rematch_accept:${game.id}`).setLabel('✅ 수락').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`omok:rematch_decline:${game.id}`).setLabel('❌ 거절').setStyle(ButtonStyle.Danger),
+    ),
+  ];
+}
+
+// 거절·만료 시 지난 판 결과 메시지에 재대결/종료 버튼을 되살린다.
+async function restoreRematchButton(game) {
+  await game.sourceMessage?.edit({ components: [buildFinishedRow(game.prevBId, game.prevWId)] }).catch(() => {});
+}
+
+// 봇전 재대결은 승낙이 필요 없으니 새 메시지로 바로 시작한다.
+async function startRematchVsBot(interaction, humanId) {
+  const games = getGames(interaction.client);
+  const game = newGame(interaction, interaction.id);
+  game.players = { B: humanId, W: 'BOT' };
+  game.status = 'playing';
+  game.turn = 'B';
+  game.board = Array(225).fill('');
+  game.messagesSinceBoard = 0;
+  games.set(game.id, game);
+
+  await interaction.update({ components: [] }); // 지난 결과 메시지의 버튼 제거
+  game.message = await interaction.channel.send(playingPayload(game));
+  resetTimeout(game, games);
+}
+
+// 사람 상대 재대결 — 상대의 수락을 받는 신청 메시지를 새로 올린다.
+async function startRematchRequest(interaction, challengerId, opponentId, prevBId, prevWId) {
   const games = getGames(interaction.client);
   const gameId = interaction.id;
+  const game = {
+    id: gameId,
+    status: 'rematch_pending',
+    channelId: interaction.channelId,
+    guildId: interaction.guildId,
+    challengerId,
+    opponentId,
+    prevBId,
+    prevWId,
+    accepted: new Set([challengerId]),
+    sourceMessageId: interaction.message.id,
+    sourceMessage: interaction.message,
+    message: null,
+    timeoutId: null,
+  };
+  games.set(gameId, game);
+
+  await interaction.update({ components: [] });
+  game.message = await interaction.channel.send({
+    content: `🔄 <@${opponentId}>님, <@${challengerId}>님이 재대결을 신청했습니다!`,
+    embeds: [buildRematchRequestEmbed(game)],
+    components: buildRematchRequestComponents(game),
+  });
+
+  game.timeoutId = setTimeout(async () => {
+    const g = games.get(gameId);
+    if (!g || g.status !== 'rematch_pending') return;
+    games.delete(gameId);
+    await g.message?.edit({ content: '⏰ **재대결 신청이 만료되었습니다.**', embeds: [], components: [] }).catch(() => {});
+    await restoreRematchButton(g);
+  }, 60_000);
+}
+
+// omok:rematch:<bId>:<wId> — 지난 판 참가자가 누르면 재대결 시작(봇전은 바로, 사람 상대는 승낙 대기).
+async function startRematch(interaction, prevBId, prevWId) {
+  const games = getGames(interaction.client);
   const isBot = prevWId === 'BOT';
   const prevIds = isBot ? [prevBId] : [prevBId, prevWId];
 
@@ -691,27 +845,32 @@ async function startRematch(interaction, prevBId, prevWId) {
     }
   }
 
-  const invitedId = isBot ? null : prevIds.find(id => id !== interaction.user.id);
-  const game = newGame(interaction, gameId);
-  game.sourceMessageId = interaction.message.id;
-  games.set(gameId, game);
+  if (isBot) {
+    await startRematchVsBot(interaction, prevBId);
+    return;
+  }
+  const challengerId = interaction.user.id;
+  const opponentId = prevIds.find(id => id !== challengerId);
+  await startRematchRequest(interaction, challengerId, opponentId, prevBId, prevWId);
+}
 
-  await interaction.update({ components: [] });
-  const content = invitedId
-    ? `🔄 <@${invitedId}>님, <@${interaction.user.id}>님이 재대결을 신청했습니다! 참가하려면 **✋ 참가**를 누르세요.`
-    : undefined;
-  game.message = await interaction.channel.send({
-    content,
-    embeds: [buildLobbyEmbed(game)],
-    components: buildLobbyComponents(game),
-  });
+// 재대결 신청(rematch_pending) → 실제 대국 시작. 신청 메시지를 그대로 보드로 바꾼다.
+async function beginRematchGame(interaction, game, games) {
+  clearTimeout(game.timeoutId);
+  const a = game.challengerId, b = game.opponentId;
+  game.players = Math.random() < 0.5 ? { B: a, W: b } : { B: b, W: a }; // 흑/백 무작위
+  game.status = 'playing';
+  game.turn = 'B';
+  game.board = Array(225).fill('');
+  game.endReason = null;
+  game.resignedBy = null;
+  game.lastMove = null;
+  game.moveCount = 0;
+  game.messagesSinceBoard = 0;
 
-  game.timeoutId = setTimeout(async () => {
-    const g = games.get(gameId);
-    if (!g || g.status !== 'waiting') return;
-    games.delete(gameId);
-    await g.message.edit({ content: '⏰ **재대결 신청이 만료되었습니다.**', embeds: [], components: [] }).catch(() => {});
-  }, LOBBY_MS);
+  await interaction.update(playingPayload(game));
+  game.message = await interaction.fetchReply();
+  resetTimeout(game, games);
 }
 
 async function handleOmokButton(interaction) {
@@ -754,9 +913,41 @@ async function handleOmokButton(interaction) {
     return interaction.update({ content: '❌ **게임이 취소되었습니다.**', embeds: [], components: [] });
   }
 
+  if (customId.startsWith('omok:resign:')) {
+    const game = games.get(customId.slice('omok:resign:'.length));
+    if (!game || game.status !== 'playing') return interaction.reply({ content: '⚠️ **진행 중인 게임이 아닙니다.**', flags: MessageFlags.Ephemeral });
+    const myColor = interaction.user.id === game.players.B ? 'B' : interaction.user.id === game.players.W ? 'W' : null;
+    if (!myColor) return interaction.reply({ content: '⚠️ **대국 참가자만 기권할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.deferUpdate();
+    finishGame(game, games, other(myColor), 'resign', { resignedBy: interaction.user.id });
+    await finishBoard(game);
+    return;
+  }
+
   if (customId.startsWith('omok:rematch:')) {
     const [, , bId, wId] = customId.split(':');
     return startRematch(interaction, bId, wId);
+  }
+
+  if (customId.startsWith('omok:rematch_accept:')) {
+    const game = games.get(customId.slice('omok:rematch_accept:'.length));
+    if (!game || game.status !== 'rematch_pending') return interaction.reply({ content: '⚠️ **만료된 재대결 신청입니다.**', flags: MessageFlags.Ephemeral });
+    if (interaction.user.id !== game.opponentId) return interaction.reply({ content: '⚠️ **재대결을 신청받은 상대만 수락할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+    game.accepted.add(interaction.user.id);
+    return beginRematchGame(interaction, game, games);
+  }
+
+  if (customId.startsWith('omok:rematch_decline:')) {
+    const game = games.get(customId.slice('omok:rematch_decline:'.length));
+    if (!game || game.status !== 'rematch_pending') return interaction.reply({ content: '⚠️ **만료된 재대결 신청입니다.**', flags: MessageFlags.Ephemeral });
+    if (interaction.user.id !== game.challengerId && interaction.user.id !== game.opponentId) {
+      return interaction.reply({ content: '⚠️ **원래 참가자만 응답할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+    }
+    clearTimeout(game.timeoutId);
+    games.delete(game.id);
+    await interaction.update({ content: `❌ **<@${interaction.user.id}>님이 재대결을 거절했습니다.**`, embeds: [], components: [] });
+    await restoreRematchButton(game);
+    return;
   }
 
   if (customId.startsWith('omok:close:')) {
@@ -776,6 +967,9 @@ async function handleOmokMessage(message) {
   for (const game of games.values()) {
     if (game.status !== 'playing' || game.channelId !== message.channelId) continue;
 
+    // 보드가 몇 칸이나 밀렸는지 센다(잡담도 포함 — 밀려나는 건 매한가지다).
+    game.messagesSinceBoard = (game.messagesSinceBoard ?? 0) + 1;
+
     const currentId = game.players[game.turn];
     if (currentId === 'BOT' || currentId !== message.author.id) continue;
 
@@ -791,11 +985,11 @@ async function handleOmokMessage(message) {
     clearTimeout(game.timeoutId);
     applyMove(game, games, coord.x, coord.y, game.turn);
     await react(message, '✅');
-    await game.message.edit(boardPayload(game)).catch(() => {});
 
-    if (game.status === 'finished') return;
-    if (game.players[game.turn] === 'BOT') await botTurn(game, games);
-    else resetTimeout(game, games);
+    if (game.status === 'finished') { await finishBoard(game); return; }
+    if (game.players[game.turn] === 'BOT') { await botTurn(game, games); return; }
+    await refreshBoard(game);
+    resetTimeout(game, games);
     return;
   }
 }
