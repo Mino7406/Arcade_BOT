@@ -2,7 +2,7 @@ const path = require('path');
 // 실행 디렉터리(CWD)가 아니라 이 파일 기준으로 env를 찾는다 — systemd 등 다른 CWD에서 띄워도
 // 토큰을 놓치지 않게. (파일명이 '.env'가 아니라 'env'인 것은 의도된 것)
 require('dotenv').config({ path: path.join(__dirname, 'env') });
-const { Client, GatewayIntentBits, Collection, MessageFlags } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, MessageFlags, Events } = require('discord.js');
 const fs = require('fs');
 
 // 예전 위치(루트)에 남아있던 JSON 저장 파일이 있다면 DB/ 폴더로 옮긴다(내용은 그대로, 위치만
@@ -191,8 +191,9 @@ async function reconcileMatchBonusMessages(c) {
 }
 
 // ─── 봇 준비 완료 시 ──────────────────────────────────────────
-// discord.js 버전에 따라 이벤트 이름이 'clientReady' 또는 'ready'라서 둘 다 등록.
-// _readyDone 플래그로 한 번만 실행되게 막습니다.
+// 이벤트 이름이 discord.js 버전에 따라 'ready'/'clientReady'로 다르므로 Events.ClientReady 상수를 쓴다.
+// (문자열 'ready'를 직접 넘기면 v14.22+ 에서 DeprecationWarning이 뜬다.)
+// _readyDone 플래그는 이벤트가 혹시 두 번 들어와도 한 번만 실행되게 막아준다.
 let _readyDone = false;
 // restoreMatches/loadLevels가 끝나기 전에는 저장 관련 데이터가 비어있는 상태라,
 // 이 시점에 자동 저장(30초 간격)이 실행되면 아직 못 불러온 기존 데이터를 빈 값으로
@@ -214,8 +215,7 @@ async function onReady(c) {
   startQuizScheduler(c); // 놀이터 채널에 하루 한 번 무작위 시각으로 초성퀴즈/상식퀴즈를 번갈아 출제
   dataReady = true;
 }
-client.once('clientReady', onReady);
-client.once('ready', onReady);
+client.once(Events.ClientReady, onReady);
 
 client.on('interactionCreate', async (interaction) => {
   try {
