@@ -39,8 +39,9 @@ function nowKstStr() {
 
 // 로그 배열을 메모리에 들고 있는다. 예전엔 상호작용 한 번마다 log.json 전체(최대 5000개)를
 // 다시 읽고 파싱했는데(writeEntry → readLogs), 버튼을 누를 때마다 수천 개 객체를 파싱/직렬화하는
-// 낭비였다. 시작 시 한 번만 읽고, 이후로는 메모리 배열에 push한 뒤 파일로 덮어쓴다
+// 낭비였다. 시작 시 한 번만 읽고, 이후로는 메모리 배열 맨 앞에 넣은 뒤 파일로 덮어쓴다
 // (파일이 사람이 읽는 감사 로그라 pretty-print는 유지, 크래시 대비 write-through도 유지).
+// 파일은 최신 로그가 맨 위에 오도록 저장한다(내림차순).
 let logs = null;
 
 function readLogs() {
@@ -51,13 +52,18 @@ function readLogs() {
   } catch {
     logs = [];
   }
+  // 예전엔 오래된→최신(오름차순)으로 쌓았다. 그런 파일이면 한 번 뒤집어 최신→오래된 순으로 맞춘다.
+  // (이미 내림차순인 파일은 그대로 둔다 — 재시작해도 다시 뒤집히지 않도록 시각으로 판별)
+  if (logs.length >= 2 && String(logs[0].시각) <= String(logs[logs.length - 1].시각)) {
+    logs.reverse();
+  }
   return logs;
 }
 
 function writeEntry(entry) {
   const arr = readLogs();
-  arr.push(entry);
-  if (arr.length > MAX_ENTRIES) arr.splice(0, arr.length - MAX_ENTRIES);
+  arr.unshift(entry); // 최신 로그를 맨 위에
+  if (arr.length > MAX_ENTRIES) arr.length = MAX_ENTRIES; // 넘치면 오래된(맨 아래)부터 버림
   fs.writeFileSync(LOG_PATH, JSON.stringify(arr, null, 2), 'utf8');
 }
 
