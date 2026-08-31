@@ -21,6 +21,7 @@ const { awardMatchCompletionXp, announceLevelUp } = require('./레벨링');
 const { KST_OFFSET_MS } = require('./시간');
 const { ADMIN_IDS, STEAM_EMOJI_ID } = require('../config');
 const { logSystem } = require('./로그');
+const { writeJsonIfChanged } = require('./저장');
 
 // 내전(naejeon)/모집(mojip) 두 시스템이 공유하는 게임 → 역할 이름 매핑.
 // (역할 멘션 대상 채널이 있으면 해당 역할을 핑한다.)
@@ -632,7 +633,6 @@ function buildCancelComponents(type) {
 // 파일명 N-M.json은 이 파일이 담는 두 매치 타입, 내전(N)/모집(M)의 앞글자를 딴 것.
 const DB_DIR  = path.join(__dirname, '..', 'DB');
 const DB_PATH = path.join(DB_DIR, 'N-M.json');
-const TMP_PATH = DB_PATH + '.tmp';
 
 fs.mkdirSync(DB_DIR, { recursive: true });
 
@@ -682,9 +682,8 @@ function saveAll(client) {
   }
   // 30초마다 파일 전체를 덮어쓰기 때문에, 쓰는 도중에 죽으면 N-M.json이 잘린 채 남아
   // 다음 재시작 때 loadRows()가 파싱에 실패(→ [] 반환)하며 전체 데이터가 날아간다.
-  // 임시 파일에 먼저 다 쓰고 rename으로 교체해, 실패해도 기존 파일이 그대로 남게 한다.
-  fs.writeFileSync(TMP_PATH, JSON.stringify(rows), 'utf8');
-  fs.renameSync(TMP_PATH, DB_PATH);
+  // 임시 파일 교체(원자적 쓰기)와 "직전 저장과 같으면 건너뛰기"는 저장.js가 함께 처리한다.
+  writeJsonIfChanged(DB_PATH, rows);
 }
 
 // 저장된 모든 행을 읽어옴 (봇 시작 시 복원할 때 사용)

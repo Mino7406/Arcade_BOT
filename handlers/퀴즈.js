@@ -15,6 +15,7 @@ const { applyXp, isExcludedGuild } = require('./레벨링');
 const { KST_OFFSET_MS } = require('./시간');
 const { QUIZ_CHANNEL_ID } = require('../config'); // 놀이터 채널 (config.js의 PLAYGROUND_CHANNEL_ID)
 const { logSystem } = require('./로그');
+const { writeJsonIfChanged } = require('./저장');
 
 // KST 기준 출제 가능 시간대: 오전 10시 ~ 밤 11시. 이 시각(23:00)까지 봇이 안 켜져 있었다면
 // 그날 사이클은 건너뜀.
@@ -140,7 +141,7 @@ function loadState() {
 }
 
 function saveState(state) {
-  fs.writeFileSync(STATE_PATH, JSON.stringify(state), 'utf8');
+  writeJsonIfChanged(STATE_PATH, state);
 }
 
 // ── 한국어기초사전 API에서 문제 후보 조회 ───────────────────────────

@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const { kstDateString, timeUntilKstMidnight } = require('./시간');
 const { logSystem } = require('./로그');
+const { writeJsonIfChanged } = require('./저장');
 
 const STORE_PATH = path.join(__dirname, '..', 'DB', 'botmatch-xp.json');
 fs.mkdirSync(path.dirname(STORE_PATH), { recursive: true });
@@ -41,7 +42,7 @@ function loadBotMatchXp() {
 }
 
 function saveBotMatchXp() {
-  fs.writeFileSync(STORE_PATH, JSON.stringify(store), 'utf8');
+  writeJsonIfChanged(STORE_PATH, store);
 }
 
 // 오늘(KST) 이 유저가 이미 받은 봇전 보상 XP. 날짜가 바뀌었으면 0으로 본다.

@@ -8,6 +8,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags
 const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp } = require('./레벨링');
 const { kstDateString, timeUntilKstMidnight } = require('./시간');
 const { logSystem } = require('./로그');
+const { writeJsonIfChanged } = require('./저장');
 
 const ROULETTE_PATH = path.join(__dirname, '..', 'DB', 'roulette.json');
 fs.mkdirSync(path.dirname(ROULETTE_PATH), { recursive: true });
@@ -52,7 +53,7 @@ function loadRoulette() {
 }
 
 function saveRoulette() {
-  fs.writeFileSync(ROULETTE_PATH, JSON.stringify(roulette), 'utf8');
+  writeJsonIfChanged(ROULETTE_PATH, roulette);
 }
 
 function getGuildRoulette(guildId) {
@@ -114,9 +115,14 @@ function buildReelRow(lobbyId, display, winIndices = []) {
   return new ActionRowBuilder().addComponents(...buttons);
 }
 
-const SPIN_TICKS = 12;
-const SPIN_TICK_MS = 180;
-const REEL_STOP_AT = [5, 8, 11]; // 각 릴이 최종값에 고정되는 틱(순서대로 하나씩 멈춤)
+// 틱 하나당 message.edit이 한 번 나간다. 예전엔 180ms 간격 12회(2.2초에 12번 수정)였는데,
+// 디스코드는 같은 메시지 수정에 라우트별 레이트리밋을 빡빡하게 걸어서(대략 5초에 5회 수준)
+// 거의 매번 걸렸다. discord.js가 알아서 큐에 넣고 기다리므로 오류가 나는 대신 연출이
+// 늘어지고, 그동안 같은 라우트의 다른 요청까지 뒤에 밀린다. 전체 길이(약 2.4초)는 그대로
+// 두고 호출 횟수만 절반으로 줄인다.
+const SPIN_TICKS = 6;
+const SPIN_TICK_MS = 400;
+const REEL_STOP_AT = [2, 4, 5]; // 각 릴이 최종값에 고정되는 틱(순서대로 하나씩 멈춤 — 마지막 틱에 결과 완성)
 
 // 실제 슬롯머신처럼 릴이 하나씩 순서대로 멈추는 애니메이션. finalReels는 이미 정해진 결과이고,
 // 여기서는 그 결과가 드러나기 전까지 버튼 라벨을 무작위 심볼로 계속 바꿔가며 "돌아가는" 연출만 한다.

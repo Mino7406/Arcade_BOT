@@ -8,6 +8,7 @@ const { ChannelType } = require('discord.js');
 
 const { GUILD_ID, HUB_CHANNEL_ID, TEMP_CATEGORY_ID } = require('../config');
 const { logSystem } = require('./로그');
+const { writeJsonIfChanged } = require('./저장');
 
 const DATA_PATH = path.join(__dirname, '..', 'DB', 'voiceRooms.json');
 fs.mkdirSync(path.dirname(DATA_PATH), { recursive: true });
@@ -31,7 +32,7 @@ function loadTempChannels() {
 }
 
 function saveTempChannels() {
-  fs.writeFileSync(DATA_PATH, JSON.stringify([...tempChannelIds]), 'utf8');
+  writeJsonIfChanged(DATA_PATH, [...tempChannelIds]);
 }
 
 // 방이 얼마나 유지됐는지. 생성 시각을 따로 저장하지 않아도 채널 객체가 createdTimestamp를

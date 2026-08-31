@@ -164,7 +164,12 @@ function pngChunk(type, data) {
   return Buffer.concat([len, typeBuf, data, crc]);
 }
 
-function encodePng(rgb) {
+// zlib.deflate는 워커 스레드 풀에서 돌아 이벤트 루프를 막지 않는다. 예전엔 deflateSync를
+// 써서, 한 수 둘 때마다 봇 전체가 4.4ms씩 멈췄다(약 1MB 버퍼 압축). 압축 레벨도 6 → 3으로
+// 낮춘다 — 바둑판은 단색 위주라 결과 크기 차이가 거의 없으면서 압축 시간은 크게 줄어든다.
+const DEFLATE_LEVEL = 3;
+
+async function encodePng(rgb) {
   const sig = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(SIZE, 0);
@@ -178,13 +183,15 @@ function encodePng(rgb) {
     raw[y * (stride + 1)] = 0; // 스캔라인 필터 바이트
     rgb.copy(raw, y * (stride + 1) + 1, y * stride, y * stride + stride);
   }
-  const idat = zlib.deflateSync(raw, { level: 6 });
+  const idat = await new Promise((resolve, reject) => {
+    zlib.deflate(raw, { level: DEFLATE_LEVEL }, (err, out) => (err ? reject(err) : resolve(out)));
+  });
 
   return Buffer.concat([sig, pngChunk('IHDR', ihdr), pngChunk('IDAT', idat), pngChunk('IEND', Buffer.alloc(0))]);
 }
 
 // board: 길이 225 배열('' | 'B' | 'W'), last: {x,y}|null → PNG Buffer
-function renderBoard(board, last) {
+async function renderBoard(board, last) {
   const buf = Buffer.alloc(SIZE * SIZE * 3);
 
   fillRect(buf, 0, 0, SIZE, SIZE, COL.wood);
@@ -488,8 +495,8 @@ function settleGameXp(game) {
 }
 
 // ── 렌더 페이로드 ───────────────────────────────────────────
-function boardFile(game) {
-  return new AttachmentBuilder(renderBoard(game.board, game.lastMove), { name: 'omok.png' });
+async function boardFile(game) {
+  return new AttachmentBuilder(await renderBoard(game.board, game.lastMove), { name: 'omok.png' });
 }
 
 function buildEmbed(game) {
@@ -561,21 +568,21 @@ function buildFinishedRow(bId, wId) {
   );
 }
 
-function playingPayload(game) {
+async function playingPayload(game) {
   return {
     content: '',
     embeds: [buildEmbed(game)],
-    files: [boardFile(game)],
+    files: [await boardFile(game)],
     components: buildPlayingComponents(game),
     attachments: [],
   };
 }
 
-function finishedPayload(game) {
+async function finishedPayload(game) {
   return {
     content: '',
     embeds: [buildEmbed(game)],
-    files: [boardFile(game)],
+    files: [await boardFile(game)],
     components: [buildFinishedRow(game.players.B, game.players.W)],
     attachments: [],
   };
@@ -601,7 +608,7 @@ async function moveBoardDown(game, payload) {
 }
 
 async function refreshBoard(game) {
-  const payload = playingPayload(game);
+  const payload = await playingPayload(game);
   if (game.messagesSinceBoard && await moveBoardDown(game, payload)) return;
   await game.message?.edit(payload).catch(() => {});
 }
@@ -626,7 +633,7 @@ async function editWithRetry(message, payload, delays = FINISH_EDIT_RETRY_DELAYS
 }
 
 async function finishBoard(game) {
-  const payload = finishedPayload(game);
+  const payload = await finishedPayload(game);
   if (game.messagesSinceBoard && await moveBoardDown(game, payload)) return;
   await editWithRetry(game.message, payload);
 }
@@ -748,7 +755,7 @@ async function beginGame(interaction, game, games) {
   game.moveCount = 0;
   game.messagesSinceBoard = 0;
 
-  await interaction.update(playingPayload(game));
+  await interaction.update(await playingPayload(game));
   game.message = await interaction.fetchReply();
   resetTimeout(game, games);
 }
@@ -832,7 +839,7 @@ async function startRematchVsBot(interaction, humanId) {
   games.set(game.id, game);
 
   await interaction.update({ components: [] }); // 지난 결과 메시지의 버튼 제거
-  game.message = await interaction.channel.send(playingPayload(game));
+  game.message = await interaction.channel.send(await playingPayload(game));
   resetTimeout(game, games);
 }
 
@@ -913,7 +920,7 @@ async function beginRematchGame(interaction, game, games) {
   game.moveCount = 0;
   game.messagesSinceBoard = 0;
 
-  await interaction.update(playingPayload(game));
+  await interaction.update(await playingPayload(game));
   game.message = await interaction.fetchReply();
   resetTimeout(game, games);
 }

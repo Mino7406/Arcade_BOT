@@ -4,6 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const { logSystem } = require('./로그');
+const { writeJsonIfChanged } = require('./저장');
 
 const {
   EXCLUDED_GUILD_IDS,
@@ -78,7 +79,7 @@ function isLevelsLoaded() {
 
 function saveLevels() {
   if (!loaded) return; // 복원 전에는 저장하지 않는다 — 빈 메모리로 파일을 덮어써 전체가 날아간다
-  fs.writeFileSync(LEVELS_PATH, JSON.stringify(levels), 'utf8');
+  writeJsonIfChanged(LEVELS_PATH, levels);
 }
 
 function getGuildLevels(guildId) {
