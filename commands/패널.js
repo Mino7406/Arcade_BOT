@@ -82,7 +82,7 @@ function buildSetupPanelPayload(interaction) {
     .setColor(0x57F287)
     .setTitle('🎡 놀이터 채널 안내')
     .setDescription(
-      '**끝말잇기, 틱택토, 룰렛, 레벨, 랭킹**은 놀이터 채널에서만 이용할 수 있어요.\n아래 버튼으로 바로 이동하세요.',
+      '**끝말잇기, 틱택토, 오목, 룰렛, 레벨, 랭킹**은 놀이터 채널에서만 이용할 수 있어요.\n아래 버튼으로 바로 이동하세요.',
     );
 
   const row1 = new ActionRowBuilder().addComponents(
@@ -302,11 +302,37 @@ function buildMatchDeleteAllConfirmPayload(panelMessageId, count) {
 }
 
 // 메시지 ID 또는 디스코드 메시지 링크에서 { channelId, messageId }를 추출한다.
-// channelId가 없으면(순수 ID만 입력) 명령어를 실행한 현재 채널을 사용한다.
+// channelId가 없으면(순수 ID만 입력) 채널을 특정할 수 없어, 아래 findBotMessage가 서버 전체를 훑는다.
 function parseMessageRef(input) {
   const linkMatch = input.match(/channels\/\d+\/(\d+)\/(\d+)/);
   if (linkMatch) return { channelId: linkMatch[1], messageId: linkMatch[2] };
   if (/^\d{17,20}$/.test(input)) return { channelId: null, messageId: input };
+  return null;
+}
+
+// ref로 메시지를 찾는다.
+// - 링크(채널ID 포함): 그 채널에서만 조회
+// - 순수 ID: 패널이 있는 현재 채널 → 없으면 이 서버에서 봇이 볼 수 있는 모든 텍스트 채널을 훑는다
+//   (메시지 ID는 서버 안에서 유일하므로, 놀이터 등 다른 채널의 봇 메시지도 ID만으로 삭제 가능)
+async function findBotMessage(interaction, ref) {
+  if (ref.channelId) {
+    const ch = await interaction.client.channels.fetch(ref.channelId).catch(() => null);
+    return ch?.messages ? ch.messages.fetch(ref.messageId).catch(() => null) : null;
+  }
+
+  const here = await interaction.channel?.messages?.fetch(ref.messageId).catch(() => null);
+  if (here) return here;
+
+  const guild = interaction.guild;
+  if (!guild) return null;
+  const channels = await guild.channels.fetch().catch(() => null);
+  if (!channels) return null;
+  for (const ch of channels.values()) {
+    if (!ch || ch.id === interaction.channelId) continue;
+    if (typeof ch.isTextBased !== 'function' || !ch.isTextBased() || !ch.viewable) continue;
+    const msg = await ch.messages.fetch(ref.messageId).catch(() => null);
+    if (msg) return msg;
+  }
   return null;
 }
 
@@ -321,7 +347,7 @@ function buildBotMessageDeleteModal(panelMessageId) {
           .setCustomId('message_ref')
           .setLabel('삭제할 메시지 ID 또는 링크')
           .setStyle(TextInputStyle.Short)
-          .setPlaceholder('예: 1234567890123456789')
+          .setPlaceholder('다른 채널이면 메시지 링크를 붙여넣으세요')
           .setRequired(true),
       ),
     );
@@ -431,22 +457,26 @@ async function handlePanelBotMessageDeleteModal(interaction) {
     return;
   }
 
-  const channel = ref.channelId
-    ? await interaction.client.channels.fetch(ref.channelId).catch(() => null)
-    : interaction.channel;
-  const message = channel ? await channel.messages.fetch(ref.messageId).catch(() => null) : null;
+  // 순수 ID면 서버 전체를 훑을 수 있어 3초를 넘길 수 있으므로 먼저 응답을 확정한다.
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const message = await findBotMessage(interaction, ref);
 
   if (!message) {
-    await interaction.reply({ content: '⚠️ **메시지를 찾을 수 없습니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.editReply('⚠️ **메시지를 찾을 수 없습니다.** 봇이 볼 수 있는 채널의 메시지여야 합니다 — 확실하지 않으면 메시지 **링크**를 붙여넣어 보세요.');
     return;
   }
   if (message.author.id !== interaction.client.user.id) {
-    await interaction.reply({ content: '⚠️ **봇이 보낸 메시지만 삭제할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.editReply('⚠️ **봇이 보낸 메시지만 삭제할 수 있습니다.**');
     return;
   }
 
-  await message.delete();
-  await interaction.reply({ content: '✅ **메시지를 삭제했습니다.**', flags: MessageFlags.Ephemeral });
+  try {
+    await message.delete();
+  } catch (err) {
+    await interaction.editReply(`⚠️ **삭제에 실패했습니다.** <#${message.channelId}> 채널에서 봇에게 '메시지 관리' 권한이 있는지 확인하세요.\n-# ${err?.message ?? err}`);
+    return;
+  }
+  await interaction.editReply('✅ **메시지를 삭제했습니다.**');
 }
 
 // ── 관리 메뉴 셀렉트 메뉴 처리 ("🗑️ 내전/모집 삭제" 목록) ────────────

@@ -194,7 +194,7 @@ npm start
   - **🔄 새로고침** — 패널 메시지를 최신 상태로 그 자리에서 갱신
   - **🧹 채널 청소** — 클릭 즉시(확인 화면 없이) 현재 채널의 봇이 아닌 유저 메시지를 전부 삭제(`purgeUserMessages`). Discord API 제약상 14일 넘은 메시지는 일괄삭제가 불가능해 자동으로 건너뛰며, 최대 2000개(20페이지)까지만 훑음
   - **🗑️ 내전/모집 삭제** — 현재 서버의 진행 중/마감된 내전·모집은 물론, 취소되어 자동삭제 대기 중인 게시글(🔴 취소됨, `client.cancelledDeletions`)까지 셀렉트 메뉴로 함께 표시 → 선택 후 확인 화면을 거쳐 삭제. 마감됨·취소됨 항목은 각각 "🔒 마감됨 · 약 N시간 후 자동삭제" / "🔴 취소됨 · 약 N시간 후 자동삭제"로 실제 자동삭제까지 남은 시간을 함께 보여줌(자동삭제가 꺼진 마감 매치는 "🔒 마감됨"만 표시). 활성 매치는 알림 타이머 취소·완료 보너스 XP 지급·참가자 멘션 메시지 삭제까지 정리 후 삭제(관리 목록에서도 제거), 취소된 게시글은 자동삭제 대기열에서 제거 후 즉시 삭제. 목록 화면 하단의 **🗑️ 전체 삭제** 버튼으로 확인 화면을 한 번 거쳐 현재 서버의 표시된 항목을 한 번에 모두 삭제할 수도 있음
-  - **🤖 봇 메시지 삭제** — 메시지 ID/링크를 입력받는 모달을 띄운 뒤, 봇이 보낸 메시지인지 확인하고 삭제(옛 `/관리` 명령어의 `메시지삭제` 옵션과 동일한 기능)
+  - **🤖 봇 메시지 삭제** — 메시지 ID/링크를 입력받는 모달을 띄운 뒤, 봇이 보낸 메시지인지 확인하고 삭제(옛 `/관리` 명령어의 `메시지삭제` 옵션과 동일한 기능). 링크면 그 채널을, **순수 ID면 패널이 있는 채널 → 서버 내 봇이 볼 수 있는 모든 텍스트 채널을 훑어** 찾으므로 놀이터 등 다른 채널의 봇 메시지도 ID만으로 삭제 가능. 삭제 실패 시(그 채널에 '메시지 관리' 권한 없음 등) 사유를 안내
 - "⚙️ 관리"를 제외한 나머지 버튼은 관리자 권한 없이 아무나 클릭 가능(안내 패널의 목적이 명령어 없이도 접근 가능하게 하는 것이므로) — 패널을 게시하는 `/패널` 실행과 "⚙️ 관리" 메뉴 전체만 관리자 전용
 - 패널을 게시한 채널이 `config.js`의 `ALLOWED_CHANNEL_IDS`에 포함되어 있어야 버튼 클릭 이후의 게임 선택/모달 등 후속 상호작용이 정상 동작함
 
@@ -496,10 +496,11 @@ npm start
 | `buildMatchDeleteListPayload(interaction, panelMessageId)` | "🗑️ 내전/모집 삭제" 클릭 시 현재 서버의 삭제 가능 항목 셀렉트 메뉴 + "🗑️ 전체 삭제" 버튼 생성(없으면 안내 메시지) |
 | `buildMatchDeleteConfirmPayload(panelMessageId, type, msgId, confirmText)` | 셀렉트에서 항목 선택 후 보여줄 단건 삭제 확인 화면(✅ 삭제 / ↩️ 취소) |
 | `buildMatchDeleteAllConfirmPayload(panelMessageId, count)` | "🗑️ 전체 삭제" 클릭 시 보여줄 확인 화면(대상 건수 `count` 표시) |
-| `parseMessageRef(input)` | 메시지 ID 또는 디스코드 메시지 링크에서 `{ channelId, messageId }` 추출(ID만 입력하면 현재 채널로 간주) |
+| `parseMessageRef(input)` | 메시지 ID 또는 디스코드 메시지 링크에서 `{ channelId, messageId }` 추출(순수 ID면 `channelId`는 `null`) |
+| `findBotMessage(interaction, ref)` | ref로 메시지 조회 — 링크면 그 채널만, 순수 ID면 현재 채널 → 서버 내 봇이 볼 수 있는 모든 텍스트 채널을 순회(메시지 ID는 서버 내 유일) |
 | `buildBotMessageDeleteModal(panelMessageId)` | "🤖 봇 메시지 삭제" 클릭 시 뜨는 모달(ID/링크 입력 하나) |
 | `handlePanelButton(interaction)` | 관리 메뉴의 모든 버튼(`panel:` 프리픽스) 처리 — 메뉴 이동/새로고침/채널 청소(확인 없이 즉시)/매치 단건·전체 삭제(확인 포함)/봇 메시지 삭제 모달 오픈 |
-| `handlePanelBotMessageDeleteModal(interaction)` | "🤖 봇 메시지 삭제" 모달 제출(`panel:bot_msg_delete_modal:`) 처리 — ID/링크로 메시지를 찾아 봇 메시지인지 확인 후 삭제 |
+| `handlePanelBotMessageDeleteModal(interaction)` | "🤖 봇 메시지 삭제" 모달 제출(`panel:bot_msg_delete_modal:`) 처리 — `deferReply` 후 `findBotMessage`로 찾아 봇 메시지인지 확인하고 삭제, 삭제 실패는 사유와 함께 안내 |
 | `handlePanelMatchDeleteSelect(interaction)` | 관리 메뉴의 내전/모집 삭제 셀렉트(`panel:match_delete_select:`) 처리 → 삭제 확인 화면 표시 |
 
 ### `index.js` — 엔트리 포인트
