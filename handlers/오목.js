@@ -354,10 +354,18 @@ const WAGER_SETTLE_COOLDOWN_MS = 3 * 60 * 1000;
 const BOT_SETTLE_COOLDOWN_MS   = 5 * 60 * 1000;
 const xpSettleCooldowns = new Map(); // userId → 마지막 XP 정산 시각(내기·봇전 공용)
 
-// 봇이 늘 최선수만 두면 사람이 이길 길이 거의 없어 봇전 보상이 사실상 죽는다. 낮은 확률로
-// "가벼운 실수"를 섞어(상대 5 임박만은 무조건 막음) 사람이 파고들 틈을 만든다. 반복 파밍은
-// 쿨다운·하루 한도로 따로 차단된다 — 틱택토의 BOT_BLUNDER_CHANCE와 같은 취지.
-const BOT_BLUNDER_CHANCE = 0.14;
+// 봇이 늘 최선수만 두면 사람이 이길 길이 거의 없어 봇전 보상이 사실상 죽는다. 그렇다고 판
+// 초반부터 실수를 섞으면 너무 쉬워지므로, 끝말잇기의 "봇이 슬슬 포기"와 같은 방식으로 —
+// 착수가 어느 정도 쌓인 뒤부터 봇 차례마다 "가벼운 실수"(상대 5 임박만은 무조건 막음) 확률이
+// 조금씩 커지고 상한에서 멈춘다. 반복 파밍은 쿨다운·하루 한도로 따로 차단된다.
+const BOT_BLUNDER_AFTER_MOVES = 20;   // 총 착수가 이만큼 쌓이기 전에는 봇이 실수하지 않음(정석대로)
+const BOT_BLUNDER_STEP        = 0.03; // 그 뒤 봇 착수마다 실수 확률이 이만큼씩 증가
+const BOT_BLUNDER_MAX_CHANCE  = 0.18; // 실수 확률 상한
+
+function blunderChance(moveCount) {
+  if (moveCount < BOT_BLUNDER_AFTER_MOVES) return 0;
+  return Math.min(BOT_BLUNDER_MAX_CHANCE, (moveCount - BOT_BLUNDER_AFTER_MOVES + 1) * BOT_BLUNDER_STEP);
+}
 
 function isOnCooldown(userId, cooldownMs) {
   const last = xpSettleCooldowns.get(userId);
@@ -705,7 +713,7 @@ function resetTimeout(game, games) {
 }
 
 async function botTurn(game, games) {
-  const blunder = Math.random() < BOT_BLUNDER_CHANCE;
+  const blunder = Math.random() < blunderChance(game.moveCount);
   const mv = pickBotMove(game.board, 'W', blunder);
   applyMove(game, games, mv.x, mv.y, 'W');
   if (game.status === 'finished') { await finishBoard(game); return; }
