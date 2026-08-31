@@ -1013,6 +1013,11 @@ async function handleOmokMessage(message) {
     clearTimeout(game.timeoutId);
     applyMove(game, games, coord.x, coord.y, game.turn);
     await react(message, '✅');
+    // 착수는 보드에 그려지므로 유저가 친 좌표 메시지는 지워 채널을 깔끔하게 둔다.
+    // (유저 메시지 삭제엔 '메시지 관리' 권한 필요 — 없으면 조용히 남는다)
+    // 지운 메시지는 보드를 밀지 않으므로 위에서 올린 카운트를 되돌린다.
+    await message.delete().catch(() => {});
+    game.messagesSinceBoard = Math.max(0, (game.messagesSinceBoard ?? 1) - 1);
 
     if (game.status === 'finished') { await finishBoard(game); return; }
     if (game.players[game.turn] === 'BOT') { await botTurn(game, games); return; }
