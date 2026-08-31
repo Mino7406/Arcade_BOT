@@ -4,7 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp } = require('./레벨링');
 const { kstDateString, timeUntilKstMidnight } = require('./시간');
 
@@ -187,14 +187,14 @@ async function startRouletteCommand(interaction) {
   const userId = interaction.user.id;
 
   if (isExcludedGuild(guildId)) {
-    await interaction.reply({ content: '⚠️ **이 서버에서는 룰렛을 이용할 수 없습니다.**', ephemeral: true });
+    await interaction.reply({ content: '⚠️ **이 서버에서는 룰렛을 이용할 수 없습니다.**', flags: MessageFlags.Ephemeral });
     return;
   }
 
   if (hasPlayedToday(guildId, userId)) {
     await interaction.reply({
       content: `⏳ **오늘은 이미 룰렛을 돌렸습니다.**\n다음 판까지 약 ${timeUntilKstMidnight()} 남았어요.`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -203,7 +203,7 @@ async function startRouletteCommand(interaction) {
   if (currentLevelXp < MIN_BET) {
     await interaction.reply({
       content: `⚠️ **베팅 가능한 XP가 부족합니다.**\n(최소 ${MIN_BET} XP 필요, 현재 레벨 안 보유 XP: ${currentLevelXp})`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -221,7 +221,7 @@ async function startRouletteCommand(interaction) {
   lobbies.set(lobby.id, lobby);
 
   // 로비는 본인에게만 보이게(ephemeral) 띄우고, 결과는 스핀 시점에 채널에 공개 메시지로 따로 보낸다.
-  await interaction.reply({ embeds: [buildLobbyEmbed(lobby)], components: buildLobbyComponents(lobby), ephemeral: true });
+  await interaction.reply({ embeds: [buildLobbyEmbed(lobby)], components: buildLobbyComponents(lobby), flags: MessageFlags.Ephemeral });
 
   lobby.timeoutId = setTimeout(async () => {
     const l = lobbies.get(lobby.id);
@@ -325,18 +325,18 @@ async function handleRouletteButton(interaction) {
   const lobby = lobbies.get(lobbyId);
 
   if (!lobby) {
-    await interaction.reply({ content: '⚠️ **만료된 룰렛입니다.**', ephemeral: true });
+    await interaction.reply({ content: '⚠️ **만료된 룰렛입니다.**', flags: MessageFlags.Ephemeral });
     return;
   }
   if (interaction.user.id !== lobby.userId) {
-    await interaction.reply({ content: '⚠️ **본인이 시작한 룰렛만 조작할 수 있습니다.**', ephemeral: true });
+    await interaction.reply({ content: '⚠️ **본인이 시작한 룰렛만 조작할 수 있습니다.**', flags: MessageFlags.Ephemeral });
     return;
   }
 
   if (action === 'bet') {
     const amount = parseInt(parts[3], 10);
     if (amount > lobby.maxAvailable) {
-      await interaction.reply({ content: '⚠️ **베팅 가능한 XP를 초과했습니다.**', ephemeral: true });
+      await interaction.reply({ content: '⚠️ **베팅 가능한 XP를 초과했습니다.**', flags: MessageFlags.Ephemeral });
       return;
     }
     lobby.bet = amount;
@@ -352,7 +352,7 @@ async function handleRouletteButton(interaction) {
 
   if (action === 'spin') {
     if (!lobby.bet) {
-      await interaction.reply({ content: '⚠️ **먼저 베팅 XP를 선택하세요.**', ephemeral: true });
+      await interaction.reply({ content: '⚠️ **먼저 베팅 XP를 선택하세요.**', flags: MessageFlags.Ephemeral });
       return;
     }
     await spinLobby(interaction, lobby, lobbies);

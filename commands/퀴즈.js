@@ -1,6 +1,7 @@
 const {
   SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
   ModalBuilder, TextInputBuilder, TextInputStyle,
+  MessageFlags,
 } = require('discord.js');
 const { ADMIN_IDS } = require('../handlers/공용');
 const { pauseQuiz, resumeQuiz, postCustomQuiz, getQuizStatus } = require('../handlers/퀴즈');
@@ -104,17 +105,17 @@ module.exports = {
 
   async execute(interaction) {
     if (!ADMIN_IDS.includes(interaction.user.id)) {
-      await interaction.reply({ content: '❌ **권한이 없습니다.**', ephemeral: true });
+      await interaction.reply({ content: '❌ **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
       return;
     }
-    await interaction.reply({ ...buildQuizPanelPayload(), ephemeral: true });
+    await interaction.reply({ ...buildQuizPanelPayload(), flags: MessageFlags.Ephemeral });
   },
 };
 
 // ── 버튼 처리 ────────────────────────────────────────────────────
 async function handleQuizAdminButton(interaction) {
   if (!ADMIN_IDS.includes(interaction.user.id)) {
-    await interaction.reply({ content: '❌ **권한이 없습니다.**', ephemeral: true });
+    await interaction.reply({ content: '❌ **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -156,7 +157,7 @@ async function handleQuizAdminButton(interaction) {
 // ── 모달(직접 문제 입력) 처리 ──────────────────────────────────────
 async function handleQuizCreateModal(interaction) {
   if (!ADMIN_IDS.includes(interaction.user.id)) {
-    await interaction.reply({ content: '❌ **권한이 없습니다.**', ephemeral: true });
+    await interaction.reply({ content: '❌ **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -165,15 +166,15 @@ async function handleQuizCreateModal(interaction) {
   const hint = interaction.fields.getTextInputValue('hint').trim();
 
   if (!WORD_ONLY.test(word)) {
-    await interaction.reply({ content: '⚠️ **단어는 공백·특수문자 없이 한글 2~10자로 입력해주세요.**', ephemeral: true });
+    await interaction.reply({ content: '⚠️ **단어는 공백·특수문자 없이 한글 2~10자로 입력해주세요.**', flags: MessageFlags.Ephemeral });
     return;
   }
   if (!hint) {
-    await interaction.reply({ content: '⚠️ **힌트를 입력해주세요.**', ephemeral: true });
+    await interaction.reply({ content: '⚠️ **힌트를 입력해주세요.**', flags: MessageFlags.Ephemeral });
     return;
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const result = await postCustomQuiz(interaction.client, modeKey, word, hint);
   const notice = result.ok
     ? `✅ **직접 만든 ${MODE_LABELS[result.mode]}를 출제했습니다.** (정답: \`${word}\`, 1시간 안에 못 맞히면 자동 마감)`

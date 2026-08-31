@@ -8,6 +8,7 @@ const {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
+  MessageFlags,
 } = require('discord.js');
 const { ADMIN_IDS } = require('../config');
 const {
@@ -31,16 +32,16 @@ const MAX_LEVEL = 1000;
 // 조정 전 공통 관문 — 막히면 true. 순서 주의: 권한을 먼저 봐서 비관리자에게 내부 상태를 흘리지 않는다.
 async function denyGuard(interaction) {
   if (!ADMIN_IDS.includes(interaction.user.id)) {
-    await interaction.reply({ content: '❌ **권한이 없습니다.**', ephemeral: true });
+    await interaction.reply({ content: '❌ **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
     return true;
   }
   if (isExcludedGuild(interaction.guildId)) {
-    await interaction.reply({ content: '⚠️ **이 서버는 레벨 시스템이 비활성화돼 있어 XP를 조정할 수 없습니다.**', ephemeral: true });
+    await interaction.reply({ content: '⚠️ **이 서버는 레벨 시스템이 비활성화돼 있어 XP를 조정할 수 없습니다.**', flags: MessageFlags.Ephemeral });
     return true;
   }
   if (!isLevelsLoaded()) {
     // 복원 전에는 levels가 빈 객체라, 여기서 조정+저장하면 levels.json이 통째로 비워진다.
-    await interaction.reply({ content: '⚠️ **레벨 데이터를 복원하는 중입니다. 잠시 후 다시 시도하세요.**', ephemeral: true });
+    await interaction.reply({ content: '⚠️ **레벨 데이터를 복원하는 중입니다. 잠시 후 다시 시도하세요.**', flags: MessageFlags.Ephemeral });
     return true;
   }
   return false;
@@ -144,7 +145,7 @@ module.exports = {
     await interaction.reply({
       content: '조정할 유저를 선택하세요.',
       components: [buildPickRow()],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   },
 };
@@ -210,7 +211,7 @@ async function handleXpModal(interaction) {
     if (!Number.isInteger(n) || n <= 0 || n > MAX_ABS) {
       await interaction.reply({
         content: `⚠️ **1 ~ ${MAX_ABS.toLocaleString()} 사이의 정수를 입력하세요.**`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -229,7 +230,7 @@ async function handleXpModal(interaction) {
     if (!Number.isInteger(lv) || lv < 0 || lv > MAX_LEVEL) {
       await interaction.reply({
         content: `⚠️ **0 ~ ${MAX_LEVEL} 사이의 정수를 입력하세요.**`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }

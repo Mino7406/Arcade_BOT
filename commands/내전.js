@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
+const { SlashCommandBuilder, ActionRowBuilder, StringSelectMenuBuilder, MessageFlags } = require('discord.js');
 
 const { GAME_EMOJIS } = require('../config');
 
@@ -18,7 +18,7 @@ function buildGameSelectPayload() {
   return {
     content: '🎮 **내전 생성**\n어떤 게임의 내전을 만들까요?',
     components: [new ActionRowBuilder().addComponents(selectMenu)],
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   };
 }
 

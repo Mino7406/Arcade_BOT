@@ -8,6 +8,7 @@ const {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
+  MessageFlags,
 } = require('discord.js');
 
 const { ADMIN_IDS, AUTO_CLOSE_DELAY_MS, disarmAutoEnd, clearNotifyTimer, deleteMentionMessage, announceMatchCompletionXp, getCancelledDeletions } = require('../handlers/공용');
@@ -41,7 +42,7 @@ function buildCommandListPayload() {
       ...PLAYGROUND_COMMAND_LIST.map(c => ({ name: `\`${c.name}\``, value: c.value, inline: true })),
     );
 
-  return { embeds: [embed], ephemeral: true };
+  return { embeds: [embed], flags: MessageFlags.Ephemeral };
 }
 
 // /패널 최초 게시와 "🔄 새로고침" 버튼(index.js)에서 함께 사용.
@@ -106,6 +107,8 @@ function buildSetupPanelPayload(interaction) {
 // 조작은 패널에 바로 노출하지 않고 이 메뉴 안에 둔다. panelMessageId로 원본 패널 메시지를 지정해
 // 어느 패널을 갱신할지 특정한다(채널에 패널이 여러 개 게시돼 있을 수 있으므로). 이 메뉴 내부의
 // 모든 상호작용(새로고침/채널 청소/매치 삭제/봇 메시지 삭제)은 'panel:' 프리픽스로 공개 패널 버튼('recruit:')과 구분한다.
+// 이 페이로드는 최초 노출(reply)뿐 아니라 update/editReply로도 재사용되는데, 뒤의 둘은 Ephemeral
+// flag를 받지 않는다(이미 비공개 메시지라 붙일 필요가 없다). 그래서 flags는 여기 두지 않고 reply 호출부에서만 붙인다.
 function buildAdminMenuPayload(panelMessageId, notice) {
   return {
     content: (notice ? `${notice}\n\n` : '') + '⚙️ **패널 관리**',
@@ -119,7 +122,6 @@ function buildAdminMenuPayload(panelMessageId, notice) {
         new ButtonBuilder().setCustomId(`panel:bot_msg_delete:${panelMessageId}`).setLabel('🤖 봇 메시지 삭제').setStyle(ButtonStyle.Secondary),
       ),
     ],
-    ephemeral: true,
   };
 }
 
@@ -332,12 +334,12 @@ module.exports = {
 
   async execute(interaction) {
     if (!ADMIN_IDS.includes(interaction.user.id)) {
-      await interaction.reply({ content: '❌ **권한이 없습니다.**', ephemeral: true });
+      await interaction.reply({ content: '❌ **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
       return;
     }
 
     await interaction.channel.send(buildSetupPanelPayload(interaction));
-    await interaction.reply({ content: '✅ **안내 패널을 게시했습니다.**', ephemeral: true });
+    await interaction.reply({ content: '✅ **안내 패널을 게시했습니다.**', flags: MessageFlags.Ephemeral });
   },
 
   buildSetupPanelPayload,
@@ -348,7 +350,7 @@ module.exports = {
 // ── 관리 메뉴 버튼 처리 ('panel:' 프리픽스) ─────────────────────────
 async function handlePanelButton(interaction) {
   if (!ADMIN_IDS.includes(interaction.user.id)) {
-    await interaction.reply({ content: '❌ **권한이 없습니다.**', ephemeral: true });
+    await interaction.reply({ content: '❌ **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -418,14 +420,14 @@ async function handlePanelButton(interaction) {
 // ── 관리 메뉴 모달 처리 ("🤖 봇 메시지 삭제") ────────────────────────
 async function handlePanelBotMessageDeleteModal(interaction) {
   if (!ADMIN_IDS.includes(interaction.user.id)) {
-    await interaction.reply({ content: '❌ **권한이 없습니다.**', ephemeral: true });
+    await interaction.reply({ content: '❌ **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
     return;
   }
 
   const raw = interaction.fields.getTextInputValue('message_ref').trim();
   const ref = parseMessageRef(raw);
   if (!ref) {
-    await interaction.reply({ content: '⚠️ **올바른 메시지 ID 또는 링크가 아닙니다.**', ephemeral: true });
+    await interaction.reply({ content: '⚠️ **올바른 메시지 ID 또는 링크가 아닙니다.**', flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -435,22 +437,22 @@ async function handlePanelBotMessageDeleteModal(interaction) {
   const message = channel ? await channel.messages.fetch(ref.messageId).catch(() => null) : null;
 
   if (!message) {
-    await interaction.reply({ content: '⚠️ **메시지를 찾을 수 없습니다.**', ephemeral: true });
+    await interaction.reply({ content: '⚠️ **메시지를 찾을 수 없습니다.**', flags: MessageFlags.Ephemeral });
     return;
   }
   if (message.author.id !== interaction.client.user.id) {
-    await interaction.reply({ content: '⚠️ **봇이 보낸 메시지만 삭제할 수 있습니다.**', ephemeral: true });
+    await interaction.reply({ content: '⚠️ **봇이 보낸 메시지만 삭제할 수 있습니다.**', flags: MessageFlags.Ephemeral });
     return;
   }
 
   await message.delete();
-  await interaction.reply({ content: '✅ **메시지를 삭제했습니다.**', ephemeral: true });
+  await interaction.reply({ content: '✅ **메시지를 삭제했습니다.**', flags: MessageFlags.Ephemeral });
 }
 
 // ── 관리 메뉴 셀렉트 메뉴 처리 ("🗑️ 내전/모집 삭제" 목록) ────────────
 async function handlePanelMatchDeleteSelect(interaction) {
   if (!ADMIN_IDS.includes(interaction.user.id)) {
-    await interaction.reply({ content: '❌ **권한이 없습니다.**', ephemeral: true });
+    await interaction.reply({ content: '❌ **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
     return;
   }
 

@@ -2,7 +2,7 @@ const path = require('path');
 // 실행 디렉터리(CWD)가 아니라 이 파일 기준으로 env를 찾는다 — systemd 등 다른 CWD에서 띄워도
 // 토큰을 놓치지 않게. (파일명이 '.env'가 아니라 'env'인 것은 의도된 것)
 require('dotenv').config({ path: path.join(__dirname, 'env') });
-const { Client, GatewayIntentBits, Collection } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, MessageFlags } = require('discord.js');
 const fs = require('fs');
 
 // 예전 위치(루트)에 남아있던 JSON 저장 파일이 있다면 DB/ 폴더로 옮긴다(내용은 그대로, 위치만
@@ -238,7 +238,7 @@ client.on('interactionCreate', async (interaction) => {
 
     if (isWordchainOrRanking && !skipChannelLimits && interaction.channelId !== WORDCHAIN_RANKING_CHANNEL_ID) {
       if (interaction.isRepliable()) {
-        await interaction.reply({ content: '❌ 이 채널에서는 사용할 수 없습니다.', ephemeral: true });
+        await interaction.reply({ content: '❌ 이 채널에서는 사용할 수 없습니다.', flags: MessageFlags.Ephemeral });
       }
       return;
     }
@@ -252,7 +252,7 @@ client.on('interactionCreate', async (interaction) => {
 
     if (isReload && !skipChannelLimits && interaction.channelId !== MATCH_BONUS_CHANNEL_ID) {
       if (interaction.isRepliable()) {
-        await interaction.reply({ content: '❌ 이 채널에서는 사용할 수 없습니다.', ephemeral: true });
+        await interaction.reply({ content: '❌ 이 채널에서는 사용할 수 없습니다.', flags: MessageFlags.Ephemeral });
       }
       return;
     }
@@ -267,7 +267,7 @@ client.on('interactionCreate', async (interaction) => {
     if (!isChannelExempt && !skipChannelLimits) {
       if (allowedChannels.length > 0 && !allowedChannels.includes(interaction.channelId)) {
         if (interaction.isRepliable()) {
-          await interaction.reply({ content: '❌ 이 채널에서는 사용할 수 없습니다.', ephemeral: true });
+          await interaction.reply({ content: '❌ 이 채널에서는 사용할 수 없습니다.', flags: MessageFlags.Ephemeral });
         }
         return;
       }
@@ -368,9 +368,9 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply(buildCommandListPayload());
       } else if (interaction.customId === 'recruit:관리') {
         if (!ADMIN_IDS.includes(interaction.user.id)) {
-          await interaction.reply({ content: '❌ **권한이 없습니다.**', ephemeral: true });
+          await interaction.reply({ content: '❌ **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
         } else {
-          await interaction.reply(buildAdminMenuPayload(interaction.message.id));
+          await interaction.reply({ ...buildAdminMenuPayload(interaction.message.id), flags: MessageFlags.Ephemeral });
         }
       } else if (interaction.customId.startsWith('panel:')) {
         await handlePanelButton(interaction);
@@ -378,7 +378,7 @@ client.on('interactionCreate', async (interaction) => {
     }
   } catch (error) {
     console.error(error);
-    const msg = { content: '❌ 처리 중 오류가 발생했습니다.', ephemeral: true };
+    const msg = { content: '❌ 처리 중 오류가 발생했습니다.', flags: MessageFlags.Ephemeral };
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp(msg).catch(() => {});
     } else {

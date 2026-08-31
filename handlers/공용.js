@@ -57,6 +57,10 @@ function titleHeader(game, gameInfo, title) {
   return game === 'custom' ? `## ${title}` : `## ${gameInfo.emoji}  ${title}`;
 }
 
+// DM을 보낼 수 없는 정상적인 상황(수신자가 DM 차단 / 봇과 공통 서버 없음)의 디스코드 에러 코드.
+// 실패해도 봇 잘못이 아니므로 스택 트레이스 대신 한 줄 경고만 남긴다.
+const DM_UNREACHABLE_CODES = new Set([50007, 50278]);
+
 const AUTO_CLOSE_DELAY_MS = 8 * 60 * 60 * 1000;
 const CANCELLED_DELETE_DELAY_MS = 3 * 60 * 60 * 1000;
 
@@ -352,7 +356,13 @@ async function notifyOrganizerOnClose(match, label) {
       .addTextDisplayComponents(td => td.setContent('-# 📬 자동 마감 처리되어 주최자에게 알림이 전송되었습니다.'));
     await user.send({ components: [container], flags: MessageFlags.IsComponentsV2 });
   } catch (err) {
-    console.error(`${label} 마감 DM 전송 실패:`, err);
+    // 상대가 DM을 막아뒀거나(50007) 봇과 공통 서버가 없는(50278) 경우는 흔히 있는 일이라
+    // 스택 트레이스까지 남길 필요가 없다. 그 외의 예상 못 한 오류만 전체를 기록한다.
+    if (DM_UNREACHABLE_CODES.has(err?.code)) {
+      console.warn(`${label} 마감 DM 전송 생략(수신 불가): ${organizer.id}`);
+    } else {
+      console.error(`${label} 마감 DM 전송 실패:`, err);
+    }
   }
 }
 

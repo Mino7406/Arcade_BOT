@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const { getLeaderboard, getLeaderboardSize, buildProgressBar } = require('../handlers/레벨링');
 
 const PAGE_SIZE = 5;
@@ -113,7 +113,7 @@ module.exports = {
 
   async execute(interaction) {
     // 멤버 조회(네트워크 요청) 전에 먼저 ack해서 3초 인터랙션 응답 제한을 넘기지 않는다.
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const view = await buildRankingView(interaction.guild, 1);
     if (!view) {
       await interaction.editReply({ content: '📭 **아직 레벨 기록이 없습니다.**' });

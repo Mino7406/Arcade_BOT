@@ -5,6 +5,7 @@ const {
   ButtonStyle,
   StringSelectMenuBuilder,
   UserSelectMenuBuilder,
+  MessageFlags,
 } = require('discord.js');
 
 const {
@@ -302,7 +303,7 @@ async function handleNaejeonModal(interaction) {
   const description = interaction.fields.getTextInputValue('description');
 
   if (isNaN(parseInt(players)) || parseInt(players) < 1) {
-    await interaction.reply({ content: '⚠️ **모집 인원은 1 이상의 숫자만 입력해주세요.**', ephemeral: true });
+    await interaction.reply({ content: '⚠️ **모집 인원은 1 이상의 숫자만 입력해주세요.**', flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -314,7 +315,7 @@ async function handleNaejeonModal(interaction) {
     embeds: [buildPreviewEmbed(data)],
     components: buildPreviewComponents(data),
     attachments: [],
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   });
 }
 
@@ -330,14 +331,14 @@ async function handleNaejeonEditModal(interaction) {
   const description = interaction.fields.getTextInputValue('description');
 
   if (isNaN(parseInt(players)) || parseInt(players) < 1) {
-    await interaction.reply({ content: '⚠️ **모집 인원은 1 이상의 숫자만 입력해주세요.**', ephemeral: true });
+    await interaction.reply({ content: '⚠️ **모집 인원은 1 이상의 숫자만 입력해주세요.**', flags: MessageFlags.Ephemeral });
     return;
   }
 
   const pending = getPending(interaction.client);
   const data = pending.get(interaction.user.id);
   if (!data || !data._previewInteraction) {
-    await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/내전\`을 실행해주세요.`, ephemeral: true });
+    await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/내전\`을 실행해주세요.`, flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -351,7 +352,7 @@ async function handleNaejeonEditModal(interaction) {
   });
 
   // 모달 인터랙션을 조용히 마무리 (새 메시지 생성 없이)
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   await interaction.deleteReply();
 }
 
@@ -382,7 +383,7 @@ async function handleNaejeonButton(interaction) {
   if (customId === 'naejeon:publish') {
     const data = getPending(interaction.client).get(interaction.user.id);
     if (!data) {
-      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/내전\`을 실행해주세요.`, ephemeral: true });
+      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/내전\`을 실행해주세요.`, flags: MessageFlags.Ephemeral });
       return;
     }
     const maxPlayers = parseInt(data.players) || 0;
@@ -413,19 +414,19 @@ async function handleNaejeonButton(interaction) {
   if (customId === 'naejeon:join') {
     const match = getMatches(interaction.client).get(interaction.message.id);
     if (!match) {
-      await interaction.reply({ content: `⚠️ **만료된 내전입니다.**`, ephemeral: true });
+      await interaction.reply({ content: `⚠️ **만료된 내전입니다.**`, flags: MessageFlags.Ephemeral });
       return;
     }
     if (match.closed) {
       const inMatch = match.participants.some(u => u.id === interaction.user.id);
       if (!inMatch) {
-        await interaction.reply({ content: '🔒 **이미 마감된 내전입니다.**', ephemeral: true });
+        await interaction.reply({ content: '🔒 **이미 마감된 내전입니다.**', flags: MessageFlags.Ephemeral });
         return;
       }
       await interaction.reply({
         content: '**⚠️ 마감된 내전입니다.**\n취소하려면 아래 버튼을 눌러주세요.',
         components: [buildLeaveButton(interaction.message.id)],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -436,12 +437,12 @@ async function handleNaejeonButton(interaction) {
       await interaction.reply({
         content: '**⚠️ 이미 참가 중입니다.**\n취소하려면 아래 버튼을 눌러주세요.',
         components: [buildLeaveButton(interaction.message.id)],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
     if (match.participants.length >= maxPlayers) {
-      await interaction.reply({ content: '❌ **모집 인원이 가득 찼습니다!**', ephemeral: true });
+      await interaction.reply({ content: '❌ **모집 인원이 가득 찼습니다!**', flags: MessageFlags.Ephemeral });
       return;
     }
     match.participants.push({ id: interaction.user.id, displayName: displayNameFromInteraction(interaction) });
@@ -452,7 +453,7 @@ async function handleNaejeonButton(interaction) {
     await interaction.followUp({
       content: `✅ **참가 완료!** 명단에 등록되었습니다.\n취소하려면 아래 버튼을 눌러주세요.`,
       components: [buildLeaveButton(interaction.message.id)],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -492,17 +493,17 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = interaction.message.id;
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.reply({ content: `⚠️ **만료된 내전입니다.**`, ephemeral: true });
+      await interaction.reply({ content: `⚠️ **만료된 내전입니다.**`, flags: MessageFlags.Ephemeral });
       return;
     }
     if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
-      await interaction.reply({ content: '❌ **주최자만 사용할 수 있습니다.**', ephemeral: true });
+      await interaction.reply({ content: '❌ **주최자만 사용할 수 있습니다.**', flags: MessageFlags.Ephemeral });
       return;
     }
     await interaction.reply({
       content: '⚙️ **주최자 관리 메뉴**',
       components: buildManageMenu(match, matchMsgId),
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -672,7 +673,7 @@ async function handleNaejeonButton(interaction) {
       return;
     }
     if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
-      await interaction.reply({ content: '❌ **주최자만 사용할 수 있습니다.**', ephemeral: true });
+      await interaction.reply({ content: '❌ **주최자만 사용할 수 있습니다.**', flags: MessageFlags.Ephemeral });
       return;
     }
     if (!match.closed) {
@@ -710,11 +711,11 @@ async function handleNaejeonButton(interaction) {
       return;
     }
     if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
-      await interaction.reply({ content: '❌ **주최자만 사용할 수 있습니다.**', ephemeral: true });
+      await interaction.reply({ content: '❌ **주최자만 사용할 수 있습니다.**', flags: MessageFlags.Ephemeral });
       return;
     }
     if (match.notifySent) {
-      await interaction.reply({ content: '❌ **이미 발송된 알림은 다시 수정할 수 없습니다.**', ephemeral: true });
+      await interaction.reply({ content: '❌ **이미 발송된 알림은 다시 수정할 수 없습니다.**', flags: MessageFlags.Ephemeral });
       return;
     }
     if (match.data.notifyAt) {
@@ -748,11 +749,11 @@ async function handleNaejeonButton(interaction) {
       return;
     }
     if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
-      await interaction.reply({ content: '❌ **주최자만 사용할 수 있습니다.**', ephemeral: true });
+      await interaction.reply({ content: '❌ **주최자만 사용할 수 있습니다.**', flags: MessageFlags.Ephemeral });
       return;
     }
     if (match.notifySent) {
-      await interaction.reply({ content: '❌ **이미 발송된 알림은 다시 수정할 수 없습니다.**', ephemeral: true });
+      await interaction.reply({ content: '❌ **이미 발송된 알림은 다시 수정할 수 없습니다.**', flags: MessageFlags.Ephemeral });
       return;
     }
     await interaction.showModal(buildNotifyModal(matchMsgId, match.data.notifyAt, match.data.notify12h));
@@ -895,7 +896,7 @@ async function handleNaejeonButton(interaction) {
   if (customId === 'naejeon:toggle_autoclose') {
     const data = getPending(interaction.client).get(interaction.user.id);
     if (!data) {
-      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/내전\`을 실행해주세요.`, ephemeral: true });
+      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/내전\`을 실행해주세요.`, flags: MessageFlags.Ephemeral });
       return;
     }
     data.autoClose = !data.autoClose;
@@ -912,7 +913,7 @@ async function handleNaejeonButton(interaction) {
   if (customId === 'naejeon:toggle_steam') {
     const data = getPending(interaction.client).get(interaction.user.id);
     if (!data) {
-      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/내전\`을 실행해주세요.`, ephemeral: true });
+      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/내전\`을 실행해주세요.`, flags: MessageFlags.Ephemeral });
       return;
     }
     data.mentionSteam = !data.mentionSteam;
@@ -929,7 +930,7 @@ async function handleNaejeonButton(interaction) {
   if (customId === 'naejeon:notify_set_preview') {
     const data = getPending(interaction.client).get(interaction.user.id);
     if (!data) {
-      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/내전\`을 실행해주세요.`, ephemeral: true });
+      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/내전\`을 실행해주세요.`, flags: MessageFlags.Ephemeral });
       return;
     }
     await interaction.showModal(buildNotifyModal('preview', data.notifyAt, data.notify12h));
@@ -940,7 +941,7 @@ async function handleNaejeonButton(interaction) {
   if (customId === 'naejeon:edit') {
     const data = getPending(interaction.client).get(interaction.user.id);
     if (!data) {
-      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/내전\`을 실행해주세요.`, ephemeral: true });
+      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/내전\`을 실행해주세요.`, flags: MessageFlags.Ephemeral });
       return;
     }
     const editModal = buildModal(data.game, data);
@@ -995,7 +996,7 @@ async function handleNaejeonMatchEditModal(interaction) {
 
   const match = getMatches(interaction.client).get(matchMsgId);
   if (!match) {
-    await interaction.reply({ content: `⚠️ **만료된 내전입니다.**`, ephemeral: true });
+    await interaction.reply({ content: `⚠️ **만료된 내전입니다.**`, flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -1005,7 +1006,7 @@ async function handleNaejeonMatchEditModal(interaction) {
   const description = interaction.fields.getTextInputValue('description');
 
   if (isNaN(parseInt(players)) || parseInt(players) < 1) {
-    await interaction.reply({ content: '⚠️ **모집 인원은 1 이상의 숫자만 입력해주세요.**', ephemeral: true });
+    await interaction.reply({ content: '⚠️ **모집 인원은 1 이상의 숫자만 입력해주세요.**', flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -1013,7 +1014,7 @@ async function handleNaejeonMatchEditModal(interaction) {
 
   await match.message.edit(buildPublicMessagePayload(match));
 
-  await interaction.reply({ content: '✅ **내전 정보가 수정되었습니다.**', ephemeral: true });
+  await interaction.reply({ content: '✅ **내전 정보가 수정되었습니다.**', flags: MessageFlags.Ephemeral });
 }
 
 // customId: naejeon:notify_modal:{matchMsgId}. 비워서 제출하면 예약을 취소한다.
@@ -1025,17 +1026,17 @@ async function handleNaejeonNotifyModal(interaction) {
   if (matchMsgId === 'preview') {
     const data = getPending(interaction.client).get(interaction.user.id);
     if (!data || !data._previewInteraction) {
-      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/내전\`을 실행해주세요.`, ephemeral: true });
+      await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/내전\`을 실행해주세요.`, flags: MessageFlags.Ephemeral });
       return;
     }
     if (raw) {
       const notifyAt = parseNotifyTime(raw);
       if (!notifyAt) {
-        await interaction.reply({ content: '⚠️ **알림 시각 형식이 올바르지 않습니다.** (예: `6/5 20:00` 또는 `6/5 오후 8:00`)', ephemeral: true });
+        await interaction.reply({ content: '⚠️ **알림 시각 형식이 올바르지 않습니다.** (예: `6/5 20:00` 또는 `6/5 오후 8:00`)', flags: MessageFlags.Ephemeral });
         return;
       }
       if (isNotifyTooFar(notifyAt)) {
-        await interaction.reply({ content: '⚠️ **알림은 최대 24일 이내로만 예약할 수 있습니다.**', ephemeral: true });
+        await interaction.reply({ content: '⚠️ **알림은 최대 24일 이내로만 예약할 수 있습니다.**', flags: MessageFlags.Ephemeral });
         return;
       }
       data.notifyAt = notifyAt;
@@ -1050,14 +1051,14 @@ async function handleNaejeonNotifyModal(interaction) {
       components: buildPreviewComponents(data),
       attachments: [],
     });
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     await interaction.deleteReply();
     return;
   }
 
   const match = getMatches(interaction.client).get(matchMsgId);
   if (!match) {
-    await interaction.reply({ content: `⚠️ **만료된 내전입니다.**`, ephemeral: true });
+    await interaction.reply({ content: `⚠️ **만료된 내전입니다.**`, flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -1067,17 +1068,17 @@ async function handleNaejeonNotifyModal(interaction) {
     match.notifySent = false;
     clearNotifyTimer(match);
     await match.message.edit(buildPublicMessagePayload(match)).catch(err => console.error('알림 예약 아이콘 갱신 실패:', err));
-    await interaction.reply({ content: '🔕 **알림 예약이 취소되었습니다.**', ephemeral: true });
+    await interaction.reply({ content: '🔕 **알림 예약이 취소되었습니다.**', flags: MessageFlags.Ephemeral });
     return;
   }
 
   const notifyAt = parseNotifyTime(raw);
   if (!notifyAt) {
-    await interaction.reply({ content: '⚠️ **알림 시각 형식이 올바르지 않습니다.** (예: `6/5 20:00` 또는 `6/5 오후 8:00`)', ephemeral: true });
+    await interaction.reply({ content: '⚠️ **알림 시각 형식이 올바르지 않습니다.** (예: `6/5 20:00` 또는 `6/5 오후 8:00`)', flags: MessageFlags.Ephemeral });
     return;
   }
   if (isNotifyTooFar(notifyAt)) {
-    await interaction.reply({ content: '⚠️ **알림은 최대 24일 이내로만 예약할 수 있습니다.**', ephemeral: true });
+    await interaction.reply({ content: '⚠️ **알림은 최대 24일 이내로만 예약할 수 있습니다.**', flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -1088,7 +1089,7 @@ async function handleNaejeonNotifyModal(interaction) {
   await match.message.edit(buildPublicMessagePayload(match)).catch(err => console.error('알림 예약 아이콘 갱신 실패:', err));
   await interaction.reply({
     content: `✅ **${formatNotifyTimeSmart(notifyAt, match.data.notify12h)}에 참가자에게 DM 알림을 보낼게요.**`,
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   });
 }
 

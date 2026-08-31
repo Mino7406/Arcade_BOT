@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
+const { SlashCommandBuilder, ActionRowBuilder, StringSelectMenuBuilder, MessageFlags } = require('discord.js');
 
 // 안내 패널의 "불러오기" 버튼(index.js)에서도 재사용하기 위해 페이로드 생성 로직을 분리.
 // naejeonMatches/mojipMatches가 길드별로 client에 실려있기 때문에 interaction이 필요하다.
@@ -25,7 +25,7 @@ function buildReloadListPayload(interaction) {
   }
 
   if (options.length === 0) {
-    return { content: '⚠️ **진행 중인 내전/모집이 없습니다.**', ephemeral: true };
+    return { content: '⚠️ **진행 중인 내전/모집이 없습니다.**', flags: MessageFlags.Ephemeral };
   }
 
   return {
@@ -38,7 +38,7 @@ function buildReloadListPayload(interaction) {
           .addOptions(options.slice(0, 25)),
       ),
     ],
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   };
 }
 

@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const { getXp, levelFromXp, buildProgressBar } = require('../handlers/레벨링');
 const { displayNameFromMember } = require('../handlers/이름');
 
@@ -46,7 +46,7 @@ module.exports = {
     await interaction.reply({
       embeds: [embed],
       components: [buildShareRow(targetUser.id)],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   },
 };

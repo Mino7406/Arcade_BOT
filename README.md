@@ -317,7 +317,7 @@ npm start
 | `scheduleMessageDelete(client, msgId, channelId, deleteAt)` | 매치 상태와 무관하게 일반 메시지를 `deleteAt`(기본 8시간 후) 시점에 자동 삭제 예약 — `client.pendingMessageDeletions` Map에 기록해 재시작 후에도 복원 가능 (내전/모집 인증 채널의 유저 메시지 정리에 사용) |
 | `markClosed(matchesMap, msgId, match, label, notify = true)` / `markReopened(match)` | 매치 마감/마감 해제 처리 (자동 삭제 타이머 연동). `notify=false`를 넘기면 주최자 DM을 생략(주최자 본인이 직접 마감한 경우에 사용) |
 | `toggleAutoCloseWhileClosed(matchesMap, msgId, match, label, enabled)` | 이미 마감된 매치의 자동 삭제 ON/OFF를 관리 메뉴에서 토글 — 원래 마감 시각 기준 남은 시간으로 재예약(다 지났으면 즉시 삭제), OFF 시 타이머만 취소 |
-| `notifyOrganizerOnClose(match, label)` *(내부)* | 정원 자동 마감 시 주최자에게 게시글 제목과 링크를 DM으로 전송 (DM 차단 등 실패는 무시) |
+| `notifyOrganizerOnClose(match, label)` *(내부)* | 정원 자동 마감 시 주최자에게 게시글 제목과 링크를 DM으로 전송 (DM 차단 등 실패는 무시). 주최자가 DM을 막아뒀거나(`50007`) 봇과 공통 서버가 없는(`50278`) 경우는 흔한 상황이라 스택 트레이스 대신 한 줄 경고만 남기고(`DM_UNREACHABLE_CODES`), 그 외 예상 못 한 오류만 전체를 기록 |
 | `announceMatchCompletionXp(match)` | 마감된 매치에 보너스 XP 지급 + 레벨업 유저 축하 메시지 게시 |
 | `buildModal` / `buildPreviewEmbed` / `buildPreviewComponents` / `buildCancelComponents` / `buildLeaveButton` | 내전/모집이 공유하는 모달·임베드·버튼 빌더 (`type` 파라미터로 분기) |
 | `matchToJSON(match)` *(내부)* | 직렬화 불가능한 필드(메시지 참조, 타이머 등)를 제외하고 매치를 JSON 변환 |
@@ -451,7 +451,7 @@ npm start
 |---|---|
 | `buildCommandListPayload()` | "📖 명령어 보기" 버튼용 전체 명령어 목록 임베드 페이로드 생성 (index.js에서도 재사용) |
 | `buildSetupPanelPayload(interaction)` | 안내 패널 임베드/버튼 페이로드 생성 (`/패널` 최초 게시, "🔄 새로고침" 버튼에서 공용) |
-| `buildAdminMenuPayload(panelMessageId, notice)` | "⚙️ 관리" 버튼(관리자 전용) → 새로고침/채널 청소/내전·모집 삭제/봇 메시지 삭제를 모아 보여주는 ephemeral 메뉴, `panelMessageId`로 갱신 대상 패널을 특정. `notice`가 있으면 방금 조작 결과를 상단에 덧붙임 |
+| `buildAdminMenuPayload(panelMessageId, notice)` | "⚙️ 관리" 버튼(관리자 전용) → 새로고침/채널 청소/내전·모집 삭제/봇 메시지 삭제를 모아 보여주는 비공개(ephemeral) 메뉴, `panelMessageId`로 갱신 대상 패널을 특정. `notice`가 있으면 방금 조작 결과를 상단에 덧붙임. 이 페이로드만은 `flags`를 담지 않는다 — 최초 노출(`reply`) 외에 `update`/`editReply`로도 재사용되는데 그 둘은 Ephemeral flag를 받지 않으므로, flag는 `index.js`의 `reply` 호출부에서만 붙인다 |
 | `purgeUserMessages(channel)` | 채널의 봇이 아닌 유저 메시지를 페이지 단위로 조회해 `bulkDelete`(14일 초과분은 자동 스킵) — 최대 2000개(20페이지)까지 순회 후 삭제 개수 반환 |
 | `formatHoursLeft(deleteAt)` | `deleteAt`(epoch ms)까지 남은 시간을 "약 N시간 후 자동삭제"로 표시 — 마감된 매치/취소된 게시글 상태 문구에서 공용으로 사용 |
 | `formatMatchStatus(match)` | 셀렉트 옵션의 상태 문구 생성 — 모집 중이면 "🟢 모집중", 마감이면 자동삭제(`autoClose`) 켜짐 여부에 따라 "🔒 마감됨"만 또는 남은 시간을 붙여 표시 |
@@ -492,6 +492,12 @@ npm start
 - 두 파일 모두 30초마다 자동 저장되며, `SIGTERM`/`SIGINT` 종료 시에도 마지막으로 한 번 저장됩니다.
 - `DB/N-M.json` 저장은 **원자적으로** 이뤄집니다 — `DB/N-M.json.tmp`에 먼저 전부 쓴 뒤 `rename`으로 교체합니다. 전량 덮어쓰기 도중 봇이 죽어도 파일이 잘리지 않아, 재시작 시 파싱 실패로 데이터 전체가 날아가는 일을 막습니다.
 - 봇 재시작 시 `DB/N-M.json`을 읽어 매치를 복원하고, 실제 채널/메시지를 다시 조회해 최신 코드 기준으로 임베드를 다시 렌더링하며, 남은 자동 종료 시간도 재계산해 타이머를 다시 겁니다.
+
+## 코드 컨벤션
+
+- **비공개(ephemeral) 응답은 `flags: MessageFlags.Ephemeral`로 통일합니다.** discord.js v14에서 `ephemeral: true` 옵션은 deprecated이며 v15에서 제거되므로(실행 시 `Supplying "ephemeral" for interaction response options is deprecated` 경고), `reply`/`deferReply`/`followUp`에는 항상 `flags`를 씁니다. `MessageFlags`는 각 파일의 `require('discord.js')` 구조분해에 포함시킵니다.
+- 단, **`update`/`editReply`에는 Ephemeral flag를 넣지 않습니다** — 이미 비공개인 메시지를 고치는 것이라 불필요하고, 디스코드가 받지 않는 조합입니다. 그래서 `reply`와 `update`/`editReply` 양쪽에서 재사용되는 페이로드 빌더(`buildAdminMenuPayload`)는 flag를 담지 않고, 최초 노출하는 `reply` 호출부에서만 `{ ...payload, flags: MessageFlags.Ephemeral }`로 붙입니다.
+- 컴포넌트 v2 메시지의 `flags: MessageFlags.IsComponentsV2`(`handlers/공용.js`의 DM 등)와는 별개이며, 한 페이로드에서 두 flag가 겹치는 곳은 현재 없습니다.
 
 ## 권한
 
