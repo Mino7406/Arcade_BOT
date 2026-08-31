@@ -423,6 +423,23 @@ async function react(message, emoji) {
   }
 }
 
+// 유저가 친 좌표 메시지를 지운다. 남의 메시지 삭제엔 '메시지 관리' 권한이 필요해서, 없으면
+// 조용히 실패한다 — 왜 안 지워지는지 추적할 수 있게 10분에 한 번은 사유를 로그로 남긴다.
+let lastDeleteErrorLog = 0;
+async function deleteUserMessage(message) {
+  try {
+    await message.delete();
+  } catch (err) {
+    const now = Date.now();
+    if (now - lastDeleteErrorLog < REACT_ERROR_LOG_INTERVAL_MS) return;
+    lastDeleteErrorLog = now;
+    console.error(
+      `오목 좌표 메시지 삭제 실패 — 채널 ${message.channelId}에서 봇에게 '메시지 관리' 권한이 있는지 확인하세요:`,
+      err?.message ?? err,
+    );
+  }
+}
+
 // ── XP 정산 (틱택토와 동일한 구조·상수) ──────────────────────────
 function settleWagerXp(game) {
   if (!game.guildId || game.winner === 'DRAW') return null;
@@ -1014,9 +1031,9 @@ async function handleOmokMessage(message) {
     applyMove(game, games, coord.x, coord.y, game.turn);
     await react(message, '✅');
     // 착수는 보드에 그려지므로 유저가 친 좌표 메시지는 지워 채널을 깔끔하게 둔다.
-    // (유저 메시지 삭제엔 '메시지 관리' 권한 필요 — 없으면 조용히 남는다)
+    // (봇에게 '메시지 관리' 권한이 없으면 삭제가 실패하고 메시지는 남는다 — deleteUserMessage가 사유를 로그로 남김)
     // 지운 메시지는 보드를 밀지 않으므로 위에서 올린 카운트를 되돌린다.
-    await message.delete().catch(() => {});
+    await deleteUserMessage(message);
     game.messagesSinceBoard = Math.max(0, (game.messagesSinceBoard ?? 1) - 1);
 
     if (game.status === 'finished') { await finishBoard(game); return; }
