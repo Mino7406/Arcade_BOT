@@ -394,8 +394,25 @@ function parseCoord(text) {
 
 const coordLabel = (x, y) => String.fromCharCode(65 + x) + (y + 1);
 
+// 리액션은 실패해도 게임 진행엔 지장 없지만, 조용히 삼키면 "왜 체크 표시가 안 달리지?"를
+// 추적할 수 없다. 대개 그 채널에서 봇에게 '반응 추가' 또는 '메시지 기록 보기' 권한이 없는
+// 경우다(리액션엔 둘 다 필요). 끝말잇기와 동일하게 10분에 한 번만 로그를 남긴다.
+const REACT_ERROR_LOG_INTERVAL_MS = 10 * 60 * 1000;
+let lastReactErrorLog = 0;
+
 async function react(message, emoji) {
-  try { await message.react(emoji); } catch { /* 권한 없음 등은 무시 */ }
+  try {
+    await message.react(emoji);
+  } catch (err) {
+    const now = Date.now();
+    if (now - lastReactErrorLog < REACT_ERROR_LOG_INTERVAL_MS) return;
+    lastReactErrorLog = now;
+    console.error(
+      `오목 리액션(${emoji}) 실패 — 채널 ${message.channelId}에서 봇에게 '반응 추가'와 `
+      + `'메시지 기록 보기' 권한이 있는지 확인하세요:`,
+      err?.message ?? err,
+    );
+  }
 }
 
 // ── XP 정산 (틱택토와 동일한 구조·상수) ──────────────────────────
@@ -491,12 +508,15 @@ function buildEmbed(game) {
     ? (game.winner === 'DRAW' ? 0x808080 : 0xFFD700)
     : 0x5865F2;
 
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(color)
     .setDescription(desc)
     .setImage('attachment://omok.png')
-    .setFooter({ text: '5분 안에 두지 않으면 시간 초과로 종료됩니다.' })
     .setTimestamp();
+  if (game.status !== 'finished') {
+    embed.setFooter({ text: '5분 안에 두지 않으면 시간 초과로 종료됩니다.' });
+  }
+  return embed;
 }
 
 // 진행 중 보드에 붙는 버튼 — 자기 차례가 아니어도 참가자면 누를 수 있는 포기.
@@ -974,7 +994,7 @@ async function handleOmokMessage(message) {
     if (currentId === 'BOT' || currentId !== message.author.id) continue;
 
     const coord = parseCoord(message.content);
-    if (!coord) return; // 좌표가 아닌 잡담 — 무시(제한 시간은 그대로 흐른다)
+    if (!coord) continue; // 좌표가 아닌 잡담 — 무시(제한 시간은 그대로 흐른다)
 
     if (game.board[cellIdx(coord.x, coord.y)] !== '') {
       const warn = await message.reply('⚠️ 이미 돌이 있는 자리입니다. 다른 좌표를 입력하세요.').catch(() => null);
