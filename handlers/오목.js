@@ -502,7 +502,7 @@ async function boardFile(game) {
 function buildEmbed(game) {
   const bName = game.players.B === 'BOT' ? '🤖 봇' : `<@${game.players.B}>`;
   const wName = game.players.W === 'BOT' ? '🤖 봇' : `<@${game.players.W}>`;
-  let desc = `# ⚫ 오목\n⚫ ${bName}  **vs**  ⚪ ${wName}\n\n`;
+  let desc = `## ⚫ 오목\n⚫ ${bName}  **vs**  ⚪ ${wName}\n\n`;
 
   if (game.status === 'finished') {
     if (game.winner === 'DRAW') {
