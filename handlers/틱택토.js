@@ -307,6 +307,10 @@ function buildEmbed(game) {
     .setDescription(desc)
     .setTimestamp();
 
+  if (game.status !== 'finished') {
+    embed.setFooter({ text: `⏰ ${TIMEOUT_MS / 60000}분 안에 두지 않으면 시간 초과로 종료됩니다.` });
+  }
+
   return embed;
 }
 

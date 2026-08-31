@@ -316,6 +316,7 @@ function buildPlayingEmbed(game) {
       { name: `👥 참가자  ${game.players.length}명`, value: participantText, inline: true },
       { name: '📝 최근 단어', value: recentWords, inline: true },
     )
+    .setFooter({ text: `⏰ ${TURN_SEC}초 안에 입력하지 않으면 시간 초과로 종료됩니다.` })
     .setTimestamp();
 }
 
