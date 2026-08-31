@@ -33,7 +33,7 @@ const { handleRankingPageButton, handleRankingShareButton } = require('./command
 const { handleXpUserSelect, handleXpButton, handleXpModal } = require('./commands/XP');
 const { loadLevels, saveLevels, handleMessageXp, trackVoiceStateUpdate, initVoiceStates, startVoiceXpTicker, announceLevelUp, MATCH_BONUS_CHANNEL_ID } = require('./handlers/레벨링');
 const { handleTempVoiceState, reconcileTempChannels } = require('./handlers/음성채널');
-const { logInteraction } = require('./handlers/로그');
+const { logInteraction, flushLogsSync } = require('./handlers/로그');
 
 // 끝말잇기/틱택토/랭킹 명령어와 관련 버튼을 이 채널에서만 사용할 수 있게 제한한다.
 // ALLOWED_CHANNEL_IDS는 내전/모집/팀 상호작용을 허용할 채널 목록(비어 있으면 제한 없음).
@@ -474,6 +474,9 @@ function shutdown() {
     try { saveRoulette(); } catch (e) { console.error('룰렛 종료 저장 실패:', e); }
     try { saveBotMatchXp(); } catch (e) { console.error('봇전 XP 한도 종료 저장 실패:', e); }
   }
+  // 로그는 dataReady와 무관하게(복원 전에 눌린 상호작용도 남아 있으므로) 항상 밀어 넣는다.
+  // 평소 저장은 비동기라 아래 process.exit()에 끊길 수 있어, 여기서만 동기로 마무리한다.
+  flushLogsSync();
   client.destroy();
   process.exit(0);
 }

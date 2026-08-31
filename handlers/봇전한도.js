@@ -7,6 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const { kstDateString, timeUntilKstMidnight } = require('./시간');
+const { logSystem } = require('./로그');
 
 const STORE_PATH = path.join(__dirname, '..', 'DB', 'botmatch-xp.json');
 fs.mkdirSync(path.dirname(STORE_PATH), { recursive: true });
@@ -31,7 +32,10 @@ function loadBotMatchXp() {
     if (fs.existsSync(STORE_PATH)) {
       store = JSON.parse(fs.readFileSync(STORE_PATH, 'utf8'));
     }
-  } catch {
+  } catch (err) {
+    // 초기화되면 오늘치 봇전 보상 한도가 풀려 XP를 상한 없이 더 받을 수 있게 된다.
+    console.error('봇전 XP 한도 기록 읽기 실패(오늘치 한도가 초기화됨):', err);
+    logSystem({ 유형: '저장 오류', 내용: `botMatchXp.json 읽기 실패 — 오늘치 봇전 보상 한도 초기화됨: ${err?.message ?? err}` });
     store = {};
   }
 }

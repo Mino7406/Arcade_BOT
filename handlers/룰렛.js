@@ -7,6 +7,7 @@ const path = require('path');
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp } = require('./레벨링');
 const { kstDateString, timeUntilKstMidnight } = require('./시간');
+const { logSystem } = require('./로그');
 
 const ROULETTE_PATH = path.join(__dirname, '..', 'DB', 'roulette.json');
 fs.mkdirSync(path.dirname(ROULETTE_PATH), { recursive: true });
@@ -42,7 +43,10 @@ function loadRoulette() {
     if (fs.existsSync(ROULETTE_PATH)) {
       roulette = JSON.parse(fs.readFileSync(ROULETTE_PATH, 'utf8'));
     }
-  } catch {
+  } catch (err) {
+    // 초기화되면 오늘 이미 돌린 사람도 다시 돌릴 수 있게 된다(일일 1회 제한이 풀림).
+    console.error('룰렛 기록 읽기 실패(일일 제한이 초기화됨):', err);
+    logSystem({ 유형: '저장 오류', 내용: `roulette.json 읽기 실패 — 일일 플레이 기록 초기화됨: ${err?.message ?? err}` });
     roulette = {};
   }
 }

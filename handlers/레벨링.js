@@ -3,6 +3,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { logSystem } = require('./로그');
 
 const {
   EXCLUDED_GUILD_IDS,
@@ -58,10 +59,17 @@ function loadLevels() {
     if (fs.existsSync(LEVELS_PATH)) {
       levels = JSON.parse(fs.readFileSync(LEVELS_PATH, 'utf8'));
     }
-  } catch {
+    loaded = true; // 파일이 없어서 빈 채로 시작하는 것도 "복원 완료"로 본다
+  } catch (err) {
+    // 파일이 깨져 읽지 못한 경우. 여기서 loaded를 켜면 빈 levels가 '복원 완료'로 취급돼,
+    // 다음 saveLevels() 한 번에 levels.json이 통째로 비워진다(전 서버 XP 영구 소실).
+    // 그래서 loaded는 false로 남겨 저장 자체를 막는다 — 깨진 파일을 그대로 보존하는 편이
+    // 빈 값으로 덮어쓰는 것보다 낫다(그동안 쌓인 XP는 저장되지 않는다).
+    // 조용히 넘어가면 원인을 알 수 없으므로 콘솔과 파일 로그 양쪽에 남긴다.
+    console.error('레벨 데이터 읽기 실패(XP 저장이 중지됨 — levels.json을 복구해야 함):', err);
+    logSystem({ 유형: '저장 오류', 내용: `levels.json 읽기 실패 — 덮어쓰기 방지를 위해 XP 저장 중지됨(파일 복구 필요): ${err?.message ?? err}` });
     levels = {};
   }
-  loaded = true; // 파일이 없어서 빈 채로 시작하는 것도 "복원 완료"로 본다
 }
 
 function isLevelsLoaded() {

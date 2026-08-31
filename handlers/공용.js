@@ -20,6 +20,7 @@ const {
 const { awardMatchCompletionXp, announceLevelUp } = require('./레벨링');
 const { KST_OFFSET_MS } = require('./시간');
 const { ADMIN_IDS, STEAM_EMOJI_ID } = require('../config');
+const { logSystem } = require('./로그');
 
 // 내전(naejeon)/모집(mojip) 두 시스템이 공유하는 게임 → 역할 이름 매핑.
 // (역할 멘션 대상 채널이 있으면 해당 역할을 핑한다.)
@@ -60,6 +61,29 @@ function titleHeader(game, gameInfo, title) {
 // DM을 보낼 수 없는 정상적인 상황(수신자가 DM 차단 / 봇과 공통 서버 없음)의 디스코드 에러 코드.
 // 실패해도 봇 잘못이 아니므로 스택 트레이스 대신 한 줄 경고만 남긴다.
 const DM_UNREACHABLE_CODES = new Set([50007, 50278]);
+
+// 위 두 코드를 사람이 읽을 수 있는 사유로 바꾼다. 콘솔·로그 양쪽에서 같은 문구를 쓴다.
+const DM_FAIL_REASONS = {
+  50007: 'DM 차단(개인정보 설정 또는 봇 차단)',
+  50278: '공통 서버 없음(서버를 나감)',
+};
+
+// DM 발송 실패를 콘솔과 DB/log.json에 함께 남긴다. 콘솔은 봇이 꺼지면 사라지므로,
+// "언제 · 누구한테 · 왜 실패했는지"를 나중에도 되짚을 수 있게 파일 로그에도 기록한다.
+// 흔한 수신 불가(DM_UNREACHABLE_CODES)는 봇 잘못이 아니라 한 줄 경고, 그 외는 스택까지 남긴다.
+function logDmFailure(err, { 종류, label, target, match }) {
+  const 유저 = `${target?.displayName || '알 수 없는 유저'}(${target?.id})`;
+  const 채널 = match?.message?.channel?.name ? `#${match.message.channel.name}` : '-';
+  const 제목 = match?.data?.title ? ` — '${match.data.title}'` : '';
+  if (DM_UNREACHABLE_CODES.has(err?.code)) {
+    const 사유 = DM_FAIL_REASONS[err.code];
+    console.warn(`${label} ${종류} DM 전송 생략(${사유}, ${err.code}): ${유저}`);
+    logSystem({ 유형: 'DM 실패', 유저, 채널, 내용: `${label} ${종류} DM 미발송${제목} — ${사유}(${err.code})` });
+  } else {
+    console.error(`${label} ${종류} DM 전송 실패:`, err);
+    logSystem({ 유형: 'DM 실패', 유저, 채널, 내용: `${label} ${종류} DM 발송 오류${제목} — ${err?.code ?? '알 수 없음'}: ${err?.message ?? err}` });
+  }
+}
 
 const AUTO_CLOSE_DELAY_MS = 8 * 60 * 60 * 1000;
 const CANCELLED_DELETE_DELAY_MS = 3 * 60 * 60 * 1000;
@@ -249,8 +273,9 @@ async function sendMatchStartDm(match, label) {
         .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
         .addTextDisplayComponents(td => td.setContent('-# 📬 예약된 알림 시각이 되어 참가자에게 자동으로 전송되었습니다.'));
       await target.send({ components: [container], flags: MessageFlags.IsComponentsV2 });
-    } catch {
-      // DM 차단 등으로 실패해도 다른 수신자 발송에는 영향 없음
+    } catch (err) {
+      // DM 차단 등으로 실패해도 다른 수신자 발송에는 영향 없음 — 기록만 남기고 다음 사람으로 넘어간다.
+      logDmFailure(err, { 종류: '시작 알림', label, target: user, match });
     }
   }
 }
@@ -358,11 +383,7 @@ async function notifyOrganizerOnClose(match, label) {
   } catch (err) {
     // 상대가 DM을 막아뒀거나(50007) 봇과 공통 서버가 없는(50278) 경우는 흔히 있는 일이라
     // 스택 트레이스까지 남길 필요가 없다. 그 외의 예상 못 한 오류만 전체를 기록한다.
-    if (DM_UNREACHABLE_CODES.has(err?.code)) {
-      console.warn(`${label} 마감 DM 전송 생략(수신 불가): ${organizer.id}`);
-    } else {
-      console.error(`${label} 마감 DM 전송 실패:`, err);
-    }
+    logDmFailure(err, { 종류: '마감', label, target: organizer, match });
   }
 }
 
@@ -671,7 +692,10 @@ function loadRows() {
   try {
     if (!fs.existsSync(DB_PATH)) return [];
     return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-  } catch {
+  } catch (err) {
+    // 진행 중이던 내전/모집이 전부 복원되지 않은 채 시작된다(메시지는 남아있지만 버튼이 죽음).
+    console.error('내전/모집 저장 파일 읽기 실패(복원 없이 시작):', err);
+    logSystem({ 유형: '저장 오류', 내용: `내전/모집 저장 파일 읽기 실패 — 진행 중이던 매치가 복원되지 않음: ${err?.message ?? err}` });
     return [];
   }
 }

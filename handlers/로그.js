@@ -21,6 +21,7 @@ const { KST_OFFSET_MS } = require('./시간');
 const { displayNameFromInteraction } = require('./이름');
 
 const LOG_PATH = path.join(__dirname, '..', 'DB', 'log.json');
+const TMP_PATH = `${LOG_PATH}.tmp`;
 fs.mkdirSync(path.dirname(LOG_PATH), { recursive: true });
 
 // 로그가 무한정 커져 파일이 무거워지지 않도록 최근 이만큼만 보관한다(오래된 것부터 버림).
@@ -60,11 +61,55 @@ function readLogs() {
   return logs;
 }
 
+// 파일 쓰기는 비동기 1건만 돌리고, 그 사이 들어온 기록은 dirty 플래그로 합친다.
+// 예전엔 상호작용 한 번마다 writeFileSync로 전체(최대 5000개, 약 700KB)를 동기 저장했다.
+// 직렬화 1.4ms + 동기 쓰기 0.9ms가 매 클릭마다 이벤트 루프를 통째로 멈춰, 여러 명이 동시에
+// 버튼을 누르면 그만큼 봇 응답이 밀린다. 지금은 (1) 쓰기가 비동기라 루프를 막지 않고,
+// (2) 쓰기가 도는 동안 쌓인 기록들이 한 번의 저장으로 합쳐진다.
+// 저장을 미루지는 않으므로(요청 즉시 시작) 크래시 대비 write-through 성격은 그대로다.
+let writing = false;
+let dirty = false;
+
+function serialize() {
+  return JSON.stringify(logs, null, 2); // 사람이 읽는 감사 로그라 pretty-print 유지
+}
+
+// 임시 파일에 다 쓴 뒤 rename으로 교체한다(내전/모집 저장과 같은 방식). 쓰는 도중 프로세스가
+// 죽어도 기존 log.json이 반쪽짜리로 깨지지 않는다 — 깨지면 readLogs가 통째로 버린다.
+async function flushLoop() {
+  while (dirty) {
+    dirty = false;
+    await fs.promises.writeFile(TMP_PATH, serialize(), 'utf8');
+    await fs.promises.rename(TMP_PATH, LOG_PATH);
+  }
+}
+
+function scheduleWrite() {
+  dirty = true;
+  if (writing) return; // 이미 도는 루프가 방금 바뀐 내용까지 같이 저장한다
+  writing = true;
+  flushLoop()
+    .catch(err => console.error('로그 파일 저장 실패:', err))
+    .finally(() => { writing = false; });
+}
+
+// 종료 직전 한 번만 동기로 저장한다. shutdown()이 process.exit()을 부르면 진행 중이던
+// 비동기 쓰기가 그대로 끊겨 마지막 몇 줄이 날아가므로, 여기서 확실히 밀어 넣는다.
+function flushLogsSync() {
+  if (!logs) return; // 한 번도 읽지 않았으면 저장할 것도 없다
+  try {
+    fs.writeFileSync(TMP_PATH, serialize(), 'utf8');
+    fs.renameSync(TMP_PATH, LOG_PATH);
+  } catch (err) {
+    console.error('로그 종료 저장 실패:', err);
+  }
+}
+
 function writeEntry(entry) {
   const arr = readLogs();
   arr.unshift(entry); // 최신 로그를 맨 위에
   if (arr.length > MAX_ENTRIES) arr.length = MAX_ENTRIES; // 넘치면 오래된(맨 아래)부터 버림
-  fs.writeFileSync(LOG_PATH, JSON.stringify(arr, null, 2), 'utf8');
+  scheduleWrite();
 }
 
 
@@ -102,11 +147,25 @@ function describeInteraction(interaction) {
   return { 유형: '기타', 내용: interaction.customId || interaction.commandName || '알 수 없는 상호작용' };
 }
 
+// interaction이 아예 없는 곳(타이머로 도는 DM 발송 등)에서 봇이 스스로 겪은 일을 남긴다.
+// logAction은 interaction.user/channel에서 유저·채널을 뽑아 쓰므로 그런 경로에서는 못 쓴다.
+// 필드 구성(시각/유형/유저/채널/내용)은 동일하게 맞추고, 해당 없는 값만 '-'로 채운다.
+function logSystem({ 유형, 내용, 유저 = '-', 채널 = '-' }) {
+  writeEntry({ 시각: nowKstStr(), 유형, 유저, 채널, 내용 });
+}
+
+// 로그를 남기지 않을 상호작용의 customId 접두사.
+// 틱택토 칸(ttt:move:...)은 한 판에 수십 번 눌려 로그가 ⬜ 클릭으로만 가득 차고, 정작
+// 봐야 할 명령어·관리 버튼이 5000개 보관 한도 밖으로 밀려난다. 게임 진행 자체는 승패
+// 결과와 XP 지급 기록으로 충분히 추적되므로 칸 클릭은 남기지 않는다.
+const SKIP_LOG_PREFIXES = ['ttt:move:'];
+
 // 명령어/버튼/선택 메뉴/모달 제출 등 모든 상호작용을 기록한다.
 // (index.js의 interactionCreate 맨 앞에서, 채널 제한 등 다른 처리보다 먼저 호출 —
 //  막힌 시도까지 포함해 실제로 무슨 입력이 들어왔는지 전부 남기기 위함)
 function logInteraction(interaction) {
   if (!interaction.user) return;
+  if (SKIP_LOG_PREFIXES.some(prefix => interaction.customId?.startsWith(prefix))) return;
 
   const { 유형, 내용 } = describeInteraction(interaction);
   logAction(interaction, 유형, 내용);
@@ -129,4 +188,4 @@ function logAction(interaction, 유형, 내용) {
   });
 }
 
-module.exports = { logInteraction, logAction };
+module.exports = { logInteraction, logAction, logSystem, flushLogsSync };

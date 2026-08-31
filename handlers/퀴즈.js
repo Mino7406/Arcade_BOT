@@ -14,6 +14,7 @@ const path = require('path');
 const { applyXp, isExcludedGuild } = require('./레벨링');
 const { KST_OFFSET_MS } = require('./시간');
 const { QUIZ_CHANNEL_ID } = require('../config'); // 놀이터 채널 (config.js의 PLAYGROUND_CHANNEL_ID)
+const { logSystem } = require('./로그');
 
 // KST 기준 출제 가능 시간대: 오전 10시 ~ 밤 11시. 이 시각(23:00)까지 봇이 안 켜져 있었다면
 // 그날 사이클은 건너뜀.
@@ -130,7 +131,11 @@ function windowBoundsForDay(dayStr) {
 function loadState() {
   try {
     if (fs.existsSync(STATE_PATH)) return JSON.parse(fs.readFileSync(STATE_PATH, 'utf8'));
-  } catch { /* 무시하고 새 상태로 시작 */ }
+  } catch (err) {
+    // 새 상태로 시작하면 오늘 이미 낸 문제를 다시 낼 수 있다.
+    console.error('퀴즈 상태 읽기 실패(새 상태로 시작):', err);
+    logSystem({ 유형: '저장 오류', 내용: `quiz.json 읽기 실패 — 출제 상태가 새로 시작됨: ${err?.message ?? err}` });
+  }
   return null;
 }
 

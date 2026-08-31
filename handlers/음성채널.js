@@ -7,6 +7,7 @@ const path = require('path');
 const { ChannelType } = require('discord.js');
 
 const { GUILD_ID, HUB_CHANNEL_ID, TEMP_CATEGORY_ID } = require('../config');
+const { logSystem } = require('./로그');
 
 const DATA_PATH = path.join(__dirname, '..', 'DB', 'voiceRooms.json');
 fs.mkdirSync(path.dirname(DATA_PATH), { recursive: true });
@@ -20,13 +21,26 @@ function loadTempChannels() {
     if (fs.existsSync(DATA_PATH)) {
       tempChannelIds = new Set(JSON.parse(fs.readFileSync(DATA_PATH, 'utf8')));
     }
-  } catch {
+  } catch (err) {
+    // 파일이 깨져 있으면 빈 목록으로 시작할 수밖에 없는데, 그러면 이전에 만든 임시 채널들이
+    // 추적에서 빠져 아무도 없어도 자동 삭제되지 않는다. 조용히 넘어가면 원인을 알 수 없어 기록한다.
+    console.error('임시 음성채널 목록 읽기 실패(추적 목록이 초기화됨):', err);
+    logSystem({ 유형: '저장 오류', 내용: `voiceRooms.json 읽기 실패 — 임시 채널 추적 목록 초기화됨: ${err?.message ?? err}` });
     tempChannelIds = new Set();
   }
 }
 
 function saveTempChannels() {
   fs.writeFileSync(DATA_PATH, JSON.stringify([...tempChannelIds]), 'utf8');
+}
+
+// 방이 얼마나 유지됐는지. 생성 시각을 따로 저장하지 않아도 채널 객체가 createdTimestamp를
+// 들고 있으므로 그걸 그대로 쓴다(voiceRooms.json 형식은 건드리지 않는다).
+function livedFor(channel) {
+  if (!channel?.createdTimestamp) return '유지 시간 알 수 없음';
+  const minutes = Math.round((Date.now() - channel.createdTimestamp) / 60_000);
+  if (minutes < 60) return `${minutes}분 유지`;
+  return `${Math.floor(minutes / 60)}시간 ${minutes % 60}분 유지`;
 }
 
 // 봇 재시작 시 이전에 만든 임시 채널들을 다시 확인한다.
@@ -48,6 +62,11 @@ async function reconcileTempChannels(client) {
     }
     if (channel.members.size === 0) {
       await channel.delete().catch(err => console.error('임시 음성채널 삭제 실패:', err));
+      logSystem({
+        유형: '음성채널',
+        채널: `#${channel.name}`,
+        내용: `임시 음성채널 삭제 — '${channel.name}'(${channel.id}), ${livedFor(channel)} (봇 재시작 후 빈 방 정리)`,
+      });
       tempChannelIds.delete(channelId);
       changed = true;
     }
@@ -71,6 +90,15 @@ async function cleanupIfEmpty(oldState, newState) {
     tempChannelIds.delete(channel.id);
     saveTempChannels();
     await channel.delete().catch(err => console.error('임시 음성채널 삭제 실패:', err));
+    // 생성 로그와 짝을 맞춘다 — 마지막으로 나간 사람과 방이 유지된 시간까지 남겨야
+    // "언제 만들어져서 언제 사라졌는지"가 로그만으로 이어진다.
+    const leaver = oldState.member;
+    logSystem({
+      유형: '음성채널',
+      유저: leaver ? `${leaver.displayName}(${leaver.id})` : '-',
+      채널: `#${channel.name}`,
+      내용: `임시 음성채널 삭제 — '${channel.name}'(${channel.id}), ${livedFor(channel)} (마지막 인원 퇴장)`,
+    });
   }
 }
 
@@ -105,6 +133,11 @@ async function createTempChannel(newState) {
     });
   } catch (err) {
     console.error('임시 음성채널 생성 실패:', err);
+    logSystem({
+      유형: '음성채널',
+      유저: `${member.displayName}(${member.id})`,
+      내용: `임시 음성채널 생성 실패 — ${err?.message ?? err}`,
+    });
     return;
   }
 
@@ -123,6 +156,15 @@ async function createTempChannel(newState) {
   tempChannelIds.add(tempChannel.id);
   saveTempChannels();
 
+  // 누가 언제 방을 만들었는지 DB/log.json에 남긴다. 임시 채널은 비면 곧 사라지기 때문에
+  // 생성 시점에 남겨두지 않으면 나중에 디스코드 쪽에서 되짚을 방법이 없다.
+  logSystem({
+    유형: '음성채널',
+    유저: `${member.displayName}(${member.id})`,
+    채널: `#${tempChannel.name}`,
+    내용: `임시 음성채널 생성 — '${tempChannel.name}'(${tempChannel.id})`,
+  });
+
   // 채널 관리 권한 부여는 별도 오류로 실패해도(예: 봇에 "역할 관리" 권한이 없는 경우)
   // 아래 이동 로직에 영향을 주지 않도록 분리한다.
   await tempChannel.permissionOverwrites
@@ -136,6 +178,13 @@ async function createTempChannel(newState) {
     tempChannelIds.delete(tempChannel.id);
     saveTempChannels();
     await tempChannel.delete().catch(err2 => console.error('임시 음성채널 정리 실패:', err2));
+    // 위에서 이미 '생성' 로그를 남겼으므로, 되돌린 사실도 남겨야 짝이 맞는다.
+    logSystem({
+      유형: '음성채널',
+      유저: `${member.displayName}(${member.id})`,
+      채널: `#${tempChannel.name}`,
+      내용: `임시 음성채널 삭제 — '${tempChannel.name}'(${tempChannel.id}) (이동 실패로 취소됨)`,
+    });
   }
 }
 
