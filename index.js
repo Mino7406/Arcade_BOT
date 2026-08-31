@@ -18,6 +18,7 @@ const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = requ
 const { handleRMatchSelect } = require('./handlers/불러오기');
 const { handleWcButton, handleWcMessage } = require('./handlers/끝말잇기');
 const { handleTttButton } = require('./handlers/틱택토');
+const { handleOmokButton, handleOmokMessage } = require('./handlers/오목');
 const { loadRoulette, saveRoulette, handleRouletteButton } = require('./handlers/룰렛');
 const { loadBotMatchXp, saveBotMatchXp } = require('./handlers/봇전한도');
 const { startQuizScheduler, handleQuizMessage } = require('./handlers/퀴즈');
@@ -229,9 +230,10 @@ client.on('interactionCreate', async (interaction) => {
 
     // 끝말잇기/틱택토/룰렛/레벨/랭킹은 다른 채널 허용 목록과 무관하게 이 채널에서만 사용 가능.
     const isWordchainOrRanking =
-      (interaction.isChatInputCommand() && ['끝말잇기', '틱택토', '룰렛', '레벨', '랭킹'].includes(interaction.commandName)) ||
+      (interaction.isChatInputCommand() && ['끝말잇기', '틱택토', '오목', '룰렛', '레벨', '랭킹'].includes(interaction.commandName)) ||
       interaction.customId?.startsWith('wc:') ||
       interaction.customId?.startsWith('ttt:') ||
+      interaction.customId?.startsWith('omok:') ||
       interaction.customId?.startsWith('roulette:') ||
       interaction.customId?.startsWith('ranking:') ||
       interaction.customId?.startsWith('level:');
@@ -344,6 +346,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleWcButton(interaction);
       } else if (interaction.customId.startsWith('ttt:')) {
         await handleTttButton(interaction);
+      } else if (interaction.customId.startsWith('omok:')) {
+        await handleOmokButton(interaction);
       } else if (interaction.customId.startsWith('roulette:')) {
         await handleRouletteButton(interaction);
       } else if (interaction.customId.startsWith('quiz:')) {
@@ -390,6 +394,12 @@ client.on('interactionCreate', async (interaction) => {
 client.on('messageCreate', async (message) => {
   try {
     await handleWcMessage(message);
+  } catch (error) {
+    console.error(error);
+  }
+
+  try {
+    await handleOmokMessage(message);
   } catch (error) {
     console.error(error);
   }
