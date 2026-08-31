@@ -464,7 +464,7 @@ function buildEmbed(game) {
       const winName = game.winner === 'B' ? bName : wName;
       const winEmoji = game.winner === 'B' ? '⚫' : '⚪';
       desc += `**🏆 ${winEmoji} ${winName} 승리!**`;
-      if (game.endReason === 'resign' && game.resignedBy) desc += `\n🏳️ <@${game.resignedBy}>님이 기권했습니다.`;
+      if (game.endReason === 'resign' && game.resignedBy) desc += `\n🏳️ <@${game.resignedBy}>님이 포기했습니다.`;
       if (game.lastMove) desc += `  \n-# 마지막 수: ${coordLabel(game.lastMove.x, game.lastMove.y)} · 총 ${game.moveCount}수`;
 
       if (game.xpResult?.type === 'wager') {
@@ -499,11 +499,11 @@ function buildEmbed(game) {
     .setTimestamp();
 }
 
-// 진행 중 보드에 붙는 버튼 — 자기 차례가 아니어도 참가자면 누를 수 있는 기권.
+// 진행 중 보드에 붙는 버튼 — 자기 차례가 아니어도 참가자면 누를 수 있는 포기.
 function buildPlayingComponents(game) {
   return [
     new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`omok:resign:${game.id}`).setLabel('🏳️ 기권').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`omok:resign:${game.id}`).setLabel('🏳️ 포기').setStyle(ButtonStyle.Danger),
     ),
   ];
 }
@@ -586,7 +586,7 @@ async function finishBoard(game) {
   await editWithRetry(game.message, payload);
 }
 
-// 게임을 끝내고(승패/기권/시간 초과) map에서 제거, 필요하면 XP 정산.
+// 게임을 끝내고(승패/포기/시간 초과) map에서 제거, 필요하면 XP 정산.
 // winner: 'B' | 'W' | 'DRAW'.  endReason: 'five' | 'resign' | 'timeout' | 'full'.
 function finishGame(game, games, winner, endReason, extra = {}) {
   game.status = 'finished';
@@ -917,7 +917,7 @@ async function handleOmokButton(interaction) {
     const game = games.get(customId.slice('omok:resign:'.length));
     if (!game || game.status !== 'playing') return interaction.reply({ content: '⚠️ **진행 중인 게임이 아닙니다.**', flags: MessageFlags.Ephemeral });
     const myColor = interaction.user.id === game.players.B ? 'B' : interaction.user.id === game.players.W ? 'W' : null;
-    if (!myColor) return interaction.reply({ content: '⚠️ **대국 참가자만 기권할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+    if (!myColor) return interaction.reply({ content: '⚠️ **대국 참가자만 포기할 수 있습니다.**', flags: MessageFlags.Ephemeral });
     await interaction.deferUpdate();
     finishGame(game, games, other(myColor), 'resign', { resignedBy: interaction.user.id });
     await finishBoard(game);

@@ -234,7 +234,7 @@ npm start
 - `config.js`의 `WORDCHAIN_RANKING_CHANNEL_ID`로 지정된 채널에서만 사용 가능
 - **대기 로비·봇전·XP 내기는 틱택토와 동일한 형태·상수** — `✋ 참가`(최대 2명)/`▶️ 게임 시작`/`🤖 봇과 시작`/`❌ 취소`, 2분 내 미시작 시 자동 취소. XP 정산·쿨다운·하루 한도(`DAILY_BOT_MATCH_XP_CAP`=100, 끝말잇기·틱택토와 합산)도 틱택토와 같은 코드 구조
 - **착수는 채팅 좌표 입력** — 15×15는 버튼 격자(디스코드 한 메시지당 버튼 25개 한계)로 만들 수 없어서, 자기 차례에 `H8`·`8H`·`h-8` 같은 좌표를 채팅으로 보내면 그 자리에 돌이 놓임(`parseCoord`). 좌표로 안 보이는 메시지는 잡담으로 간주해 무시(제한 시간은 계속 흐름), 이미 돌이 있는 자리면 4초 뒤 지워지는 경고를 답장으로 붙임. 끝말잇기의 채팅 핸들러(`handleWcMessage`)와 같은 방식
-- **진행 중 `🏳️ 기권` 버튼** — 대국 참가자면 자기 차례가 아니어도 누를 수 있고, 누른 사람이 패(상대 승). 사람끼리면 기권도 내기 XP가 정산되고(끝말잇기 포기와 동일), 봇전 기권은 봇 승이라 XP 변동 없음
+- **진행 중 `🏳️ 포기` 버튼** — 대국 참가자면 자기 차례가 아니어도 누를 수 있고, 누른 사람이 패(상대 승). 사람끼리면 포기도 내기 XP가 정산되고(끝말잇기 포기와 동일), 봇전 포기는 봇 승이라 XP 변동 없음
 - **보드를 항상 맨 아래로** — 좌표를 채팅으로 치는 게임이라 착수·잡담마다 보드 임베드가 위로 밀린다. `messagesSinceBoard`로 밀린 정도를 세고, 밀렸으면 기존 보드를 지우고 맨 아래에 다시 올린다(`moveBoardDown`) — 착수 메시지 자체가 카운터를 올리므로 사실상 매 착수마다 보드가 하단으로 재게시됨(끝말잇기 `refreshBoard`와 동일). 종료 화면은 내리기에 실패해도 원래 자리에서 갱신되도록 재시도(`editWithRetry`)
 - **재대결은 끝말잇기식 승낙/거절** — 종료 후 `🔄 재대결`/`🛑 종료` 버튼(원래 참가자만). 봇전 재대결은 승낙 없이 새 메시지로 바로 시작. 사람 상대면 신청 메시지에 `✅ 수락`/`❌ 거절`이 붙고, 상대가 수락하면 그 메시지가 그대로 새 대국 보드로 바뀜(흑/백 재추첨). 거절·60초 만료 시 지난 결과 메시지에 재대결 버튼을 되살림(`restoreRematchButton`). 한 결과 메시지당 재대결 신청은 하나만(`sourceMessageId`로 중복 차단)
 - **판은 이미지로 렌더링** — `canvas`·`pureimage`·`sharp` 같은 외부 라이브러리는 네이티브 빌드가 필요하거나 상주 메모리를 크게 먹어서, 콘솔 없이 버튼으로만 재시작하는 호스팅 + 256MB RAM 환경에 부담이라 **의존성 0**으로 갔다 — 픽셀 버퍼(RGB)에 격자·화점·좌표(5×7 비트맵 폰트)·돌(안티에일리어싱 원)·마지막 착수 표시(빨간 링)를 직접 찍고 Node 내장 `zlib`로 PNG를 인코딩(`renderBoard`). 렌더 1회에 약 1MB 버퍼가 잠깐 잡혔다가 GC됨. 매 수마다 새 PNG를 첨부해 게임 메시지를 갱신(`attachments: []`로 이전 첨부 제거 후 `files`로 교체)
@@ -410,18 +410,18 @@ npm start
 | 함수 | 설명 |
 |---|---|
 | `startOmokCommand(interaction)` | `/오목` 실행 → 틱택토와 동일한 형태의 대기 로비를 게시(참가자 2명 제한) |
-| `handleOmokButton(interaction)` | 참가/시작/봇과 시작/취소/기권/재대결(신청·수락·거절)/종료(`omok:join:`, `omok:start:`, `omok:bot_start:`, `omok:cancel:`, `omok:resign:`, `omok:rematch:`, `omok:rematch_accept:`, `omok:rematch_decline:`, `omok:close:`) 버튼 처리 |
+| `handleOmokButton(interaction)` | 참가/시작/봇과 시작/취소/포기/재대결(신청·수락·거절)/종료(`omok:join:`, `omok:start:`, `omok:bot_start:`, `omok:cancel:`, `omok:resign:`, `omok:rematch:`, `omok:rematch_accept:`, `omok:rematch_decline:`, `omok:close:`) 버튼 처리 |
 | `handleOmokMessage(message)` | 진행 중인 게임 채널에서 현재 차례인 사람이 보낸 메시지를 좌표로 파싱해 착수 처리 + `messagesSinceBoard` 카운트(`index.js`의 `messageCreate`에서 호출) — 끝말잇기 `handleWcMessage`와 같은 방식 |
 | `parseCoord(text)` *(내부)* | `H8`·`8H`·`h-8` 등을 `{x, y}`(0~14)로. 좌표가 아니면 `null`(잡담으로 무시) |
 | `renderBoard(board, last)` *(내부)* | 외부 라이브러리 없이 픽셀 버퍼에 판을 그리고 Node `zlib`로 PNG 인코딩 → `Buffer`. 5×7 비트맵 폰트로 좌표 라벨, 안티에일리어싱 원으로 돌 |
 | `pickBotMove(board, botColor, blunder)` *(내부)* | 후보 칸마다 4방향 연속선 패턴 점수(`cellScore`)로 공격+수비를 합산해 최선 칸 선택. `blunder`면 최선수 대신 무작위(상대 5 임박만 막음) |
 | `isWin(board, x, y, c)` / `longestRun(...)` *(내부)* | 착수 지점을 지나는 가장 긴 연속선 길이로 승리(5 이상, 자유형) 판정 |
-| `finishGame(game, games, winner, endReason, extra)` *(내부)* | 승패/기권(`resign`)/시간 초과(`timeout`)로 게임 종료 → map 제거 + 필요 시 `settleGameXp` |
+| `finishGame(game, games, winner, endReason, extra)` *(내부)* | 승패/포기(`resign`)/시간 초과(`timeout`)로 게임 종료 → map 제거 + 필요 시 `settleGameXp` |
 | `moveBoardDown(game, payload)` / `refreshBoard` / `finishBoard` *(내부)* | 밀린 보드를 지우고 맨 아래에 다시 게시(끝말잇기와 동일). `finishBoard`는 `editWithRetry`로 종료 화면 갱신을 보장 |
 | `startRematchVsBot` / `startRematchRequest` / `beginRematchGame` *(내부)* | 봇전 재대결은 바로 시작, 사람 상대는 `✅ 수락`/`❌ 거절` 신청 → 수락 시 그 메시지를 새 대국 보드로 전환(흑/백 재추첨) |
 | `assignColors(game)` *(내부)* | 대기 로비 참가자로 선공(⚫)/후공(⚪)을 정함 — 봇전은 사람이 흑 고정, 사람끼리면 무작위 |
 | `resetTimeout(game, games)` *(내부)* | 매 수마다 5분 무응답 타이머 재설정, 만료 시 무효 종료(XP 정산 없음) |
-| `settleWagerXp(game)` / `settleBotWinXp(game)` *(내부)* | 틱택토와 동일 — 사람끼리는 내기·기권 XP 정산, 사람이 봇을 이기면 보상 XP 지급 |
+| `settleWagerXp(game)` / `settleBotWinXp(game)` *(내부)* | 틱택토와 동일 — 사람끼리는 내기·포기 XP 정산, 사람이 봇을 이기면 보상 XP 지급 |
 
 ### `handlers/룰렛.js` — 룰렛(슬롯머신형)
 
