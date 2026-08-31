@@ -208,7 +208,7 @@ function buildLobbyEmbed(game) {
   const embed = new EmbedBuilder()
     .setColor(0x5865F2)
     .setDescription(
-      `# ${game.infinite ? '⭕❌ 틱택토 (♾️ 무한모드)' : '⭕❌ 틱택토'}\n` +
+      `## ${game.infinite ? '⭕❌ 틱택토 (♾️ 무한모드)' : '⭕❌ 틱택토'}\n` +
       `참가자를 기다리는 중입니다.\n-# (${LOBBY_MS / 60_000}분 내 시작하지 않으면 자동 취소됩니다)`,
     );
   return embed
@@ -265,7 +265,7 @@ function buildEmbed(game) {
   const xName = game.players.X === 'BOT' ? '🤖 봇' : `<@${game.players.X}>`;
   const oName = game.players.O === 'BOT' ? '🤖 봇' : `<@${game.players.O}>`;
 
-  let desc = `# ${game.infinite ? '⭕❌ 틱택토 (♾️ 무한모드)' : '⭕❌ 틱택토'}\n❌ ${xName}  **vs**  ⭕ ${oName}\n\n`;
+  let desc = `## ${game.infinite ? '⭕❌ 틱택토 (♾️ 무한모드)' : '⭕❌ 틱택토'}\n❌ ${xName}  **vs**  ⭕ ${oName}\n\n`;
 
   if (game.status === 'finished') {
     if (game.winner === 'DRAW') {

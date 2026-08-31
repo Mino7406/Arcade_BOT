@@ -655,7 +655,7 @@ function buildLobbyEmbed(game) {
   return new EmbedBuilder()
     .setColor(0x5865F2)
     .setDescription(
-      '# ⚫ 오목\n참가자를 기다리는 중입니다.\n' +
+      '## ⚫ 오목\n참가자를 기다리는 중입니다.\n' +
       `-# (${LOBBY_MS / 60_000}분 내 시작하지 않으면 자동 취소됩니다)`,
     )
     .addFields(
@@ -797,7 +797,7 @@ function buildRematchRequestEmbed(game) {
   return new EmbedBuilder()
     .setColor(0x5865F2)
     .setDescription(
-      '# 🔄 오목 재대결 신청\n' +
+      '## 🔄 오목 재대결 신청\n' +
       `<@${game.opponentId}>님이 수락하면 바로 시작됩니다.\n\n` +
       `✅ <@${game.challengerId}>  (신청)\n` +
       `${game.accepted.has(game.opponentId) ? '✅' : '⌛'} <@${game.opponentId}>`,

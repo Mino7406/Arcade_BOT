@@ -272,7 +272,7 @@ function buildWaitingEmbed(game) {
 
   const embed = new EmbedBuilder()
     .setColor(0x5865F2)
-    .setDescription(`# 🔤 끝말잇기\n참가자를 기다리는 중입니다.\n-# (${JOIN_MS / 60_000}분 내 시작하지 않으면 자동 취소됩니다)`);
+    .setDescription(`## 🔤 끝말잇기\n참가자를 기다리는 중입니다.\n-# (${JOIN_MS / 60_000}분 내 시작하지 않으면 자동 취소됩니다)`);
   return embed
     .addFields(
       { name: `👥 참가자  ${game.players.length}명`, value: participantText },
@@ -310,7 +310,7 @@ function buildPlayingEmbed(game) {
 
   const embed = new EmbedBuilder()
     .setColor(0x57F287)
-    .setDescription(`# 🔤 끝말잇기 진행 중\n${wordLine}\n\n💬 **\`${currentPlayer.name}\`의 차례** — 채팅에 단어를 입력하세요! (${currentPlayer.id === 'BOT' ? '자동' : `${TURN_SEC}초`})`);
+    .setDescription(`## 🔤 끝말잇기 진행 중\n${wordLine}\n\n💬 **\`${currentPlayer.name}\`의 차례** — 채팅에 단어를 입력하세요! (${currentPlayer.id === 'BOT' ? '자동' : `${TURN_SEC}초`})`);
   return embed
     .addFields(
       { name: `👥 참가자  ${game.players.length}명`, value: participantText, inline: true },
@@ -352,7 +352,7 @@ function buildFinishedEmbed(game) {
   const embed = new EmbedBuilder()
     .setColor(0xED4245)
     .setDescription(
-      `# 🔤 끝말잇기 종료\n${game.endReason === 'cancelled' ? '' : `**탈락** : \`${loserName}\`\n`}**이유** : ${describeEndReason(game)}\n\n` +
+      `## 🔤 끝말잇기 종료\n${game.endReason === 'cancelled' ? '' : `**탈락** : \`${loserName}\`\n`}**이유** : ${describeEndReason(game)}\n\n` +
       `총 **${game.history.length}개** 단어 사용` +
       formatXpResultLine(game),
     );
