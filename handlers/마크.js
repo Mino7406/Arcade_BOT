@@ -1,9 +1,9 @@
 // 마크.js — 마인크래프트 렐름 승인 명단 저장/조회.
-// 승인/거절 자체는 검토 임베드(commands/마크.js)가 메시지 상태만으로 처리하지만, "지금까지
+// 승인/거절 자체는 참가 임베드(commands/마크.js)가 메시지 상태만으로 처리하지만, "지금까지
 // 승인된 사람이 누구인지"는 개별 메시지를 다 뒤지지 않고도 바로 볼 수 있어야 하므로 별도로
 // 가볍게 저장한다. 룰렛(roulette.json)과 같은 단일 JSON 파일 방식.
 //
-// rosterMessageId는 검토 채널에 올려둔 "명단" 메시지 하나의 ID다 — 승인/거절이 있을 때마다
+// rosterMessageId는 참가 채널에 올려둔 "명단" 메시지 하나의 ID다 — 승인/거절이 있을 때마다
 // 그 메시지를 지우고 새로 올려 항상 채널에 명단 메시지가 딱 하나만 존재하게 한다(재시작해도
 // 어느 메시지를 지워야 할지 알 수 있도록 여기 같이 저장).
 
@@ -48,6 +48,11 @@ function removeApprovedMember(guildId, userId) {
   delete ensureGuild(guildId).members[userId];
 }
 
+// 이미 승인된 멤버인지 — "🏰 신청하기" 클릭 시 재신청을 막는 데 사용.
+function isApprovedMember(guildId, userId) {
+  return !!roster[guildId]?.members?.[userId];
+}
+
 // 승인 시각(approvedAt) 오름차순(먼저 승인된 순)으로 정렬해 반환.
 function getApprovedRoster(guildId) {
   const members = roster[guildId]?.members || {};
@@ -69,6 +74,7 @@ module.exports = {
   saveRealmRoster,
   addApprovedMember,
   removeApprovedMember,
+  isApprovedMember,
   getApprovedRoster,
   getRosterMessageId,
   setRosterMessageId,
