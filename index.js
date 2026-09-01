@@ -29,7 +29,7 @@ const { buildGameSelectPayload: buildMojipGameSelectPayload } = require('./comma
 const { buildReloadListPayload } = require('./commands/불러오기');
 const { buildTeamMatchListPayload } = require('./commands/팀');
 const { buildCommandListPayload, buildSetupPanelPayload, buildAdminMenuPayload, handlePanelButton, handlePanelMatchDeleteSelect, handlePanelBotMessageDeleteModal } = require('./commands/패널');
-const { handleRealmButton, handleRealmModal } = require('./commands/마크');
+const { handleRealmButton, handleRealmModal, handleRealmRosterModal } = require('./commands/마크');
 const { handleLevelShareButton } = require('./commands/레벨');
 const { handleRankingPageButton, handleRankingShareButton } = require('./commands/랭킹');
 const { handleXpUserSelect, handleXpButton, handleXpModal } = require('./commands/XP');
@@ -339,6 +339,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleXpModal(interaction);
       } else if (interaction.customId === 'realm:modal') {
         await handleRealmModal(interaction);
+      } else if (interaction.customId.startsWith('realm:roster:')) {
+        await handleRealmRosterModal(interaction);
       }
 
     } else if (interaction.isButton()) {

@@ -21,6 +21,8 @@ const {
   addApprovedMember,
   removeApprovedMember,
   isApprovedMember,
+  updateApprovedMemberNickname,
+  setApprovedMemberPosition,
   getApprovedRoster,
   getRosterMessageId,
   setRosterMessageId,
@@ -66,7 +68,7 @@ function buildRealmPanelPayload() {
         '그리핑, 무단 PvP, 상점 사기 등이 적발되면 즉시 추방되며 재신청도 제한돼요.',
         '',
         '> **📝 신청 방법**',
-        '아래 **🏰 신청하기** 버튼을 눌러 마인크래프트 닉네임만 입력해주세요. 참가 후 결과를 DM으로 안내드려요.',
+        '아래 **🏰 신청하기** 버튼을 눌러 마인크래프트 닉네임만 입력해주세요. 검토 후 결과를 DM으로 안내드려요.',
       ].join('\n'),
     )
     .setThumbnail(`attachment://${THUMBNAIL_FILENAME}`)
@@ -101,13 +103,13 @@ function buildRealmApplyModal() {
     );
 }
 
-// 관리자 참가 채널에 올라가는 임베드. status에 따라 색/제목/버튼이 바뀐다.
+// 관리자 검토 채널에 올라가는 임베드. status에 따라 색/제목/버튼이 바뀐다.
 // - pending: 승인/거절 버튼 표시
 // - approved/rejected: 버튼 제거, 처리자 기록
 // displayName/processedByName은 계정 태그가 아니라 서버 별명(GuildMember.displayName)을 넘긴다.
-function buildRealmReviewPayload({ applicant, displayName, nickname, appliedAt, status = 'pending', processedByName = null, processedAt = null }) {
+function buildRealmReviewPayload({ applicant, displayName, nickname, appliedAt, status = 'pending', processedByName = null }) {
   const statusMeta = {
-    pending:  { title: '<:Watch:1544331505101439066> 참가 대기중', color: PENDING_COLOR },
+    pending:  { title: '<:Watch:1544331505101439066> 검토 대기중', color: PENDING_COLOR },
     approved: { title: '<:Emerald:1544331499976007810> 승인됨', color: REALM_COLOR },
     rejected: { title: '<:Barrier:1544331503448625233> 거절됨', color: REJECTED_COLOR },
   }[status];
@@ -121,8 +123,7 @@ function buildRealmReviewPayload({ applicant, displayName, nickname, appliedAt, 
     .addFields(
       { name: '<:Name_Tag:1544325806803652608> 닉네임', value: nickname, inline: true },
       { name: '<:Compass:1544331496238882907> 신청 일시', value: `<t:${ts}:f>`, inline: true },
-    )
-    .setTimestamp(processedAt ?? appliedAt); // 푸터 옆에 처리(또는 신청) 시각이 함께 표시됨
+    );
 
   if (processedByName) embed.setFooter({ text: `처리자: ${processedByName}` });
 
@@ -138,7 +139,18 @@ function buildRealmReviewPayload({ applicant, displayName, nickname, appliedAt, 
   return { embeds: [embed], components };
 }
 
-// 참가 채널에 항상 하나만 유지되는 명단 메시지. 승인/거절이 있을 때마다 refreshRealmRosterMessage가
+// 명단 메시지 하단의 관리 버튼 한 줄(최대 5개 — 디스코드 한 행 제한과 정확히 일치).
+function buildRealmRosterButtons() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('realm:roster:edit').setLabel('편집').setEmoji('✏️').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('realm:roster:add').setLabel('추가').setEmoji('➕').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId('realm:roster:kick').setLabel('제외').setEmoji('➖').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId('realm:roster:move').setLabel('순서 변경').setEmoji('🔀').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('realm:roster:refresh').setLabel('새로고침').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
+  );
+}
+
+// 검토 채널에 항상 하나만 유지되는 명단 메시지. 승인/거절이 있을 때마다 refreshRealmRosterMessage가
 // 이 payload로 기존 메시지를 지우고 새로 올린다(ephemeral 아님 — 관리자 전원이 볼 수 있는 채널 메시지).
 // 표(코드블록) 형태는 한글이 섞이면 디스코드 고정폭 폰트가 한글 글리프에서 폰트 대체가 일어나
 // 열이 어긋나 보여서, 정렬에 기대지 않는 번호 목록으로 표시한다.
@@ -146,7 +158,7 @@ function buildRealmRosterMessagePayload(entries) {
   if (entries.length === 0) {
     const embed = new EmbedBuilder().setColor(REALM_COLOR).setTitle('<:Banner:1544331498230906931> 렐름 멤버 목록 (0명)')
       .setDescription('아직 승인된 멤버가 없습니다.');
-    return { embeds: [embed] };
+    return { embeds: [embed], components: [buildRealmRosterButtons()] };
   }
 
   const display = entries.slice(0, ROSTER_DISPLAY_LIMIT);
@@ -160,10 +172,84 @@ function buildRealmRosterMessagePayload(entries) {
     .setTitle(`<:Banner:1544331498230906931> 렐름 멤버 목록 (총 ${entries.length}명)`)
     .setDescription(lines.join('\n'));
 
-  return { embeds: [embed] };
+  return { embeds: [embed], components: [buildRealmRosterButtons()] };
 }
 
-// 참가 채널(REALM_REVIEW_CHANNEL_ID)의 명단 메시지를 최신 상태로 갱신한다. 기존 메시지가 있으면
+// 유저 ID 입력칸 하나는 세 모달(추가/편집/제외)이 공통으로 쓰므로 빌더로 뽑아둔다.
+function buildUserIdInput() {
+  return new TextInputBuilder()
+    .setCustomId('user_id')
+    .setLabel('디스코드 유저 ID')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('예: 457437911869161472')
+    .setRequired(true);
+}
+
+// "추가" 클릭 시 뜨는 모달 — 신청 절차 없이 관리자가 직접 명단에 유저를 등록한다.
+function buildAddMemberModal() {
+  return new ModalBuilder()
+    .setCustomId('realm:roster:add_modal')
+    .setTitle('멤버 수동 추가')
+    .addComponents(
+      new ActionRowBuilder().addComponents(buildUserIdInput()),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('nickname')
+          .setLabel('마인크래프트 닉네임 (Java Edition)')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('예: Notch')
+          .setRequired(true)
+          .setMaxLength(16),
+      ),
+    );
+}
+
+// "편집" 클릭 시 뜨는 모달 — 유저 ID로 대상을 지정하고 새 닉네임을 입력한다.
+function buildEditNicknameModal() {
+  return new ModalBuilder()
+    .setCustomId('realm:roster:edit_modal')
+    .setTitle('닉네임 수정')
+    .addComponents(
+      new ActionRowBuilder().addComponents(buildUserIdInput()),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('nickname')
+          .setLabel('새 마인크래프트 닉네임 (Java Edition)')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('예: Notch')
+          .setRequired(true)
+          .setMaxLength(16),
+      ),
+    );
+}
+
+// "제외" 클릭 시 뜨는 모달 — 유저 ID만 입력하면 명단에서 빼고 마크 역할도 회수한다.
+function buildKickModal() {
+  return new ModalBuilder()
+    .setCustomId('realm:roster:kick_modal')
+    .setTitle('멤버 제외')
+    .addComponents(new ActionRowBuilder().addComponents(buildUserIdInput()));
+}
+
+// "순서 변경" 클릭 시 뜨는 모달 — 유저 ID와 옮길 순번(1부터)을 입력한다.
+function buildMoveModal() {
+  return new ModalBuilder()
+    .setCustomId('realm:roster:move_modal')
+    .setTitle('순서 변경')
+    .addComponents(
+      new ActionRowBuilder().addComponents(buildUserIdInput()),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('position')
+          .setLabel('옮길 순번 (1부터, 예: 1은 맨 앞)')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('예: 1')
+          .setRequired(true),
+      ),
+    );
+}
+
+// 검토 채널(REALM_REVIEW_CHANNEL_ID)의 명단 메시지를 최신 상태로 갱신한다. 기존 메시지가 있으면
 // 지우고 새로 올려서(맨 아래로) 채널에는 항상 명단 메시지가 하나만 존재하게 한다.
 async function refreshRealmRosterMessage(client, guildId) {
   if (!REALM_REVIEW_CHANNEL_ID) return;
@@ -193,14 +279,14 @@ function buildRealmResultDm(status, nickname, processedByName) {
     .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
     .addTextDisplayComponents(td => td.setContent(
       approved
-        ? `렐름 참가 신청이 **승인**되었습니다!\n이제 렐름에 접속 가능합니다!\n\n<:Name_Tag:1544325806803652608> 닉네임: \`${nickname}\``
-        : `렐름 참가 신청이 **거절**되었습니다.\n\n<:Name_Tag:1544325806803652608> 닉네임: \`${nickname}\``,
+        ? `렐름 참가 신청이 **승인**되었습니다!\n이제 렐름에 접속 가능합니다!\n\n<:Name_Tag:1544325806803652608> 닉네임: \`${nickname}\`\n<:OP:1544340150585262180> 승인자: \`${processedByName}\``
+        : `렐름 참가 신청이 **거절**되었습니다.\n\n<:Name_Tag:1544325806803652608> 닉네임: \`${nickname}\`\n<:OP:1544340150585262180> 거절자: \`${processedByName}\``,
     ))
     .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
     .addTextDisplayComponents(td => td.setContent(
       approved
-        ? `-# <:Book:1544331697049305098> 관리자가 승인 처리하여 자동으로 전송되었습니다.\n-# 승인자: ${processedByName}`
-        : `-# <:Book:1544331697049305098> 관리자가 거절 처리하여 자동으로 전송되었습니다.\n-# 거절자: ${processedByName}`,
+        ? '-# <:Book:1544331697049305098> 관리자가 승인 처리하여 자동으로 전송되었습니다.'
+        : '-# <:Book:1544331697049305098> 관리자가 거절 처리하여 자동으로 전송되었습니다.',
     ));
 
   return { components: [container], flags: MessageFlags.IsComponentsV2 };
@@ -231,10 +317,15 @@ module.exports = {
 async function handleRealmButton(interaction) {
   if (interaction.customId === 'realm:apply') {
     if (isApprovedMember(interaction.guildId, interaction.user.id)) {
-      await interaction.reply({ content: '<:Emerald:1544331499976007810> **이미 렐름 참가가 승인된 멤버입니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply({ content: '<:Barrier:1544331503448625233> **이미 렐름 참가가 승인된 멤버입니다.**', flags: MessageFlags.Ephemeral });
       return;
     }
     await interaction.showModal(buildRealmApplyModal());
+    return;
+  }
+
+  if (interaction.customId.startsWith('realm:roster:')) {
+    await handleRosterAdminButton(interaction);
     return;
   }
 
@@ -257,7 +348,6 @@ async function handleRealmButton(interaction) {
   const applicantMember = await interaction.guild.members.fetch(applicantId).catch(() => null);
   const displayName = applicantMember?.displayName ?? applicant.username;
   const processedByName = interaction.member?.displayName ?? interaction.user.username;
-  const processedAt = Date.now();
 
   // 원본 임베드에서 닉네임/신청 일시를 그대로 읽어와 재사용한다(별도 저장소 없이 메시지 자체가 상태를 들고 있음).
   const original = interaction.message.embeds[0];
@@ -289,26 +379,25 @@ async function handleRealmButton(interaction) {
       appliedAt,
       status: action === 'approve' ? 'approved' : 'rejected',
       processedByName,
-      processedAt,
     }),
   );
 
-  // 명단이 바뀌었으니(승인 추가/재거절로 제거) 참가 채널의 명단 메시지도 항상 최신 하나로 유지한다.
+  // 명단이 바뀌었으니(승인 추가/재거절로 제거) 검토 채널의 명단 메시지도 항상 최신 하나로 유지한다.
   await refreshRealmRosterMessage(interaction.client, interaction.guildId).catch(err => console.error('렐름 명단 메시지 갱신 실패:', err));
 }
 
-// ── 신청서 모달 제출 → 관리자 참가 채널에 임베드 전송 ────────────────────
+// ── 신청서 모달 제출 → 관리자 검토 채널에 임베드 전송 ────────────────────
 async function handleRealmModal(interaction) {
   const nickname = interaction.fields.getTextInputValue('mc_nickname').trim();
 
   if (!REALM_REVIEW_CHANNEL_ID) {
-    await interaction.reply({ content: '⚠️ **참가 채널이 아직 설정되지 않았습니다.** 관리자에게 문의해주세요.', flags: MessageFlags.Ephemeral });
+    await interaction.reply({ content: '⚠️ **검토 채널이 아직 설정되지 않았습니다.** 관리자에게 문의해주세요.', flags: MessageFlags.Ephemeral });
     return;
   }
 
   const reviewChannel = await interaction.client.channels.fetch(REALM_REVIEW_CHANNEL_ID).catch(() => null);
   if (!reviewChannel) {
-    await interaction.reply({ content: '⚠️ **참가 채널을 찾을 수 없습니다.** 관리자에게 문의해주세요.', flags: MessageFlags.Ephemeral });
+    await interaction.reply({ content: '⚠️ **검토 채널을 찾을 수 없습니다.** 관리자에게 문의해주세요.', flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -317,10 +406,119 @@ async function handleRealmModal(interaction) {
   await reviewChannel.send(buildRealmReviewPayload({ applicant: interaction.user, displayName, nickname, appliedAt, status: 'pending' }));
 
   await interaction.reply({
-    content: `<:Emerald:1544331499976007810> **신청이 접수되었습니다.** (닉네임: \`${nickname}\`)\n참가 후 결과를 DM으로 안내드릴게요.`,
+    content: `<:Emerald:1544331499976007810> **신청이 접수되었습니다.** (닉네임: \`${nickname}\`)\n검토 후 결과를 DM으로 안내드릴게요.`,
     flags: MessageFlags.Ephemeral,
   });
 }
 
+// ── 명단 메시지 관리 버튼("편집"·"추가"·"제외"·"순서 변경"·"새로고침", 'realm:roster:' 프리픽스) ──
+async function handleRosterAdminButton(interaction) {
+  if (!ADMIN_IDS.includes(interaction.user.id)) {
+    await interaction.reply({ content: '<:Barrier:1544331503448625233> **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  const sub = interaction.customId.split(':')[2];
+
+  if (sub === 'refresh') {
+    const entries = getApprovedRoster(interaction.guildId);
+    await interaction.update(buildRealmRosterMessagePayload(entries));
+    return;
+  }
+
+  // 편집/추가/제외/순서 변경 전부 셀렉트 메뉴 없이 모달 하나로 처리한다 — 유저 ID를 직접 입력.
+  const modalBySub = { add: buildAddMemberModal, edit: buildEditNicknameModal, kick: buildKickModal, move: buildMoveModal };
+  if (modalBySub[sub]) {
+    await interaction.showModal(modalBySub[sub]());
+  }
+}
+
+// 명단 관리 모달들이 공통으로 쓰는 "유저 ID로 대상 찾기" — 멘션(<@id>)을 붙여넣어도 숫자만 남긴다.
+// 대상이 없거나(오탈자 등) 명단에 없으면 ephemeral 안내만 보내고 null을 반환한다.
+async function resolveRosterTarget(interaction, { requireInRoster }) {
+  const userId = interaction.fields.getTextInputValue('user_id').trim().replace(/\D/g, '');
+  const user = await interaction.client.users.fetch(userId).catch(() => null);
+  if (!user) {
+    await interaction.reply({ content: '⚠️ **해당 ID의 유저를 찾을 수 없습니다.**', flags: MessageFlags.Ephemeral });
+    return null;
+  }
+  if (requireInRoster && !isApprovedMember(interaction.guildId, userId)) {
+    await interaction.reply({ content: '⚠️ **명단에서 해당 유저를 찾을 수 없습니다.**', flags: MessageFlags.Ephemeral });
+    return null;
+  }
+  return { userId, user };
+}
+
+// ── 명단 관리 모달 제출("추가"·"편집"·"제외"·"순서 변경", 'realm:roster:' 프리픽스) ──
+async function handleRealmRosterModal(interaction) {
+  if (!ADMIN_IDS.includes(interaction.user.id)) {
+    await interaction.reply({ content: '<:Barrier:1544331503448625233> **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  if (interaction.customId === 'realm:roster:add_modal') {
+    const target = await resolveRosterTarget(interaction, { requireInRoster: false });
+    if (!target) return;
+    const nickname = interaction.fields.getTextInputValue('nickname').trim();
+
+    const member = await interaction.guild.members.fetch(target.userId).catch(() => null);
+    const discordName = member?.displayName ?? target.user.username;
+
+    if (REALM_WHITELIST_ROLE_ID && member) {
+      await member.roles.add(REALM_WHITELIST_ROLE_ID).catch(err => console.error('렐름 마크 역할 지급 실패:', err));
+    }
+    addApprovedMember(interaction.guildId, target.userId, {
+      nickname,
+      discordName,
+      approvedAt: Date.now(),
+      approvedById: interaction.user.id,
+    });
+
+    await refreshRealmRosterMessage(interaction.client, interaction.guildId).catch(err => console.error('렐름 명단 메시지 갱신 실패:', err));
+    await interaction.reply({ content: `<:Emerald:1544331499976007810> **${discordName}**님을 명단에 추가했습니다.`, flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  if (interaction.customId === 'realm:roster:edit_modal') {
+    const target = await resolveRosterTarget(interaction, { requireInRoster: true });
+    if (!target) return;
+    const nickname = interaction.fields.getTextInputValue('nickname').trim();
+
+    updateApprovedMemberNickname(interaction.guildId, target.userId, nickname);
+    await refreshRealmRosterMessage(interaction.client, interaction.guildId).catch(err => console.error('렐름 명단 메시지 갱신 실패:', err));
+    await interaction.reply({ content: '<:Emerald:1544331499976007810> **닉네임을 수정했습니다.**', flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  if (interaction.customId === 'realm:roster:kick_modal') {
+    const target = await resolveRosterTarget(interaction, { requireInRoster: true });
+    if (!target) return;
+
+    removeApprovedMember(interaction.guildId, target.userId);
+    if (REALM_WHITELIST_ROLE_ID) {
+      const member = await interaction.guild.members.fetch(target.userId).catch(() => null);
+      if (member) await member.roles.remove(REALM_WHITELIST_ROLE_ID).catch(err => console.error('렐름 마크 역할 회수 실패:', err));
+    }
+    await refreshRealmRosterMessage(interaction.client, interaction.guildId).catch(err => console.error('렐름 명단 메시지 갱신 실패:', err));
+    await interaction.reply({ content: '<:Barrier:1544331503448625233> **명단에서 제외했습니다.**', flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  if (interaction.customId === 'realm:roster:move_modal') {
+    const target = await resolveRosterTarget(interaction, { requireInRoster: true });
+    if (!target) return;
+    const position = parseInt(interaction.fields.getTextInputValue('position').trim(), 10);
+    if (!Number.isInteger(position) || position < 1) {
+      await interaction.reply({ content: '⚠️ **순번은 1 이상의 숫자로 입력해주세요.**', flags: MessageFlags.Ephemeral });
+      return;
+    }
+
+    setApprovedMemberPosition(interaction.guildId, target.userId, position);
+    await refreshRealmRosterMessage(interaction.client, interaction.guildId).catch(err => console.error('렐름 명단 메시지 갱신 실패:', err));
+    await interaction.reply({ content: `<:Emerald:1544331499976007810> **${position}번째로 순서를 옮겼습니다.**`, flags: MessageFlags.Ephemeral });
+  }
+}
+
 module.exports.handleRealmButton = handleRealmButton;
 module.exports.handleRealmModal = handleRealmModal;
+module.exports.handleRealmRosterModal = handleRealmRosterModal;
