@@ -240,7 +240,7 @@ function buildRealmRosterAdminMenuPayload(notice) {
 // 열이 어긋나 보여서, 정렬에 기대지 않는 번호 목록으로 표시한다.
 function buildRealmRosterMessagePayload(entries) {
   if (entries.length === 0) {
-    const embed = new EmbedBuilder().setColor(REALM_COLOR).setTitle('<:Banner:1544331498230906931> 멤버 목록 (0명)')
+    const embed = new EmbedBuilder().setColor(REALM_COLOR).setTitle('<:flag2:1544677209426624552> 멤버 목록 (0명)')
       .setDescription('아직 승인된 멤버가 없습니다.');
     return { embeds: [embed], components: [buildRealmRosterButtons()] };
   }
@@ -253,7 +253,7 @@ function buildRealmRosterMessagePayload(entries) {
 
   const embed = new EmbedBuilder()
     .setColor(REALM_COLOR)
-    .setTitle(`<:Banner:1544331498230906931> 멤버 목록 (총 ${entries.length}명)`)
+    .setTitle(`<:flag2:1544677209426624552> 멤버 목록 (총 ${entries.length}명)`)
     .setDescription(lines.join('\n'));
 
   return { embeds: [embed], components: [buildRealmRosterButtons()] };
