@@ -29,7 +29,7 @@ const {
   getRosterMessageId,
   setRosterMessageId,
 } = require('./명단');
-const { REALM_REVIEW_CHANNEL_ID, REALM_WHITELIST_ROLE_ID, REALM_RULES_CHANNEL_ID, REALM_RULES_MESSAGE_ID, GUILD_ID } = require('../../config');
+const { REALM_REVIEW_CHANNEL_ID, REALM_RULES_CHANNEL_ID, REALM_RULES_MESSAGE_ID, GUILD_ID } = require('../../config');
 
 // "신청하기"를 누르려면 이 이모지로 규칙 메시지에 반응을 남겨둔 상태여야 한다. 안내 문구엔
 // ✅ 하나만 보여주지만, 생김새가 비슷한 다른 체크 이모지(✔️ 등)로 반응해도 인정한다.
@@ -86,7 +86,7 @@ function buildRealmPanelPayload() {
       ].join('\n'),
     )
     .setThumbnail(`attachment://${THUMBNAIL_FILENAME}`)
-    .setFooter({ text: '승인 시 @마크 역할이 자동으로 지급돼요.' });
+    .setFooter({ text: '검토 후 결과를 DM으로 안내드려요.' });
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('realm:apply').setLabel('신청하기').setEmoji({ id: '1544331697049305098' }).setStyle(ButtonStyle.Success),
@@ -287,7 +287,7 @@ function buildEditNicknameModal() {
     );
 }
 
-// "제외" 클릭 시 뜨는 모달 — 유저 ID만 입력하면 명단에서 빼고 마크 역할도 회수한다.
+// "제외" 클릭 시 뜨는 모달 — 유저 ID만 입력하면 명단에서 뺀다.
 function buildKickModal() {
   return new ModalBuilder()
     .setCustomId('realm:roster:kick_modal')
@@ -427,9 +427,6 @@ async function handleRealmButton(interaction) {
   removePendingApplication(interaction.guildId, applicantId); // 처리 완료 — 승인이면 명단으로, 거절이면 재신청 가능하게
 
   if (action === 'approve') {
-    if (REALM_WHITELIST_ROLE_ID && applicantMember) {
-      await applicantMember.roles.add(REALM_WHITELIST_ROLE_ID).catch(err => console.error('렐름 마크 역할 지급 실패:', err));
-    }
     addApprovedMember(interaction.guildId, applicantId, {
       nickname,
       discordName: displayName,
@@ -531,7 +528,7 @@ async function resolveRosterTarget(interaction, { requireInRoster }) {
 }
 
 // ── 명단 관리 모달 제출("추가"·"편집"·"제외"·"순서 변경", 'realm:roster:' 프리픽스) ──
-// 넷 다 유저/멤버 조회 + 역할 지급·회수 + refreshRealmRosterMessage(채널·메시지 조회/삭제/재전송)까지
+// 넷 다 유저/멤버 조회 + refreshRealmRosterMessage(채널·메시지 조회/삭제/재전송)까지
 // API 호출이 여러 번 이어져 3초 응답 제한을 넘기기 쉬우므로, 맨 앞에서 먼저 deferReply로 확정해둔다.
 async function handleRealmRosterModal(interaction) {
   if (!ADMIN_IDS.includes(interaction.user.id)) {
@@ -549,9 +546,6 @@ async function handleRealmRosterModal(interaction) {
     const member = await interaction.guild.members.fetch(target.userId).catch(() => null);
     const discordName = member?.displayName ?? target.user.username;
 
-    if (REALM_WHITELIST_ROLE_ID && member) {
-      await member.roles.add(REALM_WHITELIST_ROLE_ID).catch(err => console.error('렐름 마크 역할 지급 실패:', err));
-    }
     addApprovedMember(interaction.guildId, target.userId, {
       nickname,
       discordName,
@@ -580,10 +574,6 @@ async function handleRealmRosterModal(interaction) {
     if (!target) return;
 
     removeApprovedMember(interaction.guildId, target.userId);
-    if (REALM_WHITELIST_ROLE_ID) {
-      const member = await interaction.guild.members.fetch(target.userId).catch(() => null);
-      if (member) await member.roles.remove(REALM_WHITELIST_ROLE_ID).catch(err => console.error('렐름 마크 역할 회수 실패:', err));
-    }
     await refreshRealmRosterMessage(interaction.client, interaction.guildId).catch(err => console.error('렐름 명단 메시지 갱신 실패:', err));
     await interaction.editReply({ content: '<:Barrier:1544331503448625233> **명단에서 제외했습니다.**' });
     return;
