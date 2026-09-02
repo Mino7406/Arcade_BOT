@@ -58,6 +58,12 @@ const ROSTER_DISPLAY_LIMIT = 40; // 임베드 description 한도(4096자) 안에
 const FIELD_NICKNAME = '<:Name_Tag:1544325806803652608> 닉네임';
 const FIELD_APPLIED_AT = '<:Compass:1544331496238882907> 신청 일시';
 
+// 패널 설명의 "규칙" 섹션과 신청 전 동의 화면이 같은 문구를 쓴다 — 규칙을 고칠 때 한 곳만
+// 고치면 되게 상수로 묶어둔다.
+const RULES_LINES = [
+  '1. 여기다가 규칙 입력',
+];
+
 // 안내 패널 썸네일. attachment:// 방식으로 메시지에 매번 첨부해 올리므로 외부 링크(만료되는
 // 디스코드 CDN 서명 URL 등)에 의존하지 않는다.
 const THUMBNAIL_PATH = path.join(__dirname, '..', '..', 'assets', 'mc_realm_thumbnail.webp');
@@ -71,18 +77,18 @@ function buildRealmPanelPayload() {
     .setDescription(
       [
         '> **<:apple:1544507302948634704> 신청 방법**',
-        '아래 **<:Book:1544331697049305098> 신청하기** 버튼을 눌러 마인크래프트 닉네임을 제출해주세요.\n검토 후 결과를 DM으로 안내드려요.',
+        '**<:Book:1544331697049305098>신청하기** 버튼을 눌러 **마인크래프트 닉네임**을 제출해주세요.\n검토 후 결과를 DM으로 안내드려요.',
         '',
-        '> **<:Banner:1544331498230906931> 주의사항**',
-        '최신 릴리스로 접속하셔야 렐름에 입장이 가능합니다.\n서버에 접속할 때는 반드시 **Java Edition**으로 접속해주세요. Bedrock Edition은 지원하지 않습니다.',
+        '> **<:flag:1544635910757425183> 주의사항**',
+        '**최신 릴리스**로 접속하셔야 렐름에 입장이 가능합니다.\n서버에 접속할 때는 반드시 **Java Edition**으로 접속해주세요. Bedrock Edition은 지원하지 않습니다.',
         '',
         '> **<:Enchanted_Book:1544571673636773898> 규칙**',
-        '1. 여기다가 규칙 입력',
+        RULES_LINES.join('\n'),
         '',
       ].join('\n'),
     )
     .setThumbnail(`attachment://${THUMBNAIL_FILENAME}`)
-    .setFooter({ text: '승인 시 @마크 역할이 자동으로 지급돼요.' });
+    .setFooter({ text: '<:Emerald:1544331499976007810> 승인 시 @마크 역할이 자동으로 지급돼요.' });
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('realm:apply').setLabel('신청하기').setEmoji({ id: '1544331697049305098' }).setStyle(ButtonStyle.Success),
@@ -93,6 +99,23 @@ function buildRealmPanelPayload() {
     components: [row],
     files: [new AttachmentBuilder(THUMBNAIL_PATH, { name: THUMBNAIL_FILENAME })],
   };
+}
+
+// "신청하기" 클릭 시 먼저 뜨는 규칙 동의 화면(ephemeral). "동의하고 신청하기"를 눌러야
+// 실제 신청서 모달(buildRealmApplyModal)이 뜬다 — 모달은 체크박스를 못 넣으므로 버튼 한 단계를
+// 앞에 둬서 동의를 받는다.
+function buildRealmRulesConfirmPayload() {
+  const embed = new EmbedBuilder()
+    .setColor(REALM_COLOR)
+    .setTitle('<:Enchanted_Book:1544571673636773898> 신청 전 규칙 확인')
+    .setDescription([RULES_LINES.join('\n'), '', '위 규칙에 동의해야 신청서를 작성할 수 있습니다.'].join('\n'));
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('realm:apply_confirm').setLabel('동의하고 신청하기').setEmoji({ id: '1544331499976007810' }).setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId('realm:apply_cancel').setLabel('취소').setStyle(ButtonStyle.Secondary),
+  );
+
+  return { embeds: [embed], components: [row], flags: MessageFlags.Ephemeral };
 }
 
 // "신청하기" 클릭 시 뜨는 신청서 모달. 마인크래프트 자바 닉네임 최대 길이(16자)로 제한.
@@ -343,7 +366,26 @@ async function handleRealmButton(interaction) {
       await interaction.reply({ content: '⚠️ **이미 제출한 신청서가 검토 대기중입니다.** 처리될 때까지 기다려주세요.', flags: MessageFlags.Ephemeral });
       return;
     }
+    await interaction.reply(buildRealmRulesConfirmPayload());
+    return;
+  }
+
+  if (interaction.customId === 'realm:apply_confirm') {
+    // 규칙 화면을 보는 사이 이미 승인됐거나 다른 곳에서 신청했을 수 있으니 다시 확인한다.
+    if (isApprovedMember(interaction.guildId, interaction.user.id)) {
+      await interaction.update({ content: '<:Barrier:1544331503448625233> **이미 렐름 참가가 승인된 멤버입니다.**', embeds: [], components: [] });
+      return;
+    }
+    if (hasPendingApplication(interaction.guildId, interaction.user.id)) {
+      await interaction.update({ content: '⚠️ **이미 제출한 신청서가 검토 대기중입니다.** 처리될 때까지 기다려주세요.', embeds: [], components: [] });
+      return;
+    }
     await interaction.showModal(buildRealmApplyModal());
+    return;
+  }
+
+  if (interaction.customId === 'realm:apply_cancel') {
+    await interaction.update({ content: '신청을 취소했습니다.', embeds: [], components: [] });
     return;
   }
 
