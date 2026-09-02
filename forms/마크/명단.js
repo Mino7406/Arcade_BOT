@@ -1,5 +1,5 @@
-// 마크.js — 마인크래프트 렐름 승인 명단 저장/조회.
-// 승인/거절 자체는 검토 임베드(commands/마크.js)가 메시지 상태만으로 처리하지만, "지금까지
+// forms/마크/명단.js — 마인크래프트 렐름 승인 명단 저장/조회 ("마크" 신청서 전용 저장소).
+// 승인/거절 자체는 검토 임베드(forms/마크/index.js)가 메시지 상태만으로 처리하지만, "지금까지
 // 승인된 사람이 누구인지"는 개별 메시지를 다 뒤지지 않고도 바로 볼 수 있어야 하므로 별도로
 // 가볍게 저장한다. 룰렛(roulette.json)과 같은 단일 JSON 파일 방식.
 //
@@ -9,10 +9,10 @@
 
 const fs = require('fs');
 const path = require('path');
-const { writeJsonIfChanged } = require('./저장');
-const { logSystem } = require('./로그');
+const { writeJsonIfChanged } = require('../../handlers/저장');
+const { logSystem } = require('../../handlers/로그');
 
-const REALM_ROSTER_PATH = path.join(__dirname, '..', 'DB', 'realm_roster.json');
+const REALM_ROSTER_PATH = path.join(__dirname, '..', '..', 'DB', 'realm_roster.json');
 fs.mkdirSync(path.dirname(REALM_ROSTER_PATH), { recursive: true });
 
 // { [guildId]: {

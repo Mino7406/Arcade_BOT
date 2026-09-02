@@ -2,7 +2,7 @@ const path = require('path');
 // 실행 디렉터리(CWD)가 아니라 이 파일 기준으로 env를 찾는다 — systemd 등 다른 CWD에서 띄워도
 // 토큰을 놓치지 않게. (파일명이 '.env'가 아니라 'env'인 것은 의도된 것)
 require('dotenv').config({ path: path.join(__dirname, 'env') });
-const { Client, GatewayIntentBits, Collection, MessageFlags, Events } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, MessageFlags, Events, Options } = require('discord.js');
 const fs = require('fs');
 
 // 예전 위치(루트)에 남아있던 JSON 저장 파일이 있다면 DB/ 폴더로 옮긴다(내용은 그대로, 위치만
@@ -21,7 +21,7 @@ const { handleTttButton } = require('./handlers/틱택토');
 const { handleOmokButton, handleOmokMessage } = require('./handlers/오목');
 const { loadRoulette, saveRoulette, handleRouletteButton } = require('./handlers/룰렛');
 const { loadBotMatchXp, saveBotMatchXp } = require('./handlers/봇전한도');
-const { loadRealmRoster, saveRealmRoster } = require('./handlers/마크');
+const { loadRealmRoster, saveRealmRoster } = require('./forms/마크/명단');
 const { startQuizScheduler, handleQuizMessage } = require('./handlers/퀴즈');
 const { handleQuizAdminButton, handleQuizCreateModal } = require('./commands/퀴즈');
 const { buildGameSelectPayload: buildNaejeonGameSelectPayload } = require('./commands/내전');
@@ -29,7 +29,8 @@ const { buildGameSelectPayload: buildMojipGameSelectPayload } = require('./comma
 const { buildReloadListPayload } = require('./commands/불러오기');
 const { buildTeamMatchListPayload } = require('./commands/팀');
 const { buildCommandListPayload, buildSetupPanelPayload, buildAdminMenuPayload, handlePanelButton, handlePanelMatchDeleteSelect, handlePanelBotMessageDeleteModal } = require('./commands/패널');
-const { handleRealmButton, handleRealmModal, handleRealmRosterModal } = require('./commands/마크');
+const { handleRealmButton, handleRealmModal, handleRealmRosterModal } = require('./forms/마크');
+const { handleFormSelectButton } = require('./commands/신청서');
 const { handleLevelShareButton } = require('./commands/레벨');
 const { handleRankingPageButton, handleRankingShareButton } = require('./commands/랭킹');
 const { handleXpUserSelect, handleXpButton, handleXpModal } = require('./commands/XP');
@@ -49,6 +50,27 @@ const client = new Client({
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildMembers, // /랭킹의 대량 멤버 조회(guild.members.fetch({ user: [...] }))에 필요(특권 인텐트)
   ],
+
+  // ── 메모리 상한 ──────────────────────────────────────────────
+  // 몇 달씩 켜두는 봇이라 discord.js 기본 캐시(유저·멤버·메시지)가 "한 번 본 것"을 계속
+  // 들고 있으면서 메모리가 우상향한다. 이 봇의 핸들러는 필요한 유저/멤버/채널을 그때그때
+  // .fetch()로 가져오고(전부 .catch(() => null) 처리), 게임/매치가 편집하는 메시지는 자기
+  // 객체에 참조를 따로 들고 있어서 — 아래처럼 캐시를 줄이고 주기적으로 비워도 동작에 영향이 없다.
+  makeCache: Options.cacheWithLimits({
+    ...Options.DefaultMakeCacheSettings,
+    MessageManager: 25,        // 채널당 캐시 메시지 상한 (기본 200)
+    ReactionManager: 0,        // 리액션 기능 없음
+    GuildBanManager: 0,        // 밴 조회 안 함
+    PresenceManager: 0,        // Presence 인텐트 없음(명시)
+    ThreadManager: 0,          // 스레드 안 씀
+    ThreadMemberManager: 0,
+  }),
+  sweepers: {
+    ...Options.DefaultSweeperSettings,
+    messages:     { interval: 600, lifetime: 900 },                                    // 10분마다 15분 지난 캐시 메시지 제거
+    users:        { interval: 3600, filter: () => (u) => u.id !== u.client.user.id },  // 1시간마다 봇 외 유저 캐시 비움
+    guildMembers: { interval: 3600, filter: () => (m) => m.id !== m.client.user.id },  // 1시간마다 봇 외 멤버 캐시 비움
+  },
 });
 
 client.commands = new Collection();
@@ -263,12 +285,13 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     const isChannelExempt =
-      (interaction.isChatInputCommand() && ['패널', '퀴즈', 'xp', '마크'].includes(interaction.commandName)) ||
+      (interaction.isChatInputCommand() && ['패널', '퀴즈', 'xp', '신청서'].includes(interaction.commandName)) ||
       isWordchainOrRanking ||
       isReload ||
       interaction.customId?.startsWith('quiz:') ||
       interaction.customId?.startsWith('xp:') ||
-      interaction.customId?.startsWith('realm:');
+      interaction.customId?.startsWith('realm:') ||
+      interaction.customId?.startsWith('form:');
 
     if (!isChannelExempt && !skipChannelLimits) {
       if (allowedChannels.length > 0 && !allowedChannels.includes(interaction.channelId)) {
@@ -386,6 +409,8 @@ client.on('interactionCreate', async (interaction) => {
         }
       } else if (interaction.customId.startsWith('panel:')) {
         await handlePanelButton(interaction);
+      } else if (interaction.customId.startsWith('form:')) {
+        await handleFormSelectButton(interaction);
       } else if (interaction.customId.startsWith('realm:')) {
         await handleRealmButton(interaction);
       }

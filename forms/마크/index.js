@@ -1,6 +1,5 @@
 const path = require('path');
 const {
-  SlashCommandBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -15,8 +14,8 @@ const {
   MessageFlags,
 } = require('discord.js');
 
-const { ADMIN_IDS } = require('../handlers/공용');
-const { logSystem } = require('../handlers/로그');
+const { ADMIN_IDS } = require('../../handlers/공용');
+const { logSystem } = require('../../handlers/로그');
 const {
   addApprovedMember,
   removeApprovedMember,
@@ -29,8 +28,8 @@ const {
   getApprovedRoster,
   getRosterMessageId,
   setRosterMessageId,
-} = require('../handlers/마크');
-const { REALM_REVIEW_CHANNEL_ID, REALM_WHITELIST_ROLE_ID } = require('../config');
+} = require('./명단');
+const { REALM_REVIEW_CHANNEL_ID, REALM_WHITELIST_ROLE_ID } = require('../../config');
 
 // DM을 보낼 수 없는 정상적인 상황(수신자가 DM 차단 / 봇과 공통 서버 없음)의 디스코드 에러 코드.
 // handlers/공용.js의 마감·시작 알림 DM과 동일한 기준.
@@ -61,7 +60,7 @@ const FIELD_APPLIED_AT = '<:Compass:1544331496238882907> 신청 일시';
 
 // 안내 패널 썸네일. attachment:// 방식으로 메시지에 매번 첨부해 올리므로 외부 링크(만료되는
 // 디스코드 CDN 서명 URL 등)에 의존하지 않는다.
-const THUMBNAIL_PATH = path.join(__dirname, '..', 'assets', 'mc_realm_thumbnail.webp');
+const THUMBNAIL_PATH = path.join(__dirname, '..', '..', 'assets', 'mc_realm_thumbnail.webp');
 const THUMBNAIL_FILENAME = 'mc_realm_thumbnail.webp';
 
 // /마크 최초 게시에서 사용. 이후 새로고침 등이 생기면 여기를 재사용한다(패널.js 패턴과 동일).
@@ -75,7 +74,10 @@ function buildRealmPanelPayload() {
         '아래 <:Book:1544331697049305098> 신청하기 버튼을 눌러 마인크래프트 닉네임을 제출해주세요.\n검토 후 결과를 DM으로 안내드려요.',
         '',
         '> **<:Banner:1544331498230906931> 주의사항**',
-        '나중에 입력하겠음.',
+        '최신 릴리스로 접속하셔야 렐름에 입장이 가능합니다.\n서버에 접속할 때는 반드시 **Java Edition**으로 접속해주세요. Bedrock Edition은 지원하지 않습니다.',
+        '',
+        '> **<:Enchanted_Book:1544571673636773898> 규칙**',
+        '1. 여기다가 규칙 입력',
         '',
       ].join('\n'),
     )
@@ -298,18 +300,18 @@ async function refreshRealmRosterMessage(client, guildId) {
 function buildRealmResultDm(status, nickname, processedByName) {
   const approved = status === 'approved';
   const container = new ContainerBuilder()
-    .addTextDisplayComponents(td => td.setContent(approved ? '# <:Emerald:1544331499976007810> 렐름 신청 승인' : '# <:Barrier:1544331503448625233> 렐름 신청 거절'))
+    .addTextDisplayComponents(td => td.setContent(approved ? '# <:MC:1544570096859742248> 렐름 신청 승인' : '# <:MC:1544570096859742248> 렐름 신청 거절'))
     .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
     .addTextDisplayComponents(td => td.setContent(
       approved
-        ? '렐름 참가 신청이 **승인**되었습니다!\n이제 렐름에 접속 가능합니다!'
-        : '렐름 참가 신청이 **거절**되었습니다.',
+        ? '<:Emerald:1544331499976007810> 렐름 참가 신청이 **승인**되었습니다!\n이제 렐름에 접속 가능합니다!'
+        : '<:Barrier:1544331503448625233>렐름 참가 신청이 **거절**되었습니다.',
     ))
     .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
     .addTextDisplayComponents(td => td.setContent(
       approved
-        ? `<:Name_Tag:1544325806803652608> 닉네임: \`${nickname}\`\n<:OP:1544340150585262180> 승인자: \`${processedByName}\``
-        : `<:Name_Tag:1544325806803652608> 닉네임: \`${nickname}\`\n<:OP:1544340150585262180> 거절자: \`${processedByName}\``,
+        ? `<:Name_Tag:1544325806803652608> **닉네임**: \`${nickname}\`\n\n<:OP:1544340150585262180> **승인자**: \`${processedByName}\``
+        : `<:Name_Tag:1544325806803652608> **닉네임**: \`${nickname}\`\n\n<:OP:1544340150585262180> **거절자**: \`${processedByName}\``,
     ))
     .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
     .addTextDisplayComponents(td => td.setContent(
@@ -321,21 +323,9 @@ function buildRealmResultDm(status, nickname, processedByName) {
   return { components: [container], flags: MessageFlags.IsComponentsV2 };
 }
 
+// "마크" 신청서 모듈 — /신청서(commands/신청서.js)가 선택 메뉴에서 이 폼을 고르면
+// buildRealmPanelPayload로 패널을 게시하고, 이후 버튼/모달 상호작용은 아래 핸들러들이 처리한다.
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('마크')
-    .setDescription('[관리자 전용] 현재 채널에 마인크래프트 렐름 참가 신청 패널을 게시합니다.'),
-
-  async execute(interaction) {
-    if (!ADMIN_IDS.includes(interaction.user.id)) {
-      await interaction.reply({ content: '<:Barrier:1544331503448625233> **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
-      return;
-    }
-
-    await interaction.channel.send(buildRealmPanelPayload());
-    await interaction.reply({ content: '<:Emerald:1544331499976007810> **마크 신청 패널을 게시했습니다.**', flags: MessageFlags.Ephemeral });
-  },
-
   buildRealmPanelPayload,
   buildRealmApplyModal,
   buildRealmReviewPayload,
