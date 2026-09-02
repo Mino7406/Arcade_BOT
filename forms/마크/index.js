@@ -68,7 +68,7 @@ const ROSTER_DISPLAY_LIMIT = 40; // 임베드 description 한도(4096자) 안에
 // 쓴다. 리터럴 문자열을 양쪽에 따로 적어두면 이모지를 바꿀 때 한쪽만 고치고 지나치기 쉬워서
 // (실제로 한 번 그렇게 깨진 적 있음) 하나로 묶어둔다.
 const FIELD_NICKNAME = '<:Name_Tag:1544325806803652608> 닉네임';
-const FIELD_APPLIED_AT = '<:Compass:1544331496238882907> 신청 일시';
+const FIELD_APPLIED_AT = '<:Watch:1544331505101439066> 신청 일시';
 
 // 안내 패널 썸네일. attachment:// 방식으로 메시지에 매번 첨부해 올리므로 외부 링크(만료되는
 // 디스코드 CDN 서명 URL 등)에 의존하지 않는다.
@@ -174,7 +174,7 @@ function buildRealmApplyModal() {
 // displayName/processedByName은 계정 태그가 아니라 서버 별명(GuildMember.displayName)을 넘긴다.
 function buildRealmReviewPayload({ applicant, displayName, nickname, appliedAt, status = 'pending', processedByName = null }) {
   const statusMeta = {
-    pending:  { title: '<:Watch:1544331505101439066> 검토 대기중', color: PENDING_COLOR },
+    pending:  { title: '<:Compass:1544331496238882907> 검토 대기중', color: PENDING_COLOR },
     approved: { title: '<:Emerald:1544331499976007810> 승인됨', color: REALM_COLOR },
     rejected: { title: '<:Barrier:1544331503448625233> 거절됨', color: REJECTED_COLOR },
   }[status];
