@@ -5,7 +5,7 @@ const {
   ButtonStyle,
   MessageFlags,
 } = require('discord.js');
-const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp } = require('./레벨링');
+const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp, isMinigameXpFrozen } = require('./레벨링');
 const {
   getRemainingBotXp, addBotMatchXp, DAILY_BOT_MATCH_XP_CAP, timeUntilKstMidnight,
   WAGER_XP, BOT_WIN_XP_MIN, BOT_WIN_XP_MAX, rollBotWinXp,
@@ -374,6 +374,10 @@ function formatXpResultLine(game) {
     return `\n🚫 오늘 봇전으로 받을 수 있는 XP(하루 ${DAILY_BOT_MATCH_XP_CAP})를 모두 받아 이번 판은 지급되지 않았습니다.\n-# (약 ${timeUntilKstMidnight()} 후 초기화)`;
   }
 
+  if (result.type === 'frozen') {
+    return `\n-# ⚙️ 관리자가 미니게임 XP 정산을 일시 중지했습니다.`;
+  }
+
   const winnerLines = result.winnerResults.map(w => `📈 <@${w.userId}> **+${w.amount} XP**`).join('\n');
   if (result.type === 'wager') {
     return `\n🎲 **내기 결과**\n📉 <@${result.loserId}> **−${result.wager} XP**\n${winnerLines}`;
@@ -638,6 +642,7 @@ function settleBotWinXp(game) {
 
 function settleGameXp(game) {
   if (isExcludedGuild(game.guildId)) return; // 레벨 시스템 제외 서버(테스트 서버 등)는 내기/보상도 미적용
+  if (isMinigameXpFrozen()) { game.xpResult = { type: 'frozen' }; return; } // 관리자 긴급정지: 미니게임 XP 정산 생략
   const result = settleWagerXp(game) || settleBotWinXp(game);
   game.xpResult = result;
   if (!result || result.type === 'cooldown' || result.type === 'bot_daily_cap') return;

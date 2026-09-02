@@ -34,7 +34,7 @@ const { handleFormSelectButton } = require('./commands/신청서');
 const { handleLevelShareButton } = require('./commands/레벨');
 const { handleRankingPageButton, handleRankingShareButton } = require('./commands/랭킹');
 const { handleXpUserSelect, handleXpButton, handleXpModal } = require('./commands/XP');
-const { loadLevels, saveLevels, handleMessageXp, trackVoiceStateUpdate, initVoiceStates, startVoiceXpTicker, announceLevelUp, MATCH_BONUS_CHANNEL_ID } = require('./handlers/레벨링');
+const { loadLevels, saveLevels, loadXpState, handleMessageXp, trackVoiceStateUpdate, initVoiceStates, startVoiceXpTicker, announceLevelUp, MATCH_BONUS_CHANNEL_ID } = require('./handlers/레벨링');
 const { handleTempVoiceState, reconcileTempChannels } = require('./handlers/음성채널');
 const { logInteraction, flushLogsSync } = require('./handlers/로그');
 
@@ -230,6 +230,7 @@ async function onReady(c) {
   c.startedAt = new Date();
   await restoreMatches(c); // ⬅️ 추가: 저장된 내전/모집 복원
   loadLevels(); // ⬅️ 추가: 저장된 레벨/XP 복원
+  loadXpState(); // XP 긴급정지/뉴비부스트 스위치 상태 복원
   loadRoulette(); // 룰렛 일일 플레이 기록 복원
   loadBotMatchXp(); // 끝말잇기·틱택토 봇전 일일 XP 한도 기록 복원
   loadRealmRoster(); // 마인크래프트 렐름 승인 명단 복원

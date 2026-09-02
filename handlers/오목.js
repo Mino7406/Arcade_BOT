@@ -18,7 +18,7 @@ const {
   AttachmentBuilder,
   MessageFlags,
 } = require('discord.js');
-const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp } = require('./레벨링');
+const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp, isMinigameXpFrozen } = require('./레벨링');
 const {
   getRemainingBotXp, addBotMatchXp, DAILY_BOT_MATCH_XP_CAP, timeUntilKstMidnight,
   WAGER_XP, BOT_WIN_XP_MIN, BOT_WIN_XP_MAX, rollBotWinXp,
@@ -482,6 +482,7 @@ function settleBotWinXp(game) {
 
 function settleGameXp(game) {
   if (isExcludedGuild(game.guildId)) return;
+  if (isMinigameXpFrozen()) { game.xpResult = { type: 'frozen' }; return; } // 관리자 긴급정지: 미니게임 XP 정산 생략
   const result = settleWagerXp(game) || settleBotWinXp(game);
   game.xpResult = result;
   if (!result || result.type === 'cooldown' || result.type === 'bot_daily_cap') return;
@@ -527,6 +528,8 @@ function buildEmbed(game) {
       } else if (game.xpResult?.type === 'cooldown') {
         const cooldownMin = Math.ceil((game.xpResult.cooldownMs ?? BOT_SETTLE_COOLDOWN_MS) / 60000);
         desc += `\n⏳ 연속 대결 쿨다운 중이라\n 이번 판은 XP 정산이 생략됐습니다.\n-# (직전 정산 후 ${cooldownMin}분 이내)`;
+      } else if (game.xpResult?.type === 'frozen') {
+        desc += `\n-# ⚙️ 관리자가 미니게임 XP 정산을 일시 중지했습니다.`;
       }
     }
   } else {

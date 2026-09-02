@@ -5,7 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
-const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp } = require('./레벨링');
+const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp, isMinigameXpFrozen } = require('./레벨링');
 const { kstDateString, timeUntilKstMidnight } = require('./시간');
 const { logSystem } = require('./로그');
 const { writeJsonIfChanged } = require('./저장');
@@ -249,6 +249,12 @@ async function spinLobby(interaction, lobby, lobbies) {
   // 처리해버리는데, 그 시점엔 이미 markPlayedToday/applyXp가 끝나 있어 유저는 기회만 날리고
   // 결과도 못 보는 상황이 생길 수 있었다. 응답부터 먼저 확정해 이 경합을 없앤다.
   await interaction.deferUpdate();
+
+  // 관리자 긴급정지 중이면 오늘 기회를 소모하지 않고 안내만 한다.
+  if (isMinigameXpFrozen()) {
+    await interaction.editReply({ content: '⚙️ **현재 관리자가 미니게임 XP를 일시 중지해 룰렛을 돌릴 수 없습니다.**', embeds: [], components: [] });
+    return;
+  }
 
   // 로비가 열려있던 사이(다른 곳에서) 이미 오늘 플레이했거나 XP가 줄어들었을 수 있으므로 재검증.
   if (hasPlayedToday(lobby.guildId, lobby.userId)) {

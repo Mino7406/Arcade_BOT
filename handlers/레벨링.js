@@ -13,6 +13,7 @@ const {
   LEVEL_UP_ANNOUNCE_CHANNEL_ID,
   XP_CHANNEL_MULTIPLIERS,
   MATCH_BONUS_CHANNEL_ID,
+  NEWBIE_BOOST_ROLE_ID,
 } = require('../config');
 
 const LEVELS_PATH = path.join(__dirname, '..', 'DB', 'levels.json');
@@ -35,6 +36,65 @@ const XP_MAX = 25;
 // 내전/모집 완료 보너스 XP 배율
 const ORGANIZER_XP_MULTIPLIER = 1.5;
 const PARTICIPANT_XP_MULTIPLIER = 1.3;
+
+// ── XP 런타임 스위치 ────────────────────────────────────────────
+// 관리자가 /xp → "XP 관리"에서 토글한다. xp-state.json에 저장돼 재시작해도 유지된다
+// (긴급정지는 봇이 재시작돼도 조용히 풀리면 안 되므로 반드시 디스크에 남긴다).
+const XP_STATE_PATH = path.join(__dirname, '..', 'DB', 'xp-state.json');
+const xpState = {
+  farmFrozen: false,        // 일반 파밍(메시지·TTS·통화방 체류·퀴즈·내전/모집 완료 보너스) XP 지급 정지
+  minigameFrozen: false,    // 미니게임(오목·룰렛·틱택토·끝말잇기) XP 정산 정지
+  newbieBoostEnabled: true, // 뉴비부스트 역할 1.5배 적용 여부
+};
+
+function loadXpState() {
+  try {
+    if (fs.existsSync(XP_STATE_PATH)) {
+      const saved = JSON.parse(fs.readFileSync(XP_STATE_PATH, 'utf8'));
+      for (const k of Object.keys(xpState)) {
+        if (typeof saved?.[k] === 'boolean') xpState[k] = saved[k];
+      }
+    }
+  } catch (err) {
+    // 못 읽으면 기본값(전부 정상 작동)으로 시작한다 — 긴급정지가 안 걸린 쪽이 더 안전한 기본값.
+    console.error('xp-state.json 읽기 실패(기본값으로 시작):', err);
+  }
+}
+
+function saveXpState() {
+  try {
+    writeJsonIfChanged(XP_STATE_PATH, xpState);
+  } catch (err) {
+    console.error('xp-state.json 저장 실패:', err);
+  }
+}
+
+function getXpState() {
+  return { ...xpState };
+}
+
+// key: 'farmFrozen' | 'minigameFrozen' | 'newbieBoostEnabled'. 값을 바꿔 즉시 저장하고 갱신된 전체 상태를 반환.
+function setXpSwitch(key, value) {
+  if (key in xpState) {
+    xpState[key] = !!value;
+    saveXpState();
+  }
+  return getXpState();
+}
+
+function isFarmXpFrozen() { return xpState.farmFrozen; }
+function isMinigameXpFrozen() { return xpState.minigameFrozen; }
+function isNewbieBoostEnabled() { return xpState.newbieBoostEnabled; }
+
+// "뉴비부스트" 역할 보유자에게 곱해줄 배율. 메인/TTS 채널 메시지 XP와 통화방 체류 XP에만 적용하고,
+// 미니게임(룰렛·끝말잇기·틱택토·오목·퀴즈)과 내전/모집 완료 보너스에는 적용하지 않는다.
+const NEWBIE_BOOST_XP_MULTIPLIER = 1.5;
+
+// 멤버가 뉴비부스트 역할을 가지고 있는지. 역할 ID가 비었거나·부스트가 꺼져 있거나·멤버 정보가 없으면 false.
+function hasNewbieBoost(member) {
+  if (!NEWBIE_BOOST_ROLE_ID || !xpState.newbieBoostEnabled) return false;
+  return !!member?.roles?.cache?.has(NEWBIE_BOOST_ROLE_ID);
+}
 
 // 통화방(음성 채널) 체류 XP: 봇이 음성에 직접 참가하지 않고도
 // voiceStateUpdate 게이트웨이 이벤트만으로 1분마다 활동 중인 유저에게 XP를 지급한다.
@@ -166,6 +226,7 @@ function randomBaseXp() {
 // 메시지 하나에 대해 쿨다운을 확인하고 XP를 지급. 레벨업 여부를 반환.
 function handleMessageXp(message) {
   if (message.author.bot || !message.guild) return null;
+  if (isFarmXpFrozen()) return null; // 관리자 긴급정지: 일반 파밍 XP 지급 중단
   const isMainChannel = message.channelId === XP_CHANNEL_ID;
   const multiplier = XP_CHANNEL_MULTIPLIERS[message.channelId];
   if (!isMainChannel && multiplier === undefined) return null;
@@ -185,7 +246,9 @@ function handleMessageXp(message) {
   cooldowns.set(key, now);
 
   const baseXp = randomBaseXp();
-  const gained = multiplier !== undefined ? Math.round(baseXp * multiplier) : baseXp;
+  const channelMultiplier = multiplier !== undefined ? multiplier : 1;
+  const boost = hasNewbieBoost(message.member) ? NEWBIE_BOOST_XP_MULTIPLIER : 1;
+  const gained = Math.round(baseXp * channelMultiplier * boost);
   return applyXp(guildId, userId, gained);
 }
 
@@ -199,6 +262,7 @@ function awardMatchCompletionXp(match) {
 
   const guildId = match.guildId;
   if (!guildId || isExcludedGuild(guildId)) return [];
+  if (isFarmXpFrozen()) return []; // 관리자 긴급정지: 완료 보너스도 일반 파밍으로 취급해 중단
 
   if (!match.xpAwardedUserIds) match.xpAwardedUserIds = {};
 
@@ -287,9 +351,14 @@ function sweepCooldowns(now = Date.now()) {
 function startVoiceXpTicker(client) {
   setInterval(async () => {
     sweepCooldowns();
+    if (isFarmXpFrozen()) return; // 관리자 긴급정지: 통화방 체류 XP 지급 중단
     for (const key of activeVoiceUsers) {
       const [guildId, userId] = key.split(':');
-      const raw = randomBaseXp() * VOICE_XP_TICK_MINUTES * VOICE_XP_MULTIPLIER + (voiceXpCarry.get(key) || 0);
+      const guild = client.guilds.cache.get(guildId);
+      const member = guild?.members.cache.get(userId)
+        || await guild?.members.fetch(userId).catch(() => null);
+      const boost = hasNewbieBoost(member) ? NEWBIE_BOOST_XP_MULTIPLIER : 1;
+      const raw = randomBaseXp() * VOICE_XP_TICK_MINUTES * VOICE_XP_MULTIPLIER * boost + (voiceXpCarry.get(key) || 0);
       const gained = Math.floor(raw);
       voiceXpCarry.set(key, raw - gained);
       if (gained <= 0) continue;
@@ -322,6 +391,12 @@ module.exports = {
   loadLevels,
   saveLevels,
   isLevelsLoaded,
+  loadXpState,
+  getXpState,
+  setXpSwitch,
+  isFarmXpFrozen,
+  isMinigameXpFrozen,
+  isNewbieBoostEnabled,
   handleMessageXp,
   awardMatchCompletionXp,
   applyXp,

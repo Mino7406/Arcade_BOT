@@ -21,6 +21,8 @@ const {
   saveLevels,
   isLevelsLoaded,
   isExcludedGuild,
+  getXpState,
+  setXpSwitch,
 } = require('../handlers/레벨링');
 const { logAction } = require('../handlers/로그');
 const { displayNameFromMember } = require('../handlers/이름');
@@ -73,6 +75,89 @@ function buildActionRow(targetId) {
     new ButtonBuilder().setCustomId(`xp:sub:${targetId}`).setEmoji('➖').setLabel('XP').setStyle(ButtonStyle.Danger),
     new ButtonBuilder().setCustomId(`xp:level:${targetId}`).setEmoji('🔄').setLabel('레벨 조정').setStyle(ButtonStyle.Primary),
   );
+}
+
+// ── /xp 첫 화면: "XP 조정" / "XP 관리" 분기 ──────────────────────
+function buildMenuView() {
+  return {
+    content: '**XP 콘솔** — 항목을 선택하세요.',
+    embeds: [],
+    components: [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('xp:menu:adjust').setEmoji('⚙️').setLabel('XP 조정').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('xp:menu:manage').setEmoji('🛠️').setLabel('XP 관리').setStyle(ButtonStyle.Secondary),
+      ),
+    ],
+  };
+}
+
+// ── "XP 관리" 패널: 일반파밍/미니게임 긴급정지 + 뉴비부스트 토글 ──
+function buildManageView(notice) {
+  const st = getXpState();
+  const embed = new EmbedBuilder()
+    .setColor(st.farmFrozen || st.minigameFrozen ? 0xED4245 : 0x57F287)
+    .setDescription(
+      `## 🛠️ XP 관리\n` +
+      `**일반 파밍 XP** ${st.farmFrozen ? '🔴 정지됨' : '🟢 작동 중'}\n` +
+      `-# 메인·TTS 채팅 · 통화방 체류 · 퀴즈 · 내전/모집 완료 보너스\n\n` +
+      `**미니게임 XP** ${st.minigameFrozen ? '🔴 정지됨' : '🟢 작동 중'}\n` +
+      `-# 오목 · 룰렛 · 틱택토 · 끝말잇기\n\n` +
+      `**뉴비부스트(×1.5)** ${st.newbieBoostEnabled ? '🟢 ON' : '⚪ OFF'}\n` +
+      `-# 뉴비부스트 역할의 메인·TTS·통화방 체류 XP 1.5배` +
+      (notice ? `\n\n${notice}` : ''),
+    )
+    .setTimestamp();
+  return {
+    content: '',
+    embeds: [embed],
+    components: [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('xp:mng:farm')
+          .setEmoji(st.farmFrozen ? '▶️' : '⏸️')
+          .setLabel(st.farmFrozen ? '일반파밍 재개' : '일반파밍 긴급정지')
+          .setStyle(st.farmFrozen ? ButtonStyle.Success : ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('xp:mng:game')
+          .setEmoji(st.minigameFrozen ? '▶️' : '⏸️')
+          .setLabel(st.minigameFrozen ? '미니게임 재개' : '미니게임 긴급정지')
+          .setStyle(st.minigameFrozen ? ButtonStyle.Success : ButtonStyle.Danger),
+      ),
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('xp:mng:boost')
+          .setEmoji('✨')
+          .setLabel(st.newbieBoostEnabled ? '뉴비부스트 끄기' : '뉴비부스트 켜기')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('xp:menu:home').setEmoji('↩️').setLabel('메뉴로').setStyle(ButtonStyle.Secondary),
+      ),
+    ],
+  };
+}
+
+// ── 긴급정지 ON/OFF 확인 화면 ──────────────────────────────────
+function buildConfirmView(which) {
+  const st = getXpState();
+  const isFarm = which === 'farm';
+  const frozen = isFarm ? st.farmFrozen : st.minigameFrozen;
+  const label = isFarm ? '일반 파밍' : '미니게임';
+  const act = frozen ? '재개' : '긴급정지';
+  const embed = new EmbedBuilder()
+    .setColor(frozen ? 0x57F287 : 0xED4245)
+    .setDescription(
+      `## ⚠️ 확인\n**${label} XP 지급을 ${act}**하시겠습니까?\n\n` +
+      (frozen
+        ? '재개하면 즉시 다시 XP가 지급됩니다.'
+        : `정지하면 관리자가 다시 켤 때까지 ${label} 관련 XP가 전혀 지급되지 않습니다.`),
+    );
+  return {
+    content: '',
+    embeds: [embed],
+    components: [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`xp:mngyes:${which}`).setLabel(`네, ${act}합니다`)
+          .setStyle(frozen ? ButtonStyle.Success : ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('xp:mngno').setLabel('취소').setStyle(ButtonStyle.Secondary),
+      ),
+    ],
+  };
 }
 
 function buildPanelEmbed(guildId, targetId, targetUser, displayName, notice) {
@@ -138,15 +223,11 @@ function formatAdjustNotice(result) {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('xp')
-    .setDescription('[관리자 전용] 유저의 XP/레벨을 버튼으로 수동 조정합니다.'),
+    .setDescription('[관리자 전용] XP 수동 조정 · XP 시스템 긴급정지/뉴비부스트 관리.'),
 
   async execute(interaction) {
     if (await denyGuard(interaction)) return;
-    await interaction.reply({
-      content: '조정할 유저를 선택하세요.',
-      components: [buildPickRow()],
-      flags: MessageFlags.Ephemeral,
-    });
+    await interaction.reply({ ...buildMenuView(), flags: MessageFlags.Ephemeral });
   },
 };
 
@@ -157,10 +238,50 @@ async function handleXpUserSelect(interaction) {
   await interaction.update(await buildPanel(interaction, targetId));
 }
 
-// ── 버튼(➕/➖/🎚️) → 모달 오픈 ───────────────────────────────
+// ── 버튼 라우팅: 메뉴 분기 / XP 관리 토글 / ➕➖🔄 모달 오픈 ────
 async function handleXpButton(interaction) {
   if (await denyGuard(interaction)) return;
   const [, action, targetId] = interaction.customId.split(':');
+
+  // 첫 화면 분기
+  if (action === 'menu') {
+    if (targetId === 'adjust') {
+      await interaction.update({ content: '조정할 유저를 선택하세요.', embeds: [], components: [buildPickRow()] });
+    } else if (targetId === 'manage') {
+      await interaction.update(buildManageView());
+    } else if (targetId === 'home') {
+      await interaction.update(buildMenuView());
+    }
+    return;
+  }
+
+  // XP 관리 패널
+  if (action === 'mng') {
+    if (targetId === 'boost') {
+      const st = setXpSwitch('newbieBoostEnabled', !getXpState().newbieBoostEnabled);
+      logAction(interaction, 'XP 관리', `뉴비부스트 ${st.newbieBoostEnabled ? 'ON' : 'OFF'}`);
+      await interaction.update(buildManageView(`✅ 뉴비부스트를 **${st.newbieBoostEnabled ? '켰습니다' : '껐습니다'}**.`));
+    } else if (targetId === 'farm' || targetId === 'game') {
+      await interaction.update(buildConfirmView(targetId));
+    }
+    return;
+  }
+  if (action === 'mngno') {
+    await interaction.update(buildManageView());
+    return;
+  }
+  if (action === 'mngyes') {
+    const isFarm = targetId === 'farm';
+    const key = isFarm ? 'farmFrozen' : 'minigameFrozen';
+    const label = isFarm ? '일반 파밍' : '미니게임';
+    const next = !getXpState()[key];
+    const st = setXpSwitch(key, next);
+    logAction(interaction, 'XP 관리', `${label} XP ${next ? '긴급정지' : '재개'}`);
+    await interaction.update(buildManageView(
+      st[key] ? `🛑 **${label} XP 지급을 정지**했습니다.` : `▶️ **${label} XP 지급을 재개**했습니다.`,
+    ));
+    return;
+  }
 
   if (action === 'add' || action === 'sub') {
     const modal = new ModalBuilder()
