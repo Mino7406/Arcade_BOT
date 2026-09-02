@@ -1,4 +1,4 @@
-// /명단관리테스트 — [임시] 테스트 서버 전용.
+// /테스트 — [임시] 테스트 서버 전용.
 // 렐름 멤버 목록 메시지의 "관리" 버튼을 눌렀을 때 나오는 것과 똑같은 ephemeral 관리 메뉴
 // (편집/추가/제외/순서 변경/새로고침)를 바로 띄운다. 그 메뉴 버튼들은 forms/마크/index.js의
 // handleRealmButton('realm:roster:' 프리픽스)이 그대로 처리한다.
@@ -47,7 +47,7 @@ async function handleRealmTestButton(interaction) {
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName('명단관리테스트')
+    .setName('테스트')
     .setDescription('[임시·테스트 서버 전용] 렐름 명단 관리 메뉴를 엽니다.'),
 
   async execute(interaction) {

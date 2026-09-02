@@ -58,7 +58,7 @@ async function handleFormSelectButton(interaction) {
   const form = FORMS[type];
   if (!form) return;
 
-  await interaction.channel.send(form.build());
+  await interaction.channel.send(form.build(interaction.client));
   await interaction.update({ content: form.done, components: [] });
 }
 

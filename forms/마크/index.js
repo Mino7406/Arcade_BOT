@@ -81,7 +81,8 @@ const THUMBNAIL_FILENAME = 'mc_realm_thumbnail.webp';
 const APPLY_DISABLED = true;
 
 // /마크 최초 게시에서 사용. 이후 새로고침 등이 생기면 여기를 재사용한다(패널.js 패턴과 동일).
-function buildRealmPanelPayload() {
+// client를 넘기면 footer 아이콘에 봇 프로필 사진을 붙인다(안 넘겨도 동작).
+function buildRealmPanelPayload(client) {
   const embed = new EmbedBuilder()
     .setColor(REALM_COLOR)
     .setTitle('마인크래프트 렐름 참가 신청')
@@ -98,7 +99,10 @@ function buildRealmPanelPayload() {
       ].join('\n'),
     )
     .setThumbnail(`attachment://${THUMBNAIL_FILENAME}`)
-    .setFooter({ text: '@마크 역할이 있어야 규정집에 접근 가능합니다.' });
+    .setFooter({
+      text: '@마크 역할이 있어야 규정집에 접근 가능합니다.',
+      iconURL: client?.user?.displayAvatarURL() ?? undefined,
+    });
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('realm:apply').setLabel('신청하기').setEmoji({ id: '1544331697049305098' }).setStyle(ButtonStyle.Success).setDisabled(APPLY_DISABLED),
@@ -327,7 +331,7 @@ function buildMoveModal() {
 
 // [임시] config의 REALM_PANEL_CHANNEL_ID/REALM_PANEL_MESSAGE_ID가 가리키는, 이미 게시된 렐름
 // 신청서 패널 메시지를 그 자리에서 최신 buildRealmPanelPayload()로 다시 그린다. APPLY_DISABLED를
-// 바꾼 뒤 패널을 새로 게시하지 않고 갱신하는 용도(테스트 서버의 /명단관리테스트에서 호출).
+// 바꾼 뒤 패널을 새로 게시하지 않고 갱신하는 용도(테스트 서버의 /테스트에서 호출).
 // 성공/실패 사유를 문자열로 돌려줘 호출부가 그대로 안내에 쓴다.
 async function refreshRealmPanelMessage(client) {
   if (!REALM_PANEL_CHANNEL_ID || !REALM_PANEL_MESSAGE_ID) {
@@ -340,7 +344,7 @@ async function refreshRealmPanelMessage(client) {
   if (!message) return '패널 메시지를 찾을 수 없습니다 (REALM_PANEL_MESSAGE_ID 확인).';
 
   // buildRealmPanelPayload는 attachment:// 썸네일을 새로 첨부하므로, 기존 첨부는 비워 중복을 막는다.
-  const payload = buildRealmPanelPayload();
+  const payload = buildRealmPanelPayload(client);
   const edited = await message.edit({ ...payload, attachments: [] }).catch(err => {
     console.error('렐름 패널 메시지 갱신 실패:', err);
     return null;
