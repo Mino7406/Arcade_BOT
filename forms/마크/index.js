@@ -78,7 +78,7 @@ const THUMBNAIL_FILENAME = 'mc_realm_thumbnail.webp';
 // 렐름 신청서를 임베드만 먼저 게시해두고 신청은 나중에 받고 싶을 때 true로 둔다.
 // true면 "신청하기" 버튼이 비활성화되고, 혹시 모를 우회 클릭도 handleRealmButton에서 막는다.
 // 신청을 열 때는 false로 바꾸고 /마크로 패널을 다시 게시(또는 새로고침)하면 된다.
-const APPLY_DISABLED = false;
+const APPLY_DISABLED = true;
 
 // /마크 최초 게시에서 사용. 이후 새로고침 등이 생기면 여기를 재사용한다(패널.js 패턴과 동일).
 // client를 넘기면 footer 아이콘에 봇 프로필 사진을 붙인다(안 넘겨도 동작).
