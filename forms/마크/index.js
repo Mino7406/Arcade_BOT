@@ -29,7 +29,10 @@ const {
   getRosterMessageId,
   setRosterMessageId,
 } = require('./명단');
-const { REALM_REVIEW_CHANNEL_ID, REALM_WHITELIST_ROLE_ID } = require('../../config');
+const { REALM_REVIEW_CHANNEL_ID, REALM_WHITELIST_ROLE_ID, REALM_RULES_CHANNEL_ID, REALM_RULES_MESSAGE_ID, GUILD_ID } = require('../../config');
+
+// "신청하기"를 누르려면 이 이모지로 규칙 메시지에 반응을 남겨둔 상태여야 한다.
+const RULES_CHECK_EMOJI = '✅';
 
 // DM을 보낼 수 없는 정상적인 상황(수신자가 DM 차단 / 봇과 공통 서버 없음)의 디스코드 에러 코드.
 // handlers/공용.js의 마감·시작 알림 DM과 동일한 기준.
@@ -67,7 +70,7 @@ const THUMBNAIL_FILENAME = 'mc_realm_thumbnail.webp';
 function buildRealmPanelPayload() {
   const embed = new EmbedBuilder()
     .setColor(REALM_COLOR)
-    .setTitle('마인크래프트 렐름 참가 신청')
+    .setTitle('마인크래프트 렐름 참가 신청\n-# (9/5 OPEN 예정) - 신청은 9/4부터 가능')
     .setDescription(
       [
         '> **<:apple:1544507302948634704> 신청 방법**',
@@ -83,6 +86,11 @@ function buildRealmPanelPayload() {
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('realm:apply').setLabel('신청하기').setEmoji({ id: '1544331697049305098' }).setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setLabel('규정집 바로가기')
+      .setEmoji({ id: '1544571673636773898' }) // <:Enchanted_Book:...>
+      .setStyle(ButtonStyle.Link)
+      .setURL(`https://discord.com/channels/${GUILD_ID}/${REALM_RULES_CHANNEL_ID}/${REALM_RULES_MESSAGE_ID}`),
   );
 
   return {
@@ -90,6 +98,22 @@ function buildRealmPanelPayload() {
     components: [row],
     files: [new AttachmentBuilder(THUMBNAIL_PATH, { name: THUMBNAIL_FILENAME })],
   };
+}
+
+// 규칙 스레드의 메시지에 유저가 ✅를 남겨뒀는지 확인한다. 채널/메시지가 아직 설정되지 않았거나
+// 못 찾으면(오탈자, 메시지 삭제 등) 관리자 설정 문제이므로 통과시키지 않고 false를 반환한다.
+async function hasAgreedToRules(interaction) {
+  if (!REALM_RULES_CHANNEL_ID || !REALM_RULES_MESSAGE_ID) return false;
+
+  const channel = await interaction.client.channels.fetch(REALM_RULES_CHANNEL_ID).catch(() => null);
+  if (!channel) return false;
+  const message = await channel.messages.fetch(REALM_RULES_MESSAGE_ID).catch(() => null);
+  if (!message) return false;
+
+  const reaction = message.reactions.cache.get(RULES_CHECK_EMOJI);
+  if (!reaction) return false;
+  const users = await reaction.users.fetch().catch(() => null);
+  return !!users?.has(interaction.user.id);
 }
 
 // "신청하기" 클릭 시 뜨는 신청서 모달. 규칙 동의(정확히 "예"를 입력해야 통과)와 닉네임 입력을
@@ -349,6 +373,14 @@ async function handleRealmButton(interaction) {
     }
     if (hasPendingApplication(interaction.guildId, interaction.user.id)) {
       await interaction.reply({ content: '⚠️ **이미 제출한 신청서가 검토 대기중입니다.** 처리될 때까지 기다려주세요.', flags: MessageFlags.Ephemeral });
+      return;
+    }
+    if (!(await hasAgreedToRules(interaction))) {
+      const rulesUrl = `https://discord.com/channels/${GUILD_ID}/${REALM_RULES_CHANNEL_ID}/${REALM_RULES_MESSAGE_ID}`;
+      await interaction.reply({
+        content: `⚠️ **먼저 규정집 메시지에 ${RULES_CHECK_EMOJI} 이모지로 동의 표시를 해주세요.**\n${rulesUrl}`,
+        flags: MessageFlags.Ephemeral,
+      });
       return;
     }
     await interaction.showModal(buildRealmApplyModal());
