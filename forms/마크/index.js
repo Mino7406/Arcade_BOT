@@ -72,9 +72,11 @@ const THUMBNAIL_FILENAME = 'mc_realm_thumbnail.webp';
 function buildRealmPanelPayload() {
   const embed = new EmbedBuilder()
     .setColor(REALM_COLOR)
-    .setTitle('마인크래프트 렐름 참가 신청\n-# (9/5 OPEN 예정) - 신청은 9/4부터 가능')
+    .setTitle('마인크래프트 렐름 참가 신청')
     .setDescription(
       [
+        '-# (9/5 OPEN 예정) - 신청은 9/4부터 가능',
+        '',
         '> **<:apple:1544507302948634704> 신청 방법**',
         '**<:Book:1544331697049305098>신청하기** 버튼을 눌러 **마인크래프트 닉네임**을 제출해주세요.\n검토 후 결과를 DM으로 안내드려요.',
         '',
@@ -131,23 +133,13 @@ async function hasAgreedToRules(interaction) {
   return !!users?.has(interaction.user.id);
 }
 
-// "신청하기" 클릭 시 뜨는 신청서 모달. 규칙 동의(정확히 "예"를 입력해야 통과)와 닉네임 입력을
-// 한 모달에서 같이 받는다 — 모달은 체크박스가 없어서 텍스트로 동의를 받는 방식.
-// 마인크래프트 닉네임은 자바 에디션 기준 최대 16자로 제한.
+// "신청하기" 클릭 시 뜨는 신청서 모달. 규칙 동의는 이제 반응(hasAgreedToRules)으로 이미
+// 확인했으므로 모달엔 닉네임만 받는다. 마인크래프트 닉네임은 자바 에디션 기준 최대 16자로 제한.
 function buildRealmApplyModal() {
   return new ModalBuilder()
     .setCustomId('realm:modal')
     .setTitle('렐름 참가 신청서')
     .addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId('rules_agree')
-          .setLabel('규칙에 동의하면 "예"를 입력해주세요')
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder('예')
-          .setRequired(true)
-          .setMaxLength(4),
-      ),
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId('mc_nickname')
@@ -391,9 +383,8 @@ async function handleRealmButton(interaction) {
       return;
     }
     if (!(await hasAgreedToRules(interaction))) {
-      const rulesUrl = `https://discord.com/channels/${GUILD_ID}/${REALM_RULES_CHANNEL_ID}/${REALM_RULES_MESSAGE_ID}`;
       await interaction.reply({
-        content: `⚠️ **먼저 규정집 메시지에 ${RULES_CHECK_EMOJI} 이모지로 동의 표시를 해주세요.**\n${rulesUrl}`,
+        content: `⚠️ **먼저 규정집 메시지에 ${RULES_CHECK_EMOJI} 이모지로 동의 표시를 해주세요.**`,
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -468,13 +459,7 @@ async function handleRealmButton(interaction) {
 
 // ── 신청서 모달 제출 → 관리자 검토 채널에 임베드 전송 ────────────────────
 async function handleRealmModal(interaction) {
-  const rulesAgree = interaction.fields.getTextInputValue('rules_agree').trim();
   const nickname = interaction.fields.getTextInputValue('mc_nickname').trim();
-
-  if (rulesAgree !== '예') {
-    await interaction.reply({ content: '⚠️ **규칙에 동의해야 신청할 수 있습니다.** "예"를 정확히 입력한 뒤 다시 시도해주세요.', flags: MessageFlags.Ephemeral });
-    return;
-  }
 
   if (!REALM_REVIEW_CHANNEL_ID) {
     await interaction.reply({ content: '⚠️ **검토 채널이 아직 설정되지 않았습니다.** 관리자에게 문의해주세요.', flags: MessageFlags.Ephemeral });
