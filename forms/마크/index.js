@@ -29,7 +29,14 @@ const {
   getRosterMessageId,
   setRosterMessageId,
 } = require('./명단');
-const { REALM_REVIEW_CHANNEL_ID, REALM_RULES_CHANNEL_ID, REALM_RULES_MESSAGE_ID, GUILD_ID } = require('../../config');
+const {
+  REALM_REVIEW_CHANNEL_ID,
+  REALM_RULES_CHANNEL_ID,
+  REALM_RULES_MESSAGE_ID,
+  REALM_PANEL_CHANNEL_ID,
+  REALM_PANEL_MESSAGE_ID,
+  GUILD_ID,
+} = require('../../config');
 
 // "신청하기"를 누르려면 이 이모지로 규칙 메시지에 반응을 남겨둔 상태여야 한다. 안내 문구엔
 // ✅ 하나만 보여주지만, 생김새가 비슷한 다른 체크 이모지(✔️ 등)로 반응해도 인정한다.
@@ -318,6 +325,29 @@ function buildMoveModal() {
     );
 }
 
+// [임시] config의 REALM_PANEL_CHANNEL_ID/REALM_PANEL_MESSAGE_ID가 가리키는, 이미 게시된 렐름
+// 신청서 패널 메시지를 그 자리에서 최신 buildRealmPanelPayload()로 다시 그린다. APPLY_DISABLED를
+// 바꾼 뒤 패널을 새로 게시하지 않고 갱신하는 용도(테스트 서버의 /명단관리테스트에서 호출).
+// 성공/실패 사유를 문자열로 돌려줘 호출부가 그대로 안내에 쓴다.
+async function refreshRealmPanelMessage(client) {
+  if (!REALM_PANEL_CHANNEL_ID || !REALM_PANEL_MESSAGE_ID) {
+    return '패널 메시지가 config에 설정되지 않았습니다 (REALM_PANEL_CHANNEL_ID / REALM_PANEL_MESSAGE_ID).';
+  }
+  const channel = await client.channels.fetch(REALM_PANEL_CHANNEL_ID).catch(() => null);
+  if (!channel) return '패널 채널을 찾을 수 없습니다 (REALM_PANEL_CHANNEL_ID 확인).';
+
+  const message = await channel.messages.fetch(REALM_PANEL_MESSAGE_ID).catch(() => null);
+  if (!message) return '패널 메시지를 찾을 수 없습니다 (REALM_PANEL_MESSAGE_ID 확인).';
+
+  // buildRealmPanelPayload는 attachment:// 썸네일을 새로 첨부하므로, 기존 첨부는 비워 중복을 막는다.
+  const payload = buildRealmPanelPayload();
+  const edited = await message.edit({ ...payload, attachments: [] }).catch(err => {
+    console.error('렐름 패널 메시지 갱신 실패:', err);
+    return null;
+  });
+  return edited ? null : '패널 메시지 수정 중 오류가 발생했습니다 (봇 권한 확인).';
+}
+
 // 검토 채널(REALM_REVIEW_CHANNEL_ID)의 명단 메시지를 최신 상태로 갱신한다. 기존 메시지가 있으면
 // 지우고 새로 올려서(맨 아래로) 채널에는 항상 명단 메시지가 하나만 존재하게 한다.
 async function refreshRealmRosterMessage(client, guildId) {
@@ -373,7 +403,9 @@ module.exports = {
   buildRealmPanelPayload,
   buildRealmApplyModal,
   buildRealmReviewPayload,
+  buildRealmRosterAdminMenuPayload,
   refreshRealmRosterMessage,
+  refreshRealmPanelMessage,
 };
 
 // ── "🏰 신청하기" 버튼 → 신청서 모달 / "<:Emerald:1544331499976007810> 승인"·"❌ 거절" 처리 ('realm:' 프리픽스) ──

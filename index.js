@@ -31,6 +31,7 @@ const { buildTeamMatchListPayload } = require('./commands/팀');
 const { buildCommandListPayload, buildSetupPanelPayload, buildAdminMenuPayload, handlePanelButton, handlePanelMatchDeleteSelect, handlePanelBotMessageDeleteModal } = require('./commands/패널');
 const { handleRealmButton, handleRealmModal, handleRealmRosterModal } = require('./forms/마크');
 const { handleFormSelectButton } = require('./commands/신청서');
+const { handleRealmTestButton } = require('./commands/명단관리테스트'); // [임시] 테스트 서버 전용
 const { handleLevelShareButton } = require('./commands/레벨');
 const { handleRankingPageButton, handleRankingShareButton } = require('./commands/랭킹');
 const { handleXpUserSelect, handleXpButton, handleXpModal } = require('./commands/XP');
@@ -413,6 +414,8 @@ client.on('interactionCreate', async (interaction) => {
         await handlePanelButton(interaction);
       } else if (interaction.customId.startsWith('form:')) {
         await handleFormSelectButton(interaction);
+      } else if (interaction.customId.startsWith('realmtest:')) {
+        await handleRealmTestButton(interaction);
       } else if (interaction.customId.startsWith('realm:')) {
         await handleRealmButton(interaction);
       }
