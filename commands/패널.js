@@ -75,8 +75,7 @@ function buildSetupPanelPayload(interaction) {
     .setFooter({
       text: '버튼 말고도 해당 채널에서 명령어로도 사용 가능합니다.',
       iconURL: interaction.client.user.displayAvatarURL(),
-    })
-    .setTimestamp();
+    });
 
   const playgroundEmbed = new EmbedBuilder()
     .setColor(0x57F287)
