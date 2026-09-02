@@ -42,8 +42,8 @@ const PARTICIPANT_XP_MULTIPLIER = 1.3;
 // (긴급정지는 봇이 재시작돼도 조용히 풀리면 안 되므로 반드시 디스크에 남긴다).
 const XP_STATE_PATH = path.join(__dirname, '..', 'DB', 'xp-state.json');
 const xpState = {
-  farmFrozen: false,        // 일반 파밍(메시지·TTS·통화방 체류·퀴즈·내전/모집 완료 보너스) XP 지급 정지
-  minigameFrozen: false,    // 미니게임(오목·룰렛·틱택토·끝말잇기) XP 정산 정지
+  farmFrozen: false,        // 일반 파밍(메시지·TTS·통화방 체류·내전/모집 완료 보너스) XP 지급 정지
+  minigameFrozen: false,    // 미니게임(오목·룰렛·틱택토·끝말잇기·퀴즈) XP 정산 정지
   newbieBoostEnabled: true, // 뉴비부스트 역할 1.5배 적용 여부
 };
 

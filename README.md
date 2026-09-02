@@ -305,8 +305,8 @@ npm start
     - 조정할 때마다 `saveLevels()`로 즉시 저장하고, 패널을 갱신하며 방금 결과(적용된 XP, 레벨 변화, 0에서 잘렸으면 실제 적용값)를 상단에 안내. 패널의 유저 선택 메뉴로 대상만 바꿔 계속 조정 가능
     - 최종 XP가 0 밑으로는 내려가지 않게 잘라냄(음수 XP는 레벨·진행바 계산을 깨뜨림)
   - **`🛠️ XP 관리`** → XP 시스템 스위치 패널(상태는 `DB/xp-state.json`에 저장돼 재시작해도 유지):
-    - **일반파밍 긴급정지** — 메인·TTS 채팅 XP, 통화방 체류 XP, 퀴즈 정답 XP, 내전/모집 완료 보너스를 전부 중단(`isFarmXpFrozen`). 누르면 **확인 화면**을 거쳐 적용
-    - **미니게임 긴급정지** — 오목·룰렛·틱택토·끝말잇기의 XP 정산을 중단(`isMinigameXpFrozen`, 정지 중에는 룰렛은 오늘 기회를 소모하지 않고, 나머지는 게임은 진행되되 정산만 생략). 누르면 **확인 화면**을 거쳐 적용
+    - **일반파밍 긴급정지** — 메인·TTS 채팅 XP, 통화방 체류 XP, 내전/모집 완료 보너스를 전부 중단(`isFarmXpFrozen`). 누르면 **확인 화면**을 거쳐 적용
+    - **미니게임 긴급정지** — 오목·룰렛·틱택토·끝말잇기·퀴즈의 XP 정산을 중단(`isMinigameXpFrozen`, 정지 중에는 룰렛은 오늘 기회를 소모하지 않고, 나머지는 게임/퀴즈는 진행되되 정산만 생략). 누르면 **확인 화면**을 거쳐 적용
     - **뉴비부스트 ON/OFF** — `NEWBIE_BOOST_ROLE_ID` 역할의 1.5배 배율을 즉시 켜고 끔(확인 없음)
     - 각 토글은 `logAction`으로 `유형: "XP 관리"` 감사 줄을 남김
   - `/패널`·`/퀴즈`처럼 채널 제한을 받지 않아 아무 채널에서나 사용 가능
@@ -350,7 +350,7 @@ npm start
 | `buildProgressBar(current, needed, length)` | `/레벨` 임베드용 진행바(■□) 문자열 생성 |
 | `loadXpState()` | 봇 시작 시 `DB/xp-state.json`에서 긴급정지·뉴비부스트 스위치 상태 복원(없거나 깨졌으면 전부 정상 작동으로 시작) |
 | `getXpState()` / `setXpSwitch(key, value)` | `/xp` → `XP 관리`용 — 스위치 3종(`farmFrozen`/`minigameFrozen`/`newbieBoostEnabled`) 조회, 변경 시 즉시 디스크 저장 |
-| `isFarmXpFrozen()` / `isMinigameXpFrozen()` / `isNewbieBoostEnabled()` | 각 XP 지급 지점(메시지·통화방·퀴즈·완료 보너스 / 오목·룰렛·틱택토·끝말잇기 / 뉴비부스트 배율)에서 확인하는 게이트 |
+| `isFarmXpFrozen()` / `isMinigameXpFrozen()` / `isNewbieBoostEnabled()` | 각 XP 지급 지점(메시지·통화방·완료 보너스 / 오목·룰렛·틱택토·끝말잇기·퀴즈 / 뉴비부스트 배율)에서 확인하는 게이트 |
 
 ### `handlers/공용.js` — 내전/모집/팀 공용 유틸
 

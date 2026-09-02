@@ -11,7 +11,7 @@
 const { EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const { applyXp, isExcludedGuild, isFarmXpFrozen } = require('./레벨링');
+const { applyXp, isExcludedGuild, isMinigameXpFrozen } = require('./레벨링');
 const { KST_OFFSET_MS } = require('./시간');
 const { QUIZ_CHANNEL_ID } = require('../config'); // 놀이터 채널 (config.js의 PLAYGROUND_CHANNEL_ID)
 const { logSystem } = require('./로그');
@@ -488,8 +488,8 @@ async function handleQuizMessage(message) {
       saveState(state);
     }
 
-    if (isFarmXpFrozen()) {
-      // 관리자 긴급정지 중 — 정답 처리는 하되 XP는 지급하지 않는다.
+    if (isMinigameXpFrozen()) {
+      // 관리자 긴급정지 중(미니게임) — 정답 처리는 하되 XP는 지급하지 않는다.
       await message.reply({
         content: `⭕ 정답입니다! **${quiz.word}**\n-# ⚙️ 현재 XP 지급이 일시 중지되어 이번 정답은 XP가 지급되지 않았습니다.`,
         allowedMentions: { repliedUser: false, users: [] },

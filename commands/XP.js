@@ -99,9 +99,9 @@ function buildManageView(notice) {
     .setDescription(
       `## 🛠️ XP 관리\n` +
       `**일반 파밍 XP** ${st.farmFrozen ? '🔴 정지됨' : '🟢 작동 중'}\n` +
-      `-# 메인·TTS 채팅 · 통화방 체류 · 퀴즈 · 내전/모집 완료 보너스\n\n` +
+      `-# 메인·TTS 채팅 · 통화방 체류 · 내전/모집 완료 보너스\n\n` +
       `**미니게임 XP** ${st.minigameFrozen ? '🔴 정지됨' : '🟢 작동 중'}\n` +
-      `-# 오목 · 룰렛 · 틱택토 · 끝말잇기\n\n` +
+      `-# 오목 · 룰렛 · 틱택토 · 끝말잇기 · 퀴즈\n\n` +
       `**뉴비부스트(×1.5)** ${st.newbieBoostEnabled ? '🟢 ON' : '⚪ OFF'}\n` +
       `-# 뉴비부스트 역할의 메인·TTS·통화방 체류 XP 1.5배` +
       (notice ? `\n\n${notice}` : ''),
