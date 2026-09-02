@@ -68,6 +68,11 @@ const FIELD_APPLIED_AT = '<:Compass:1544331496238882907> 신청 일시';
 const THUMBNAIL_PATH = path.join(__dirname, '..', '..', 'assets', 'mc_realm_thumbnail.webp');
 const THUMBNAIL_FILENAME = 'mc_realm_thumbnail.webp';
 
+// 렐름 신청서를 임베드만 먼저 게시해두고 신청은 나중에 받고 싶을 때 true로 둔다.
+// true면 "신청하기" 버튼이 비활성화되고, 혹시 모를 우회 클릭도 handleRealmButton에서 막는다.
+// 신청을 열 때는 false로 바꾸고 /마크로 패널을 다시 게시(또는 새로고침)하면 된다.
+const APPLY_DISABLED = true;
+
 // /마크 최초 게시에서 사용. 이후 새로고침 등이 생기면 여기를 재사용한다(패널.js 패턴과 동일).
 function buildRealmPanelPayload() {
   const embed = new EmbedBuilder()
@@ -86,10 +91,10 @@ function buildRealmPanelPayload() {
       ].join('\n'),
     )
     .setThumbnail(`attachment://${THUMBNAIL_FILENAME}`)
-    .setFooter({ text: '검토 후 결과를 DM으로 안내드려요.' });
+    .setFooter({ text: '@마크 역할이 있어야 규정집에 접근 가능합니다.' });
 
   const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('realm:apply').setLabel('신청하기').setEmoji({ id: '1544331697049305098' }).setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId('realm:apply').setLabel('신청하기').setEmoji({ id: '1544331697049305098' }).setStyle(ButtonStyle.Success).setDisabled(APPLY_DISABLED),
     new ButtonBuilder()
       .setLabel('규정집 바로가기')
       .setEmoji({ id: '1544571673636773898' }) // <:Enchanted_Book:...>
@@ -374,6 +379,10 @@ module.exports = {
 // ── "🏰 신청하기" 버튼 → 신청서 모달 / "<:Emerald:1544331499976007810> 승인"·"❌ 거절" 처리 ('realm:' 프리픽스) ──
 async function handleRealmButton(interaction) {
   if (interaction.customId === 'realm:apply') {
+    if (APPLY_DISABLED) {
+      await interaction.reply({ content: '<:Barrier:1544331503448625233> **아직 신청을 받고 있지 않습니다.** 신청 시작일에 다시 시도해주세요.', flags: MessageFlags.Ephemeral });
+      return;
+    }
     if (isApprovedMember(interaction.guildId, interaction.user.id)) {
       await interaction.reply({ content: '<:Barrier:1544331503448625233> **이미 렐름 참가가 승인된 멤버입니다.**', flags: MessageFlags.Ephemeral });
       return;
