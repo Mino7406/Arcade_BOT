@@ -71,7 +71,7 @@ function buildRealmPanelPayload() {
     .setDescription(
       [
         '> **<:apple:1544507302948634704> 신청 방법**',
-        '아래 <:Book:1544331697049305098> 신청하기 버튼을 눌러 마인크래프트 닉네임을 제출해주세요.\n검토 후 결과를 DM으로 안내드려요.',
+        '아래 **<:Book:1544331697049305098> 신청하기** 버튼을 눌러 마인크래프트 닉네임을 제출해주세요.\n검토 후 결과를 DM으로 안내드려요.',
         '',
         '> **<:Banner:1544331498230906931> 주의사항**',
         '최신 릴리스로 접속하셔야 렐름에 입장이 가능합니다.\n서버에 접속할 때는 반드시 **Java Edition**으로 접속해주세요. Bedrock Edition은 지원하지 않습니다.',
@@ -153,7 +153,7 @@ function buildRealmReviewPayload({ applicant, displayName, nickname, appliedAt, 
 // 실제 조작 버튼들은 이 버튼을 눌렀을 때 뜨는 ephemeral 관리 메뉴(buildRealmRosterAdminMenuPayload) 안에 있다.
 function buildRealmRosterButtons() {
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('realm:roster:menu').setLabel('관리').setEmoji({ id: '1544340150585262180' }).setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId('realm:roster:menu').setLabel('관리').setEmoji({ id: '1544340150585262180' }).setStyle(ButtonStyle.Secondary),
   );
 }
 

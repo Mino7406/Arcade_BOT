@@ -41,7 +41,7 @@ function buildFormSelectPayload() {
   );
 
   return {
-    content: '<:Book:1544331697049305098> **게시할 신청서를 선택하십시오.**',
+    content: '**게시할 신청서를 선택하십시오.**',
     components: [row],
     flags: MessageFlags.Ephemeral,
   };
