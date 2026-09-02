@@ -212,7 +212,8 @@ function buildRealmRosterButtons() {
   );
 }
 
-// "⚙️ 관리" 클릭 시 뜨는 ephemeral 메뉴 — 순서 변경/새로고침은 두 번째 줄로 분리.
+// "⚙️ 관리" 클릭 시 뜨는 ephemeral 메뉴 — 순서 변경/명단 새로고침은 두 번째 줄, 세 번째 줄엔
+// 본서버 모집글에 게시된 신청서 패널을 그 자리에서 다시 그리는 버튼(APPLY_DISABLED 등 반영).
 function buildRealmRosterAdminMenuPayload(notice) {
   return {
     content: (notice ? `${notice}\n\n` : '') + '<:OP:1544340150585262180> **명단 관리**',
@@ -225,6 +226,9 @@ function buildRealmRosterAdminMenuPayload(notice) {
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('realm:roster:move').setLabel('순서 변경').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('realm:roster:refresh').setLabel('새로고침').setStyle(ButtonStyle.Secondary),
+      ),
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('realm:roster:panelrefresh').setLabel('신청서 패널 새로고침').setStyle(ButtonStyle.Primary),
       ),
     ],
   };
@@ -329,9 +333,9 @@ function buildMoveModal() {
     );
 }
 
-// [임시] config의 REALM_PANEL_CHANNEL_ID/REALM_PANEL_MESSAGE_ID가 가리키는, 이미 게시된 렐름
-// 신청서 패널 메시지를 그 자리에서 최신 buildRealmPanelPayload()로 다시 그린다. APPLY_DISABLED를
-// 바꾼 뒤 패널을 새로 게시하지 않고 갱신하는 용도(테스트 서버의 /테스트에서 호출).
+// config의 REALM_PANEL_CHANNEL_ID/REALM_PANEL_MESSAGE_ID가 가리키는, 이미 게시된 렐름 신청서
+// 패널 메시지를 그 자리에서 최신 buildRealmPanelPayload()로 다시 그린다. APPLY_DISABLED를 바꾼 뒤
+// 패널을 새로 게시하지 않고 갱신하는 용도(명단 관리 메뉴의 "신청서 패널 새로고침" 버튼에서 호출).
 // 성공/실패 사유를 문자열로 돌려줘 호출부가 그대로 안내에 쓴다.
 async function refreshRealmPanelMessage(client) {
   if (!REALM_PANEL_CHANNEL_ID || !REALM_PANEL_MESSAGE_ID) {
@@ -407,9 +411,7 @@ module.exports = {
   buildRealmPanelPayload,
   buildRealmApplyModal,
   buildRealmReviewPayload,
-  buildRealmRosterAdminMenuPayload,
   refreshRealmRosterMessage,
-  refreshRealmPanelMessage,
 };
 
 // ── "🏰 신청하기" 버튼 → 신청서 모달 / "<:Emerald:1544331499976007810> 승인"·"❌ 거절" 처리 ('realm:' 프리픽스) ──
@@ -525,7 +527,7 @@ async function handleRealmModal(interaction) {
   });
 }
 
-// ── 명단 메시지 관리 버튼("⚙️ 관리" 진입 버튼 + 메뉴 안의 "편집"·"추가"·"제외"·"순서 변경"·"새로고침", 'realm:roster:' 프리픽스) ──
+// ── 명단 메시지 관리 버튼("⚙️ 관리" 진입 버튼 + 메뉴 안의 "편집"·"추가"·"제외"·"순서 변경"·"새로고침"·"신청서 패널 새로고침", 'realm:roster:' 프리픽스) ──
 async function handleRosterAdminButton(interaction) {
   if (!ADMIN_IDS.includes(interaction.user.id)) {
     await interaction.reply({ content: '<:Barrier:1544331503448625233> **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
@@ -545,6 +547,19 @@ async function handleRosterAdminButton(interaction) {
     await interaction.deferUpdate();
     await refreshRealmRosterMessage(interaction.client, interaction.guildId).catch(err => console.error('렐름 명단 메시지 갱신 실패:', err));
     await interaction.editReply(buildRealmRosterAdminMenuPayload('<:Emerald:1544331499976007810> **명단을 새로고침했습니다.**'));
+    return;
+  }
+
+  if (sub === 'panelrefresh') {
+    // config의 REALM_PANEL_*이 가리키는 본서버 모집글의 신청서 패널 메시지를 그 자리에서 다시 그린다.
+    // 채널/메시지 조회 + edit까지 API가 여러 번 이어지므로 먼저 defer.
+    await interaction.deferUpdate();
+    const error = await refreshRealmPanelMessage(interaction.client);
+    await interaction.editReply(buildRealmRosterAdminMenuPayload(
+      error
+        ? `<:Barrier:1544331503448625233> **신청서 패널 새로고침 실패:** ${error}`
+        : '<:Emerald:1544331499976007810> **신청서 패널을 새로고침했습니다.**',
+    ));
     return;
   }
 
