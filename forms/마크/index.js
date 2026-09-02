@@ -107,7 +107,9 @@ async function hasAgreedToRules(interaction) {
 
   const channel = await interaction.client.channels.fetch(REALM_RULES_CHANNEL_ID).catch(() => null);
   if (!channel) return false;
-  const message = await channel.messages.fetch(REALM_RULES_MESSAGE_ID).catch(() => null);
+  // force: true — 캐시된(반응 추가 전) 옛 메시지를 쓰지 않고 매번 새로 가져와야 방금 남긴
+  // 반응까지 정확히 반영된다.
+  const message = await channel.messages.fetch({ message: REALM_RULES_MESSAGE_ID, force: true }).catch(() => null);
   if (!message) return false;
 
   const reaction = message.reactions.cache.get(RULES_CHECK_EMOJI);
