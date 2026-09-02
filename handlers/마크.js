@@ -15,13 +15,20 @@ const { logSystem } = require('./로그');
 const REALM_ROSTER_PATH = path.join(__dirname, '..', 'DB', 'realm_roster.json');
 fs.mkdirSync(path.dirname(REALM_ROSTER_PATH), { recursive: true });
 
-// { [guildId]: { members: { [userId]: { nickname, discordName, approvedAt(epoch ms), approvedById, order } }, rosterMessageId: string|null } }
+// { [guildId]: {
+//   members: { [userId]: { nickname, discordName, approvedAt(epoch ms), approvedById, order } },
+//   pending: { [userId]: { nickname, appliedAt(epoch ms) } },
+//   rosterMessageId: string|null,
+// } }
 // order는 명단 표시 순서를 결정하는 값이다. 기본은 승인 시각이지만 moveApprovedMember로 인접
 // 항목과 값을 맞바꿔 수동으로 순서를 바꿀 수 있다(값 자체의 의미보다 상대적 크기 비교만 사용).
+// pending은 검토 대기중인 신청서를 추적해 같은 사람이 중복으로 신청서를 내는 것을 막는 데 쓴다
+// (승인/거절 처리가 끝나면 지운다 — 승인은 members로 넘어가고, 거절은 재신청할 수 있어야 하므로).
 let roster = {};
 
 function ensureGuild(guildId) {
-  if (!roster[guildId]) roster[guildId] = { members: {}, rosterMessageId: null };
+  if (!roster[guildId]) roster[guildId] = { members: {}, pending: {}, rosterMessageId: null };
+  if (!roster[guildId].pending) roster[guildId].pending = {}; // 이 필드가 추가되기 전 데이터 호환
   return roster[guildId];
 }
 
@@ -57,6 +64,21 @@ function removeApprovedMember(guildId, userId) {
 // 이미 승인된 멤버인지 — "🏰 신청하기" 클릭 시 재신청을 막는 데 사용.
 function isApprovedMember(guildId, userId) {
   return !!roster[guildId]?.members?.[userId];
+}
+
+// 신청서 제출 시 대기중으로 등록한다(중복 신청 방지용).
+function addPendingApplication(guildId, userId, entry) {
+  ensureGuild(guildId).pending[userId] = entry;
+}
+
+// 승인/거절 처리가 끝나면 대기 목록에서 뺀다. 없어도 조용히 무시.
+function removePendingApplication(guildId, userId) {
+  delete ensureGuild(guildId).pending[userId];
+}
+
+// 이미 검토 대기중인 신청서가 있는지 — "🏰 신청하기" 클릭 시 중복 신청을 막는 데 사용.
+function hasPendingApplication(guildId, userId) {
+  return !!roster[guildId]?.pending?.[userId];
 }
 
 function updateApprovedMemberNickname(guildId, userId, nickname) {
@@ -107,6 +129,9 @@ module.exports = {
   addApprovedMember,
   removeApprovedMember,
   isApprovedMember,
+  addPendingApplication,
+  removePendingApplication,
+  hasPendingApplication,
   updateApprovedMemberNickname,
   setApprovedMemberPosition,
   getApprovedRoster,
