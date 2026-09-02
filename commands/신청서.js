@@ -24,7 +24,7 @@ const FORMS = {
     label: '마크',
     emoji: { id: '1544570096859742248' }, // <:MC:...>
     build: buildRealmPanelPayload,
-    done: '<:Emerald:1544331499976007810> **마크 신청 패널을 게시했습니다.**',
+    done: '<:MC:1544570096859742248> **마크 신청 패널을 게시했습니다.**',
   },
 };
 
