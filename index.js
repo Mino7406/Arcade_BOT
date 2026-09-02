@@ -59,7 +59,8 @@ const client = new Client({
   makeCache: Options.cacheWithLimits({
     ...Options.DefaultMakeCacheSettings,
     MessageManager: 25,        // 채널당 캐시 메시지 상한 (기본 200)
-    ReactionManager: 0,        // 리액션 기능 없음
+    // ReactionManager는 기본값(무제한) 유지 — 0으로 두면 메시지를 새로 가져와도 반응이 캐시에
+    // 저장되지 못해 항상 비어 보인다(마크 신청서의 규정집 반응 확인 기능이 이걸로 깨진 적 있음).
     GuildBanManager: 0,        // 밴 조회 안 함
     PresenceManager: 0,        // Presence 인텐트 없음(명시)
     ThreadManager: 0,          // 스레드 안 씀
