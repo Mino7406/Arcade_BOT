@@ -31,8 +31,10 @@ const {
 } = require('./명단');
 const { REALM_REVIEW_CHANNEL_ID, REALM_WHITELIST_ROLE_ID, REALM_RULES_CHANNEL_ID, REALM_RULES_MESSAGE_ID, GUILD_ID } = require('../../config');
 
-// "신청하기"를 누르려면 이 이모지로 규칙 메시지에 반응을 남겨둔 상태여야 한다.
+// "신청하기"를 누르려면 이 이모지로 규칙 메시지에 반응을 남겨둔 상태여야 한다. 안내 문구엔
+// ✅ 하나만 보여주지만, 생김새가 비슷한 다른 체크 이모지(✔️ 등)로 반응해도 인정한다.
 const RULES_CHECK_EMOJI = '✅';
+const RULES_CHECK_EMOJIS = ['✅', '✔️', '✔'];
 
 // DM을 보낼 수 없는 정상적인 상황(수신자가 DM 차단 / 봇과 공통 서버 없음)의 디스코드 에러 코드.
 // handlers/공용.js의 마감·시작 알림 DM과 동일한 기준.
@@ -105,16 +107,27 @@ function buildRealmPanelPayload() {
 async function hasAgreedToRules(interaction) {
   if (!REALM_RULES_CHANNEL_ID || !REALM_RULES_MESSAGE_ID) return false;
 
-  const channel = await interaction.client.channels.fetch(REALM_RULES_CHANNEL_ID).catch(() => null);
+  const channel = await interaction.client.channels.fetch(REALM_RULES_CHANNEL_ID).catch(err => {
+    console.error('렐름 규정집 채널 조회 실패(REALM_RULES_CHANNEL_ID 확인 필요):', err);
+    return null;
+  });
   if (!channel) return false;
+
   // force: true — 캐시된(반응 추가 전) 옛 메시지를 쓰지 않고 매번 새로 가져와야 방금 남긴
   // 반응까지 정확히 반영된다.
-  const message = await channel.messages.fetch({ message: REALM_RULES_MESSAGE_ID, force: true }).catch(() => null);
+  const message = await channel.messages.fetch({ message: REALM_RULES_MESSAGE_ID, force: true }).catch(err => {
+    console.error('렐름 규정집 메시지 조회 실패(REALM_RULES_MESSAGE_ID 확인 필요):', err);
+    return null;
+  });
   if (!message) return false;
 
-  const reaction = message.reactions.cache.get(RULES_CHECK_EMOJI);
+  const reaction = message.reactions.cache.find(r => RULES_CHECK_EMOJIS.includes(r.emoji.name));
   if (!reaction) return false;
-  const users = await reaction.users.fetch().catch(() => null);
+
+  const users = await reaction.users.fetch().catch(err => {
+    console.error('렐름 규정집 반응자 목록 조회 실패:', err);
+    return null;
+  });
   return !!users?.has(interaction.user.id);
 }
 
