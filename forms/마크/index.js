@@ -78,7 +78,7 @@ const THUMBNAIL_FILENAME = 'mc_realm_thumbnail.webp';
 // 렐름 신청서를 임베드만 먼저 게시해두고 신청은 나중에 받고 싶을 때 true로 둔다.
 // true면 "신청하기" 버튼이 비활성화되고, 혹시 모를 우회 클릭도 handleRealmButton에서 막는다.
 // 신청을 열 때는 false로 바꾸고 /마크로 패널을 다시 게시(또는 새로고침)하면 된다.
-const APPLY_DISABLED = true;
+const APPLY_DISABLED = false;
 
 // /마크 최초 게시에서 사용. 이후 새로고침 등이 생기면 여기를 재사용한다(패널.js 패턴과 동일).
 // client를 넘기면 footer 아이콘에 봇 프로필 사진을 붙인다(안 넘겨도 동작).
@@ -88,7 +88,7 @@ function buildRealmPanelPayload(client) {
     .setTitle('마인크래프트 렐름 참가 신청')
     .setDescription(
       [
-        '-# (9/5 OPEN 예정) - 신청은 9/4부터 가능',
+        '-# **09/05 ~ 10/04 OPEN**',
         '',
         '> **<:apple:1544507302948634704> 신청 방법**',
         '**<:Book:1544331697049305098>신청하기** 버튼을 눌러 **마인크래프트 닉네임**을 제출해주세요.\n검토 후 결과를 DM으로 안내드려요.',
@@ -364,10 +364,8 @@ async function refreshRealmRosterMessage(client, guildId) {
   if (!channel) return;
 
   const oldId = getRosterMessageId(guildId);
-  if (oldId) {
-    const oldMessage = await channel.messages.fetch(oldId).catch(() => null);
-    if (oldMessage) await oldMessage.delete().catch(() => {});
-  }
+  // ID만으로 바로 삭제한다(fetch 생략). 이미 지워졌거나 없으면 조용히 무시.
+  if (oldId) await channel.messages.delete(oldId).catch(() => {});
 
   const entries = getApprovedRoster(guildId);
   const newMessage = await channel.send(buildRealmRosterMessagePayload(entries)).catch(err => {
@@ -455,13 +453,15 @@ async function handleRealmButton(interaction) {
 
   await interaction.deferUpdate();
 
-  const applicant = await interaction.client.users.fetch(applicantId).catch(() => null);
+  // 서버 별명(닉네임)을 쓰기 위해 GuildMember를 먼저 가져온다 — 성공하면 그 안의 .user를 그대로
+  // 재사용해 users.fetch를 한 번 아낀다. 탈퇴 등으로 멤버가 없을 때만 계정을 따로 조회한다.
+  const applicantMember = await interaction.guild.members.fetch(applicantId).catch(() => null);
+  const applicant = applicantMember?.user
+    ?? await interaction.client.users.fetch(applicantId).catch(() => null);
   if (!applicant) {
     await interaction.followUp({ content: '⚠️ **신청자 정보를 찾을 수 없습니다.**', flags: MessageFlags.Ephemeral });
     return;
   }
-  // 서버 별명(닉네임)을 쓰기 위해 GuildMember도 함께 가져온다 — 탈퇴 등으로 없으면 계정 이름으로 대체.
-  const applicantMember = await interaction.guild.members.fetch(applicantId).catch(() => null);
   const displayName = applicantMember?.displayName ?? applicant.username;
   const processedByName = interaction.member?.displayName ?? interaction.user.username;
 
