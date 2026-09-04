@@ -2,7 +2,7 @@ const path = require('path');
 // 실행 디렉터리(CWD)가 아니라 이 파일 기준으로 env를 찾는다 — systemd 등 다른 CWD에서 띄워도
 // 토큰을 놓치지 않게. (파일명이 '.env'가 아니라 'env'인 것은 의도된 것)
 require('dotenv').config({ path: path.join(__dirname, 'env') });
-const { Client, GatewayIntentBits, Collection, MessageFlags, Events, Options } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, Collection, MessageFlags, Events, Options } = require('discord.js');
 const fs = require('fs');
 
 // 예전 위치(루트)에 남아있던 JSON 저장 파일이 있다면 DB/ 폴더로 옮긴다(내용은 그대로, 위치만
@@ -29,7 +29,7 @@ const { buildGameSelectPayload: buildMojipGameSelectPayload } = require('./comma
 const { buildReloadListPayload } = require('./commands/불러오기');
 const { buildTeamMatchListPayload } = require('./commands/팀');
 const { buildCommandListPayload, buildSetupPanelPayload, buildAdminMenuPayload, handlePanelButton, handlePanelMatchDeleteSelect, handlePanelBotMessageDeleteModal } = require('./commands/패널');
-const { handleRealmButton, handleRealmModal, handleRealmRosterModal } = require('./forms/마크');
+const { handleRealmButton, handleRealmModal, handleRealmRosterModal, initRulesAgreementCache, handleRealmRulesReactionAdd, handleRealmRulesReactionRemove } = require('./forms/마크');
 const { handleFormSelectButton } = require('./commands/신청서');
 const { handleLevelShareButton } = require('./commands/레벨');
 const { handleRankingPageButton, handleRankingShareButton } = require('./commands/랭킹');
@@ -49,7 +49,12 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildMembers, // /랭킹의 대량 멤버 조회(guild.members.fetch({ user: [...] }))에 필요(특권 인텐트)
+    GatewayIntentBits.GuildMessageReactions, // 마크 렐름 규정집 반응(✅) 실시간 캐싱에 필요(특권 아님)
   ],
+  // 규정집 메시지가 MessageManager 캐시(줄 60대)에서 밀려난 뒤에도 반응 이벤트를 받으려면
+  // 메시지/반응이 partial로라도 전달돼야 한다 — 이 둘이 없으면 discord.js가 캐시 안 된
+  // 메시지의 반응 이벤트를 아예 emit하지 않는다.
+  partials: [Partials.Message, Partials.Reaction],
 
   // ── 메모리 상한 ──────────────────────────────────────────────
   // 몇 달씩 켜두는 봇이라 discord.js 기본 캐시(유저·멤버·메시지)가 "한 번 본 것"을 계속
@@ -235,6 +240,7 @@ async function onReady(c) {
   loadRoulette(); // 룰렛 일일 플레이 기록 복원
   loadBotMatchXp(); // 끝말잇기·틱택토 봇전 일일 XP 한도 기록 복원
   loadRealmRoster(); // 마인크래프트 렐름 승인 명단 복원
+  await initRulesAgreementCache(c); // 렐름 규정집 반응(✅) 캐시 초기화
   initVoiceStates(c); // 재시작 전 이미 통화방에 있던 유저 추적 복원
   startVoiceXpTicker(c); // 통화방 체류 XP 1분 틱 시작
   await reconcileTempChannels(c); // 재시작 전 만들어둔 임시 음성채널 중 빈 방 정리
@@ -477,6 +483,22 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     await handleTempVoiceState(oldState, newState);
   } catch (error) {
     console.error('임시 음성채널 처리 실패:', error);
+  }
+});
+
+client.on(Events.MessageReactionAdd, async (reaction, user) => {
+  try {
+    await handleRealmRulesReactionAdd(reaction, user);
+  } catch (error) {
+    console.error('렐름 규정집 반응 추가 처리 실패:', error);
+  }
+});
+
+client.on(Events.MessageReactionRemove, async (reaction, user) => {
+  try {
+    await handleRealmRulesReactionRemove(reaction, user);
+  } catch (error) {
+    console.error('렐름 규정집 반응 제거 처리 실패:', error);
   }
 });
 

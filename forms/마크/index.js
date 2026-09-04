@@ -120,36 +120,67 @@ function buildRealmPanelPayload(client) {
   };
 }
 
-// 규칙 스레드의 메시지에 유저가 ✅를 남겨뒀는지 확인한다. 채널/메시지가 아직 설정되지 않았거나
-// 못 찾으면(오탈자, 메시지 삭제 등) 관리자 설정 문제이므로 통과시키지 않고 false를 반환한다.
-async function hasAgreedToRules(interaction) {
-  if (!REALM_RULES_CHANNEL_ID || !REALM_RULES_MESSAGE_ID) return false;
+// 규정집 메시지에 ✅류 반응을 남긴 유저 ID 캐시 — "신청하기" 클릭마다 채널/메시지/반응자
+// 목록을 순차로 fetch(최대 3번의 API 호출)하던 예전 방식은, 그게 느려지면 상호작용 3초
+// 응답 제한을 넘겨 showModal()이 "Unknown interaction"으로 실패하는 문제가 있었다. 이제는
+// 봇 시작 시(initRulesAgreementCache) 한 번만 실제 반응자 목록을 읽어 채워두고, 이후엔
+// messageReactionAdd/Remove 이벤트로만 갱신해 클릭 시점엔 API 호출 없이 동기로 확인한다.
+const rulesAgreedUserIds = new Set();
 
-  const channel = await interaction.client.channels.fetch(REALM_RULES_CHANNEL_ID).catch(err => {
+// 봇 시작(onReady) 시 한 번 호출 — 규정집 메시지의 현재 반응자 목록으로 캐시를 채운다.
+async function initRulesAgreementCache(client) {
+  if (!REALM_RULES_CHANNEL_ID || !REALM_RULES_MESSAGE_ID) return;
+
+  const channel = await client.channels.fetch(REALM_RULES_CHANNEL_ID).catch(err => {
     console.error('렐름 규정집 채널 조회 실패(REALM_RULES_CHANNEL_ID 확인 필요):', err);
     return null;
   });
-  if (!channel) return false;
+  if (!channel) return;
 
-  // force: true — 캐시된(반응 추가 전) 옛 메시지를 쓰지 않고 매번 새로 가져와야 방금 남긴
-  // 반응까지 정확히 반영된다.
   const message = await channel.messages.fetch({ message: REALM_RULES_MESSAGE_ID, force: true }).catch(err => {
     console.error('렐름 규정집 메시지 조회 실패(REALM_RULES_MESSAGE_ID 확인 필요):', err);
     return null;
   });
-  if (!message) return false;
+  if (!message) return;
 
-  const reaction = message.reactions.cache.find(r => RULES_CHECK_EMOJIS.includes(r.emoji.name));
-  if (!reaction) return false;
-
-  const users = await reaction.users.fetch().catch(err => {
-    console.error('렐름 규정집 반응자 목록 조회 실패:', err);
-    return null;
-  });
-  return !!users?.has(interaction.user.id);
+  const reactions = message.reactions.cache.filter(r => RULES_CHECK_EMOJIS.includes(r.emoji.name));
+  for (const reaction of reactions.values()) {
+    const users = await reaction.users.fetch().catch(err => {
+      console.error('렐름 규정집 반응자 목록 조회 실패:', err);
+      return null;
+    });
+    users?.forEach(u => rulesAgreedUserIds.add(u.id));
+  }
+  console.log(`✅ 렐름 규정집 동의자 캐시 초기화: ${rulesAgreedUserIds.size}명`);
 }
 
-// "신청하기" 클릭 시 뜨는 신청서 모달. 규칙 동의는 이제 반응(hasAgreedToRules)으로 이미
+// message/reaction이 partial일 수 있으므로(캐시에서 밀려난 메시지) 필요할 때만 fetch로 채운다.
+function isRulesReaction(reaction) {
+  return reaction.message.id === REALM_RULES_MESSAGE_ID
+    && RULES_CHECK_EMOJIS.includes(reaction.emoji.name);
+}
+
+async function handleRealmRulesReactionAdd(reaction, user) {
+  if (user.bot) return;
+  if (reaction.partial) {
+    reaction = await reaction.fetch().catch(() => null);
+    if (!reaction) return;
+  }
+  if (!isRulesReaction(reaction)) return;
+  rulesAgreedUserIds.add(user.id);
+}
+
+async function handleRealmRulesReactionRemove(reaction, user) {
+  if (user.bot) return;
+  if (reaction.partial) {
+    reaction = await reaction.fetch().catch(() => null);
+    if (!reaction) return;
+  }
+  if (!isRulesReaction(reaction)) return;
+  rulesAgreedUserIds.delete(user.id);
+}
+
+// "신청하기" 클릭 시 뜨는 신청서 모달. 규칙 동의는 이제 반응 캐시(rulesAgreedUserIds)로 이미
 // 확인했으므로 모달엔 닉네임만 받는다. 마인크래프트 닉네임은 자바 에디션 기준 최대 16자로 제한.
 function buildRealmApplyModal() {
   return new ModalBuilder()
@@ -427,7 +458,7 @@ async function handleRealmButton(interaction) {
       await interaction.reply({ content: '⚠️ **이미 제출한 신청서가 검토 대기중입니다.** 처리될 때까지 기다려주세요.', flags: MessageFlags.Ephemeral });
       return;
     }
-    if (!(await hasAgreedToRules(interaction))) {
+    if (!rulesAgreedUserIds.has(interaction.user.id)) {
       await interaction.reply({
         content: `⚠️ **먼저 규정집 메시지에 ${RULES_CHECK_EMOJI} 이모지로 동의 표시를 해주세요.**`,
         flags: MessageFlags.Ephemeral,
@@ -657,3 +688,6 @@ async function handleRealmRosterModal(interaction) {
 module.exports.handleRealmButton = handleRealmButton;
 module.exports.handleRealmModal = handleRealmModal;
 module.exports.handleRealmRosterModal = handleRealmRosterModal;
+module.exports.initRulesAgreementCache = initRulesAgreementCache;
+module.exports.handleRealmRulesReactionAdd = handleRealmRulesReactionAdd;
+module.exports.handleRealmRulesReactionRemove = handleRealmRulesReactionRemove;
