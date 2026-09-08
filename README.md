@@ -367,6 +367,7 @@ npm start
 | `notifyOrganizerOnClose(match, label)` *(내부)* | 정원 자동 마감 시 주최자에게 게시글 제목과 링크를 DM으로 전송 (DM 차단 등 실패는 무시). 주최자가 DM을 막아뒀거나(`50007`) 봇과 공통 서버가 없는(`50278`) 경우는 흔한 상황이라 스택 트레이스 대신 한 줄 경고만 남기고(`DM_UNREACHABLE_CODES`), 그 외 예상 못 한 오류만 전체를 기록 |
 | `announceMatchCompletionXp(match)` | 마감된 매치에 보너스 XP 지급 + 레벨업 유저 축하 메시지 게시 |
 | `buildModal` / `buildPreviewEmbed` / `buildPreviewComponents` / `buildCancelComponents` / `buildLeaveButton` | 내전/모집이 공유하는 모달·임베드·버튼 빌더 (`type` 파라미터로 분기) |
+| `stripEmoji(text)` | 커스텀 이모지 태그(`<:이름:id>`)와 유니코드 이모지를 모두 제거. 모달 제목/입력 라벨은 순수 텍스트라 커스텀 이모지가 태그 그대로 노출되므로, `buildModal`의 제목은 글자만 남긴다 |
 | `matchToJSON(match)` *(내부)* | 직렬화 불가능한 필드(메시지 참조, 타이머 등)를 제외하고 매치를 JSON 변환 |
 | `saveAll(client)` | 모든 내전/모집 매치를 `DB/N-M.json`에 저장 (예전엔 프로젝트 루트의 `db.js`였음 — 내전/모집 둘 다 대상이라 어느 한쪽에도 속하지 않아 이 공용 파일로 옮김) |
 | `loadRows()` | `DB/N-M.json`을 읽어 매치 배열로 반환 (없거나 오류 시 빈 배열) |

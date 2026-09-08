@@ -54,6 +54,17 @@ function shuffleIntoTeams(participants) {
   return { team1: shuffled.slice(0, half), team2: shuffled.slice(half) };
 }
 
+// 모달 제목/입력 라벨은 순수 텍스트라 <:이름:id> 형태의 커스텀 이모지가 태그 그대로 노출된다.
+// 커스텀 이모지 태그와 유니코드 이모지를 모두 걷어내 글자만 남긴다.
+function stripEmoji(text) {
+  return String(text)
+    .replace(/<a?:\w+:\d+>/g, '')                       // <:이름:id> / <a:이름:id>
+    .replace(/\p{Extended_Pictographic}/gu, '')            // 🎮 같은 유니코드 이모지
+    .replace(/[\u200d\ufe0f\u20e3]/g, '')                  // ZWJ·이모지 변형 선택자·키캡 결합 문자
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 // 직접 입력(custom)일 때는 제목에 게임 아이콘을 붙이지 않는다.
 function titleHeader(game, gameInfo, title) {
   return game === 'custom' ? `## ${title}` : `## ${gameInfo.emoji}  ${title}`;
@@ -510,7 +521,7 @@ function buildModal(type, label, GAMES, game, data = {}) {
 
   const modal = new ModalBuilder()
     .setCustomId(`${type}:modal:${game}`)
-    .setTitle(`${gameInfo.emoji} ${gameInfo.name} ${label} 생성`);
+    .setTitle(stripEmoji(`${gameInfo.emoji} ${gameInfo.name} ${label} 생성`));
 
   const titleInput = new TextInputBuilder()
     .setCustomId('title')
@@ -719,6 +730,7 @@ module.exports = {
   buildCancelComponents,
   buildNotifyModal,
   titleHeader,
+  stripEmoji,
   armAutoEnd,
   disarmAutoEnd,
   markClosed,
