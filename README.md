@@ -104,17 +104,21 @@ Arcade_BOT/
 │  ├─ 음성채널.js             # 허브 채널 입장 시 임시 음성채널 자동 생성/삭제
 │  ├─ 시간.js                # KST 오프셋·날짜·자정까지 남은 시간 공용 유틸
 │  ├─ 이름.js                # 상호작용/멤버 → 표시 이름 공용 규칙
+│  ├─ 봇전한도.js             # 미니게임 내기/봇전 보상 XP 상수와 하루 누적 한도(KST 자정 초기화) 공용 관리
+│  ├─ 저장.js                # JSON 저장 공용 헬퍼 — 직전 저장과 내용이 같으면 건너뛰고, tmp→rename 원자적 쓰기
 │  └─ 공용.js                # 내전/모집/팀 공용 유틸 (관리자 목록, 임베드 빌더, 자동 종료 타이머, 내전/모집 매치 저장·복원 등)
 ├─ DB/                      # fs 기반 JSON 저장 파일 전부 (자동 생성, 폴더째 gitignore)
 │  ├─ N-M.json               # 진행 중인 내전(N)/모집(M) 매치
-│  ├─ N-M.json.tmp           # N-M.json 원자적 저장용 임시 파일(정상 종료 시 남지 않음)
+│  ├─ *.json.tmp             # 원자적 저장용 임시 파일(tmp에 다 쓴 뒤 rename, 정상 종료 시 남지 않음)
 │  ├─ levels.json             # 유저별 XP
+│  ├─ xp-state.json           # XP 스위치 상태(일반파밍·미니게임 긴급정지, 뉴비부스트 ON/OFF)
 │  ├─ roulette.json           # 유저별 룰렛 마지막 플레이 날짜(KST, 일일 제한용)
 │  ├─ log.json                # 명령어/버튼/선택 메뉴/모달 제출 상호작용 이력
 │  ├─ voiceRooms.json         # 봇이 생성한 임시 음성채널 ID 목록
 │  ├─ quiz.json               # 오늘 출제 시각/모드(초성·상식)/출제 여부/최근 출제 단어/자동·관리자 미해결 문제 기록
 │  ├─ botmatch-xp.json        # 유저별 봇전 보상 XP 하루 누적량(KST 자정 초기화)
 │  └─ realm_roster.json       # 길드별 마크(렐름) 승인 명단·검토 대기 신청·명단 메시지 ID
+├─ assets/                   # 임베드에 첨부하는 이미지 (마크 신청서 썸네일 mc_realm_thumbnail.webp)
 └─ env                       # 환경변수 파일 (gitignore, 아래 참고)
 ```
 
@@ -156,7 +160,7 @@ STDICT_API_KEY=국립국어원_표준국어대사전_오픈API_키   # (선택) 
 | `ALLOWED_CHANNEL_IDS` | 내전/모집/팀 상호작용을 허용할 채널 ID 배열. **비우면(`[]`) 채널 제한 없음** |
 | `TEST_GUILD_IDS` / `isTestGuild(guildId)` | 테스트 서버 길드 ID 배열과 판별 함수. 이 길드에서는 채널 제한을 걸지 않음. 비우면(`[]`) 테스트 서버 없음 |
 | `GUILD_ID` / `HUB_CHANNEL_ID` / `TEMP_CATEGORY_ID` | `GUILD_ID`는 임시 음성채널의 대상 길드이자 `deploy-commands.js`/`clear-guild-commands.js`가 커맨드를 등록/삭제할 길드(콤마로 여러 개 가능). `HUB_CHANNEL_ID`/`TEMP_CATEGORY_ID`는 허브(트리거) 채널, 생성될 카테고리 |
-| `EXCLUDED_GUILD_IDS` | 레벨/XP 시스템을 적용하지 않을 길드(테스트 서버 등) |
+| `EXCLUDED_GUILD_IDS` / `isExcludedGuild(guildId)` | 레벨/XP 시스템을 적용하지 않을 길드(테스트 서버 등)와 판별 함수 |
 | `XP_CHANNEL_ID` | 채팅 XP를 인정할 채널 |
 | `LEVEL_UP_ANNOUNCE_CHANNEL_ID` | 레벨업 축하 메시지를 보낼 채널 (= 놀이터) |
 | `XP_CHANNEL_MULTIPLIERS` | 기본 배율이 아닌 XP 배율을 적용할 채널 (TTS 채널 0.06배) |
@@ -165,6 +169,9 @@ STDICT_API_KEY=국립국어원_표준국어대사전_오픈API_키   # (선택) 
 | `QUIZ_CHANNEL_ID` | 초성퀴즈·상식퀴즈 자동 출제 채널 (= 놀이터) |
 | `WORDCHAIN_RANKING_CHANNEL_ID` | 끝말잇기/틱택토/오목/룰렛/레벨/랭킹 전용 채널 (= 놀이터) |
 | `ADMIN_IDS` | 관리자 유저 ID 목록 |
+| `REALM_REVIEW_CHANNEL_ID` | 마크(렐름) 신청서의 검토 임베드(승인/거절 버튼)와 승인 명단 메시지가 올라갈 채널 |
+| `REALM_RULES_CHANNEL_ID` / `REALM_RULES_MESSAGE_ID` | 규정집 메시지. 여기에 ✅ 반응을 남긴 사람만 "신청하기"를 누를 수 있고, 패널의 "규정집 바로가기" 버튼도 이 메시지로 연결됨 |
+| `REALM_PANEL_CHANNEL_ID` / `REALM_PANEL_MESSAGE_ID` | 이미 게시해둔 신청서 패널 메시지. 명단 관리 메뉴의 "신청서 패널 새로고침"이 이 메시지를 그 자리에서 다시 그림(비우면 안내만 표시) |
 | `GAME_EMOJIS` | `/내전`·`/모집` 게임 선택 메뉴의 게임별 커스텀 이모지 ID (두 커맨드가 공유) |
 | `STEAM_EMOJI_ID` | 직접 입력 게임의 Steam 역할 멘션 토글 버튼 이모지 |
 
@@ -223,7 +230,7 @@ npm start
 4. 공개 게시 시 게임에 해당하는 역할(롤→`롤`, 발로란트→`발로란트`, 오버워치→`오버워치`, 배그→`배그`)을 멘션하며 게시
 5. 참가/취소 버튼으로 인원 모집, 정원이 차면 자동 마감(`markClosed`) — 마감 시 8시간 후 자동 삭제 타이머가 걸리고(타이머 만료 시 참가자에게 완료 보너스 XP가 지급된 뒤 메시지가 삭제됨), 정원이 자동으로 차서 마감된 경우 주최자에게 마감 안내 DM이 발송됨(주최자가 직접 "마감하기" 버튼으로 수동 마감한 경우는 본인이 이미 알고 있으므로 DM 미발송, DM 차단 시에도 무시)
 6. 주최자(또는 관리자) 전용 관리 메뉴: 마감/마감 해제, 수정, 취소, 팀 만들기(수동/자동 배정), 참가자 멘션(1회성), 🔔 알림 예약, 참가자 강제 추가/제거, ⏰ 자동 삭제 ON/OFF 토글(마감 전/후 상관없이 항상 현재 설정에 맞춰 표시) — 게시 전 미리보기에서 정한 설정을 마감 후에도 바꿀 수 있으며, 원래 마감 시각 기준 남은 시간으로 다시 예약됨(`toggleAutoCloseWhileClosed`); 이미 그 8시간이 지나 다음 클릭 시 즉시 삭제될 상황이면 버튼이 `🗑️ (내전/모집) 삭제`로 바뀜
-7. 주최자가 취소하면 🔴 취소됨 임베드로 교체되고(`autoClose` 토글과 무관하게 항상) 8시간 후 자동 삭제됨(`scheduleCancelledDelete`) — 재시작해도 `DB/N-M.json`에 삭제 예정 시각이 저장돼 있어 남은 시간만큼 다시 예약됨. 참가자 멘션을 이미 보낸 상태였다면 그 멘션 메시지도 즉시 함께 삭제됨(`deleteMentionMessage`) — 자동 삭제/관리 메뉴 즉시삭제 등 매치가 끝나는 모든 경로에서 공통
+7. 주최자가 취소하면 🔴 취소됨 임베드로 교체되고(`autoClose` 토글과 무관하게 항상) 3시간 후 자동 삭제됨(`scheduleCancelledDelete`, `CANCELLED_DELETE_DELAY_MS`) — 재시작해도 `DB/N-M.json`에 삭제 예정 시각이 저장돼 있어 남은 시간만큼 다시 예약됨. 참가자 멘션을 이미 보낸 상태였다면 그 멘션 메시지도 즉시 함께 삭제됨(`deleteMentionMessage`) — 자동 삭제/관리 메뉴 즉시삭제 등 매치가 끝나는 모든 경로에서 공통
 8. **🔔 알림 예약**: 자유 형식인 "일시"와 별개로, "M/D HH:mm"(KST, 24시간제) 형식만 받는 전용 모달(`buildNotifyModal`)로 알림 시각을 설정. 그 시각이 됐을 때 **매치가 마감(closed) 상태인 경우에만** 주최자+참가자 전원에게 DM으로 시작 알림을 보냄(마감 전이면 보류) — 마감 전에 시각이 지나도 유실되지 않고, 이후 수동("🔒 마감하기")이든 자동(정원 마감)이든 **마감되는 즉시** 밀려있던 알림이 발송됨(`markClosed`가 `trySendNotify`로 catch-up). 다만 매치가 취소/자동 삭제 등으로 관리 목록(matchesMap)에서 이미 빠진 상태라면 보내지 않음(`clearNotifyTimer`로 타이머를 명시적으로 취소하거나, 타이머가 이미 걸린 채 빠졌더라도 발동 시점에 매치 조회 실패로 조용히 건너뜀). 형식이 안 맞으면 제출이 거부되고, 연도 입력이 없으므로 올해 기준으로 계산하되 이미 지난 시각이면 내년으로 자동 보정. 빈 값으로 제출하면 예약 취소. `data.notifyAt`(epoch ms)이 매치 데이터에 함께 저장되므로 재시작 후에도 `armNotifyReminder`로 다시 예약됨, 재게시(`/불러오기`)로 메시지 ID가 바뀌어도 새 ID로 다시 걸림
    - 예약이 걸려있는 동안에는 공개 임베드의 "📊 상태" 줄 아래에 `🔔 **알림**　　M/D ...` 줄이 추가로 표시되어 주최자/참가자 모두 확인 가능(취소하면 즉시 사라짐, `match.message.edit`로 실시간 반영)
    - 표시 형식은 주최자가 **입력했던 형식 그대로** 따라감 — 24시간제("6/5 20:00")로 입력했으면 임베드/버튼/확인 메시지 모두 24시간제로, 오전/오후("6/5 오후 8:00")로 입력했으면 그대로 오전/오후로 표시(`data.notify12h`에 입력 형식을 기록해두고 `formatNotifyTimeSmart`로 그에 맞춰 렌더링, 재수정 시 입력창 프리필도 동일 형식 유지)
@@ -290,7 +297,7 @@ npm start
 - 봇 참가 시 두음법칙을 반영해 가능한 시작 글자들로 한국어기초사전 API에서 단어를 조회해 자동 응답
 - **봇이 어느 정도는 져 줌** — 봇은 인기순 상위 100개 풀에서 안 쓴 단어를 고르므로 사실상 막히지 않아, 그냥 두면 봇전은 늘 사람이 먼저 실수해 지는 판으로만 끝난다. 그래서 단어가 `BOT_CONCEDE_AFTER_WORDS`(20)개 이상 쌓이면 봇 차례마다 `BOT_CONCEDE_STEP`(0.03)씩 커지는 확률로(상한 `BOT_CONCEDE_MAX_CHANCE`=0.18) 봇이 스스로 포기(`gave_up`)해 사람이 이길 여지를 만든다. 판 초반 즉시 포기는 XP 파밍 수단이 되므로 최소 단어 수를 넘긴 뒤부터만 발동하고, 포기하면 봇이 탈락한 것이므로 평소처럼 생존자에게 봇전 보상 XP가 지급됨(하루 누적 한도 적용)
 - **XP 내기/보상**: 참가자가 전부 사람이면 자동으로 내기가 걸림 — 탈락자가 min(`WAGER_XP`=100, 탈락자의 **현재 레벨 안에 쌓인 XP**)만큼 잃고, 그 XP를 생존자들이 똑같이 나눠 가짐(레벨 자체가 깎이는 일은 없음). 참가자 중 봇이 있었고 그 봇이 탈락했다면(=사람들이 이김) 내기 대신 생존자에게 보상 XP를 지급 — 고정값이 아니라 매 판 `BOT_WIN_XP_MIN`=10 ~ `BOT_WIN_XP_MAX`=30 사이에서 무작위로 정해지고, 생존자가 여럿이면 판당 한 번만 굴려 **모두 같은 금액**을 받는다(사람이 진 경우는 봇전이라 페널티 없음). 결과 임베드에 정산 내역이 함께 표시되고, 정산으로 레벨업하면 평소처럼 레벨업 채널에 축하 메시지가 감. 대기 로비 임베드에 내기가 걸린다는 안내가 표시됨(동의 없이 걸리는 것을 방지)
-- **악용 방지**: 봇전 반복 파밍이나 같은 상대와의 즉석 내기 반복(예: "🏳️ 포기"로 즉시 종료해 XP만 옮기기)을 막기 위해 유저당 `XP_SETTLE_COOLDOWN_MS`(3분) 쿨다운을 둠 — 쿨다운 중에도 게임 자체는 정상 진행되지만 XP 정산만 생략되고, 그 사유가 결과 임베드에 그대로 안내됨(조용히 생략되지 않음)
+- **악용 방지**: 봇전 반복 파밍이나 같은 상대와의 즉석 내기 반복(예: "🏳️ 포기"로 즉시 종료해 XP만 옮기기)을 막기 위해 유저당 정산 쿨다운을 둠(사람끼리 내기는 `WAGER_SETTLE_COOLDOWN_MS` 3분, 봇전 보상은 `BOT_SETTLE_COOLDOWN_MS` 5분) — 쿨다운 중에도 게임 자체는 정상 진행되지만 XP 정산만 생략되고, 그 사유가 결과 임베드에 그대로 안내됨(조용히 생략되지 않음)
 - **종료 처리는 절대 실패하지 않도록 방어** — XP 정산이나 결과 임베드 생성에서 예외가 나도 게임은 반드시 종료 화면으로 마무리되고, 실패 시엔 최소 안내 문구로라도 메시지를 갱신함. 예전엔 종료 사유 문구를 객체 리터럴로 한꺼번에 만들면서 `wrong_start` 항목이 `getAcceptableStarts(lastChar)`를 호출한 탓에, **첫 단어에서 진 판**(= `lastChar`가 `null`)에서 TypeError가 나 임베드가 '진행 중'인 채로 얼어붙고 이후 입력이 전부 무시됐음. 게다가 이 예외가 턴 타이머 콜백에서 터지면 `uncaughtException`으로 봇 프로세스까지 죽어 진행 중이던 다른 게임들도 같이 멈췄음. 또 종료 임베드 갱신은 한 번 실패하면 끝이었는데(순간적인 통신 장애로 실패하면 게임은 끝났는데 화면만 '진행 중'으로 영원히 남고 이후 입력이 전부 무시됨), 3초·15초·60초 간격으로 다시 시도하고, 끝내 실패하면(예: 그 메시지가 삭제된 경우 — 재시도로는 영영 못 푼다) 사유를 로그로 남기고 같은 채널에 새 메시지로 결과를 알림
 
 </details>
@@ -304,10 +311,10 @@ npm start
 - **무한모드**: 각자 최대 3개(❌/⭕)까지만 보드에 남고, 4번째를 두면 그 마크의 가장 오래된 조각이 사라짐(곧 사라질 조각은 흐린 회색 버튼으로 미리 표시) — 보드가 절대 다 차지 않아 무승부 없이 계속 이어짐. 봇 AI는 무한모드 전용 로직(깊이 4로 제한한 미니맥스 + 줄 단위 휴리스틱 평가)을 따로 씀 — 판이 끝없이 순환할 수 있어 일반 모드처럼 완전 탐색을 할 수 없기 때문
 - 참가자만 자신의 차례에 버튼으로 칸을 선택 가능, 한 수도 없이 5분이 지나면 시간 초과로 무승부 종료
 - **봇 로직(일반 모드)은 완전 탐색(미니맥스)** — 3x3 보드가 작아 매 수마다 모든 경우의 수를 다 봐서 최선수를 찾는다. 예전엔 단순 휴리스틱이라 "상대 코너 → 내 중앙 → 상대 반대편 코너"로 시작하는 유명한 트릭에 뚫려 몇 수만 외우면 반복해서 이길 수 있었는데, 완전 탐색으로 바꿔서 정해진 수순으로 이기는 길을 없앰
-- **봇이 어느 정도는 져 줌** — minimax만 쓰면 봇전이 늘 무승부 아니면 봇 승리로만 끝나 사람이 이길 길이 없다. 그래서 봇 차례마다 `BOT_BLUNDER_CHANCE`(0.18) 확률로 최선수 대신 아무 빈칸에나 두는 "실수"를 섞는다(`pickBotMove` — 무한모드도 동일). 확률이 낮아 대부분의 수는 여전히 제대로 두지만 가끔 사람이 파고들 틈이 생긴다. 반복 파밍은 이걸로 뚫리지 않게 아래 쿨다운(3분)과 하루 누적 한도(`DAILY_BOT_MATCH_XP_CAP`=100, 끝말잇기와 합산)로 계속 막는다
+- **봇이 어느 정도는 져 줌** — minimax만 쓰면 봇전이 늘 무승부 아니면 봇 승리로만 끝나 사람이 이길 길이 없다. 그래서 봇 차례마다 `BOT_BLUNDER_CHANCE`(0.18) 확률로 최선수 대신 아무 빈칸에나 두는 "실수"를 섞는다(`pickBotMove` — 무한모드도 동일). 확률이 낮아 대부분의 수는 여전히 제대로 두지만 가끔 사람이 파고들 틈이 생긴다. 반복 파밍은 이걸로 뚫리지 않게 아래 쿨다운(사람끼리 3분·봇전 5분)과 하루 누적 한도(`DAILY_BOT_MATCH_XP_CAP`=100, 끝말잇기와 합산)로 계속 막는다
 - 게임이 끝나면 보드 아래에 `🔄 재대결` / `🛑 종료` 버튼이 붙음(원래 참가자만 사용 가능) — 재대결을 누르면 무한모드 여부를 이어받은 **새 대기 로비**가 뜸(신청자만 로비에 들어간 상태, 사람 상대였다면 상대를 멘션해 참가 안내). 봇전이었으면 신청자가 `🤖 봇과 시작`으로 바로 재개 가능. 참가자 둘이 거의 동시에 재대결을 눌러도 신청은 하나만 만들어짐(둘 다 만들어지면 밀려난 쪽이 만료 처리를 하면서 그 사이 시작된 게임 보드를 지워버린다). 원래 게임은 끝나는 순간 map에서 지워지므로, 끝말잇기와 달리 결과 메시지 ID(`sourceMessageId`)를 기준으로 중복을 막는다. **지난 판 최종 보드는 덮어쓰지 않고 그대로 남기고**(다 쓴 버튼만 제거), 재대결 로비는 새 메시지로 올린다 — 취소되거나 2분 만료되면 지난 판 보드에 재대결 버튼을 되살린다(`rematchSource`에 담아둔 값으로 버튼을 다시 만든다).
 - **XP 내기/보상**: 사람 vs 사람 대결에서 승부가 나면(무승부 제외) 자동으로 내기가 걸림 — 진 사람이 min(`WAGER_XP`=100, 진 사람의 **현재 레벨 안에 쌓인 XP**)만큼 잃고 이긴 사람이 그만큼 얻음(레벨 자체가 깎이는 일은 없음). 사람이 봇을 이기면 내기 대신 매 판 `BOT_WIN_XP_MIN`=10 ~ `BOT_WIN_XP_MAX`=30 사이에서 무작위로 정해진 보상 XP를 지급, 봇이 이기거나 무승부면 아무 변동 없음. 결과 임베드에 정산 내역이 함께 표시되고, 정산으로 레벨업하면 평소처럼 레벨업 채널에 축하 메시지가 감
-- **악용 방지**: 유저당 `XP_SETTLE_COOLDOWN_MS`(3분) 쿨다운으로 봇전 반복 파밍이나 같은 상대와의 즉석 내기 반복을 제한 — 쿨다운에 걸리면 승부 자체는 정상 인정되지만 XP 정산만 생략되고, 그 사유가 결과 임베드에 그대로 안내됨(조용히 생략되지 않음). 봇이 가끔 져 주긴 하지만(위 `BOT_BLUNDER_CHANCE`) 승리가 매 판 보장되진 않고, 이겨도 쿨다운·하루 한도에 걸리면 XP가 안 들어오므로 반복 파밍 이득은 크지 않음
+- **악용 방지**: 유저당 정산 쿨다운(사람끼리 내기 `WAGER_SETTLE_COOLDOWN_MS` 3분, 봇전 보상 `BOT_SETTLE_COOLDOWN_MS` 5분)으로 봇전 반복 파밍이나 같은 상대와의 즉석 내기 반복을 제한 — 쿨다운에 걸리면 승부 자체는 정상 인정되지만 XP 정산만 생략되고, 그 사유가 결과 임베드에 그대로 안내됨(조용히 생략되지 않음). 봇이 가끔 져 주긴 하지만(위 `BOT_BLUNDER_CHANCE`) 승리가 매 판 보장되진 않고, 이겨도 쿨다운·하루 한도에 걸리면 XP가 안 들어오므로 반복 파밍 이득은 크지 않음
 
 </details>
 
@@ -361,7 +368,7 @@ npm start
 <details>
 <summary>🔊 <b>임시 음성채널</b> <sub><code>handlers/음성채널.js</code></sub></summary>
 
-- 지정된 허브 채널(`HUB_CHANNEL_ID`)에 입장하면 지정된 카테고리(`TEMP_CATEGORY_ID`)에 `🔊 {닉네임}의 방` 음성채널을 새로 만들어 그리로 이동시킴
+- 지정된 허브 채널(`HUB_CHANNEL_ID`)에 입장하면 지정된 카테고리(`TEMP_CATEGORY_ID`)에 `🔊│{닉네임}의 방` 음성채널을 새로 만들어 그리로 이동시킴
 - 방을 만든 사람에게는 해당 채널의 "채널 관리" 권한을 부여(이름/인원제한 등을 스스로 수정 가능)
 - 채널에 아무도 남지 않으면 자동으로 삭제(허브로 바로 재입장해 새 방을 만드는 경우에도 이전 방 정리가 먼저 처리됨)
 - 봇 재시작 시 그동안 만들어졌던 임시 채널 중 빈 방을 정리(`DB/voiceRooms.json`으로 추적 ID 영속화)
@@ -408,9 +415,10 @@ npm start
 여러 종류의 "신청서"를 버튼으로 골라 게시하기 위한 진입점. `/신청서`(채널 제한 없음)를 실행하면 본인에게만 보이는(ephemeral) **"게시할 신청서를 선택하십시오"** 메뉴가 뜨고, 버튼을 누르면 그 신청서 패널이 명령을 쓴 채널에 게시된다. 신청서 종류는 `commands/신청서.js`의 `FORMS` 표(`{ 종류: { label, emoji, build, done } }`)로 관리하며, 새 신청서는 `forms/<이름>/` 폴더에 폼 모듈을 만들고 이 표에 한 줄(버튼 하나)만 추가하면 옆으로 늘어난다. 선택 버튼 커스텀ID는 `form:publish:<종류>`.
 
 - **현재 등록된 신청서: "마크"(마인크래프트 렐름 참가 신청, `forms/마크/`)**
-  - 게시된 패널의 **신청하기** 버튼 → 마인크래프트 자바 닉네임(최대 16자) 모달 → `REALM_REVIEW_CHANNEL_ID` 검토 채널에 승인/거절 버튼이 달린 임베드 전송. 같은 사람이 이미 승인됐거나 검토 대기중이면 다시 신청 불가(`DB/realm_roster.json`의 `members`/`pending`으로 판정)
-  - 검토 임베드의 **승인**/**거절**(관리자 전용) → 신청자에게 결과 DM(Components V2 형식) 발송, 승인 시 `REALM_WHITELIST_ROLE_ID` 역할 지급(비워두면 DM만). 임베드는 상태(대기/승인/거절)에 따라 색·제목이 바뀌고 처리 후 버튼이 사라짐. 닉네임·신청 일시는 별도 저장 없이 임베드 필드에서 다시 읽어 재사용
-  - 검토 채널에는 승인 명단 메시지가 항상 하나만 유지됨(승인/거절·명단 변경 때마다 지우고 새로 게시, `rosterMessageId`로 재시작에도 추적). 명단 메시지의 **관리** 버튼(관리자 전용) → ephemeral 메뉴에서 **편집 / 추가 / 제외 / 순서 변경 / 새로고침** — 전부 유저 ID를 직접 입력하는 모달로 처리, 제외 시 역할도 회수
+  - 패널에는 **신청하기**와 **규정집 바로가기**(링크) 버튼이 있고, **신청하기를 누르려면 `REALM_RULES_MESSAGE_ID` 규정집 메시지에 ✅ 반응을 먼저 남겨야 함**(✔️ 등 비슷한 체크 이모지도 인정). 동의자 목록은 봇 시작 시 그 메시지의 반응자로 캐시를 채우고(`initRulesAgreementCache`) 이후 반응 추가/삭제 이벤트로 갱신하므로, 신청할 때마다 API를 다시 조회하지 않음. 코드 상단의 `APPLY_DISABLED`를 `true`로 두면 신청 버튼이 비활성 상태로 게시됨
+  - **신청하기** 버튼 → 마인크래프트 자바 닉네임(최대 16자) 모달 → `REALM_REVIEW_CHANNEL_ID` 검토 채널에 승인/거절 버튼이 달린 임베드 전송. 같은 사람이 이미 승인됐거나 검토 대기중이면 다시 신청 불가(`DB/realm_roster.json`의 `members`/`pending`으로 판정)
+  - 검토 임베드의 **승인**/**거절**(관리자 전용) → 신청자에게 결과 DM(Components V2 형식) 발송(역할 지급 같은 서버 권한 변경은 하지 않음 — 승인은 명단 등록 + DM까지). 임베드는 상태(대기/승인/거절)에 따라 색·제목이 바뀌고 처리 후 버튼이 사라짐. 닉네임·신청 일시는 별도 저장 없이 임베드 필드에서 다시 읽어 재사용
+  - 검토 채널에는 승인 명단 메시지가 항상 하나만 유지됨(승인/거절·명단 변경 때마다 지우고 새로 게시, `rosterMessageId`로 재시작에도 추적). 명단 메시지의 **관리** 버튼(관리자 전용) → ephemeral 메뉴에서 **편집 / 추가 / 제외 / 순서 변경 / 새로고침 / 신청서 패널 새로고침** — 편집·추가·제외·순서 변경은 유저 ID를 직접 입력하는 모달로 처리(명단에서만 빼며 역할은 건드리지 않음), "신청서 패널 새로고침"은 `REALM_PANEL_MESSAGE_ID`로 지정해둔 게시된 패널을 그 자리에서 다시 그림
   - 관련 상호작용 커스텀ID: `realm:apply` · `realm:modal` · `realm:approve:<유저ID>` · `realm:reject:<유저ID>` · `realm:roster:*`. 채널 제한 면제 대상(`form:` / `realm:` 프리픽스)
   - 상호작용 처리는 `forms/마크/index.js`, 승인 명단·검토 대기 신청·명단 메시지 ID 저장은 `forms/마크/명단.js`(`DB/realm_roster.json`, 길드별)
 
@@ -446,6 +454,7 @@ npm start
 | `startVoiceXpTicker(client)` | 1분마다 통화 중인 유저에게 체류 XP를 자동 지급하는 타이머 시작 |
 | `getLeaderboard(guildId, limit, offset)` / `getLeaderboardSize(guildId)` | `/랭킹`용 정렬된 리더보드 조회 |
 | `buildProgressBar(current, needed, length)` | `/레벨` 임베드용 진행바(■□) 문자열 생성 |
+| `announceLevelUp(client, guildId, userId, newLevel)` | 레벨업 축하 메시지를 축하 채널에 게시 — 미니게임 정산 등 XP를 주는 모든 경로가 공용으로 호출 |
 | `loadXpState()` | 봇 시작 시 `DB/xp-state.json`에서 긴급정지·뉴비부스트 스위치 상태 복원(없거나 깨졌으면 전부 정상 작동으로 시작) |
 | `getXpState()` / `setXpSwitch(key, value)` | `/xp` → `XP 관리`용 — 스위치 3종(`farmFrozen`/`minigameFrozen`/`newbieBoostEnabled`) 조회, 변경 시 즉시 디스크 저장 |
 | `isFarmXpFrozen()` / `isMinigameXpFrozen()` / `isNewbieBoostEnabled()` | 각 XP 지급 지점(메시지·통화방·완료 보너스 / 오목·룰렛·틱택토·끝말잇기·퀴즈 / 뉴비부스트 배율)에서 확인하는 게이트 |
@@ -457,7 +466,7 @@ npm start
 
 | 함수 | 설명 |
 |---|---|
-| `getNaejeonMatches(client)` | `client.naejeonMatches` Map 획득(없으면 생성) |
+| `getNaejeonMatches(client)` / `getMojipMatches(client)` / `getCancelledDeletions(client)` | 진행 중인 내전·모집 매치와 취소 후 삭제 대기 목록 Map 획득(없으면 생성, 내부적으로 `getClientMap` 공용) |
 | `shuffleIntoTeams(participants)` | Fisher–Yates 셔플 후 절반씩 팀1/팀2로 분할 |
 | `armAutoEnd(matchesMap, msgId, match, label, delayMs)` | 마감된 매치에 8시간 자동 삭제 타이머 설정 — 만료 시 XP 지급 후 메시지를 바로 삭제 |
 | `disarmAutoEnd(match)` | 자동 삭제 타이머 해제 |
@@ -468,6 +477,10 @@ npm start
 | `notifyOrganizerOnClose(match, label)` *(내부)* | 정원 자동 마감 시 주최자에게 게시글 제목과 링크를 DM으로 전송 (DM 차단 등 실패는 무시). 주최자가 DM을 막아뒀거나(`50007`) 봇과 공통 서버가 없는(`50278`) 경우는 흔한 상황이라 스택 트레이스 대신 한 줄 경고만 남기고(`DM_UNREACHABLE_CODES`), 그 외 예상 못 한 오류만 전체를 기록 |
 | `announceMatchCompletionXp(match)` | 마감된 매치에 보너스 XP 지급 + 레벨업 유저 축하 메시지 게시 |
 | `buildModal` / `buildPreviewEmbed` / `buildPreviewComponents` / `buildCancelComponents` / `buildLeaveButton` | 내전/모집이 공유하는 모달·임베드·버튼 빌더 (`type` 파라미터로 분기) |
+| `buildNotifyModal` / `parseNotifyTime` / `formatNotifyTimeSmart` / `isNotify12HourInput` / `isNotifyTooFar` | 🔔 알림 예약 모달과 "M/D HH:mm" 입력 파싱·표시 유틸 — 주최자가 입력한 형식(24시간제/오전·오후)을 기억해 임베드·버튼·프리필에 같은 형식으로 렌더링 |
+| `armNotifyReminder(client, matchesMap, msgId, match, label)` / `clearNotifyTimer(match)` | 알림 DM 타이머 예약/해제 — 재시작 시 `data.notifyAt` 기준으로 다시 걸고, 매치가 사라지면 조용히 건너뜀 |
+| `titleHeader(game, gameInfo, title)` | 임베드 제목 줄 생성 — 직접 입력(custom) 게임에는 게임 아이콘을 붙이지 않음 |
+| `buildTeamResultEmbed(match)` / `deleteMentionMessage(client, match)` | 팀 배정 결과 임베드 생성 / 참가자 멘션 메시지 정리(매치가 끝나는 모든 경로에서 공용) |
 | `stripEmoji(text)` | 커스텀 이모지 태그(`<:이름:id>`)와 유니코드 이모지를 모두 제거. 모달 제목/입력 라벨은 순수 텍스트라 커스텀 이모지가 태그 그대로 노출되므로, `buildModal`의 제목은 글자만 남긴다 |
 | `matchToJSON(match)` *(내부)* | 직렬화 불가능한 필드(메시지 참조, 타이머 등)를 제외하고 매치를 JSON 변환 |
 | `saveAll(client)` | 모든 내전/모집 매치를 `DB/N-M.json`에 저장 (예전엔 프로젝트 루트의 `db.js`였음 — 내전/모집 둘 다 대상이라 어느 한쪽에도 속하지 않아 이 공용 파일로 옮김) |
@@ -485,6 +498,7 @@ npm start
 | `handleNaejeonEditModal(interaction)` | 게시 전 미리보기 상태에서 수정 모달 제출 처리 |
 | `handleNaejeonButton(interaction)` | 게시/참가/탈퇴/마감/취소/팀 관리 등 내전 관련 모든 버튼 처리 (커스텀ID 분기) |
 | `handleNaejeonMatchEditModal(interaction)` | 게시된 내전의 정보 수정 모달 제출 처리 |
+| `handleNaejeonNotifyModal(interaction)` | 🔔 알림 예약 모달 제출 처리 — 시각을 파싱해 타이머를 걸고 임베드의 알림 줄을 갱신(빈 값이면 예약 취소) |
 | `handleTeamAssign(interaction)` | 주최자 관리 메뉴에서 트리거되는 팀 배정 셀렉트 처리 |
 | `handleNaejeonMemberAdd(interaction)` / `handleNaejeonMemberRemove(interaction)` | 관리자/주최자의 참가자 강제 추가/제거 |
 | `buildPublicMessagePayload(match)` | 공개 게시 메시지(임베드+버튼) 페이로드 생성 — `/불러오기`에서 재게시할 때도 사용 |
@@ -494,7 +508,7 @@ npm start
 <details>
 <summary>📄 <b><code>handlers/모집.js</code> — 모집</b></summary>
 
-내전과 동일한 구조로 `handleMojipGameSelect`, `handleMojipModal`, `handleMojipEditModal`, `handleMojipButton`, `handleMojipMatchEditModal`, `handleMojipMemberAdd`, `handleMojipMemberRemove`, `buildMojipMessagePayload`를 내보내며 역할도 각각 내전 쪽 대응 함수와 동일합니다(팀 배정 관련 함수만 없음).
+내전과 동일한 구조로 `handleMojipNotifyModal`(🔔 알림 예약)을 포함해 `handleMojipGameSelect`, `handleMojipModal`, `handleMojipEditModal`, `handleMojipButton`, `handleMojipMatchEditModal`, `handleMojipMemberAdd`, `handleMojipMemberRemove`, `buildMojipMessagePayload`를 내보내며 역할도 각각 내전 쪽 대응 함수와 동일합니다(팀 배정 관련 함수만 없음).
 
 </details>
 
@@ -585,6 +599,7 @@ npm start
 |---|---|
 | `startRouletteCommand(interaction)` | `/룰렛` 실행 → 일일 제한/보유 XP 검증 후 본인에게만 보이는 베팅 선택 로비 게시 |
 | `handleRouletteButton(interaction)` | 로비의 베팅 프리셋/최대/돌리기/취소(`roulette:bet:`, `roulette:max:`, `roulette:spin:`, `roulette:cancel:`) 버튼 처리 |
+| `MIN_BET` / `MAX_BET` | 베팅 가능 범위(10~300 XP) — 로비의 `🔺 최대` 버튼과 입력 검증이 함께 참조 |
 | `loadRoulette()` / `saveRoulette()` | `DB/roulette.json`에서 유저별 마지막 플레이 날짜를 불러오거나 저장 |
 | `hasPlayedToday(guildId, userId)` / `markPlayedToday(guildId, userId)` *(내부)* | KST 날짜 기준 오늘 플레이 여부 확인/기록 |
 | `spinLobby(interaction, lobby, lobbies)` *(내부)* | `🎰 돌리기` 클릭 시 재검증 후 로비를 닫고 채널에 공개 메시지로 스핀 연출·XP 정산·결과 임베드 진행 |
@@ -634,6 +649,8 @@ npm start
 | 함수 | 설명 |
 |---|---|
 | `logInteraction(interaction)` | 명령어/버튼/선택 메뉴/모달 제출을 `DB/log.json`에 기록(최신이 맨 위로). 채널 제한 등으로 막히는 시도까지 포함해 `interactionCreate` 맨 앞에서 호출됨. 버튼은 커스텀ID가 아니라 **버튼에 보이는 글자(이모지+라벨, `buttonName`)**로 기록 |
+| `logSystem({ 유형, 내용, 유저, 채널 })` | 상호작용 없이 봇이 스스로 한 일을 남길 때 사용(예: DM 실패). 사람이 누른 게 아니므로 유저/채널은 생략 가능 |
+| `flushLogsSync()` | 종료(SIGTERM/SIGINT) 시 메모리에 있는 로그를 동기로 파일에 밀어 넣음 — 평소 저장은 비동기라 종료에 끊길 수 있어서 |
 | `logAction(interaction, 유형, 내용)` | 핸들러가 "실제로 무슨 일이 일어났는지"를 직접 한 줄로 남길 때 사용. 예: `/xp`가 조정에 성공하면 `유형: "XP 조정"`으로 대상·증감·전후 XP/레벨을 기록 |
 
 </details>
@@ -677,6 +694,57 @@ npm start
 </details>
 
 <details>
+<summary>📄 <b><code>handlers/봇전한도.js</code> — 미니게임 XP 상수·봇전 하루 한도</b></summary>
+
+끝말잇기·틱택토·오목이 공유하는 XP 상수와 봇전 보상 한도를 한 곳에 모은 모듈(예전엔 같은 값이 각 파일에 복붙돼 있었음).
+
+| 함수 / 상수 | 설명 |
+|---|---|
+| `WAGER_XP`(100) | 사람끼리 대결에서 자동으로 거는 내기 XP 상한 — 실제로는 진 사람의 현재 레벨 안 XP로 한 번 더 잘려 레벨이 떨어지지 않음 |
+| `BOT_WIN_XP_MIN`(10) / `BOT_WIN_XP_MAX`(30) / `rollBotWinXp()` | 봇을 이겼을 때 주는 보상 XP 범위와 매 판 무작위 추첨 |
+| `DAILY_BOT_MATCH_XP_CAP`(100) | 한 유저가 하루에 봇전으로 받을 수 있는 총 XP(끝말잇기·틱택토·오목 합산) |
+| `getEarnedToday` / `getRemainingBotXp` / `addBotMatchXp` | 오늘 받은 양 조회·남은 한도 계산·지급 후 누적 (KST 자정 기준으로 날짜가 바뀌면 초기화) |
+| `loadBotMatchXp()` / `saveBotMatchXp()` | `DB/botmatch-xp.json` 불러오기·저장 |
+
+</details>
+
+<details>
+<summary>📄 <b><code>handlers/저장.js</code> — JSON 저장 공용 헬퍼</b></summary>
+
+| 함수 | 설명 |
+|---|---|
+| `writeJsonIfChanged(filePath, value)` | 직전에 쓴 내용과 같으면 건너뛰고(파일이 실제로 있는지도 확인), 쓸 때는 `<파일>.tmp`에 다 쓴 뒤 `rename`으로 교체하는 원자적 저장. 실제로 썼으면 `true` 반환 |
+
+30초 자동 저장이 매번 모든 파일을 다시 쓰던 낭비와, 쓰는 도중 프로세스가 죽어 파일이 반쪽으로 깨지던 문제를 함께 없애기 위한 모듈. 다른 핸들러를 `require`하지 않습니다(순환참조 방지).
+
+</details>
+
+<details>
+<summary>📄 <b><code>handlers/시간.js</code> · <code>handlers/이름.js</code> — 공용 소품</b></summary>
+
+| 함수 | 설명 |
+|---|---|
+| `KST_OFFSET_MS` / `kstDateString(epochMs)` / `timeUntilKstMidnight(epochMs)` | KST 오프셋 상수, `YYYY-MM-DD` 날짜 문자열, 자정까지 남은 ms — 퀴즈 출제·룰렛 일일 제한·봇전 한도가 같은 기준을 쓰도록 |
+| `displayNameFromInteraction(interaction)` / `displayNameFromMember(member, user)` | 서버 별명 → 전역 표시이름 → 유저명 순으로 이름을 고르는 공용 규칙 |
+
+</details>
+
+<details>
+<summary>📝 <b><code>forms/마크/index.js</code> · <code>forms/마크/명단.js</code> — 마크(렐름) 신청서</b></summary>
+
+| 함수 | 설명 |
+|---|---|
+| `buildRealmPanelPayload(client)` | 신청 패널 페이로드 생성(신청하기 + 규정집 바로가기 버튼, 썸네일 첨부) — `commands/신청서.js`의 `FORMS.마크.build`로 등록됨 |
+| `handleRealmButton(interaction)` | `realm:apply`(규정집 동의 확인 후 모달) / `realm:approve:<유저ID>` / `realm:reject:<유저ID>` 처리 |
+| `handleRealmModal(interaction)` | 닉네임 모달 제출 → 검토 채널에 승인/거절 임베드 전송 + 대기 목록 등록 |
+| `handleRosterAdminButton` / `handleRealmRosterModal` | 명단 메시지의 "관리" 메뉴 버튼과 편집·추가·제외·순서 변경 모달 처리 |
+| `initRulesAgreementCache(client)` / `handleRealmRulesReactionAdd` / `handleRealmRulesReactionRemove` | 규정집 ✅ 반응자 캐시 — 시작 시 한 번 채우고 이후 반응 이벤트로만 갱신(신청할 때마다 API를 다시 조회하지 않아 Unknown interaction 방지) |
+| `refreshRealmRosterMessage` / `refreshRealmPanelMessage` *(내부)* | 승인 명단 메시지를 항상 하나만 유지 / 게시된 신청 패널을 그 자리에서 다시 그림 |
+| `명단.js`: `addApprovedMember` · `removeApprovedMember` · `isApprovedMember` · `updateApprovedMemberNickname` · `setApprovedMemberPosition` · `getApprovedRoster` · `add/remove/hasPendingApplication` · `get/setRosterMessageId` · `loadRealmRoster` / `saveRealmRoster` | 길드별 승인 명단·검토 대기 신청·명단 메시지 ID를 `DB/realm_roster.json`에 보관 |
+
+</details>
+
+<details>
 <summary>📄 <b><code>index.js</code> — 엔트리 포인트</b></summary>
 
 | 함수 | 설명 |
@@ -702,6 +770,8 @@ npm start
 - `/xp` → `XP 관리`의 스위치 토글은 `유형: "XP 관리"`로 감사 줄을 남깁니다 — 예: `일반 파밍 XP 긴급정지`, `미니게임 XP 재개`, `뉴비부스트 OFF`
 - **최신 로그가 파일 맨 위**에 오도록 저장합니다(내림차순). 시작 시 한 번만 파일을 읽어 메모리 배열로 들고 있고(예전엔 상호작용마다 5000개를 재파싱), 이후로는 배열 맨 앞에 `unshift`한 뒤 파일로 덮어씁니다. 오름차순으로 쌓인 옛 파일은 첫 로드 때 시각을 보고 한 번 뒤집어 맞춥니다(내림차순 파일은 재시작해도 그대로).
 - 파일이 무한정 커지지 않도록 최근 `MAX_ENTRIES`(5000)건만 보관하고, 넘치면 맨 아래(가장 오래된) 것부터 버립니다.
+- 상호작용 없이 봇이 스스로 한 일은 `logSystem`으로 남깁니다(예: 결과 DM이 차단돼 못 간 경우 `유형: "DM 실패"`).
+- 종료(`SIGTERM`/`SIGINT`) 시에는 `flushLogsSync`로 메모리에 남은 로그를 동기 저장해, 마지막 몇 줄이 유실되지 않게 합니다.
 
 ---
 
@@ -709,8 +779,8 @@ npm start
 
 - SQLite 등 별도 DB 엔진 없이, `fs`로 `DB/N-M.json`에 내전/모집 매치를 직렬화해 저장합니다(Discord 메시지 참조·타이머 등 직렬화 불가능한 필드는 저장 전 제외).
 - `DB/levels.json`에는 길드별 유저 XP가 저장됩니다.
-- 두 파일 모두 30초마다 자동 저장되며, `SIGTERM`/`SIGINT` 종료 시에도 마지막으로 한 번 저장됩니다.
-- `DB/N-M.json` 저장은 **원자적으로** 이뤄집니다 — `DB/N-M.json.tmp`에 먼저 전부 쓴 뒤 `rename`으로 교체합니다. 전량 덮어쓰기 도중 봇이 죽어도 파일이 잘리지 않아, 재시작 시 파싱 실패로 데이터 전체가 날아가는 일을 막습니다.
+- 30초마다 자동 저장되는 대상은 매치(`N-M.json`) · XP(`levels.json`) · 룰렛 일일 기록(`roulette.json`) · 봇전 XP 한도(`botmatch-xp.json`) · 마크 승인 명단(`realm_roster.json`)이며, `SIGTERM`/`SIGINT` 종료 시에도 마지막으로 한 번 저장됩니다. 복원이 끝나기 전(`dataReady`)에는 저장을 건너뜁니다 — 비어있는 메모리로 기존 파일을 덮어쓰지 않기 위해서입니다.
+- 저장은 모두 `handlers/저장.js`의 `writeJsonIfChanged`를 거칩니다 — **직전 저장과 내용이 같으면 아예 쓰지 않고**(아무도 접속하지 않은 새벽의 의미 없는 디스크 쓰기 제거), 쓸 때는 `<파일>.tmp`에 전부 쓴 뒤 `rename`으로 교체하는 **원자적 저장**입니다. 덮어쓰기 도중 봇이 죽어도 파일이 잘리지 않아, 재시작 시 파싱 실패로 데이터가 통째로 날아가는 일을 막습니다.
 - 봇 재시작 시 `DB/N-M.json`을 읽어 매치를 복원하고, 실제 채널/메시지를 다시 조회해 최신 코드 기준으로 임베드를 다시 렌더링하며, 남은 자동 종료 시간도 재계산해 타이머를 다시 겁니다.
 
 ---
