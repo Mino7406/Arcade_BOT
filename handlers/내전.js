@@ -690,12 +690,15 @@ async function handleNaejeonButton(interaction) {
     }
     match.mentionSent = true;
     const mentionText = match.participants.map(u => `<@${u.id}>`).join(' ');
+    // 멘션 발송(네트워크 요청)이 3초 인터랙션 응답 제한을 넘겨 Unknown interaction(10062)이
+    // 나는 걸 막기 위해, 느릴 수 있는 channel.send보다 먼저 ack한다.
+    await interaction.deferUpdate();
     const mentionMsg = await interaction.channel.send({
       content: `📣 **${match.data.title}**\n${mentionText}`,
       allowedMentions: { parse: ['users'] },
     });
     match.mentionMessageId = mentionMsg.id;
-    await interaction.update({
+    await interaction.editReply({
       content: '📣 **참가자에게 멘션을 보냈습니다.**',
       components: buildManageMenu(match, matchMsgId),
     });
