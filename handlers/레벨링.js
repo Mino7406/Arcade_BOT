@@ -12,6 +12,7 @@ const {
   XP_CHANNEL_ID,
   LEVEL_UP_ANNOUNCE_CHANNEL_ID,
   XP_CHANNEL_MULTIPLIERS,
+  TEXT_XP_MULTIPLIER,
   MATCH_BONUS_CHANNEL_ID,
   NEWBIE_BOOST_ROLE_ID,
 } = require('../config');
@@ -28,10 +29,10 @@ const XP_MAX = 25;
 
 // EXCLUDED_GUILD_IDS(레벨 시스템 미적용 길드), XP_CHANNEL_ID(XP 인정 채널),
 // LEVEL_UP_ANNOUNCE_CHANNEL_ID(레벨업 축하 채널), MATCH_BONUS_CHANNEL_ID(완료 보너스 채널),
-// XP_CHANNEL_MULTIPLIERS(TTS 채널 배율)는 config.js에 모아뒀다.
-// TTS 채널 0.06배 = 통화방 체류(수동) 시간당 평균(~24 XP)과 1:1로 맞춘 값.
-// 3분 쿨다운(TTS_CHANNEL_COOLDOWN_MS)을 딱딱 맞춰 쳐도 시간당 20회 × 평균 20 XP × 0.06 ≈ 24 XP로,
-// 아무리 열심히 타이핑해도 통화방에 그냥 앉아있는 것 이상으로 벌 수 없게 맞췄다.
+// XP_CHANNEL_MULTIPLIERS·TEXT_XP_MULTIPLIER(메인/TTS 채널 배율, 하나로 통합)는 config.js에 모아뒀다.
+// TEXT_XP_MULTIPLIER(0.06) = 통화방 체류(수동) 시간당 평균(~24 XP)과 1:1로 맞춘 값.
+// TTS 채널은 3분 쿨다운(TTS_CHANNEL_COOLDOWN_MS)을 딱딱 맞춰 쳐도 시간당 20회 × 평균 20 XP ×
+// 0.06 ≈ 24 XP로, 아무리 열심히 타이핑해도 통화방에 그냥 앉아있는 것 이상으로 벌 수 없게 맞췄다.
 
 // 내전/모집 완료 보너스 XP 배율
 const ORGANIZER_XP_MULTIPLIER = 1.5;
@@ -246,7 +247,7 @@ function handleMessageXp(message) {
   cooldowns.set(key, now);
 
   const baseXp = randomBaseXp();
-  const channelMultiplier = multiplier !== undefined ? multiplier : 1;
+  const channelMultiplier = multiplier !== undefined ? multiplier : TEXT_XP_MULTIPLIER;
   const boost = hasNewbieBoost(message.member) ? NEWBIE_BOOST_XP_MULTIPLIER : 1;
   const gained = Math.round(baseXp * channelMultiplier * boost);
   return applyXp(guildId, userId, gained);
