@@ -102,8 +102,8 @@ function buildManageView(notice) {
       `-# 메인·TTS 채팅 · 통화방 체류 · 내전/모집 완료 보너스\n\n` +
       `**미니게임 XP** ${st.minigameFrozen ? '🔴 정지됨' : '🟢 작동 중'}\n` +
       `-# 오목 · 룰렛 · 틱택토 · 끝말잇기 · 퀴즈\n\n` +
-      `**뉴비부스트(×1.5)** ${st.newbieBoostEnabled ? '🟢 ON' : '⚪ OFF'}\n` +
-      `-# 뉴비부스트 역할의 메인·TTS·통화방 체류 XP 1.5배` +
+      `**뉴비부스트(×2)** ${st.newbieBoostEnabled ? '🟢 ON' : '⚪ OFF'}\n` +
+      `-# 뉴비부스트 역할의 메인·TTS·통화방 체류 XP 2배` +
       (notice ? `\n\n${notice}` : ''),
     )
     .setTimestamp();

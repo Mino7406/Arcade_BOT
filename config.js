@@ -27,10 +27,6 @@ function isExcludedGuild(guildId) {
   return !!guildId && EXCLUDED_GUILD_IDS.includes(guildId);
 }
 
-// 메인 채널과 TTS 채널의 메시지 XP 배율을 하나로 통합한 값. handlers/레벨링.js가
-// 메인 채널의 기본 배율로, 아래 XP_CHANNEL_MULTIPLIERS가 TTS 채널 배율로 같이 참조한다.
-const TEXT_XP_MULTIPLIER = 0.06;
-
 module.exports = {
   PLAYGROUND_CHANNEL_ID,
   TEST_GUILD_IDS,
@@ -56,19 +52,13 @@ module.exports = {
   XP_CHANNEL_ID: '1340523443413844048',
   // 레벨업 축하 메시지를 보낼 채널
   LEVEL_UP_ANNOUNCE_CHANNEL_ID: PLAYGROUND_CHANNEL_ID,
-  // TTS 채널의 XP 배율(TEXT_XP_MULTIPLIER로 메인 채널 기본 배율과 통합됨). 값 자체보다도,
-  // 이 채널들을 TTS 전용 쿨다운(TTS_CHANNEL_COOLDOWN_MS)·통화방 XP 중복 지급 방지 대상으로
-  // 구분하는 용도로 handlers/레벨링.js가 이 목록을 참조한다.
-  XP_CHANNEL_MULTIPLIERS: {
-    '1374679502394884178': TEXT_XP_MULTIPLIER,
-    '1522575222589620254': TEXT_XP_MULTIPLIER,
-  },
-  // 메인 채널 메시지 XP 기본 배율. TTS 채널과 같은 값(TEXT_XP_MULTIPLIER)을 쓴다.
-  TEXT_XP_MULTIPLIER,
+  // TTS 채널(메인 채널과 배율·쿨다운 완전히 동일, 배율 자체가 없어짐) 목록.
+  // handlers/레벨링.js가 이 목록으로 "TTS 채널인지" 판정 + 통화방 XP 중복 지급 방지 대상을 구분한다.
+  XP_TTS_CHANNEL_IDS: ['1374679502394884178', '1522575222589620254'],
   // 내전/모집 완료 보너스 XP를 적용할 채널(= 인증 채널)
   MATCH_BONUS_CHANNEL_ID: '1535971639660122262',
   // "뉴비부스트" 역할: 이 역할을 가진 유저는 메인 채널·TTS 채널 메시지 XP와
-  // 통화방 체류 XP를 1.5배로 받는다(미니게임·내전/모집 완료 보너스는 제외). 비우면('') 부스트 없음.
+  // 통화방 체류 XP를 2배로 받는다(미니게임·내전/모집 완료 보너스는 제외). 비우면('') 부스트 없음.
   NEWBIE_BOOST_ROLE_ID: '1544613271137419396',
 
   // ─── 퀴즈 (handlers/퀴즈.js) ──────────────────────────────────
