@@ -23,6 +23,8 @@ const {
   isExcludedGuild,
   getXpState,
   setXpSwitch,
+  isUserXpFrozen,
+  setUserXpFrozen,
 } = require('../handlers/레벨링');
 const { logAction } = require('../handlers/로그');
 const { displayNameFromMember } = require('../handlers/이름');
@@ -69,12 +71,21 @@ function buildPickRow(selectedId) {
   return new ActionRowBuilder().addComponents(menu);
 }
 
-function buildActionRow(targetId) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`xp:add:${targetId}`).setEmoji('➕').setLabel('XP').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId(`xp:sub:${targetId}`).setEmoji('➖').setLabel('XP').setStyle(ButtonStyle.Danger),
-    new ButtonBuilder().setCustomId(`xp:level:${targetId}`).setEmoji('🔄').setLabel('레벨 조정').setStyle(ButtonStyle.Primary),
-  );
+function buildActionRows(guildId, targetId) {
+  const frozen = isUserXpFrozen(guildId, targetId);
+  return [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`xp:add:${targetId}`).setEmoji('➕').setLabel('XP').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`xp:sub:${targetId}`).setEmoji('➖').setLabel('XP').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`xp:level:${targetId}`).setEmoji('🔄').setLabel('레벨 조정').setStyle(ButtonStyle.Primary),
+    ),
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`xp:freeze:${targetId}`)
+        .setEmoji(frozen ? '✅' : '🚫')
+        .setLabel(frozen ? 'XP 지급 재개' : 'XP 지급 정지')
+        .setStyle(frozen ? ButtonStyle.Success : ButtonStyle.Danger),
+    ),
+  ];
 }
 
 // ── /xp 첫 화면: "XP 조정" / "XP 관리" 분기 ──────────────────────
@@ -164,13 +175,15 @@ function buildPanelEmbed(guildId, targetId, targetUser, displayName, notice) {
   const xp = getXp(guildId, targetId);
   const { level, currentLevelXp, neededXp } = levelFromXp(xp);
   const bar = buildProgressBar(currentLevelXp, neededXp);
+  const frozen = isUserXpFrozen(guildId, targetId);
 
   const embed = new EmbedBuilder()
-    .setColor(0x5865F2)
+    .setColor(frozen ? 0xED4245 : 0x5865F2)
     .setDescription(
       `## ⚙️ XP 조정\n` +
-      `대상 : <@${targetId}> (\`${displayName}\`)\n\n` +
-      `**LEVEL ${level}**\n${bar}\n**${currentLevelXp} / ${neededXp}** XP　(누적 \`${xp}\` XP)` +
+      `대상 : <@${targetId}> (\`${displayName}\`)` +
+      (frozen ? `\n🚫 **XP 지급 정지 중** — 자동 지급 경로(채팅·통화방·미니게임 등)에서 더 이상 XP를 받지 않습니다.` : '') +
+      `\n\n**LEVEL ${level}**\n${bar}\n**${currentLevelXp} / ${neededXp}** XP　(누적 \`${xp}\` XP)` +
       (notice ? `\n\n${notice}` : ''),
     )
     .setFooter({ text: '아래 버튼으로 XP를 조정할 수 있습니다.' })
@@ -194,7 +207,7 @@ function buildPanelView(interaction, targetId, { user, displayName }, notice) {
   return {
     content: '',
     embeds: [buildPanelEmbed(interaction.guildId, targetId, user, displayName, notice)],
-    components: [buildPickRow(targetId), buildActionRow(targetId)],
+    components: [buildPickRow(targetId), ...buildActionRows(interaction.guildId, targetId)],
   };
 }
 
@@ -279,6 +292,17 @@ async function handleXpButton(interaction) {
     logAction(interaction, 'XP 관리', `${label} XP ${next ? '긴급정지' : '재개'}`);
     await interaction.update(buildManageView(
       st[key] ? `🛑 **${label} XP 지급을 정지**했습니다.` : `▶️ **${label} XP 지급을 재개**했습니다.`,
+    ));
+    return;
+  }
+
+  if (action === 'freeze') {
+    const frozen = isUserXpFrozen(interaction.guildId, targetId);
+    setUserXpFrozen(interaction.guildId, targetId, !frozen);
+    const target = await resolveTarget(interaction, targetId);
+    logAction(interaction, 'XP 조정', `${target.displayName}(${targetId}) XP 지급 ${frozen ? '재개' : '정지'}`);
+    await interaction.update(buildPanelView(interaction, targetId, target,
+      frozen ? '✅ **이 유저의 XP 지급을 재개**했습니다.' : '🚫 **이 유저의 XP 지급을 정지**했습니다.',
     ));
     return;
   }

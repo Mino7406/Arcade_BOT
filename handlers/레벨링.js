@@ -60,6 +60,7 @@ const xpState = {
   farmFrozen: false,        // 일반 파밍(메시지·TTS·통화방 체류·내전/모집 완료 보너스) XP 지급 정지
   minigameFrozen: false,    // 미니게임(오목·룰렛·틱택토·끝말잇기·퀴즈) XP 정산 정지
   newbieBoostEnabled: true, // 뉴비부스트 역할 2배 적용 여부
+  frozenUsers: {},          // { [guildId]: { [userId]: true } } — /xp에서 개별 유저 XP 지급 정지
 };
 
 function loadXpState() {
@@ -68,6 +69,10 @@ function loadXpState() {
       const saved = JSON.parse(fs.readFileSync(XP_STATE_PATH, 'utf8'));
       for (const k of Object.keys(xpState)) {
         if (typeof saved?.[k] === 'boolean') xpState[k] = saved[k];
+      }
+      // frozenUsers는 불리언이 아니라 객체라 위 루프로는 복원되지 않는다 — 따로 처리.
+      if (saved?.frozenUsers && typeof saved.frozenUsers === 'object') {
+        xpState.frozenUsers = saved.frozenUsers;
       }
     }
   } catch (err) {
@@ -95,6 +100,26 @@ function setXpSwitch(key, value) {
     saveXpState();
   }
   return getXpState();
+}
+
+// 특정 유저가 XP 지급 정지 대상인지. /xp → XP 조정에서 유저별로 켜고 끈다.
+// farmFrozen/minigameFrozen(전체 정지)과 달리 이 유저 한 명에게만 적용된다.
+function isUserXpFrozen(guildId, userId) {
+  return !!xpState.frozenUsers[guildId]?.[userId];
+}
+
+// 유저별 XP 지급 정지를 켜고 끈다(즉시 저장). applyXp() 한 곳에서만 걸러내므로
+// 메시지·통화방·내전완료·미니게임·퀴즈·룰렛 등 자동 지급 경로 전부에 적용되고,
+// /xp의 ➕➖🔄(adjustXp/setXp)는 applyXp를 거치지 않아 정지 중에도 관리자가 수동 조정 가능하다.
+function setUserXpFrozen(guildId, userId, frozen) {
+  if (frozen) {
+    if (!xpState.frozenUsers[guildId]) xpState.frozenUsers[guildId] = {};
+    xpState.frozenUsers[guildId][userId] = true;
+  } else if (xpState.frozenUsers[guildId]) {
+    delete xpState.frozenUsers[guildId][userId];
+    if (Object.keys(xpState.frozenUsers[guildId]).length === 0) delete xpState.frozenUsers[guildId];
+  }
+  saveXpState();
 }
 
 function isFarmXpFrozen() { return xpState.farmFrozen; }
@@ -190,8 +215,15 @@ function getXp(guildId, userId) {
   return getGuildLevels(guildId)[userId] || 0;
 }
 
-// XP를 더하고 레벨업 여부를 반환하는 공통 로직.
+// XP를 더하고 레벨업 여부를 반환하는 공통 로직. 메시지·통화방·내전완료·미니게임·퀴즈·룰렛 등
+// "자동" 지급 경로가 전부 이 함수를 거치므로, 여기서 한 번만 유저별 XP 지급 정지를 걸러낸다
+// (관리자의 수동 조정인 adjustXp/setXp는 이 함수를 거치지 않아 정지 중에도 그대로 동작한다).
+// 양수(지급)만 막고 음수(차감)는 그대로 통과시킨다 — 오목/틱택토/끝말잇기의 내기 정산은
+// 패자에게 applyXp(-금액), 승자에게 applyXp(+금액)을 따로 호출하는데, 부호를 안 가리고
+// 전부 막으면 정지된 패자가 내기에 져도 XP를 안 잃는 채로 승자만 그대로 받아가
+// 제로섬이 깨지고 XP가 허공에서 생겨난다.
 function applyXp(guildId, userId, amount) {
+  if (amount > 0 && isUserXpFrozen(guildId, userId)) return { leveledUp: false };
   const guildLevels = getGuildLevels(guildId);
   const oldXp = guildLevels[userId] || 0;
   const oldLevel = levelFromXp(oldXp).level;
@@ -414,6 +446,8 @@ module.exports = {
   isFarmXpFrozen,
   isMinigameXpFrozen,
   isNewbieBoostEnabled,
+  isUserXpFrozen,
+  setUserXpFrozen,
   handleMessageXp,
   awardMatchCompletionXp,
   applyXp,
