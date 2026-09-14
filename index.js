@@ -29,7 +29,7 @@ const { buildGameSelectPayload: buildMojipGameSelectPayload } = require('./comma
 const { buildReloadListPayload } = require('./commands/불러오기');
 const { buildTeamMatchListPayload } = require('./commands/팀');
 const { buildCommandListPayload, buildSetupPanelPayload, buildAdminMenuPayload, handlePanelButton, handlePanelMatchDeleteSelect, handlePanelBotMessageDeleteModal } = require('./commands/패널');
-const { handleRealmButton, handleRealmModal, handleRealmRosterModal, initRulesAgreementCache, handleRealmRulesReactionAdd, handleRealmRulesReactionRemove, refreshRealmRosterMessage } = require('./forms/마크');
+const { handleRealmButton, handleRealmModal, handleRealmRosterModal, initRulesAgreementCache, handleRealmRulesReactionAdd, handleRealmRulesReactionRemove } = require('./forms/마크');
 const { handleFormSelectButton } = require('./commands/신청서');
 const { handleLevelShareButton } = require('./commands/레벨');
 const { handleRankingPageButton, handleRankingShareButton } = require('./commands/랭킹');
@@ -40,7 +40,7 @@ const { logInteraction, flushLogsSync } = require('./handlers/로그');
 
 // 끝말잇기/틱택토/랭킹 명령어와 관련 버튼을 이 채널에서만 사용할 수 있게 제한한다.
 // ALLOWED_CHANNEL_IDS는 내전/모집/팀 상호작용을 허용할 채널 목록(비어 있으면 제한 없음).
-const { WORDCHAIN_RANKING_CHANNEL_ID, ALLOWED_CHANNEL_IDS: allowedChannels, isTestGuild, GUILD_ID } = require('./config');
+const { WORDCHAIN_RANKING_CHANNEL_ID, ALLOWED_CHANNEL_IDS: allowedChannels, isTestGuild } = require('./config');
 
 const client = new Client({
   intents: [
@@ -240,8 +240,6 @@ async function onReady(c) {
   loadRoulette(); // 룰렛 일일 플레이 기록 복원
   loadBotMatchXp(); // 끝말잇기·틱택토 봇전 일일 XP 한도 기록 복원
   loadRealmRoster(); // 마인크래프트 렐름 승인 명단 복원
-  // 명단 메시지가 (실수 삭제 등으로) 채널에서 사라져도 재시작하면 다시 게시되도록 매번 재게시한다.
-  await refreshRealmRosterMessage(c, GUILD_ID).catch(err => console.error('렐름 명단 메시지 재게시 실패:', err));
   await initRulesAgreementCache(c); // 렐름 규정집 반응(✅) 캐시 초기화
   initVoiceStates(c); // 재시작 전 이미 통화방에 있던 유저 추적 복원
   startVoiceXpTicker(c); // 통화방 체류 XP 1분 틱 시작
