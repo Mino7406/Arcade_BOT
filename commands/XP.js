@@ -78,12 +78,10 @@ function buildActionRows(guildId, targetId) {
       new ButtonBuilder().setCustomId(`xp:add:${targetId}`).setEmoji('➕').setLabel('XP').setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId(`xp:sub:${targetId}`).setEmoji('➖').setLabel('XP').setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId(`xp:level:${targetId}`).setEmoji('🔄').setLabel('레벨 조정').setStyle(ButtonStyle.Primary),
-    ),
-    new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`xp:freeze:${targetId}`)
         .setEmoji(frozen ? '✅' : '🚫')
-        .setLabel(frozen ? 'XP 지급 재개' : 'XP 지급 정지')
-        .setStyle(frozen ? ButtonStyle.Success : ButtonStyle.Danger),
+        .setLabel(frozen ? '지급 재개' : '지급 정지')
+        .setStyle(ButtonStyle.Secondary),
     ),
   ];
 }
@@ -182,7 +180,7 @@ function buildPanelEmbed(guildId, targetId, targetUser, displayName, notice) {
     .setDescription(
       `## ⚙️ XP 조정\n` +
       `대상 : <@${targetId}> (\`${displayName}\`)` +
-      (frozen ? `\n🚫 **XP 지급 정지 중** — 자동 지급 경로(채팅·통화방·미니게임 등)에서 더 이상 XP를 받지 않습니다.` : '') +
+      (frozen ? `\n🚫 **지급 정지 중** — 자동 지급 경로(채팅·통화방·미니게임 등)에서 더 이상 XP를 받지 않습니다.` : '') +
       `\n\n**LEVEL ${level}**\n${bar}\n**${currentLevelXp} / ${neededXp}** XP　(누적 \`${xp}\` XP)` +
       (notice ? `\n\n${notice}` : ''),
     )
