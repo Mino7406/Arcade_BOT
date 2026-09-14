@@ -18,7 +18,7 @@ const {
   AttachmentBuilder,
   MessageFlags,
 } = require('discord.js');
-const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp, isMinigameXpFrozen } = require('./레벨링');
+const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp, isMinigameXpFrozen, isUserXpFrozen } = require('./레벨링');
 const {
   getRemainingBotXp, addBotMatchXp, DAILY_BOT_MATCH_XP_CAP, timeUntilKstMidnight,
   WAGER_XP, BOT_WIN_XP_MIN, BOT_WIN_XP_MAX, rollBotWinXp,
@@ -457,6 +457,10 @@ function settleWagerXp(game) {
   if (isOnCooldown(winnerId, WAGER_SETTLE_COOLDOWN_MS) || isOnCooldown(loserId, WAGER_SETTLE_COOLDOWN_MS)) {
     return { type: 'cooldown', cooldownMs: WAGER_SETTLE_COOLDOWN_MS };
   }
+  // 승자가 XP 지급 정지 상태면 통째로 보류한다 — applyXp가 승자 몫만 조용히 막아버리면
+  // 패자만 정말로 XP를 잃고 승자는 못 받는 이상한 결과가 되고, 결과 임베드도 "+wager"를
+  // 그대로 보여줘 실제로는 못 받았는데 받은 것처럼 보인다. 아예 정산을 안 하는 게 낫다.
+  if (isUserXpFrozen(game.guildId, winnerId)) return { type: 'user_frozen' };
   const loserLevelXp = levelFromXp(getXp(game.guildId, loserId)).currentLevelXp;
   const wager = Math.min(WAGER_XP, loserLevelXp);
   if (wager <= 0) return null;
@@ -471,6 +475,10 @@ function settleBotWinXp(game) {
   const winnerId = game.players[game.winner];
   if (game.players[loserColor] !== 'BOT' || winnerId === 'BOT') return null;
   if (isOnCooldown(winnerId, BOT_SETTLE_COOLDOWN_MS)) return { type: 'cooldown', cooldownMs: BOT_SETTLE_COOLDOWN_MS };
+  // 정지 상태면 하루 봇전 한도(addBotMatchXp)를 건드리지 않고 보류한다 — 순서를 안 지키면
+  // 정지 중에도 한도만 소모되고 실제 XP(applyXp)는 안 들어가, 정지가 풀린 뒤에도 그날 남은
+  // 한도가 억울하게 줄어 있는 상태가 된다.
+  if (isUserXpFrozen(game.guildId, winnerId)) return { type: 'user_frozen' };
   const remaining = getRemainingBotXp(game.guildId, winnerId);
   if (remaining <= 0) return { type: 'bot_daily_cap' };
   const rolled = rollBotWinXp();
@@ -485,7 +493,7 @@ function settleGameXp(game) {
   if (isMinigameXpFrozen()) { game.xpResult = { type: 'frozen' }; return; } // 관리자 긴급정지: 미니게임 XP 정산 생략
   const result = settleWagerXp(game) || settleBotWinXp(game);
   game.xpResult = result;
-  if (!result || result.type === 'cooldown' || result.type === 'bot_daily_cap') return;
+  if (!result || result.type === 'cooldown' || result.type === 'bot_daily_cap' || result.type === 'user_frozen') return;
   markCooldown(result.winnerId);
   if (result.loserId) markCooldown(result.loserId);
   const client = game.message?.client;
@@ -530,6 +538,8 @@ function buildEmbed(game) {
         desc += `\n⏳ 연속 대결 쿨다운 중이라\n 이번 판은 XP 정산이 생략됐습니다.\n-# (직전 정산 후 ${cooldownMin}분 이내)`;
       } else if (game.xpResult?.type === 'frozen') {
         desc += `\n-# ⚙️ 관리자가 미니게임 XP 정산을 일시 중지했습니다.`;
+      } else if (game.xpResult?.type === 'user_frozen') {
+        desc += `\n-# 🚫 승자가 XP 지급 정지 상태라 이번 판은 XP 정산이 생략됐습니다.`;
       }
     }
   } else {

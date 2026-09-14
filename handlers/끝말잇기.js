@@ -5,7 +5,7 @@ const {
   ButtonStyle,
   MessageFlags,
 } = require('discord.js');
-const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp, isMinigameXpFrozen } = require('./레벨링');
+const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp, isMinigameXpFrozen, isUserXpFrozen } = require('./레벨링');
 const {
   getRemainingBotXp, addBotMatchXp, DAILY_BOT_MATCH_XP_CAP, timeUntilKstMidnight,
   WAGER_XP, BOT_WIN_XP_MIN, BOT_WIN_XP_MAX, rollBotWinXp,
@@ -378,6 +378,10 @@ function formatXpResultLine(game) {
     return `\n-# ⚙️ 관리자가 미니게임 XP 정산을 일시 중지했습니다.`;
   }
 
+  if (result.type === 'user_frozen') {
+    return `\n-# 🚫 받을 사람이 전원 XP 지급 정지 상태라 이번 판은 XP 정산이 생략됐습니다.`;
+  }
+
   const winnerLines = result.winnerResults.map(w => `📈 <@${w.userId}> **+${w.amount} XP**`).join('\n');
   if (result.type === 'wager') {
     return `\n🎲 **내기 결과**\n📉 <@${result.loserId}> **−${result.wager} XP**\n${winnerLines}`;
@@ -595,16 +599,21 @@ function settleWagerXp(game) {
   if (isOnCooldown(game.loser, WAGER_SETTLE_COOLDOWN_MS) || survivors.some(id => isOnCooldown(id, WAGER_SETTLE_COOLDOWN_MS))) {
     return { type: 'cooldown', cooldownMs: WAGER_SETTLE_COOLDOWN_MS }; // 같은 유저들이 연달아 내기를 반복해 XP를 옮기는 것 방지
   }
+  // XP 지급 정지된 생존자는 나눠 받을 수 없으니 애초에 분배 대상에서 뺀다 — 안 빼면 그 몫이
+  // applyXp에서 조용히 막혀 허공으로 사라지고(패자는 그만큼 그냥 손해), 나머지 생존자들이
+  // 받는 몫도 화면에 표시된 금액과 실제 지급액이 달라진다. 전원이 정지 상태면 내기 자체를 보류.
+  const eligible = survivors.filter(id => !isUserXpFrozen(game.guildId, id));
+  if (!eligible.length) return { type: 'user_frozen' };
 
   const loserLevelXp = levelFromXp(getXp(game.guildId, game.loser)).currentLevelXp;
   const wager = Math.min(WAGER_XP, loserLevelXp);
   if (wager <= 0) return null;
 
   const loserResult = applyXp(game.guildId, game.loser, -wager);
-  const share = Math.floor(wager / survivors.length);
-  let remainder = wager - share * survivors.length;
+  const share = Math.floor(wager / eligible.length);
+  let remainder = wager - share * eligible.length;
   const winnerResults = [];
-  for (const id of survivors) {
+  for (const id of eligible) {
     const amount = share + (remainder > 0 ? 1 : 0);
     if (remainder > 0) remainder--;
     if (amount > 0) winnerResults.push({ userId: id, amount, ...applyXp(game.guildId, id, amount) });
@@ -629,14 +638,20 @@ function settleBotWinXp(game) {
   const rolled = rollBotWinXp();
   const winnerResults = [];
   let capped = false;
+  let anyFrozen = false;
   for (const id of survivors) {
+    // 정지 상태면 하루 한도(addBotMatchXp)를 건드리지 않고 통째로 건너뛴다 — 안 그러면
+    // 정지 중에 한도만 소모되고 실제 XP는 안 들어가, 정지가 풀린 뒤에도 그날 한도가 억울하게
+    // 줄어 있는 상태가 된다.
+    if (isUserXpFrozen(game.guildId, id)) { anyFrozen = true; continue; }
     const grant = Math.min(rolled, getRemainingBotXp(game.guildId, id));
     if (grant <= 0) { capped = true; continue; }
     if (grant < rolled) capped = true;
     addBotMatchXp(game.guildId, id, grant);
     winnerResults.push({ userId: id, amount: grant, ...applyXp(game.guildId, id, grant) });
   }
-  if (!winnerResults.length) return { type: 'bot_daily_cap' }; // 생존자 전원이 오늘 한도를 다 채움
+  // 생존자 전원이 지급받지 못한 경우 — 한도 때문인지 정지 때문인지 구분해서 정확한 이유를 남긴다.
+  if (!winnerResults.length) return { type: !capped && anyFrozen ? 'user_frozen' : 'bot_daily_cap' };
   return { type: 'bot_win', winnerResults, capped };
 }
 
@@ -645,7 +660,7 @@ function settleGameXp(game) {
   if (isMinigameXpFrozen()) { game.xpResult = { type: 'frozen' }; return; } // 관리자 긴급정지: 미니게임 XP 정산 생략
   const result = settleWagerXp(game) || settleBotWinXp(game);
   game.xpResult = result;
-  if (!result || result.type === 'cooldown' || result.type === 'bot_daily_cap') return;
+  if (!result || result.type === 'cooldown' || result.type === 'bot_daily_cap' || result.type === 'user_frozen') return;
 
   if (result.loserId) markCooldown(result.loserId);
   for (const w of result.winnerResults) markCooldown(w.userId);

@@ -94,8 +94,11 @@ function getXpState() {
 }
 
 // key: 'farmFrozen' | 'minigameFrozen' | 'newbieBoostEnabled'. 값을 바꿔 즉시 저장하고 갱신된 전체 상태를 반환.
+// frozenUsers는 불리언 스위치가 아니라 { guildId: { userId: true } } 객체라 여기서 다루지
+// 않는다(setUserXpFrozen 전용) — key 검증 없이 xpState[key]=!!value를 허용하면 실수로
+// setXpSwitch('frozenUsers', ...)를 호출했을 때 객체를 boolean으로 덮어써 정지 목록이 깨진다.
 function setXpSwitch(key, value) {
-  if (key in xpState) {
+  if (key in xpState && key !== 'frozenUsers') {
     xpState[key] = !!value;
     saveXpState();
   }
@@ -317,7 +320,11 @@ function awardMatchCompletionXp(match) {
 
   const results = [];
   const organizerId = match.data?.organizer?.id;
-  if (organizerId && !match.xpAwardedUserIds[organizerId]) {
+  // 정지된 유저는 xpAwardedUserIds에 지급 완료로 남기지 않는다 — 위 isFarmXpFrozen()과
+  // 같은 원칙: 지금 못 받은 건 "포기"가 아니라 "보류"라서, 나중에 정지가 풀리고 이 매치가
+  // 다시 처리될 때(재마감 등) 그때는 정상적으로 받을 수 있어야 한다. 여기서 플래그를
+  // 먼저 세워버리면 해제 후에도 영영 못 받는다.
+  if (organizerId && !match.xpAwardedUserIds[organizerId] && !isUserXpFrozen(guildId, organizerId)) {
     match.xpAwardedUserIds[organizerId] = true;
     const gained = Math.round(randomMatchBonusXp() * ORGANIZER_XP_MULTIPLIER);
     results.push({ userId: organizerId, ...applyXp(guildId, organizerId, gained) });
@@ -326,6 +333,7 @@ function awardMatchCompletionXp(match) {
   for (const participant of match.participants || []) {
     if (participant.id === organizerId) continue; // 주최자 중복 지급 방지
     if (match.xpAwardedUserIds[participant.id]) continue; // 이미 지급받음
+    if (isUserXpFrozen(guildId, participant.id)) continue; // 정지 중 — 플래그 세우지 않고 보류
     match.xpAwardedUserIds[participant.id] = true;
     const gained = randomMatchBonusXp();
     results.push({ userId: participant.id, ...applyXp(guildId, participant.id, gained) });
