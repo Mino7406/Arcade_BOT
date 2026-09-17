@@ -175,7 +175,7 @@ function formatTimeLeft(deleteAt) {
 function formatMatchStatus(match) {
   if (!match.closed) return '🟢 모집 중';
   if (!match.data?.autoClose || !match.closedAt) return '🔒 마감됨';
-  return `🔒 마감됨 · ${formatHoursLeft(match.closedAt + AUTO_CLOSE_DELAY_MS)}`;
+  return `🔒 마감됨 · ${formatTimeLeft(match.closedAt + AUTO_CLOSE_DELAY_MS)}`;
 }
 
 // 현재 서버에서 삭제 가능한 항목(진행 중/마감된 내전·모집 + 취소되어 자동삭제 대기 중인 게시글)을
@@ -213,7 +213,7 @@ async function collectGuildMatchEntries(interaction) {
     entries.push({
       type: 'cancelled', msgId,
       label:       `[취소됨] #${channel.name}`.slice(0, 100),
-      description: `🔴 취소됨 · ${formatHoursLeft(info.deleteAt)}`.slice(0, 100),
+      description: `🔴 취소됨 · ${formatTimeLeft(info.deleteAt)}`.slice(0, 100),
       confirmText: `취소된 게시글 (#${channel.name})`,
     });
   }
