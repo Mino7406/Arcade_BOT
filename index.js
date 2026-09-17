@@ -106,7 +106,7 @@ async function restoreMatches(c) {
       try {
         const parsed = JSON.parse(row.data);
         // 구버전 데이터는 취소 시각 대신 deleteAt(취소 시각 + 그 당시 지연시간)만 저장했다.
-        // cancelledAt이 없으면 그 시절 지연시간(AUTO_CLOSE_DELAY_MS, 8시간) 기준으로 취소
+        // cancelledAt이 없으면 그 시절 지연시간(당시 AUTO_CLOSE_DELAY_MS 값) 기준으로 취소
         // 시각을 역산해 복원한다 — scheduleCancelledDelete가 항상 최신 지연시간
         // (CANCELLED_DELETE_DELAY_MS)으로 다시 계산하므로 이미 지났으면 즉시 삭제된다.
         const cancelledAt = parsed.cancelledAt ?? (parsed.deleteAt - AUTO_CLOSE_DELAY_MS);
@@ -462,7 +462,7 @@ client.on('messageCreate', async (message) => {
     console.error(error);
   }
 
-  // 내전/모집 인증 채널에 올라온 일반 유저 메시지는 8시간 후 자동 삭제한다(봇 메시지는 제외).
+  // 내전/모집 인증 채널에 올라온 일반 유저 메시지는 GENERAL_MESSAGE_DELETE_DELAY_MS 후 자동 삭제한다(봇 메시지는 제외).
   try {
     if (message.channelId === MATCH_BONUS_CHANNEL_ID && !message.author.bot) {
       scheduleMessageDelete(message.client, message.id, message.channelId);

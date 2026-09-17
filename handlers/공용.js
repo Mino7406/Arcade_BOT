@@ -293,7 +293,7 @@ async function sendMatchStartDm(match, label) {
   }
 }
 
-// 마감(closed)된 시점부터 delayMs(기본 8시간) 후 자동으로 메시지를 삭제한다.
+// 마감(closed)된 시점부터 delayMs(기본 AUTO_CLOSE_DELAY_MS) 후 자동으로 메시지를 삭제한다.
 // autoClose 옵션이 꺼져있으면 아무것도 하지 않는다. 봇 재시작 후 복원할 때는
 // 이미 지난 시간만큼 뺀 delayMs를 넘겨 원래 마감 시각 기준을 유지한다.
 function armAutoEnd(matchesMap, msgId, match, label, delayMs = AUTO_CLOSE_DELAY_MS) {
@@ -325,7 +325,7 @@ function getCancelledDeletions(client) {
   return getClientMap(client, 'cancelledDeletions');
 }
 
-// 취소된(🔴 취소됨) 임베드를 취소 시각(cancelledAt) 기준 3시간 후 자동 삭제한다.
+// 취소된(🔴 취소됨) 임베드를 취소 시각(cancelledAt) 기준 CANCELLED_DELETE_DELAY_MS 후 자동 삭제한다.
 // 취소는 마감(closed)과 달리 재개(마감 해제) 개념이 없는 종결 상태이므로,
 // autoClose 토글과 무관하게 항상 예약한다. naejeonMatches/mojipMatches에는
 // 이미 취소 시점에 매치가 제거되어 있어(활성 매치 관리 로직과 뒤섞이지 않도록)
@@ -401,7 +401,7 @@ async function notifyOrganizerOnClose(match, label) {
   }
 }
 
-// 마감(🔒 마감됨) 상태로 전환하면서 8시간 후 자동 삭제 타이머를 건다.
+// 마감(🔒 마감됨) 상태로 전환하면서 자동 삭제 타이머를 건다(AUTO_CLOSE_DELAY_MS 후).
 // notify=false를 넘기면 주최자 DM을 보내지 않는다 — 주최자 본인이 직접
 // "마감하기" 버튼을 눌러 마감한 경우(이미 알고 있으므로 불필요)에 사용.
 function markClosed(matchesMap, msgId, match, label, notify = true) {

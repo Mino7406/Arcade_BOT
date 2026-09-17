@@ -138,7 +138,7 @@ function buildCancelComponents() {
   return buildCancelComponentsBase('naejeon');
 }
 
-// 마감된 상태에서 자동 삭제 예정 시각(closedAt + 8시간)이 이미 지났는지 확인한다.
+// 마감된 상태에서 자동 삭제 예정 시각(closedAt + AUTO_CLOSE_DELAY_MS)이 이미 지났는지 확인한다.
 // autoClose가 꺼진 채로 마감돼 타이머가 안 걸린 매치는 시간이 아무리 지나도
 // 저절로 안 없어지므로, 이 경우 ON/OFF 토글 대신 바로 "삭제" 버튼을 보여준다.
 function isAutoDeleteExpired(match) {
@@ -895,7 +895,7 @@ async function handleNaejeonButton(interaction) {
     return;
   }
 
-  // ── 8시간 후 자동 종료 토글 ───────────────────────────────
+  // ── 자동 종료 토글 ───────────────────────────────
   if (customId === 'naejeon:toggle_autoclose') {
     const data = getPending(interaction.client).get(interaction.user.id);
     if (!data) {

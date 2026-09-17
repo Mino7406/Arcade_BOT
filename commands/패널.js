@@ -238,7 +238,7 @@ async function deleteCancelledEntry(interaction, msgId) {
 }
 
 // "🗑️ 내전/모집 삭제"·"🗑️ 전체 삭제" 공통 삭제 로직 — type에 따라 활성 매치 정리 절차
-// (8시간 자동삭제 타이머 취소, 완료 보너스 XP 지급, 참가자 멘션 삭제) 또는 취소된 게시글 삭제로 분기한다.
+// (자동삭제 타이머 취소, 완료 보너스 XP 지급, 참가자 멘션 삭제) 또는 취소된 게시글 삭제로 분기한다.
 async function deleteMatchEntry(interaction, type, msgId) {
   if (type === 'cancelled') return deleteCancelledEntry(interaction, msgId);
 
@@ -246,7 +246,7 @@ async function deleteMatchEntry(interaction, type, msgId) {
   const match = map?.get(msgId);
   if (!match || match.guildId !== interaction.guildId) return false;
 
-  disarmAutoEnd(match); // 마감된 매치라면 걸려있던 8시간 자동 삭제 타이머를 취소 — 즉시 삭제와 중복 실행되지 않도록.
+  disarmAutoEnd(match); // 마감된 매치라면 걸려있던 자동 삭제 타이머를 취소 — 즉시 삭제와 중복 실행되지 않도록.
   clearNotifyTimer(match); // 삭제된 매치는 알림을 보내지 않으므로 남은 예약 타이머를 취소한다.
   await announceMatchCompletionXp(match);
   map.delete(msgId);
