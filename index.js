@@ -13,7 +13,7 @@ require('./migrate').migrateOldDbFiles();
 
 const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleNaejeonNotifyModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload: buildNaejeonMessagePayload } = require('./handlers/내전');
 const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipNotifyModal, handleMojipMemberAdd, handleMojipMemberRemove, buildMojipMessagePayload } = require('./handlers/모집');
-const { armAutoEnd, AUTO_CLOSE_DELAY_MS, announceMatchCompletionXp, scheduleCancelledDelete, scheduleMessageDelete, deleteMentionMessage, armNotifyReminder, ADMIN_IDS, saveAll, loadRows } = require('./handlers/공용');
+const { armAutoEnd, AUTO_CLOSE_DELAY_MS, GENERAL_MESSAGE_DELETE_DELAY_MS, announceMatchCompletionXp, scheduleCancelledDelete, scheduleMessageDelete, deleteMentionMessage, armNotifyReminder, ADMIN_IDS, saveAll, loadRows } = require('./handlers/공용');
 const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/팀');
 const { handleRMatchSelect } = require('./handlers/불러오기');
 const { handleWcButton, handleWcMessage } = require('./handlers/끝말잇기');
@@ -150,7 +150,7 @@ async function restoreMatches(c) {
       await match.message.edit(buildPayload(match)).catch(err => console.error('복원 후 메시지 갱신 중 오류:', err));
 
       // 봇이 꺼져있던 동안 setTimeout이 소실되므로, 마감(closed) 시점을 기준으로
-      // 8시간 자동 삭제를 다시 스케줄링합니다. 이미 8시간이 지났다면 즉시 삭제합니다.
+      // AUTO_CLOSE_DELAY_MS 후 자동 삭제를 다시 스케줄링합니다. 이미 지났다면 즉시 삭제합니다.
       // (closedAt이 없는 옛 데이터는 이미 마감 상태로 오래 방치돼 있었다는 뜻이므로 즉시 삭제합니다.)
       const label = row.type === 'naejeon' ? '내전' : '모집';
       let deleted = false;
@@ -191,9 +191,9 @@ async function restoreMatches(c) {
 // (재시작 등) 인증 채널에 올라온 메시지는 그 이벤트를 아예 못 받아 예약이 안 걸린 채로
 // 남는다. N-M.json 복원(restoreMatches)은 "이미 예약돼 있던" 항목만 되살릴 뿐 이런
 // 누락은 못 잡으므로, 재시작 시 최근 메시지 기록을 직접 훑어서 예약이 빠진 메시지를 찾아
-// 다시 건다. 최대 500개(5페이지) 또는 24시간(자동삭제 기준 8시간의 3배)치까지만 훑고,
+// 다시 건다. 최대 500개(5페이지) 또는 일반 메시지 자동삭제 지연시간의 3배치까지만 훑고,
 // 그보다 오래된 건 예외적인 경우로 보고 포기한다(무한정 과거까지 훑지 않기 위함).
-const CHANNEL_RECONCILE_LOOKBACK_MS = AUTO_CLOSE_DELAY_MS * 3;
+const CHANNEL_RECONCILE_LOOKBACK_MS = GENERAL_MESSAGE_DELETE_DELAY_MS * 3;
 async function reconcileMatchBonusMessages(c) {
   const channel = await c.channels.fetch(MATCH_BONUS_CHANNEL_ID).catch(() => null);
   if (!channel) return;
@@ -209,7 +209,7 @@ async function reconcileMatchBonusMessages(c) {
     for (const msg of batch.values()) {
       if (msg.author.bot) continue;
       if (c.pendingMessageDeletions?.has(msg.id)) continue;
-      scheduleMessageDelete(c, msg.id, msg.channelId, msg.createdTimestamp + AUTO_CLOSE_DELAY_MS);
+      scheduleMessageDelete(c, msg.id, msg.channelId, msg.createdTimestamp + GENERAL_MESSAGE_DELETE_DELAY_MS);
       recovered++;
     }
 

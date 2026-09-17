@@ -228,9 +228,9 @@ npm start
 2. 게임 선택 → 모달로 제목/일시/인원/설명 입력
 3. 제출 → 미리보기 임베드 + `📢 채널에 공개 게시` / `✏️ 수정` / `❌ 취소` 버튼, ⏰ 자동 마감 토글, (직접 입력 게임의 경우) Steam 역할 멘션 토글
 4. 공개 게시 시 게임에 해당하는 역할(롤→`롤`, 발로란트→`발로란트`, 오버워치→`오버워치`, 배그→`배그`)을 멘션하며 게시
-5. 참가/취소 버튼으로 인원 모집, 정원이 차면 자동 마감(`markClosed`) — 마감 시 8시간 후 자동 삭제 타이머가 걸리고(타이머 만료 시 참가자에게 완료 보너스 XP가 지급된 뒤 메시지가 삭제됨), 정원이 자동으로 차서 마감된 경우 주최자에게 마감 안내 DM이 발송됨(주최자가 직접 "마감하기" 버튼으로 수동 마감한 경우는 본인이 이미 알고 있으므로 DM 미발송, DM 차단 시에도 무시)
-6. 주최자(또는 관리자) 전용 관리 메뉴: 마감/마감 해제, 수정, 취소, 팀 만들기(수동/자동 배정), 참가자 멘션(1회성), 🔔 알림 예약, 참가자 강제 추가/제거, ⏰ 자동 삭제 ON/OFF 토글(마감 전/후 상관없이 항상 현재 설정에 맞춰 표시) — 게시 전 미리보기에서 정한 설정을 마감 후에도 바꿀 수 있으며, 원래 마감 시각 기준 남은 시간으로 다시 예약됨(`toggleAutoCloseWhileClosed`); 이미 그 8시간이 지나 다음 클릭 시 즉시 삭제될 상황이면 버튼이 `🗑️ (내전/모집) 삭제`로 바뀜
-7. 주최자가 취소하면 🔴 취소됨 임베드로 교체되고(`autoClose` 토글과 무관하게 항상) 3시간 후 자동 삭제됨(`scheduleCancelledDelete`, `CANCELLED_DELETE_DELAY_MS`) — 재시작해도 `DB/N-M.json`에 삭제 예정 시각이 저장돼 있어 남은 시간만큼 다시 예약됨. 참가자 멘션을 이미 보낸 상태였다면 그 멘션 메시지도 즉시 함께 삭제됨(`deleteMentionMessage`) — 자동 삭제/관리 메뉴 즉시삭제 등 매치가 끝나는 모든 경로에서 공통
+5. 참가/취소 버튼으로 인원 모집, 정원이 차면 자동 마감(`markClosed`) — 마감 시 6시간 후 자동 삭제 타이머가 걸리고(타이머 만료 시 참가자에게 완료 보너스 XP가 지급된 뒤 메시지가 삭제됨), 정원이 자동으로 차서 마감된 경우 주최자에게 마감 안내 DM이 발송됨(주최자가 직접 "마감하기" 버튼으로 수동 마감한 경우는 본인이 이미 알고 있으므로 DM 미발송, DM 차단 시에도 무시)
+6. 주최자(또는 관리자) 전용 관리 메뉴: 마감/마감 해제, 수정, 취소, 팀 만들기(수동/자동 배정), 참가자 멘션(1회성), 🔔 알림 예약, 참가자 강제 추가/제거, ⏰ 자동 삭제 ON/OFF 토글(마감 전/후 상관없이 항상 현재 설정에 맞춰 표시) — 게시 전 미리보기에서 정한 설정을 마감 후에도 바꿀 수 있으며, 원래 마감 시각 기준 남은 시간으로 다시 예약됨(`toggleAutoCloseWhileClosed`); 이미 그 6시간이 지나 다음 클릭 시 즉시 삭제될 상황이면 버튼이 `🗑️ (내전/모집) 삭제`로 바뀜
+7. 주최자가 취소하면 🔴 취소됨 임베드로 교체되고(`autoClose` 토글과 무관하게 항상) 1시간 후 자동 삭제됨(`scheduleCancelledDelete`, `CANCELLED_DELETE_DELAY_MS`) — 재시작해도 `DB/N-M.json`에 삭제 예정 시각이 저장돼 있어 남은 시간만큼 다시 예약됨. 참가자 멘션을 이미 보낸 상태였다면 그 멘션 메시지도 즉시 함께 삭제됨(`deleteMentionMessage`) — 자동 삭제/관리 메뉴 즉시삭제 등 매치가 끝나는 모든 경로에서 공통
 8. **🔔 알림 예약**: 자유 형식인 "일시"와 별개로, "M/D HH:mm"(KST, 24시간제) 형식만 받는 전용 모달(`buildNotifyModal`)로 알림 시각을 설정. 그 시각이 됐을 때 **매치가 마감(closed) 상태인 경우에만** 주최자+참가자 전원에게 DM으로 시작 알림을 보냄(마감 전이면 보류) — 마감 전에 시각이 지나도 유실되지 않고, 이후 수동("🔒 마감하기")이든 자동(정원 마감)이든 **마감되는 즉시** 밀려있던 알림이 발송됨(`markClosed`가 `trySendNotify`로 catch-up). 다만 매치가 취소/자동 삭제 등으로 관리 목록(matchesMap)에서 이미 빠진 상태라면 보내지 않음(`clearNotifyTimer`로 타이머를 명시적으로 취소하거나, 타이머가 이미 걸린 채 빠졌더라도 발동 시점에 매치 조회 실패로 조용히 건너뜀). 형식이 안 맞으면 제출이 거부되고, 연도 입력이 없으므로 올해 기준으로 계산하되 이미 지난 시각이면 내년으로 자동 보정. 빈 값으로 제출하면 예약 취소. `data.notifyAt`(epoch ms)이 매치 데이터에 함께 저장되므로 재시작 후에도 `armNotifyReminder`로 다시 예약됨, 재게시(`/불러오기`)로 메시지 ID가 바뀌어도 새 ID로 다시 걸림
    - 예약이 걸려있는 동안에는 공개 임베드의 "📊 상태" 줄 아래에 `🔔 **알림**　　M/D ...` 줄이 추가로 표시되어 주최자/참가자 모두 확인 가능(취소하면 즉시 사라짐, `match.message.edit`로 실시간 반영)
    - 표시 형식은 주최자가 **입력했던 형식 그대로** 따라감 — 24시간제("6/5 20:00")로 입력했으면 임베드/버튼/확인 메시지 모두 24시간제로, 오전/오후("6/5 오후 8:00")로 입력했으면 그대로 오전/오후로 표시(`data.notify12h`에 입력 형식을 기록해두고 `formatNotifyTimeSmart`로 그에 맞춰 렌더링, 재수정 시 입력창 프리필도 동일 형식 유지)
@@ -392,7 +392,7 @@ npm start
 - `뉴비부스트` 역할(`NEWBIE_BOOST_ROLE_ID`) 보유자는 **메인 텍스트 채널·TTS 채널 메시지 XP와 통화방 체류 XP를 2배**로 받음(미니게임·내전/모집 완료 보너스에는 적용 안 됨)
 - 레벨업 시 지정된 채널에 축하 메시지 게시
 - 특정 서버(테스트 서버)는 시스템 자체가 비활성화됨
-- 내전/모집 완료 보너스 채널(`MATCH_BONUS_CHANNEL_ID`)에 올라온 일반 유저 메시지는 8시간 후 자동 삭제됨(`scheduleMessageDelete`, 봇 메시지는 제외) — 재시작해도 `DB/N-M.json`에 삭제 예정 시각이 저장돼 있어 남은 시간만큼 다시 예약됨. 다만 이 예약은 `messageCreate` 이벤트에서만 걸리므로, 봇이 꺼져있던 동안 올라온 메시지는 예약 자체가 안 걸린 채로 남을 수 있음 — 봇 시작 시(`index.js`의 `reconcileMatchBonusMessages`) 이 채널의 최근 메시지(최대 500개 또는 24시간치)를 훑어 예약이 빠진 메시지를 찾아 다시 걸어줌
+- 내전/모집 완료 보너스 채널(`MATCH_BONUS_CHANNEL_ID`)에 올라온 일반 유저 메시지는 1시간 후 자동 삭제됨(`scheduleMessageDelete`, `GENERAL_MESSAGE_DELETE_DELAY_MS`, 봇 메시지는 제외) — 재시작해도 `DB/N-M.json`에 삭제 예정 시각이 저장돼 있어 남은 시간만큼 다시 예약됨. 다만 이 예약은 `messageCreate` 이벤트에서만 걸리므로, 봇이 꺼져있던 동안 올라온 메시지는 예약 자체가 안 걸린 채로 남을 수 있음 — 봇 시작 시(`index.js`의 `reconcileMatchBonusMessages`) 이 채널의 최근 메시지(최대 500개 또는 지연시간의 3배 시간치)를 훑어 예약이 빠진 메시지를 찾아 다시 걸어줌
 - `/레벨`로 진행바 임베드 확인(레벨 내 XP와 함께 `누적 XP`도 표시), `/랭킹`으로 서버 XP 순위 확인(`/레벨`, `/랭킹` 모두 `config.js`의 `WORDCHAIN_RANKING_CHANNEL_ID` 채널에서만 사용 가능)
 - **`/xp`**(관리자 전용, `ADMIN_IDS`) — 커맨드에 옵션이 없고 실행하면 본인에게만(ephemeral) **`⚙️ XP 조정` / `🛠️ XP 관리`** 두 버튼이 뜸:
   - **`⚙️ XP 조정`** → **유저 선택 메뉴**. 유저를 고르면 그 유저의 레벨 현황(레벨·진행바·누적 XP)과 함께 `➕`(XP 추가) · `➖`(XP 차감) · `🔄 레벨 조정` · `🚫 지급 정지` 버튼이 달린 패널로 바뀜:
@@ -472,10 +472,10 @@ npm start
 |---|---|
 | `getNaejeonMatches(client)` / `getMojipMatches(client)` / `getCancelledDeletions(client)` | 진행 중인 내전·모집 매치와 취소 후 삭제 대기 목록 Map 획득(없으면 생성, 내부적으로 `getClientMap` 공용) |
 | `shuffleIntoTeams(participants)` | Fisher–Yates 셔플 후 절반씩 팀1/팀2로 분할 |
-| `armAutoEnd(matchesMap, msgId, match, label, delayMs)` | 마감된 매치에 8시간 자동 삭제 타이머 설정 — 만료 시 XP 지급 후 메시지를 바로 삭제 |
+| `armAutoEnd(matchesMap, msgId, match, label, delayMs)` | 마감된 매치에 6시간 자동 삭제 타이머 설정 — 만료 시 XP 지급 후 메시지를 바로 삭제 |
 | `disarmAutoEnd(match)` | 자동 삭제 타이머 해제 |
-| `scheduleCancelledDelete(client, msgId, channelId, cancelledAt)` | 취소된 매치를 취소 시각(`cancelledAt`, 기본 현재 시각) 기준 3시간 후 자동 삭제 예약 — `client.cancelledDeletions` Map에 기록해 재시작 후에도 복원 가능(재시작 시 항상 최신 지연시간 기준으로 재계산) |
-| `scheduleMessageDelete(client, msgId, channelId, deleteAt)` | 매치 상태와 무관하게 일반 메시지를 `deleteAt`(기본 8시간 후) 시점에 자동 삭제 예약 — `client.pendingMessageDeletions` Map에 기록해 재시작 후에도 복원 가능 (내전/모집 인증 채널의 유저 메시지 정리에 사용) |
+| `scheduleCancelledDelete(client, msgId, channelId, cancelledAt)` | 취소된 매치를 취소 시각(`cancelledAt`, 기본 현재 시각) 기준 1시간 후 자동 삭제 예약 — `client.cancelledDeletions` Map에 기록해 재시작 후에도 복원 가능(재시작 시 항상 최신 지연시간 기준으로 재계산) |
+| `scheduleMessageDelete(client, msgId, channelId, deleteAt)` | 매치 상태와 무관하게 일반 메시지를 `deleteAt`(기본 1시간 후) 시점에 자동 삭제 예약 — `client.pendingMessageDeletions` Map에 기록해 재시작 후에도 복원 가능 (내전/모집 인증 채널의 유저 메시지 정리에 사용) |
 | `markClosed(matchesMap, msgId, match, label, notify = true)` / `markReopened(match)` | 매치 마감/마감 해제 처리 (자동 삭제 타이머 연동). `notify=false`를 넘기면 주최자 DM을 생략(주최자 본인이 직접 마감한 경우에 사용) |
 | `toggleAutoCloseWhileClosed(matchesMap, msgId, match, label, enabled)` | 이미 마감된 매치의 자동 삭제 ON/OFF를 관리 메뉴에서 토글 — 원래 마감 시각 기준 남은 시간으로 재예약(다 지났으면 즉시 삭제), OFF 시 타이머만 취소 |
 | `notifyOrganizerOnClose(match, label)` *(내부)* | 정원 자동 마감 시 주최자에게 게시글 제목과 링크를 DM으로 전송 (DM 차단 등 실패는 무시). 주최자가 DM을 막아뒀거나(`50007`) 봇과 공통 서버가 없는(`50278`) 경우는 흔한 상황이라 스택 트레이스 대신 한 줄 경고만 남기고(`DM_UNREACHABLE_CODES`), 그 외 예상 못 한 오류만 전체를 기록 |
@@ -680,7 +680,7 @@ npm start
 | `buildSetupPanelPayload(interaction)` | 안내 패널 임베드/버튼 페이로드 생성 (`/패널` 최초 게시, "🔄 새로고침" 버튼에서 공용) |
 | `buildAdminMenuPayload(panelMessageId, notice)` | "⚙️ 관리" 버튼(관리자 전용) → 새로고침/채널 청소/내전·모집 삭제/봇 메시지 삭제를 모아 보여주는 비공개(ephemeral) 메뉴, `panelMessageId`로 갱신 대상 패널을 특정. `notice`가 있으면 방금 조작 결과를 상단에 덧붙임. 이 페이로드만은 `flags`를 담지 않는다 — 최초 노출(`reply`) 외에 `update`/`editReply`로도 재사용되는데 그 둘은 Ephemeral flag를 받지 않으므로, flag는 `index.js`의 `reply` 호출부에서만 붙인다 |
 | `purgeUserMessages(channel)` | 채널의 봇이 아닌 유저 메시지를 페이지 단위로 조회해 `bulkDelete`(14일 초과분은 자동 스킵) — 최대 2000개(20페이지)까지 순회 후 삭제 개수 반환 |
-| `formatHoursLeft(deleteAt)` | `deleteAt`(epoch ms)까지 남은 시간을 "약 N시간 후 자동삭제"로 표시 — 마감된 매치/취소된 게시글 상태 문구에서 공용으로 사용 |
+| `formatTimeLeft(deleteAt)` | `deleteAt`(epoch ms)까지 남은 시간을 "약 N시간 M분 후 자동삭제"(1시간 미만이면 분만)로 표시 — 마감된 매치/취소된 게시글 상태 문구에서 공용으로 사용 |
 | `formatMatchStatus(match)` | 셀렉트 옵션의 상태 문구 생성 — 모집 중이면 "🟢 모집중", 마감이면 자동삭제(`autoClose`) 켜짐 여부에 따라 "🔒 마감됨"만 또는 남은 시간을 붙여 표시 |
 | `collectGuildMatchEntries(interaction)` | 현재 서버에서 삭제 가능한 항목(내전/모집/취소된 게시글)을 전부 모아 `{ type, msgId, label, description, confirmText }` 배열로 반환 — 셀렉트 목록과 "전체 삭제" 양쪽이 공유 |
 | `deleteCancelledEntry(interaction, msgId)` | 취소되어 자동삭제 대기 중인 게시글 하나를 즉시 삭제하고 `client.cancelledDeletions`에서 제거 |

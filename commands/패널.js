@@ -159,11 +159,15 @@ async function purgeUserMessages(channel) {
   return deleted;
 }
 
-// deleteAt(epoch ms) 시점까지 남은 시간을 "약 N시간 후 자동삭제"로 표현한다.
-// 내전/모집 마감 후 자동삭제, 취소된 게시글 자동삭제 표시에서 공용으로 쓴다.
-function formatHoursLeft(deleteAt) {
-  const hoursLeft = Math.max(0, Math.ceil((deleteAt - Date.now()) / (60 * 60 * 1000)));
-  return `약 ${hoursLeft}시간 후 자동삭제`;
+// deleteAt(epoch ms) 시점까지 남은 시간을 "약 N시간 M분 후 자동삭제"로 표현한다(1시간
+// 미만이면 분만 표시). 내전/모집 마감 후 자동삭제, 취소된 게시글 자동삭제 표시에서 공용으로 쓴다.
+function formatTimeLeft(deleteAt) {
+  const minutesLeft = Math.max(0, Math.ceil((deleteAt - Date.now()) / (60 * 1000)));
+  const hours = Math.floor(minutesLeft / 60);
+  const minutes = minutesLeft % 60;
+  if (hours > 0 && minutes > 0) return `약 ${hours}시간 ${minutes}분 후 자동삭제`;
+  if (hours > 0) return `약 ${hours}시간 후 자동삭제`;
+  return `약 ${minutes}분 후 자동삭제`;
 }
 
 // 내전/모집 셀렉트 옵션의 상태 문구 — 모집 중이면 그대로, 마감됐다면 자동삭제(autoClose) 켜짐

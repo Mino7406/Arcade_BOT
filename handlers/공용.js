@@ -97,8 +97,9 @@ function logDmFailure(err, { 종류, label, target, match }) {
   }
 }
 
-const AUTO_CLOSE_DELAY_MS = 8 * 60 * 60 * 1000;
-const CANCELLED_DELETE_DELAY_MS = 3 * 60 * 60 * 1000;
+const AUTO_CLOSE_DELAY_MS = 6 * 60 * 60 * 1000;
+const CANCELLED_DELETE_DELAY_MS = 1 * 60 * 60 * 1000;
+const GENERAL_MESSAGE_DELETE_DELAY_MS = 1 * 60 * 60 * 1000;
 
 function clearAutoEndTimer(match) {
   if (match._autoEndTimer) {
@@ -353,10 +354,11 @@ function getPendingMessageDeletions(client) {
   return getClientMap(client, 'pendingMessageDeletions');
 }
 
-// 특정 채널에 올라온 일반 메시지(내전/모집과 무관한 유저 채팅 등)를 deleteAt(기본 8시간 후)
-// 시점에 자동 삭제한다. scheduleCancelledDelete와 달리 내전/모집 매치 상태와는 전혀 무관하게,
-// 순전히 "이 메시지를 이 시각에 지운다"만 기록·추적한다(client.pendingMessageDeletions).
-function scheduleMessageDelete(client, msgId, channelId, deleteAt = Date.now() + AUTO_CLOSE_DELAY_MS) {
+// 특정 채널에 올라온 일반 메시지(내전/모집과 무관한 유저 채팅 등)를 deleteAt(기본
+// GENERAL_MESSAGE_DELETE_DELAY_MS 후)에 자동 삭제한다. scheduleCancelledDelete와 달리
+// 내전/모집 매치 상태와는 전혀 무관하게, 순전히 "이 메시지를 이 시각에 지운다"만
+// 기록·추적한다(client.pendingMessageDeletions).
+function scheduleMessageDelete(client, msgId, channelId, deleteAt = Date.now() + GENERAL_MESSAGE_DELETE_DELAY_MS) {
   const map = getPendingMessageDeletions(client);
   map.set(msgId, { channelId, deleteAt });
   const delayMs = Math.max(0, deleteAt - Date.now());
@@ -713,6 +715,8 @@ function loadRows() {
 module.exports = {
   ADMIN_IDS,
   AUTO_CLOSE_DELAY_MS,
+  CANCELLED_DELETE_DELAY_MS,
+  GENERAL_MESSAGE_DELETE_DELAY_MS,
   ROLE_NAMES,
   getClientMap,
   getNaejeonMatches,
