@@ -27,6 +27,7 @@ const COMMAND_LIST = [
 const PLAYGROUND_COMMAND_LIST = [
   { name: '/끝말잇기', value: '끝말잇기 게임을 시작합니다.' },
   { name: '/틱택토', value: '틱택토 게임을 시작합니다.' },
+  { name: '/오목', value: '오목 게임을 시작합니다.' },
   { name: '/레벨', value: '나 또는 다른 유저의 레벨/XP를 확인합니다.' },
   { name: '/랭킹', value: '서버 XP 랭킹을 확인합니다.' },
   { name: '/룰렛', value: 'XP를 걸고 룰렛머신을 돌립니다. (하루 1회)' },
