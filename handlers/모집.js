@@ -670,7 +670,7 @@ async function handleMojipButton(interaction) {
     await match.message.edit({ content: '', embeds: [cancelledEmbed], components: [], attachments: [], allowedMentions: { parse: [] } });
     getMojips(interaction.client).delete(msgId);
     await deleteMentionMessage(interaction.client, match);
-    scheduleCancelledDelete(interaction.client, msgId, match.message.channelId);
+    scheduleCancelledDelete(interaction.client, msgId, match.message.channelId, Date.now(), match.data.title);
     await interaction.update({ content: '✅ **모집이 취소되었습니다.**', components: [] });
     return;
   }

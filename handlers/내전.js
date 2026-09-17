@@ -827,7 +827,7 @@ async function handleNaejeonButton(interaction) {
     await match.message.edit({ content: '', embeds: [cancelledEmbed], components: [], attachments: [], allowedMentions: { parse: [] } });
     getMatches(interaction.client).delete(matchMsgId);
     await deleteMentionMessage(interaction.client, match);
-    scheduleCancelledDelete(interaction.client, matchMsgId, match.message.channelId);
+    scheduleCancelledDelete(interaction.client, matchMsgId, match.message.channelId, Date.now(), match.data.title);
     await interaction.update({ content: '✅ **내전이 취소되었습니다.**', components: [] });
     return;
   }

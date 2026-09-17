@@ -180,8 +180,8 @@ function formatMatchStatus(match) {
 
 // 현재 서버에서 삭제 가능한 항목(진행 중/마감된 내전·모집 + 취소되어 자동삭제 대기 중인 게시글)을
 // 모두 모은다. 셀렉트 목록 생성과 "전체 삭제" 양쪽에서 공유한다. 취소된 게시글은 naejeonMatches/
-// mojipMatches가 아니라 client.cancelledDeletions에 채널ID만 기록돼 있어(handlers/공용.js 참고)
-// 채널을 조회해야 이름과 길드를 알 수 있다.
+// mojipMatches가 아니라 client.cancelledDeletions에 채널ID·제목만 기록돼 있어(handlers/공용.js 참고)
+// 길드 확인을 위해 채널은 조회해야 하고, 구버전 데이터(title 없음)는 채널명으로 대체 표시한다.
 async function collectGuildMatchEntries(interaction) {
   const naejeons = interaction.client.naejeonMatches || new Map();
   const mojips   = interaction.client.mojipMatches   || new Map();
@@ -212,9 +212,9 @@ async function collectGuildMatchEntries(interaction) {
     if (!channel || channel.guildId !== interaction.guildId) continue;
     entries.push({
       type: 'cancelled', msgId,
-      label:       `[취소됨] #${channel.name}`.slice(0, 100),
-      description: `🔴 취소됨 · ${formatTimeLeft(info.deleteAt)}`.slice(0, 100),
-      confirmText: `취소된 게시글 (#${channel.name})`,
+      label:       `[취소됨] ${info.title ?? `#${channel.name}`}`.slice(0, 100),
+      description: `#${channel.name} · 🔴 취소됨 · ${formatTimeLeft(info.deleteAt)}`.slice(0, 100),
+      confirmText: info.title ? `"${info.title}" (취소된 게시글)` : `취소된 게시글 (#${channel.name})`,
     });
   }
   return entries;

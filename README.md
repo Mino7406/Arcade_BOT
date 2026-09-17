@@ -230,7 +230,7 @@ npm start
 4. 공개 게시 시 게임에 해당하는 역할(롤→`롤`, 발로란트→`발로란트`, 오버워치→`오버워치`, 배그→`배그`)을 멘션하며 게시
 5. 참가/취소 버튼으로 인원 모집, 정원이 차면 자동 마감(`markClosed`) — 마감 시 6시간 후 자동 삭제 타이머가 걸리고(타이머 만료 시 참가자에게 완료 보너스 XP가 지급된 뒤 메시지가 삭제됨), 정원이 자동으로 차서 마감된 경우 주최자에게 마감 안내 DM이 발송됨(주최자가 직접 "마감하기" 버튼으로 수동 마감한 경우는 본인이 이미 알고 있으므로 DM 미발송, DM 차단 시에도 무시)
 6. 주최자(또는 관리자) 전용 관리 메뉴: 마감/마감 해제, 수정, 취소, 팀 만들기(수동/자동 배정), 참가자 멘션(1회성), 🔔 알림 예약, 참가자 강제 추가/제거, ⏰ 자동 삭제 ON/OFF 토글(마감 전/후 상관없이 항상 현재 설정에 맞춰 표시) — 게시 전 미리보기에서 정한 설정을 마감 후에도 바꿀 수 있으며, 원래 마감 시각 기준 남은 시간으로 다시 예약됨(`toggleAutoCloseWhileClosed`); 이미 그 6시간이 지나 다음 클릭 시 즉시 삭제될 상황이면 버튼이 `🗑️ (내전/모집) 삭제`로 바뀜
-7. 주최자가 취소하면 🔴 취소됨 임베드로 교체되고(`autoClose` 토글과 무관하게 항상) 1시간 후 자동 삭제됨(`scheduleCancelledDelete`, `CANCELLED_DELETE_DELAY_MS`) — 재시작해도 `DB/N-M.json`에 삭제 예정 시각이 저장돼 있어 남은 시간만큼 다시 예약됨. 참가자 멘션을 이미 보낸 상태였다면 그 멘션 메시지도 즉시 함께 삭제됨(`deleteMentionMessage`) — 자동 삭제/관리 메뉴 즉시삭제 등 매치가 끝나는 모든 경로에서 공통
+7. 주최자가 취소하면 🔴 취소됨 임베드로 교체되고(`autoClose` 토글과 무관하게 항상) 2시간 후 자동 삭제됨(`scheduleCancelledDelete`, `CANCELLED_DELETE_DELAY_MS`) — 재시작해도 `DB/N-M.json`에 삭제 예정 시각이 저장돼 있어 남은 시간만큼 다시 예약됨. 참가자 멘션을 이미 보낸 상태였다면 그 멘션 메시지도 즉시 함께 삭제됨(`deleteMentionMessage`) — 자동 삭제/관리 메뉴 즉시삭제 등 매치가 끝나는 모든 경로에서 공통
 8. **🔔 알림 예약**: 자유 형식인 "일시"와 별개로, "M/D HH:mm"(KST, 24시간제) 형식만 받는 전용 모달(`buildNotifyModal`)로 알림 시각을 설정. 그 시각이 됐을 때 **매치가 마감(closed) 상태인 경우에만** 주최자+참가자 전원에게 DM으로 시작 알림을 보냄(마감 전이면 보류) — 마감 전에 시각이 지나도 유실되지 않고, 이후 수동("🔒 마감하기")이든 자동(정원 마감)이든 **마감되는 즉시** 밀려있던 알림이 발송됨(`markClosed`가 `trySendNotify`로 catch-up). 다만 매치가 취소/자동 삭제 등으로 관리 목록(matchesMap)에서 이미 빠진 상태라면 보내지 않음(`clearNotifyTimer`로 타이머를 명시적으로 취소하거나, 타이머가 이미 걸린 채 빠졌더라도 발동 시점에 매치 조회 실패로 조용히 건너뜀). 형식이 안 맞으면 제출이 거부되고, 연도 입력이 없으므로 올해 기준으로 계산하되 이미 지난 시각이면 내년으로 자동 보정. 빈 값으로 제출하면 예약 취소. `data.notifyAt`(epoch ms)이 매치 데이터에 함께 저장되므로 재시작 후에도 `armNotifyReminder`로 다시 예약됨, 재게시(`/불러오기`)로 메시지 ID가 바뀌어도 새 ID로 다시 걸림
    - 예약이 걸려있는 동안에는 공개 임베드의 "📊 상태" 줄 아래에 `🔔 **알림**　　M/D ...` 줄이 추가로 표시되어 주최자/참가자 모두 확인 가능(취소하면 즉시 사라짐, `match.message.edit`로 실시간 반영)
    - 표시 형식은 주최자가 **입력했던 형식 그대로** 따라감 — 24시간제("6/5 20:00")로 입력했으면 임베드/버튼/확인 메시지 모두 24시간제로, 오전/오후("6/5 오후 8:00")로 입력했으면 그대로 오전/오후로 표시(`data.notify12h`에 입력 형식을 기록해두고 `formatNotifyTimeSmart`로 그에 맞춰 렌더링, 재수정 시 입력창 프리필도 동일 형식 유지)
@@ -474,7 +474,7 @@ npm start
 | `shuffleIntoTeams(participants)` | Fisher–Yates 셔플 후 절반씩 팀1/팀2로 분할 |
 | `armAutoEnd(matchesMap, msgId, match, label, delayMs)` | 마감된 매치에 6시간 자동 삭제 타이머 설정 — 만료 시 XP 지급 후 메시지를 바로 삭제 |
 | `disarmAutoEnd(match)` | 자동 삭제 타이머 해제 |
-| `scheduleCancelledDelete(client, msgId, channelId, cancelledAt)` | 취소된 매치를 취소 시각(`cancelledAt`, 기본 현재 시각) 기준 1시간 후 자동 삭제 예약 — `client.cancelledDeletions` Map에 기록해 재시작 후에도 복원 가능(재시작 시 항상 최신 지연시간 기준으로 재계산) |
+| `scheduleCancelledDelete(client, msgId, channelId, cancelledAt)` | 취소된 매치를 취소 시각(`cancelledAt`, 기본 현재 시각) 기준 2시간 후 자동 삭제 예약 — `client.cancelledDeletions` Map에 기록해 재시작 후에도 복원 가능(재시작 시 항상 최신 지연시간 기준으로 재계산) |
 | `scheduleMessageDelete(client, msgId, channelId, deleteAt)` | 매치 상태와 무관하게 일반 메시지를 `deleteAt`(기본 1시간 후) 시점에 자동 삭제 예약 — `client.pendingMessageDeletions` Map에 기록해 재시작 후에도 복원 가능 (내전/모집 인증 채널의 유저 메시지 정리에 사용) |
 | `markClosed(matchesMap, msgId, match, label, notify = true)` / `markReopened(match)` | 매치 마감/마감 해제 처리 (자동 삭제 타이머 연동). `notify=false`를 넘기면 주최자 DM을 생략(주최자 본인이 직접 마감한 경우에 사용) |
 | `toggleAutoCloseWhileClosed(matchesMap, msgId, match, label, enabled)` | 이미 마감된 매치의 자동 삭제 ON/OFF를 관리 메뉴에서 토글 — 원래 마감 시각 기준 남은 시간으로 재예약(다 지났으면 즉시 삭제), OFF 시 타이머만 취소 |

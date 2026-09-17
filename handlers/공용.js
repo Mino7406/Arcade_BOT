@@ -98,7 +98,7 @@ function logDmFailure(err, { 종류, label, target, match }) {
 }
 
 const AUTO_CLOSE_DELAY_MS = 6 * 60 * 60 * 1000;
-const CANCELLED_DELETE_DELAY_MS = 1 * 60 * 60 * 1000;
+const CANCELLED_DELETE_DELAY_MS = 2 * 60 * 60 * 1000;
 const GENERAL_MESSAGE_DELETE_DELAY_MS = 1 * 60 * 60 * 1000;
 
 function clearAutoEndTimer(match) {
@@ -332,10 +332,10 @@ function getCancelledDeletions(client) {
 // 별도의 client.cancelledDeletions에 채널/취소 시각만 기록해 추적한다.
 // deleteAt이 아닌 cancelledAt을 원본으로 저장해두면, 지연시간(CANCELLED_DELETE_DELAY_MS)이
 // 나중에 또 바뀌더라도 재시작 시 항상 최신 지연시간 기준으로 다시 계산된다.
-function scheduleCancelledDelete(client, msgId, channelId, cancelledAt = Date.now()) {
+function scheduleCancelledDelete(client, msgId, channelId, cancelledAt = Date.now(), title = null) {
   const map = getCancelledDeletions(client);
   const deleteAt = cancelledAt + CANCELLED_DELETE_DELAY_MS;
-  map.set(msgId, { channelId, cancelledAt, deleteAt });
+  map.set(msgId, { channelId, cancelledAt, deleteAt, title });
   const delayMs = Math.max(0, deleteAt - Date.now());
   setTimeout(async () => {
     if (!getCancelledDeletions(client).has(msgId)) return;
@@ -679,7 +679,7 @@ function saveAll(client) {
         message_id: messageId,
         channel_id: entry.channelId,
         type: 'cancelled_delete',
-        data: JSON.stringify({ cancelledAt: entry.cancelledAt }),
+        data: JSON.stringify({ cancelledAt: entry.cancelledAt, title: entry.title }),
       });
     }
   }

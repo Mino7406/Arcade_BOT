@@ -110,7 +110,7 @@ async function restoreMatches(c) {
         // 시각을 역산해 복원한다 — scheduleCancelledDelete가 항상 최신 지연시간
         // (CANCELLED_DELETE_DELAY_MS)으로 다시 계산하므로 이미 지났으면 즉시 삭제된다.
         const cancelledAt = parsed.cancelledAt ?? (parsed.deleteAt - AUTO_CLOSE_DELAY_MS);
-        scheduleCancelledDelete(c, row.message_id, row.channel_id, cancelledAt);
+        scheduleCancelledDelete(c, row.message_id, row.channel_id, cancelledAt, parsed.title ?? null);
       } catch (err) {
         console.error('취소된 임베드 삭제 예약 복원 중 오류:', err);
       }
