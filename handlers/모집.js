@@ -664,7 +664,7 @@ async function handleMojipButton(interaction) {
         `👑 **주최자**　**\`${match.data.organizer.displayName}\`**`,
         `📊 **상태**　　🔴 취소됨`,
       ].join('\n'))
-      .setFooter({ text: cancelledByOrganizer ? '❌ 주최자에 의해 모집이 취소되었습니다.' : '❌ 관리자에 의해 모집이 취소 처리되었습니다.' })
+      .setFooter({ text: cancelledByOrganizer ? '❌ 주최자에 의해 모집이 취소되었습니다.' : '⚙️ 관리자에 의해 모집이 취소 처리되었습니다.' })
       .setTimestamp();
 
     clearNotifyTimer(match); // 취소된 매치는 알림을 보내지 않으므로 남은 예약 타이머를 취소한다.
