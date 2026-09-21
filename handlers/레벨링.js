@@ -1,5 +1,5 @@
 // 레벨링.js — MEE6과 동일한 방식의 레벨/XP 시스템
-// 메시지 1개당 15~25 XP 랜덤 지급(배율 없음), 유저당 30분 쿨다운. 레벨업 요구치 공식은 MEE6와 동일.
+// 메시지 XP는 채널 종류(메인/TTS)별로 쿨다운과 1회 지급량이 다르다. 레벨업 요구치 공식은 MEE6와 동일.
 
 const fs = require('fs');
 const path = require('path');
@@ -19,35 +19,28 @@ const {
 const LEVELS_PATH = path.join(__dirname, '..', 'DB', 'levels.json');
 fs.mkdirSync(path.dirname(LEVELS_PATH), { recursive: true });
 
-// 메인 채널과 TTS 채널의 메시지 XP를 완전히 통합한다 — 배율 없이 기본치를 그대로 지급하고,
-// 쿨다운도 채널 구분 없이 동일하게 적용한다(예전엔 메인 60초 / TTS 180초로 갈렸었다).
-// 1회 지급량(15~25)은 원래 MEE6 기본값 그대로 둬서 체감을 안 건드리고, 대신 쿨다운을
-// 30분으로 크게 늘려 "진짜 문제였던" 시간당 상한만 잡는다 — 원래 60초 쿨다운일 때는
-// 시간당 최대 ~1,200 XP까지 가능해 통화방 체류(시간당 24~48 XP)를 압도적으로 앞질렀는데,
-// 30분 쿨다운이면 시간당 최대 40~80 XP로 통화방 체류의 약 1.67배 수준까지 눌린다
-// (1회당 숫자는 그대로라 "덜 준다"는 체감 없이, 도배해서 얻는 총량만 억제).
-// (메시지 기본치는 통화방 체류와 더는 공유하지 않는다 — 아래 VOICE_XP_MIN/MAX 참고.)
-const COOLDOWN_MS = 30 * 60 * 1000;
-const MESSAGE_XP_MIN = 15;
-const MESSAGE_XP_MAX = 25;
-function randomMessageXp() {
-  return Math.floor(Math.random() * (MESSAGE_XP_MAX - MESSAGE_XP_MIN + 1)) + MESSAGE_XP_MIN;
+// 메시지 XP는 채널 종류별로 쿨다운과 1회 지급량을 따로 둔다(쿨다운도 종류별로 따로 셈).
+// 시간당 기대치 = (60분 / 쿨다운) × 1회 평균:
+//   메인 채팅방 : 10분에 1번, 1회 6~11(평균 8.5) → 최대 6회 ≈ 51 XP/시간
+//   TTS 채널    : 3분에 1번, 1회 3~7(평균 5)    → 최대 20회 = 100 XP/시간
+const MESSAGE_XP = {
+  main: { cooldownMs: 10 * 60 * 1000, min: 6, max: 11 },
+  tts:  { cooldownMs: 3 * 60 * 1000,  min: 3, max: 7 },
+};
+function randomMessageXp(type) {
+  const { min, max } = MESSAGE_XP[type];
+  return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
 // EXCLUDED_GUILD_IDS(레벨 시스템 미적용 길드), XP_CHANNEL_ID(XP 인정 채널),
 // LEVEL_UP_ANNOUNCE_CHANNEL_ID(레벨업 축하 채널), MATCH_BONUS_CHANNEL_ID(완료 보너스 채널),
-// XP_TTS_CHANNEL_IDS(TTS 채널 목록, 메인 채널과 완전히 동일하게 취급)는 config.js에 모아뒀다.
+// XP_TTS_CHANNEL_IDS(TTS 채널 목록)는 config.js에 모아뒀다.
 
-// 내전/모집 완료 보너스 XP: 메시지·통화방과 별개의 전용 기본치를 쓴다(예전엔 공용 기본치를
-// 같이 썼는데, 세션 내내 그 기본치가 여러 번 바뀌면서 매치 완료 보상도 같이 계속 흔들렸다 —
-// 실제 매치 하나를 다 치르는 건 메시지 한 번 보내는 것과는 무게감이 다른 일회성 이벤트라
-// 메시지/통화방 튜닝에 더는 휩쓸리지 않게 분리했다. 메시지·통화방도 기본치(15~25)는 같지만
-// 배율이 달라 서로 별개 수치다).
-// 참가자는 30~50(평균 40, 시간당 최대치 기준 메시지 약 0.5~1시간·통화방 약 1~1.7시간에 맞먹는
-// 일회성 보상), 주최자는 그 1.3배(39~65, 평균 52)로 조금 더 얹어준다.
+// 내전/모집 완료 보너스 XP: 메시지·통화방과 별개의 전용 수치를 쓰는 1회성 보상이라
+// 메시지/통화방 튜닝에 휩쓸리지 않는다. 참가자는 30~50 랜덤(평균 40), 주최자는 50 고정.
 const MATCH_BONUS_XP_MIN = 30;
 const MATCH_BONUS_XP_MAX = 50;
-const ORGANIZER_XP_MULTIPLIER = 1.3;
+const ORGANIZER_BONUS_XP = 50;
 function randomMatchBonusXp() {
   return Math.floor(Math.random() * (MATCH_BONUS_XP_MAX - MATCH_BONUS_XP_MIN + 1)) + MATCH_BONUS_XP_MIN;
 }
@@ -141,18 +134,10 @@ function hasNewbieBoost(member) {
 
 // 통화방(음성 채널) 체류 XP: 봇이 음성에 직접 참가하지 않고도
 // voiceStateUpdate 게이트웨이 이벤트만으로 1분마다 활동 중인 유저에게 XP를 지급한다.
-// 마이크만 켜놓으면 노력 없이 쌓이는 방치형 XP라 텍스트 채팅보다 낮은 배율을 사용.
-// 배율이 낮아 매 틱 계산값이 1 미만일 때가 많은데, 그냥 반올림하면 소수점이 버려져
-// 손실이 생기므로 남은 소수점을 다음 틱으로 이월(voiceXpCarry)해 손실 없이 누적한다.
-// 기본치는 메시지(15~25, MEE6 기본값)와 똑같이 맞추고(통화방만 따로 어중간한 범위를 쓸
-// 이유가 없다), 배율만 원래 값(0.02)으로 낮춰 방치형 XP답게 차등을 둔다
-// (15~25 XP * 1분 * 0.02 = 시간당 평균 ~24 XP, 이월 덕분에 정확히 지급됨 —
-// 메시지(시간당 40~80)의 약 1.67배 낮은 수준으로 균형).
-const VOICE_XP_TICK_MINUTES = 1;
-const VOICE_XP_TICK_MS = VOICE_XP_TICK_MINUTES * 60 * 1000;
-const VOICE_XP_MULTIPLIER = 0.02;
-const VOICE_XP_MIN = 15;
-const VOICE_XP_MAX = 25;
+// 1분에 한 번, 틱당 2~3 XP(평균 2.5) → 시간당 60틱 = 평균 150 XP.
+const VOICE_XP_TICK_MS = 60 * 1000;
+const VOICE_XP_MIN = 2;
+const VOICE_XP_MAX = 3;
 function randomVoiceXp() {
   return Math.floor(Math.random() * (VOICE_XP_MAX - VOICE_XP_MIN + 1)) + VOICE_XP_MIN;
 }
@@ -162,8 +147,7 @@ let levels = {}; // { [guildId]: { [userId]: xp } }
 // 디스크의 levels.json을 통째로 비워버린다(모든 서버 XP 소실). 그래서 복원 완료 전에는
 // 저장을 막고, /xp처럼 즉시 저장하는 경로는 isLevelsLoaded()로 미리 걸러낸다.
 let loaded = false;
-const cooldowns = new Map(); // `${guildId}:${userId}` → 마지막 XP 지급 시각
-const voiceXpCarry = new Map(); // `${guildId}:${userId}` → 반올림 후 남은 소수점 이월분 (다음 틱에 더해짐)
+const cooldowns = new Map(); // `${guildId}:${userId}:${main|tts}` → 마지막 XP 지급 시각
 const activeVoiceUsers = new Set(); // `${guildId}:${userId}` — 현재 음성 채널에서 음소거/헤드셋오프가 아닌 상태로 활동 중
 
 function loadLevels() {
@@ -293,15 +277,15 @@ function handleMessageXp(message) {
   // 음소거 없이 음성 틱 XP를 이미 받고 있는 유저에게는 텍스트 XP를 중복 지급하지 않는다.
   if (isTtsChannel && activeVoiceUsers.has(key)) return null;
 
+  const type = isTtsChannel ? 'tts' : 'main';
+  const cooldownKey = `${key}:${type}`;
   const now = Date.now();
-  const last = cooldowns.get(key) || 0;
-  if (now - last < COOLDOWN_MS) return null;
-  cooldowns.set(key, now);
+  const last = cooldowns.get(cooldownKey) || 0;
+  if (now - last < MESSAGE_XP[type].cooldownMs) return null;
+  cooldowns.set(cooldownKey, now);
 
-  const baseXp = randomMessageXp();
   const boost = hasNewbieBoost(message.member) ? NEWBIE_BOOST_XP_MULTIPLIER : 1;
-  const gained = Math.round(baseXp * boost);
-  return applyXp(guildId, userId, gained);
+  return applyXp(guildId, userId, randomMessageXp(type) * boost);
 }
 
 // 내전/모집이 성공적으로 마감됐을 때 주최자/참가자에게 1회성 보너스 XP를 지급한다.
@@ -326,8 +310,7 @@ function awardMatchCompletionXp(match) {
   // 먼저 세워버리면 해제 후에도 영영 못 받는다.
   if (organizerId && !match.xpAwardedUserIds[organizerId] && !isUserXpFrozen(guildId, organizerId)) {
     match.xpAwardedUserIds[organizerId] = true;
-    const gained = Math.round(randomMatchBonusXp() * ORGANIZER_XP_MULTIPLIER);
-    results.push({ userId: organizerId, ...applyXp(guildId, organizerId, gained) });
+    results.push({ userId: organizerId, ...applyXp(guildId, organizerId, ORGANIZER_BONUS_XP) });
   }
 
   for (const participant of match.participants || []) {
@@ -359,7 +342,6 @@ function trackVoiceStateUpdate(oldState, newState) {
     activeVoiceUsers.add(key);
   } else {
     activeVoiceUsers.delete(key);
-    voiceXpCarry.delete(key); // 통화방을 나갔으면 이월분(1 XP 미만)은 버리고 맵도 비운다 — 무한 누적 방지
   }
 }
 
@@ -396,7 +378,7 @@ async function announceLevelUp(client, guildId, userId, newLevel) {
 
 // 지난 XP 지급 시각 맵(cooldowns)에서 쿨다운이 끝난 지 오래된 항목을 청소한다. 이 맵은
 // 메시지를 보낸 적 있는 모든 유저가 영구히 쌓이므로, 1분 틱마다 쓸모없어진 항목을 비운다.
-const COOLDOWN_STALE_MS = COOLDOWN_MS;
+const COOLDOWN_STALE_MS = Math.max(MESSAGE_XP.main.cooldownMs, MESSAGE_XP.tts.cooldownMs);
 function sweepCooldowns(now = Date.now()) {
   for (const [key, last] of cooldowns) {
     if (now - last > COOLDOWN_STALE_MS) cooldowns.delete(key);
@@ -415,11 +397,7 @@ function startVoiceXpTicker(client) {
       const member = guild?.members.cache.get(userId)
         || await guild?.members.fetch(userId).catch(() => null);
       const boost = hasNewbieBoost(member) ? NEWBIE_BOOST_XP_MULTIPLIER : 1;
-      const raw = randomVoiceXp() * VOICE_XP_TICK_MINUTES * VOICE_XP_MULTIPLIER * boost + (voiceXpCarry.get(key) || 0);
-      const gained = Math.floor(raw);
-      voiceXpCarry.set(key, raw - gained);
-      if (gained <= 0) continue;
-      const result = applyXp(guildId, userId, gained);
+      const result = applyXp(guildId, userId, randomVoiceXp() * boost);
       if (!result.leveledUp) continue;
       await announceLevelUp(client, guildId, userId, result.newLevel);
     }
