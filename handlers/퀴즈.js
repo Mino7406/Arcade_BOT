@@ -55,52 +55,67 @@ const FALLBACK_WORDS = [
   ['운동화', '걷거나 뛸 때 신는 신발'],
 ];
 
-// 두 모드가 XP뿐 아니라 단어 난이도도 똑같이 뽑히게 통일한다 — 상식퀴즈는 초성 힌트가
-// 없다는 것만으로 이미 체감 난이도가 더 높다. 고급 단어도 후보에 포함해 난이도를 올린다.
-const GRADE_PREFERENCE = ['초급', '중급', '고급'];
+// 난이도(단어 등급)별 고정 보상. 문제 임베드에도 등급과 보상을 그대로 보여준다.
+// 관리자 수동 출제는 등급이 없으므로 DEFAULT_XP_REWARD를 쓴다.
+const GRADE_XP = { '초급': 100, '중급': 150, '고급': 200 };
+const DEFAULT_XP_REWARD = 150;
 
-// 보상은 고정값이 아니라 매 문제마다 100~200 XP 사이에서 무작위로 정해진다(정답자에게는
-// 실제로 지급된 금액을 채팅에 그대로 알려줌 — handleQuizMessage 참고).
-const XP_REWARD_MIN = 100;
-const XP_REWARD_MAX = 200;
-function rollXpReward() {
-  return XP_REWARD_MIN + Math.floor(Math.random() * (XP_REWARD_MAX - XP_REWARD_MIN + 1));
+// 등급은 모드와 상관없이 세 등급을 똑같은 확률로 뽑는다(가중치를 바꾸면 비율 조절 가능).
+const CHOSUNG_GRADE_WEIGHTS = { '초급': 1, '중급': 1, '고급': 1 };
+const SANGSIK_GRADE_WEIGHTS = { '초급': 1, '중급': 1, '고급': 1 };
+
+function rollGrade(weights) {
+  const total = Object.values(weights).reduce((a, b) => a + b, 0);
+  let r = Math.random() * total;
+  for (const [grade, w] of Object.entries(weights)) {
+    if ((r -= w) < 0) return grade;
+  }
+  return Object.keys(weights)[0];
+}
+
+function gradeTitle(title, grade) {
+  return grade ? `${title} (${grade})` : title;
 }
 
 const MODES = {
   chosung: {
     label: '초성퀴즈',
     title: '📖 오늘의 퀴즈!',
-    gradePreference: GRADE_PREFERENCE,
-    buildEmbed({ word, hint }) {
+    gradeWeights: CHOSUNG_GRADE_WEIGHTS,
+    buildEmbed({ word, hint, grade, xpReward }) {
       return new EmbedBuilder()
         .setColor(0xFEE75C)
-        .setTitle(this.title)
+        .setTitle(gradeTitle(this.title, grade))
         .setDescription(
-          `초성 : \`${getChosung(word)}\`\n` +
+          `초성 : \`${getChosung(word)}\` **(${word.length}글자)**\n` +
           `> ${hint}`,
         )
-        .setFooter({ text: '✏️ 채팅으로 정답을 입력하면 자동으로 채점됩니다.' })
+        .setFooter({ text: `✏️ 채팅으로 정답을 입력하면 자동으로 채점됩니다. · 보상 ${xpReward} XP` })
         .setTimestamp();
     },
   },
   sangsik: {
     label: '상식퀴즈',
     title: '📖 오늘의 퀴즈!',
-    gradePreference: GRADE_PREFERENCE,
-    buildEmbed({ word, hint }) {
+    gradeWeights: SANGSIK_GRADE_WEIGHTS,
+    buildEmbed({ word, hint, grade, xpReward }) {
       return new EmbedBuilder()
         .setColor(0xEB459E)
-        .setTitle(this.title)
+        .setTitle(gradeTitle(this.title, grade))
         .setDescription(
           `다음 뜻풀이에 해당하는 단어는? **(${word.length}글자)**\n` +
           `> ${hint}`,
         )
-        .setFooter({ text: '✏️ 채팅으로 정답을 입력하면 자동으로 채점됩니다.' })
+        .setFooter({ text: `✏️ 채팅으로 정답을 입력하면 자동으로 채점됩니다. · 보상 ${xpReward} XP` })
         .setTimestamp();
     },
   },
 };
+
+// 정답 공개 메시지 뒤에 붙이는 뜻풀이 한 줄(이전 버전 상태 파일처럼 hint가 없으면 생략).
+function hintLine(quiz) {
+  return quiz.hint ? `\n> ${quiz.hint}` : '';
+}
 
 function getChosung(word) {
   return [...word].map(ch => {
@@ -144,6 +159,13 @@ function saveState(state) {
   writeJsonIfChanged(STATE_PATH, state);
 }
 
+// 뜻풀이에 정답(또는 3글자 이상 단어의 앞부분 어근)이 그대로 들어있으면 문제가 사실상 정답을
+// 알려주는 셈이라 후보에서 제외한다.
+function leaksAnswer(word, definition) {
+  const stem = word.length >= 3 ? word.slice(0, -1) : word;
+  return definition.includes(stem);
+}
+
 // ── 한국어기초사전 API에서 문제 후보 조회 ───────────────────────────
 async function fetchCandidates(prefix) {
   const apiKey = process.env.KRDICT_API_KEY;
@@ -164,7 +186,8 @@ async function fetchCandidates(prefix) {
       }))
       .filter(w =>
         w.word && KOREAN_ONLY.test(w.word) && w.word[0] === prefix &&
-        w.word.length >= 2 && w.word.length <= 6 && w.definition,
+        w.word.length >= 2 && w.word.length <= 6 && w.definition &&
+        GRADE_XP[w.grade] && !leaksAnswer(w.word, w.definition),
       );
   } catch {
     return [];
@@ -181,29 +204,37 @@ function pickRandom(arr, n) {
   return pool.slice(0, n);
 }
 
-async function pickDynamicWord(recentWords, gradePreference) {
-  const seeds = pickRandom(SEED_SYLLABLES, 6);
-  for (const seed of seeds) {
-    const candidates = await fetchCandidates(seed);
-    const preferred = candidates.filter(c => gradePreference.includes(c.grade) && !recentWords.includes(c.word));
-    const pool = preferred.length ? preferred : candidates.filter(c => !recentWords.includes(c.word));
-    if (pool.length) {
-      const pick = pool[Math.floor(Math.random() * pool.length)];
-      const hint = pick.definition.length > 100 ? `${pick.definition.slice(0, 100)}…` : pick.definition;
-      return { word: pick.word, hint };
-    }
-  }
-  return null;
+function toPicked(pick) {
+  const hint = pick.definition.length > 100 ? `${pick.definition.slice(0, 100)}…` : pick.definition;
+  return { word: pick.word, hint, grade: pick.grade };
 }
 
-async function pickWord(recentWords, gradePreference) {
-  const dynamic = await pickDynamicWord(recentWords, gradePreference);
+// 먼저 모드 가중치대로 목표 등급을 굴려 그 등급의 단어를 찾고, 시드 6개를 다 뒤져도 없으면
+// 그 모드에서 허용되는 아무 등급의 단어로 대체한다(등급이 표시되므로 보상도 그 등급대로 지급).
+async function pickDynamicWord(recentWords, gradeWeights) {
+  const targetGrade = rollGrade(gradeWeights);
+  const seeds = pickRandom(SEED_SYLLABLES, 6);
+  let fallbackPick = null;
+  for (const seed of seeds) {
+    const candidates = (await fetchCandidates(seed)).filter(c => !recentWords.includes(c.word));
+    const exact = candidates.filter(c => c.grade === targetGrade);
+    if (exact.length) return toPicked(exact[Math.floor(Math.random() * exact.length)]);
+    if (!fallbackPick) {
+      const allowed = candidates.filter(c => gradeWeights[c.grade] > 0);
+      if (allowed.length) fallbackPick = allowed[Math.floor(Math.random() * allowed.length)];
+    }
+  }
+  return fallbackPick ? toPicked(fallbackPick) : null;
+}
+
+async function pickWord(recentWords, gradeWeights) {
+  const dynamic = await pickDynamicWord(recentWords, gradeWeights);
   if (dynamic) return dynamic;
 
   const pool = FALLBACK_WORDS.filter(([w]) => !recentWords.includes(w));
   const bank = pool.length ? pool : FALLBACK_WORDS;
   const [word, hint] = bank[Math.floor(Math.random() * bank.length)];
-  return { word, hint };
+  return { word, hint, grade: '초급' };
 }
 
 // 자동 출제(activeQuiz)와 관리자 수동 출제(activeManualQuiz)는 완전히 별개 슬롯으로 관리한다
@@ -218,7 +249,7 @@ async function voidQuiz(client, state, slotKey) {
   state[slotKey] = null;
   try {
     const channel = await client.channels.fetch(quiz.channelId).catch(() => null);
-    await channel?.send(`⌛ **지난 ${MODES[quiz.mode]?.label ?? '퀴즈'} 정답은 ${quiz.word} 였습니다.**\n아무도 맞히지 못해 보상 없이 마감되었습니다.`);
+    await channel?.send(`⌛ **지난 ${MODES[quiz.mode]?.label ?? '퀴즈'} 정답은 ${quiz.word} 였습니다.**${hintLine(quiz)}\n아무도 맞히지 못해 보상 없이 마감되었습니다.`);
   } catch (err) {
     console.error('퀴즈 무효 처리 중 오류:', err);
   }
@@ -237,15 +268,19 @@ async function postQuiz(client, state, modeKey, picked, slotKey = 'activeQuiz', 
     const channel = await client.channels.fetch(QUIZ_CHANNEL_ID).catch(() => null);
     if (!channel) return false;
 
-    picked = picked || await pickWord(state.recentWords || [], mode.gradePreference);
+    picked = picked || await pickWord(state.recentWords || [], mode.gradeWeights);
     state.recentWords = [picked.word, ...(state.recentWords || [])].slice(0, RECENT_WORD_MEMORY);
 
-    const quiz = { channelId: QUIZ_CHANNEL_ID, guildId: channel.guildId, word: picked.word, mode: modeKey, xpReward: rollXpReward(), ...extraFields };
+    const xpReward = GRADE_XP[picked.grade] ?? DEFAULT_XP_REWARD;
+    const quiz = {
+      channelId: QUIZ_CHANNEL_ID, guildId: channel.guildId, word: picked.word, hint: picked.hint,
+      grade: picked.grade ?? null, mode: modeKey, xpReward, ...extraFields,
+    };
     client[slotKey] = quiz;
     state[slotKey] = quiz;
     saveState(state);
 
-    await channel.send({ embeds: [mode.buildEmbed(picked)] });
+    await channel.send({ embeds: [mode.buildEmbed({ ...picked, xpReward })] });
     return true;
   } catch (err) {
     console.error('퀴즈 출제 중 오류:', err);
@@ -436,7 +471,7 @@ function armManualQuizTimeout(client, quiz, delayMs = MANUAL_QUIZ_TIME_LIMIT_MS)
     }
     try {
       const channel = await client.channels.fetch(quiz.channelId).catch(() => null);
-      await channel?.send(`⌛ **1시간이 지나 관리자가 낸 ${MODES[quiz.mode]?.label ?? '퀴즈'}가 마감되었습니다.**\n정답은 **${quiz.word}** 였습니다.`);
+      await channel?.send(`⌛ **1시간이 지나 관리자가 낸 ${MODES[quiz.mode]?.label ?? '퀴즈'}가 마감되었습니다.**\n정답은 **${quiz.word}** 였습니다.${hintLine(quiz)}`);
     } catch (err) {
       console.error('관리자 출제 문제 시간 초과 처리 중 오류:', err);
     }
@@ -491,7 +526,7 @@ async function handleQuizMessage(message) {
     if (isMinigameXpFrozen()) {
       // 관리자 긴급정지 중(미니게임) — 정답 처리는 하되 XP는 지급하지 않는다.
       await message.reply({
-        content: `⭕ 정답입니다! **${quiz.word}**\n-# ⚙️ 현재 XP 지급이 일시 중지되어 이번 정답은 XP가 지급되지 않았습니다.`,
+        content: `⭕ 정답입니다! **${quiz.word}**${hintLine(quiz)}\n-# ⚙️ 현재 XP 지급이 일시 중지되어 이번 정답은 XP가 지급되지 않았습니다.`,
         allowedMentions: { repliedUser: false, users: [] },
       }).catch(() => {});
       return;
@@ -500,7 +535,7 @@ async function handleQuizMessage(message) {
     const result = applyXp(quiz.guildId, message.author.id, quiz.xpReward);
     const levelUpLine = result.leveledUp ? `\n<@${message.author.id}>님이 ${result.newLevel}레벨을 달성했어요. 🎉` : '';
     await message.reply({
-      content: `⭕ 정답입니다! **${quiz.word}** (+${quiz.xpReward} XP)${levelUpLine}`,
+      content: `⭕ 정답입니다! **${quiz.word}** (+${quiz.xpReward} XP)${hintLine(quiz)}${levelUpLine}`,
       allowedMentions: { repliedUser: false, users: result.leveledUp ? [message.author.id] : [] },
     }).catch(() => {});
     return; // 한 메시지는 한 슬롯만 채점
