@@ -4,13 +4,24 @@ const {
   MessageFlags,
 } = require('discord.js');
 const { ADMIN_IDS } = require('../handlers/공용');
+const { OWNER_IDS } = require('../config');
 const { pauseQuiz, resumeQuiz, postCustomQuiz, getQuizStatus } = require('../handlers/퀴즈');
+const { KST_OFFSET_MS } = require('../handlers/시간');
 
 const WORD_ONLY = /^[가-힣]{2,10}$/;
 
+function formatKst(epochMs) {
+  if (!epochMs) return '-';
+  const kst = new Date(epochMs + KST_OFFSET_MS);
+  const hh = String(kst.getUTCHours()).padStart(2, '0');
+  const mm = String(kst.getUTCMinutes()).padStart(2, '0');
+  return `${kst.getUTCMonth() + 1}/${kst.getUTCDate()} ${hh}:${mm}`;
+}
+
 // /퀴즈 실행 시(그리고 각 버튼 조작 후) 보여줄 메인 패널: 현재 상태 요약 + 조작 버튼.
-// notice가 있으면 상태 요약 위에 방금 한 조작의 결과 한 줄을 덧붙인다.
-function buildQuizPanelPayload(notice) {
+// notice가 있으면 상태 요약 위에 방금 한 조작의 결과 한 줄을 덧붙인다. 출제 예정 시각·미해결
+// 문제(정답 노출)는 OWNER_IDS에 든 사람이 볼 때만 추가로 보여준다.
+function buildQuizPanelPayload(viewerId, notice) {
   const state = getQuizStatus();
 
   if (!state) {
@@ -25,6 +36,13 @@ function buildQuizPanelPayload(notice) {
     `상태 : ${state.paused ? '⏸️ 중지됨' : '▶️ 자동 출제 중'}`,
     `오늘 출제 여부 : ${state.posted ? '✅ 출제됨' : '⏳ 대기 중'}`,
   ];
+  if (OWNER_IDS.includes(viewerId)) {
+    lines.push(
+      `출제 예정 시각 : ${state.posted ? '-' : formatKst(state.scheduledAt)} (KST)`,
+      `자동 출제 미해결 문제 : ${state.activeQuiz ? `\`${state.activeQuiz.word}\`` : '없음'}`,
+      `관리자 출제 미해결 문제 : ${state.activeManualQuiz ? `\`${state.activeManualQuiz.word}\` (1시간 후 자동 마감)` : '없음'}`,
+    );
+  }
 
   return {
     content: (notice ? `${notice}\n\n` : '') + lines.join('\n'),
@@ -80,7 +98,7 @@ module.exports = {
       await interaction.reply({ content: '❌ **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
       return;
     }
-    await interaction.reply({ ...buildQuizPanelPayload(), flags: MessageFlags.Ephemeral });
+    await interaction.reply({ ...buildQuizPanelPayload(interaction.user.id), flags: MessageFlags.Ephemeral });
   },
 };
 
@@ -95,18 +113,18 @@ async function handleQuizAdminButton(interaction) {
 
   if (customId === 'quiz:pause') {
     pauseQuiz();
-    await interaction.update(buildQuizPanelPayload('⏸️ 자동 출제를 중지했습니다. 이미 출제되어 있는 문제는 계속 채점됩니다.'));
+    await interaction.update(buildQuizPanelPayload(interaction.user.id, '⏸️ 자동 출제를 중지했습니다. 이미 출제되어 있는 문제는 계속 채점됩니다.'));
     return;
   }
 
   if (customId === 'quiz:resume') {
     resumeQuiz(interaction.client);
-    await interaction.update(buildQuizPanelPayload('▶️ 자동 출제를 다시 시작했습니다.'));
+    await interaction.update(buildQuizPanelPayload(interaction.user.id, '▶️ 자동 출제를 다시 시작했습니다.'));
     return;
   }
 
   if (customId === 'quiz:refresh') {
-    await interaction.update(buildQuizPanelPayload());
+    await interaction.update(buildQuizPanelPayload(interaction.user.id));
     return;
   }
 
@@ -139,7 +157,7 @@ async function handleQuizCreateModal(interaction) {
   const notice = result.ok
     ? `✅ **직접 만든 상식퀴즈를 출제했습니다.** (정답: \`${word}\`, 1시간 안에 못 맞히면 자동 마감)`
     : '⚠️ **출제에 실패했습니다.** 놀이터 채널을 찾을 수 없거나 오류가 발생했습니다.';
-  await interaction.editReply(buildQuizPanelPayload(notice));
+  await interaction.editReply(buildQuizPanelPayload(interaction.user.id, notice));
 }
 
 module.exports.handleQuizAdminButton = handleQuizAdminButton;
