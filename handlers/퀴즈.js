@@ -1,8 +1,6 @@
-// 퀴즈.js — 놀이터 채널에 하루 한 번, 초성퀴즈/상식퀴즈를 번갈아가며 자동 출제한다.
+// 퀴즈.js — 놀이터 채널에 하루 한 번, 상식퀴즈(뜻풀이만 보고 단어 맞히기)를 자동 출제한다.
 // 문제는 하드코딩된 목록이 아니라 국립국어원 한국어기초사전 API(끝말잇기와 동일 API)에서
 // 그때그때 무작위로 가져오므로, 오래 운영해도 문제가 고정/반복되지 않는다.
-// - 초성퀴즈: 초성 + 뜻풀이 힌트를 보여줌 (쉬운 난이도 위주)
-// - 상식퀴즈: 초성 없이 뜻풀이만 보여줌 (어려운 난이도 위주)
 // 제한시간은 따로 없고, 다음 문제가 출제될 때까지 계속 열려있다. 다음 날 새 문제가 나갈 때
 // 그 전날 문제를 아직 아무도 못 맞혔다면 그 문제는 그대로 무효 처리(보상 없이 마감)한다 —
 // 그래야 두 문제가 동시에 유효해서 생기는 중복/혼선을 막을 수 있다.
@@ -26,12 +24,11 @@ const WINDOW_END_HOUR = 23;
 // 아직 안 끝난 어제 예약을 오늘 걸로 잘못 리셋하지 않음) — cycleDateString()에서 사용.
 // 지금처럼 END가 24시 이하면 0이 되어 사이클 = 그냥 KST 달력 날짜다.
 const OVERNIGHT_CUTOFF_HOUR = WINDOW_END_HOUR > 24 ? WINDOW_END_HOUR - 24 : 0;
-const RECENT_WORD_MEMORY = 30; // 최근 이만큼은(초성/상식 합쳐서) 다시 출제하지 않음
+const RECENT_WORD_MEMORY = 30; // 최근 이만큼은 다시 출제하지 않음
 
 const STATE_PATH = path.join(__dirname, '..', 'DB', 'quiz.json');
 fs.mkdirSync(path.dirname(STATE_PATH), { recursive: true });
 
-const CHOSUNG = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
 const KOREAN_ONLY = /^[가-힣]+$/;
 
 // 단어를 검색할 때 사용할 시작 음절 시드(끝말잇기 봇 단어 선택과 같은 방식) — 매번 이 중 일부를 무작위로 골라 검색한다.
@@ -60,9 +57,8 @@ const FALLBACK_WORDS = [
 const GRADE_XP = { '초급': 100, '중급': 150, '고급': 200 };
 const DEFAULT_XP_REWARD = 150;
 
-// 등급은 모드와 상관없이 세 등급을 똑같은 확률로 뽑는다(가중치를 바꾸면 비율 조절 가능).
-const CHOSUNG_GRADE_WEIGHTS = { '초급': 1, '중급': 1, '고급': 1 };
-const SANGSIK_GRADE_WEIGHTS = { '초급': 1, '중급': 1, '고급': 1 };
+// 세 등급을 똑같은 확률로 뽑는다(가중치를 바꾸면 비율 조절 가능).
+const GRADE_WEIGHTS = { '초급': 1, '중급': 1, '고급': 1 };
 
 function rollGrade(weights) {
   const total = Object.values(weights).reduce((a, b) => a + b, 0);
@@ -77,52 +73,23 @@ function gradeTitle(title, grade) {
   return grade ? `${title} (${grade})` : title;
 }
 
-const MODES = {
-  chosung: {
-    label: '초성퀴즈',
-    title: '📖 오늘의 퀴즈!',
-    gradeWeights: CHOSUNG_GRADE_WEIGHTS,
-    buildEmbed({ word, hint, grade, xpReward }) {
-      return new EmbedBuilder()
-        .setColor(0xFEE75C)
-        .setTitle(gradeTitle(this.title, grade))
-        .setDescription(
-          `초성 : \`${getChosung(word)}\` **(${word.length}글자)**\n` +
-          `> ${hint}`,
-        )
-        .setFooter({ text: `✏️ 채팅으로 정답을 입력하면 자동으로 채점됩니다. · 보상 ${xpReward} XP` })
-        .setTimestamp();
-    },
-  },
-  sangsik: {
-    label: '상식퀴즈',
-    title: '📖 오늘의 퀴즈!',
-    gradeWeights: SANGSIK_GRADE_WEIGHTS,
-    buildEmbed({ word, hint, grade, xpReward }) {
-      return new EmbedBuilder()
-        .setColor(0xEB459E)
-        .setTitle(gradeTitle(this.title, grade))
-        .setDescription(
-          `다음 뜻풀이에 해당하는 단어는? **(${word.length}글자)**\n` +
-          `> ${hint}`,
-        )
-        .setFooter({ text: `✏️ 채팅으로 정답을 입력하면 자동으로 채점됩니다. · 보상 ${xpReward} XP` })
-        .setTimestamp();
-    },
-  },
-};
+const QUIZ_LABEL = '상식퀴즈';
+
+function buildQuizEmbed({ word, hint, grade, xpReward }) {
+  return new EmbedBuilder()
+    .setColor(0xFFD700) // 오목·틱택토 결과(승리) 임베드와 같은 노란색
+    .setTitle(gradeTitle('📖 오늘의 퀴즈!', grade))
+    .setDescription(
+      `다음 뜻풀이에 해당하는 단어는? **(${word.length}글자)**\n` +
+      `> ${hint}`,
+    )
+    .setFooter({ text: `✏️ 채팅으로 정답을 입력하면 자동으로 채점됩니다. · 보상 ${xpReward} XP` })
+    .setTimestamp();
+}
 
 // 정답 공개 메시지 뒤에 붙이는 뜻풀이 한 줄(이전 버전 상태 파일처럼 hint가 없으면 생략).
 function hintLine(quiz) {
   return quiz.hint ? `\n> ${quiz.hint}` : '';
-}
-
-function getChosung(word) {
-  return [...word].map(ch => {
-    const code = ch.charCodeAt(0) - 0xAC00;
-    if (code < 0 || code > 11171) return ch;
-    return CHOSUNG[Math.floor(code / 588)];
-  }).join('');
 }
 
 // 순수 달력 날짜가 아니라 "이 시각이 어느 출제 사이클에 속하는지"를 반환한다. 출제 가능
@@ -249,7 +216,7 @@ async function voidQuiz(client, state, slotKey) {
   state[slotKey] = null;
   try {
     const channel = await client.channels.fetch(quiz.channelId).catch(() => null);
-    await channel?.send(`⌛ **지난 ${MODES[quiz.mode]?.label ?? '퀴즈'} 정답은 ${quiz.word} 였습니다.**${hintLine(quiz)}\n아무도 맞히지 못해 보상 없이 마감되었습니다.`);
+    await channel?.send(`⌛ **지난 ${QUIZ_LABEL} 정답은 ${quiz.word} 였습니다.**${hintLine(quiz)}\n아무도 맞히지 못해 보상 없이 마감되었습니다.`);
   } catch (err) {
     console.error('퀴즈 무효 처리 중 오류:', err);
   }
@@ -259,8 +226,7 @@ async function voidQuiz(client, state, slotKey) {
 // 떼어낸 함수. fireQuiz(예약 경로, slotKey='activeQuiz')와 postCustomQuiz(관리자 직접 출제
 // 경로, slotKey='activeManualQuiz')가 공유한다. picked를 안 주면 API에서 무작위로 고르고,
 // 주면(관리자 직접 출제) 그걸 그대로 쓴다.
-async function postQuiz(client, state, modeKey, picked, slotKey = 'activeQuiz', extraFields = {}) {
-  const mode = MODES[modeKey];
+async function postQuiz(client, state, picked, slotKey = 'activeQuiz', extraFields = {}) {
   await voidQuiz(client, state, slotKey); // state[slotKey]를 정리할 수 있으므로 아래 saveState보다 먼저 실행
   saveState(state);
 
@@ -268,19 +234,19 @@ async function postQuiz(client, state, modeKey, picked, slotKey = 'activeQuiz', 
     const channel = await client.channels.fetch(QUIZ_CHANNEL_ID).catch(() => null);
     if (!channel) return false;
 
-    picked = picked || await pickWord(state.recentWords || [], mode.gradeWeights);
+    picked = picked || await pickWord(state.recentWords || [], GRADE_WEIGHTS);
     state.recentWords = [picked.word, ...(state.recentWords || [])].slice(0, RECENT_WORD_MEMORY);
 
     const xpReward = GRADE_XP[picked.grade] ?? DEFAULT_XP_REWARD;
     const quiz = {
       channelId: QUIZ_CHANNEL_ID, guildId: channel.guildId, word: picked.word, hint: picked.hint,
-      grade: picked.grade ?? null, mode: modeKey, xpReward, ...extraFields,
+      grade: picked.grade ?? null, xpReward, ...extraFields,
     };
     client[slotKey] = quiz;
     state[slotKey] = quiz;
     saveState(state);
 
-    await channel.send({ embeds: [mode.buildEmbed({ ...picked, xpReward })] });
+    await channel.send({ embeds: [buildQuizEmbed({ ...picked, xpReward })] });
     return true;
   } catch (err) {
     console.error('퀴즈 출제 중 오류:', err);
@@ -288,7 +254,7 @@ async function postQuiz(client, state, modeKey, picked, slotKey = 'activeQuiz', 
   }
 }
 
-async function fireQuiz(client, modeKey) {
+async function fireQuiz(client) {
   const state = loadState();
   if (!state || state.posted) return; // 이미 다른 경로로 처리됨 (안전장치)
   state.posted = true;
@@ -297,7 +263,7 @@ async function fireQuiz(client, modeKey) {
   // 한 번 더 예약하는 경합(중복 출제)을 막을 수 있다.
   saveState(state);
 
-  await postQuiz(client, state, modeKey); // slotKey 기본값 'activeQuiz'
+  await postQuiz(client, state, null); // slotKey 기본값 'activeQuiz'
 }
 
 // 출제 시각은 Math.random()이 아니라 "사이클 날짜 + 시드" 해시로 뽑는다. 그래야 봇을 몇 시에
@@ -336,9 +302,8 @@ function disarmTimer() {
 // 시에 켜든 그날 예약 시각은 항상 같다 — 예전에는 "봇을 켠 시각 ~ 시간대 끝" 사이에서만
 // 추첨해서, 매일 비슷한 시간에 봇을 켜면 출제 시각도 계속 비슷한 대로 몰렸다. 그 시각에 봇이
 // 꺼져 있어 놓쳤다면 즉시 출제하지 않고 남은 시간대 안에서 다시 잡고(최소 5분 뒤), 시간대가
-// 끝났으면 그날은 건너뛴다. 모드는 어제 출제된 모드의 반대로 자동 결정(첫 실행은
-// 초성퀴즈부터). scheduledAt(고정 시각)을 파일에 저장해두므로, 봇이 재시작돼도 같은 시각·같은
-// 모드로 다시 예약되고 하루에 두 번 출제되지 않는다. 아직 안 풀린 문제(activeQuiz/activeManualQuiz)도 파일에
+// 끝났으면 그날은 건너뛴다. scheduledAt(고정 시각)을 파일에 저장해두므로, 봇이 재시작돼도 같은
+// 시각으로 다시 예약되고 하루에 두 번 출제되지 않는다. 아직 안 풀린 문제(activeQuiz/activeManualQuiz)도 파일에
 // 저장해두므로, 봇이 재시작돼도 채점이 끊기지 않고 이어진다(다음 문제가 같은 슬롯에 나갈 때
 // voidQuiz가 정리). /퀴즈 중지로 paused 상태가 되면 예약을 걸지 않고(이미 나간 문제 채점은 계속
 // 동작), /퀴즈 재개 시 다시 정상적으로 예약을 재개한다. paused는 자동 출제에만 영향을 주며,
@@ -371,7 +336,7 @@ function checkAndSchedule(client) {
 
   if (!state) {
     state = {
-      day: null, mode: null, scheduledAt: null, posted: true, paused: false,
+      day: null, scheduledAt: null, posted: true, paused: false,
       recentWords: [], activeQuiz: null, activeManualQuiz: null,
     };
   }
@@ -386,11 +351,10 @@ function checkAndSchedule(client) {
   const { start, end } = windowBoundsForDay(today);
 
   if (state.day !== today) {
-    const prevMode = state.mode;
+    const { mode: _legacyMode, ...rest } = state; // 초성퀴즈 폐지 전 상태 파일의 mode 필드는 버림
     state = {
-      ...state,
+      ...rest,
       day: today,
-      mode: prevMode === 'chosung' ? 'sangsik' : 'chosung',
       scheduledAt: deterministicTimeIn(start, end, `${today}#${state.seed}`),
       posted: false,
       catchupCount: 0,
@@ -423,7 +387,7 @@ function checkAndSchedule(client) {
   const delay = Math.max(0, state.scheduledAt - Date.now());
   armedTimer = setTimeout(() => {
     armedTimer = null;
-    fireQuiz(client, state.mode);
+    fireQuiz(client);
   }, delay);
 }
 
@@ -435,7 +399,7 @@ function startQuizScheduler(client) {
 // ── 관리자 명령어(/퀴즈)에서 사용하는 제어 함수 ────────────────────────
 function pauseQuiz() {
   const state = loadState() || {
-    day: cycleDateString(), mode: 'chosung', scheduledAt: null, posted: true,
+    day: cycleDateString(), scheduledAt: null, posted: true,
     recentWords: [], activeQuiz: null, activeManualQuiz: null,
   };
   state.paused = true;
@@ -471,7 +435,7 @@ function armManualQuizTimeout(client, quiz, delayMs = MANUAL_QUIZ_TIME_LIMIT_MS)
     }
     try {
       const channel = await client.channels.fetch(quiz.channelId).catch(() => null);
-      await channel?.send(`⌛ **1시간이 지나 관리자가 낸 ${MODES[quiz.mode]?.label ?? '퀴즈'}가 마감되었습니다.**\n정답은 **${quiz.word}** 였습니다.${hintLine(quiz)}`);
+      await channel?.send(`⌛ **1시간이 지나 관리자가 낸 ${QUIZ_LABEL}가 마감되었습니다.**\n정답은 **${quiz.word}** 였습니다.${hintLine(quiz)}`);
     } catch (err) {
       console.error('관리자 출제 문제 시간 초과 처리 중 오류:', err);
     }
@@ -481,19 +445,18 @@ function armManualQuizTimeout(client, quiz, delayMs = MANUAL_QUIZ_TIME_LIMIT_MS)
 // 관리자가 /퀴즈에서 직접 입력한 단어·힌트로 문제를 출제한다(API로 무작위로 고르지 않음).
 // 자동 출제(activeQuiz)의 예약/오늘 출제 여부와는 전혀 무관하게 별도 슬롯(activeManualQuiz)에
 // 독립적으로 열리며, 1시간 안에 못 맞히면 자동으로 마감된다.
-async function postCustomQuiz(client, modeOverride, word, hint) {
-  const modeKey = modeOverride && MODES[modeOverride] ? modeOverride : 'chosung';
+async function postCustomQuiz(client, word, hint) {
   const state = loadState() || {
-    day: cycleDateString(), mode: 'chosung', scheduledAt: null, posted: false, paused: false,
+    day: cycleDateString(), scheduledAt: null, posted: false, paused: false,
     recentWords: [], activeQuiz: null, activeManualQuiz: null,
   };
 
   // expiresAt(고정 만료 시각)을 quiz에 함께 저장해두면, 봇이 재시작돼도 남은 시간을 다시
   // 계산해 타이머를 정확히 이어서 걸 수 있다(재시작 시 checkAndSchedule에서 복원).
   const expiresAt = Date.now() + MANUAL_QUIZ_TIME_LIMIT_MS;
-  const ok = await postQuiz(client, state, modeKey, { word, hint }, 'activeManualQuiz', { expiresAt });
+  const ok = await postQuiz(client, state, { word, hint }, 'activeManualQuiz', { expiresAt });
   if (ok && client.activeManualQuiz) armManualQuizTimeout(client, client.activeManualQuiz, MANUAL_QUIZ_TIME_LIMIT_MS);
-  return { ok, mode: modeKey };
+  return { ok };
 }
 
 function getQuizStatus() {

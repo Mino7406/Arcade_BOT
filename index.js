@@ -245,7 +245,7 @@ async function onReady(c) {
   startVoiceXpTicker(c); // 통화방 체류 XP 1분 틱 시작
   await reconcileTempChannels(c); // 재시작 전 만들어둔 임시 음성채널 중 빈 방 정리
   await reconcileMatchBonusMessages(c); // 봇이 꺼져있던 동안 인증 채널에 올라와 예약이 빠진 메시지 복구
-  startQuizScheduler(c); // 놀이터 채널에 하루 한 번 무작위 시각으로 초성퀴즈/상식퀴즈를 번갈아 출제
+  startQuizScheduler(c); // 놀이터 채널에 하루 한 번 무작위 시각으로 상식퀴즈를 출제
   dataReady = true;
 }
 client.once(Events.ClientReady, onReady);
@@ -362,7 +362,7 @@ client.on('interactionCreate', async (interaction) => {
         await handleMojipMatchEditModal(interaction);
       } else if (interaction.customId.startsWith('mojip:notify_modal:')) {
         await handleMojipNotifyModal(interaction);
-      } else if (interaction.customId.startsWith('quiz:create_modal:')) {
+      } else if (interaction.customId === 'quiz:create_modal') {
         await handleQuizCreateModal(interaction);
       } else if (interaction.customId.startsWith('panel:bot_msg_delete_modal:')) {
         await handlePanelBotMessageDeleteModal(interaction);
