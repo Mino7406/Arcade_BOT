@@ -5,17 +5,8 @@ const {
 } = require('discord.js');
 const { ADMIN_IDS } = require('../handlers/공용');
 const { pauseQuiz, resumeQuiz, postCustomQuiz, getQuizStatus } = require('../handlers/퀴즈');
-const { KST_OFFSET_MS } = require('../handlers/시간');
 
 const WORD_ONLY = /^[가-힣]{2,10}$/;
-
-function formatKst(epochMs) {
-  if (!epochMs) return '-';
-  const kst = new Date(epochMs + KST_OFFSET_MS);
-  const hh = String(kst.getUTCHours()).padStart(2, '0');
-  const mm = String(kst.getUTCMinutes()).padStart(2, '0');
-  return `${kst.getUTCMonth() + 1}/${kst.getUTCDate()} ${hh}:${mm}`;
-}
 
 // /퀴즈 실행 시(그리고 각 버튼 조작 후) 보여줄 메인 패널: 현재 상태 요약 + 조작 버튼.
 // notice가 있으면 상태 요약 위에 방금 한 조작의 결과 한 줄을 덧붙인다.
@@ -33,9 +24,6 @@ function buildQuizPanelPayload(notice) {
     '🛠️ **퀴즈 관리**',
     `상태 : ${state.paused ? '⏸️ 중지됨' : '▶️ 자동 출제 중'}`,
     `오늘 출제 여부 : ${state.posted ? '✅ 출제됨' : '⏳ 대기 중'}`,
-    `출제 예정 시각 : ${state.posted ? '-' : formatKst(state.scheduledAt)} (KST)`,
-    `자동 출제 미해결 문제 : ${state.activeQuiz ? `\`${state.activeQuiz.word}\`` : '없음'}`,
-    `관리자 출제 미해결 문제 : ${state.activeManualQuiz ? `\`${state.activeManualQuiz.word}\` (1시간 후 자동 마감)` : '없음'}`,
   ];
 
   return {
