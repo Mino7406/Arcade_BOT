@@ -69,27 +69,37 @@ function rollGrade(weights) {
   return Object.keys(weights)[0];
 }
 
-function gradeTitle(title, grade) {
-  return grade ? `${title} (${grade})` : title;
-}
+// 등급 배지: 색 원 + 별 개수로 난이도가 한눈에 보이게 한다. 등급이 없는 관리자 출제 문제는
+// 배지 줄 없이 보상만 표시한다.
+const GRADE_BADGE = {
+  '초급': { icon: '🟢', stars: '★☆☆' },
+  '중급': { icon: '🟡', stars: '★★☆' },
+  '고급': { icon: '🔴', stars: '★★★' },
+};
 
 const QUIZ_LABEL = '상식퀴즈';
+
+function badgeLine(grade, xpReward) {
+  const badge = GRADE_BADGE[grade];
+  return badge
+    ? `${badge.icon} **${grade}**  ${badge.stars} · 💰 **${xpReward} XP**`
+    : `💰 **${xpReward} XP**`;
+}
 
 function buildQuizEmbed({ word, hint, grade, xpReward }) {
   return new EmbedBuilder()
     .setColor(0xFFD700) // 오목·틱택토 결과(승리) 임베드와 같은 노란색
-    .setTitle(gradeTitle('📖 오늘의 퀴즈!', grade))
+    .setTitle('📖 오늘의 퀴즈!')
     .setDescription(
-      `다음 뜻풀이에 해당하는 단어는? **(${word.length}글자)**\n` +
+      `${badgeLine(grade, xpReward)}
+
+` +
+      `다음 뜻풀이에 해당하는 단어는? **(${word.length}글자)**
+` +
       `> ${hint}`,
     )
-    .setFooter({ text: `✏️ 채팅으로 정답을 입력하면 자동으로 채점됩니다. · 보상 ${xpReward} XP` })
+    .setFooter({ text: '✏️ 채팅으로 정답을 입력하면 자동으로 채점됩니다.' })
     .setTimestamp();
-}
-
-// 정답 공개 메시지 뒤에 붙이는 뜻풀이 한 줄(이전 버전 상태 파일처럼 hint가 없으면 생략).
-function hintLine(quiz) {
-  return quiz.hint ? `\n> ${quiz.hint}` : '';
 }
 
 // 순수 달력 날짜가 아니라 "이 시각이 어느 출제 사이클에 속하는지"를 반환한다. 출제 가능
@@ -216,7 +226,7 @@ async function voidQuiz(client, state, slotKey) {
   state[slotKey] = null;
   try {
     const channel = await client.channels.fetch(quiz.channelId).catch(() => null);
-    await channel?.send(`⌛ **지난 ${QUIZ_LABEL} 정답은 ${quiz.word} 였습니다.**${hintLine(quiz)}\n아무도 맞히지 못해 보상 없이 마감되었습니다.`);
+    await channel?.send(`⌛ **지난 ${QUIZ_LABEL} 정답은 ${quiz.word} 였습니다.**\n아무도 맞히지 못해 보상 없이 마감되었습니다.`);
   } catch (err) {
     console.error('퀴즈 무효 처리 중 오류:', err);
   }
@@ -239,7 +249,7 @@ async function postQuiz(client, state, picked, slotKey = 'activeQuiz', extraFiel
 
     const xpReward = GRADE_XP[picked.grade] ?? DEFAULT_XP_REWARD;
     const quiz = {
-      channelId: QUIZ_CHANNEL_ID, guildId: channel.guildId, word: picked.word, hint: picked.hint,
+      channelId: QUIZ_CHANNEL_ID, guildId: channel.guildId, word: picked.word,
       grade: picked.grade ?? null, xpReward, ...extraFields,
     };
     client[slotKey] = quiz;
@@ -435,7 +445,7 @@ function armManualQuizTimeout(client, quiz, delayMs = MANUAL_QUIZ_TIME_LIMIT_MS)
     }
     try {
       const channel = await client.channels.fetch(quiz.channelId).catch(() => null);
-      await channel?.send(`⌛ **1시간이 지나 관리자가 낸 ${QUIZ_LABEL}가 마감되었습니다.**\n정답은 **${quiz.word}** 였습니다.${hintLine(quiz)}`);
+      await channel?.send(`⌛ **1시간이 지나 관리자가 낸 ${QUIZ_LABEL}가 마감되었습니다.**\n정답은 **${quiz.word}** 였습니다.`);
     } catch (err) {
       console.error('관리자 출제 문제 시간 초과 처리 중 오류:', err);
     }
@@ -489,7 +499,7 @@ async function handleQuizMessage(message) {
     if (isMinigameXpFrozen()) {
       // 관리자 긴급정지 중(미니게임) — 정답 처리는 하되 XP는 지급하지 않는다.
       await message.reply({
-        content: `⭕ 정답입니다! **${quiz.word}**${hintLine(quiz)}\n-# ⚙️ 현재 XP 지급이 일시 중지되어 이번 정답은 XP가 지급되지 않았습니다.`,
+        content: `⭕ 정답입니다! **${quiz.word}**\n-# ⚙️ 현재 XP 지급이 일시 중지되어 이번 정답은 XP가 지급되지 않았습니다.`,
         allowedMentions: { repliedUser: false, users: [] },
       }).catch(() => {});
       return;
@@ -498,7 +508,7 @@ async function handleQuizMessage(message) {
     const result = applyXp(quiz.guildId, message.author.id, quiz.xpReward);
     const levelUpLine = result.leveledUp ? `\n<@${message.author.id}>님이 ${result.newLevel}레벨을 달성했어요. 🎉` : '';
     await message.reply({
-      content: `⭕ 정답입니다! **${quiz.word}** (+${quiz.xpReward} XP)${hintLine(quiz)}${levelUpLine}`,
+      content: `⭕ 정답입니다! **${quiz.word}** (+${quiz.xpReward} XP)${levelUpLine}`,
       allowedMentions: { repliedUser: false, users: result.leveledUp ? [message.author.id] : [] },
     }).catch(() => {});
     return; // 한 메시지는 한 슬롯만 채점
