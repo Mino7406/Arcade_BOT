@@ -478,6 +478,21 @@ function settleGameXp(game) {
   }
 }
 
+// 봇의 수는 게임 상태가 이미 갱신된 뒤 화면만 수정하는데, 이 수정이 일시적 오류(네트워크/레이트리밋)로
+// 실패하면 화면이 "봇의 차례"에 멈춘 채 남았다. 최신 상태로 다시 그려 몇 번 재시도한다.
+async function editWithRetry(message, buildPayload, attempts = 3) {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      await message.edit(buildPayload());
+      return true;
+    } catch (err) {
+      console.error(`틱택토 메시지 수정 실패(${i + 1}/${attempts}):`, err);
+      await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+    }
+  }
+  return false;
+}
+
 function applyMove(game, games, idx, mark) {
   game.board[idx] = mark;
 
@@ -793,7 +808,7 @@ async function handleTttButton(interaction) {
     if (game.players[game.currentTurn] === 'BOT') {
       const botIdx = pickBotMove(game);
       applyMove(game, games, botIdx, 'O');
-      await game.message.edit({ content: '', embeds: [buildEmbed(game)], components: buildBoard(game) }).catch(() => {});
+      await editWithRetry(game.message, () => ({ content: '', embeds: [buildEmbed(game)], components: buildBoard(game) }));
       // 봇이 두고 나면 다시 사람 차례 — 이 턴에도 5분 타이머를 새로 걸어야 한다.
       // (안 걸면 beginGame 때 건 타이머 하나로 온 게임을 재는 꼴이 돼, 봇전은 판 시작 후
       //  5분이 지나면 사람 차례에 무승부로 끝나버린다. 사람 vs 사람은 아래에서 매 턴 갱신됨)

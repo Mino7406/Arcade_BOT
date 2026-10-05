@@ -620,10 +620,25 @@ async function moveBoardDown(game, payload) {
   }
 }
 
-async function refreshBoard(game) {
+// 진행 중 보드 갱신이 한 번 실패하고 조용히 넘어가면 화면이 이전 차례에 멈춘 채 남는다.
+// 몇 초 간격으로 재시도하되, 그사이 판이 진행/종료됐을 수 있으니 매번 최신 상태로 다시 그린다.
+const REFRESH_RETRY_DELAYS_MS = [2_000, 6_000];
+
+async function refreshBoard(game, delays = REFRESH_RETRY_DELAYS_MS) {
   const payload = await playingPayload(game);
   if (game.messagesSinceBoard && await moveBoardDown(game, payload)) return;
-  await game.message?.edit(payload).catch(() => {});
+  try {
+    await game.message?.edit(payload);
+  } catch (err) {
+    if (!delays.length) {
+      console.error('오목 보드 갱신 최종 실패:', err);
+      return;
+    }
+    const [wait, ...rest] = delays;
+    setTimeout(() => {
+      if (game.status === 'playing') refreshBoard(game, rest).catch(() => {});
+    }, wait);
+  }
 }
 
 // 종료 화면도 맨 아래에 보여야 한다. 내리기 실패 시 원래 자리에서라도 반드시 갱신되도록 재시도.

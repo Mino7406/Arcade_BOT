@@ -321,7 +321,23 @@ async function spinLobby(interaction, lobby, lobbies) {
     });
 
     await animateSpin(spinMessage, lobby.id, reels);
-    await spinMessage.edit({ embeds: [resultEmbed], components: [buildReelRow(lobby.id, reels, getMatchIndices(reels))] }).catch(() => {});
+
+    // 결과 수정이 일시적 오류(네트워크/레이트리밋)로 한 번 실패하면 메시지가 "릴이 돌아가는 중..."에
+    // 영영 멈춰 보였다. 몇 번 재시도하고, 그래도 안 되면 결과를 새 메시지로 보낸다.
+    const finalPayload = { embeds: [resultEmbed], components: [buildReelRow(lobby.id, reels, getMatchIndices(reels))] };
+    let edited = false;
+    for (let attempt = 0; attempt < 3 && !edited; attempt++) {
+      try {
+        await spinMessage.edit(finalPayload);
+        edited = true;
+      } catch (err) {
+        console.error(`룰렛 결과 수정 실패(${attempt + 1}/3):`, err);
+        await sleep(1000 * (attempt + 1));
+      }
+    }
+    if (!edited) {
+      await channel.send(finalPayload).catch(err => console.error('룰렛 결과 새 메시지 전송 실패:', err));
+    }
   } catch (err) {
     console.error('룰렛 결과 공개 실패:', err);
     await interaction.editReply({ content: '', embeds: [resultEmbed], components: [] }).catch(() => {});
