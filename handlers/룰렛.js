@@ -328,7 +328,11 @@ async function spinLobby(interaction, lobby, lobbies) {
     let edited = false;
     for (let attempt = 0; attempt < 3 && !edited; attempt++) {
       try {
-        await spinMessage.edit(finalPayload);
+        // 응답이 영영 오지 않고 매달리는 경우(재시도 로직이 못 도는 경우)도 있어 시간 제한을 둔다.
+        await Promise.race([
+          spinMessage.edit(finalPayload),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('edit timeout')), 8000)),
+        ]);
         edited = true;
       } catch (err) {
         console.error(`룰렛 결과 수정 실패(${attempt + 1}/3):`, err);
