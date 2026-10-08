@@ -32,7 +32,7 @@ const { buildCommandListPayload, buildSetupPanelPayload, buildAdminMenuPayload, 
 const { handleRealmButton, handleRealmModal, handleRealmRosterModal, initRulesAgreementCache, handleRealmRulesReactionAdd, handleRealmRulesReactionRemove } = require('./forms/마크');
 const { handleFormSelectButton } = require('./commands/신청서');
 const { handleLevelShareButton } = require('./commands/레벨');
-const { handleRankingPageButton, handleRankingShareButton } = require('./commands/랭킹');
+const { handleRankingPageButton, handleRankingGotoButton, handleRankingGotoModal, handleRankingShareButton } = require('./commands/랭킹');
 const { handleXpUserSelect, handleXpButton, handleXpModal } = require('./commands/XP');
 const { loadLevels, saveLevels, loadXpState, handleMessageXp, trackVoiceStateUpdate, initVoiceStates, startVoiceXpTicker, announceLevelUp, MATCH_BONUS_CHANNEL_ID } = require('./handlers/레벨링');
 const { handleTempVoiceState, reconcileTempChannels } = require('./handlers/음성채널');
@@ -385,6 +385,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleQuizCreateModal(interaction);
       } else if (interaction.customId.startsWith('panel:bot_msg_delete_modal:')) {
         await handlePanelBotMessageDeleteModal(interaction);
+      } else if (interaction.customId === 'ranking:goto_modal') {
+        await handleRankingGotoModal(interaction);
       } else if (interaction.customId.startsWith('xp:')) {
         await handleXpModal(interaction);
       } else if (interaction.customId === 'realm:modal') {
@@ -414,6 +416,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleLevelShareButton(interaction);
       } else if (interaction.customId.startsWith('ranking:page:')) {
         await handleRankingPageButton(interaction);
+      } else if (interaction.customId.startsWith('ranking:goto:')) {
+        await handleRankingGotoButton(interaction);
       } else if (interaction.customId.startsWith('ranking:share:')) {
         await handleRankingShareButton(interaction);
       } else if (interaction.customId.startsWith('xp:')) {

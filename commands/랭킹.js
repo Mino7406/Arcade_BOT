@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { getLeaderboard, getLeaderboardSize, buildProgressBar } = require('../handlers/레벨링');
 
 const PAGE_SIZE = 5;
@@ -60,6 +60,11 @@ function buildComponents(page, totalPages, includeShare = true) {
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page <= 1),
     new ButtonBuilder()
+      .setCustomId(`ranking:goto:${totalPages}`)
+      .setLabel('🔍 페이지 이동')
+      .setStyle(ButtonStyle.Primary)
+      .setDisabled(totalPages <= 1),
+    new ButtonBuilder()
       .setCustomId(`ranking:page:${page + 1}`)
       .setLabel('▶')
       .setStyle(ButtonStyle.Secondary)
@@ -70,7 +75,7 @@ function buildComponents(page, totalPages, includeShare = true) {
       new ButtonBuilder()
         .setCustomId(`ranking:share:${page}`)
         .setLabel('📤 공유하기')
-        .setStyle(ButtonStyle.Primary),
+        .setStyle(ButtonStyle.Success),
     );
   }
   return [new ActionRowBuilder().addComponents(...buttons)];
@@ -128,7 +133,41 @@ module.exports = {
 // 3초 인터랙션 응답 제한을 넘기지 않도록, 멤버 조회 등 오래 걸릴 수 있는 작업 전에 먼저 ack한다.
 async function handleRankingPageButton(interaction) {
   await interaction.deferUpdate();
-  const page = parseInt(interaction.customId.slice('ranking:page:'.length), 10) || 1;
+  await showRankingPage(interaction, parseInt(interaction.customId.slice('ranking:page:'.length), 10) || 1);
+}
+
+// 페이지 이동 버튼: 이동할 페이지 번호를 입력받는 모달을 연다.
+async function handleRankingGotoButton(interaction) {
+  const totalPages = parseInt(interaction.customId.slice('ranking:goto:'.length), 10) || 1;
+  const modal = new ModalBuilder()
+    .setCustomId('ranking:goto_modal')
+    .setTitle('페이지 이동')
+    .addComponents(new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId('page')
+        .setLabel(`이동할 페이지 (1 ~ ${totalPages})`)
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('숫자를 입력하세요')
+        .setMinLength(1)
+        .setMaxLength(6)
+        .setRequired(true),
+    ));
+  await interaction.showModal(modal);
+}
+
+async function handleRankingGotoModal(interaction) {
+  // 버튼을 눌러 연 모달이 아니면(메시지와 연결되지 않으면) 갱신할 임베드가 없으므로 무시한다.
+  if (!interaction.isFromMessage()) return;
+  await interaction.deferUpdate();
+  const input = interaction.fields.getTextInputValue('page').trim();
+  if (!/^[0-9]+$/.test(input)) {
+    await interaction.followUp({ content: '❌ 페이지 번호는 숫자로 입력해주세요.', flags: MessageFlags.Ephemeral });
+    return;
+  }
+  await showRankingPage(interaction, parseInt(input, 10)); // 범위를 벗어난 값은 buildRankingView에서 보정된다.
+}
+
+async function showRankingPage(interaction, page) {
   // 지금 누른 메시지에 원래 공유하기 버튼이 있었는지 그대로 유지한다.
   // (공개 채널 메시지는 공유하기 버튼이 없어야 하므로, 페이지를 넘겨도 다시 생기면 안 된다.)
   // 행 전체를 훑어서 확인한다 — 배포 시점에 따라 공유하기 버튼이 어느 행에 있었는지가 달라질 수 있다.
@@ -161,4 +200,6 @@ async function handleRankingShareButton(interaction) {
 }
 
 module.exports.handleRankingPageButton = handleRankingPageButton;
+module.exports.handleRankingGotoButton = handleRankingGotoButton;
+module.exports.handleRankingGotoModal = handleRankingGotoModal;
 module.exports.handleRankingShareButton = handleRankingShareButton;
