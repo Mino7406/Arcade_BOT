@@ -12,7 +12,7 @@ const path = require('path');
 const { applyXp, isExcludedGuild, isMinigameXpFrozen } = require('./레벨링');
 const { KST_OFFSET_MS } = require('./시간');
 const { QUIZ_CHANNEL_ID } = require('../config'); // 놀이터 채널 (config.js의 PLAYGROUND_CHANNEL_ID)
-const { logSystem } = require('./로그');
+const { logSystem, logError, userLabel } = require('./로그');
 const { writeJsonIfChanged } = require('./저장');
 
 // KST 기준 출제 가능 시간대: 오전 10시 ~ 밤 11시. 이 시각(23:00)까지 봇이 안 켜져 있었다면
@@ -208,6 +208,8 @@ async function pickWord(recentWords, gradeWeights) {
   const dynamic = await pickDynamicWord(recentWords, gradeWeights);
   if (dynamic) return dynamic;
 
+  // 외부 사전 API가 실패하거나 조건에 맞는 단어가 없으면 내장 목록으로 대신 낸다 — 반복되면 API 문제 신호.
+  logSystem({ 유형: '퀴즈', 수준: '경고', 내용: '사전 API에서 문제를 못 골라 내장 단어 목록으로 출제' });
   const pool = FALLBACK_WORDS.filter(([w]) => !recentWords.includes(w));
   const bank = pool.length ? pool : FALLBACK_WORDS;
   const [word, hint] = bank[Math.floor(Math.random() * bank.length)];
@@ -227,8 +229,10 @@ async function voidQuiz(client, state, slotKey) {
   try {
     const channel = await client.channels.fetch(quiz.channelId).catch(() => null);
     await channel?.send(`⌛ **지난 ${QUIZ_LABEL} 정답은 ${quiz.word} 였습니다.**\n아무도 맞히지 못해 보상 없이 마감되었습니다.`);
+    logSystem({ 유형: '퀴즈', 내용: `${slotKey === 'activeQuiz' ? '자동' : '관리자'} 출제 문제 무효 처리 — 정답 '${quiz.word}'(${quiz.grade ?? '-'}), 새 문제가 올라와 미해결로 마감` });
   } catch (err) {
     console.error('퀴즈 무효 처리 중 오류:', err);
+    logError('퀴즈', '퀴즈 무효 처리 중 오류', err);
   }
 }
 
@@ -242,7 +246,10 @@ async function postQuiz(client, state, picked, slotKey = 'activeQuiz', extraFiel
 
   try {
     const channel = await client.channels.fetch(QUIZ_CHANNEL_ID).catch(() => null);
-    if (!channel) return false;
+    if (!channel) {
+      logError('퀴즈', `퀴즈 채널(${QUIZ_CHANNEL_ID})을 찾지 못해 출제 실패`);
+      return false;
+    }
 
     picked = picked || await pickWord(state.recentWords || [], GRADE_WEIGHTS);
     state.recentWords = [picked.word, ...(state.recentWords || [])].slice(0, RECENT_WORD_MEMORY);
@@ -257,9 +264,12 @@ async function postQuiz(client, state, picked, slotKey = 'activeQuiz', extraFiel
     saveState(state);
 
     await channel.send({ embeds: [buildQuizEmbed({ ...picked, xpReward })] });
+    // 정답 단어는 log.json에 남기지 않는다(파일을 보는 사람에게 미해결 문제 정답이 새면 안 됨) — 정답 공개/마감 시점에 남긴다.
+    logSystem({ 유형: '퀴즈', 채널: `#${channel.name}`, 내용: `${slotKey === 'activeQuiz' ? '자동' : '관리자'} 출제 — 난이도 ${picked.grade ?? '-'}, 보상 ${xpReward} XP` });
     return true;
   } catch (err) {
     console.error('퀴즈 출제 중 오류:', err);
+    logError('퀴즈', '퀴즈 출제 중 오류', err);
     return false;
   }
 }
@@ -446,8 +456,10 @@ function armManualQuizTimeout(client, quiz, delayMs = MANUAL_QUIZ_TIME_LIMIT_MS)
     try {
       const channel = await client.channels.fetch(quiz.channelId).catch(() => null);
       await channel?.send(`⌛ **1시간이 지나 관리자가 낸 ${QUIZ_LABEL}가 마감되었습니다.**\n정답은 **${quiz.word}** 였습니다.`);
+      logSystem({ 유형: '퀴즈', 내용: `관리자 출제 문제 1시간 경과로 마감 — 정답 '${quiz.word}'(${quiz.grade ?? '-'}), 정답자 없음` });
     } catch (err) {
       console.error('관리자 출제 문제 시간 초과 처리 중 오류:', err);
+      logError('퀴즈', '관리자 출제 문제 시간 초과 처리 중 오류', err);
     }
   }, Math.max(0, delayMs));
 }
@@ -498,6 +510,7 @@ async function handleQuizMessage(message) {
 
     if (isMinigameXpFrozen()) {
       // 관리자 긴급정지 중(미니게임) — 정답 처리는 하되 XP는 지급하지 않는다.
+      logSystem({ 유형: '퀴즈', 유저: userLabel(message.author.id), 채널: `#${message.channel?.name ?? message.channelId}`, 내용: `정답 '${quiz.word}'(${quiz.grade ?? '-'}) — 미니게임 XP 긴급정지 중이라 XP 미지급` });
       await message.reply({
         content: `⭕ 정답입니다! **${quiz.word}**\n-# ⚙️ 현재 XP 지급이 일시 중지되어 이번 정답은 XP가 지급되지 않았습니다.`,
         allowedMentions: { repliedUser: false, users: [] },
@@ -505,7 +518,7 @@ async function handleQuizMessage(message) {
       return;
     }
 
-    const result = applyXp(quiz.guildId, message.author.id, quiz.xpReward);
+    const result = applyXp(quiz.guildId, message.author.id, quiz.xpReward, `퀴즈 정답 '${quiz.word}'(${quiz.grade ?? '-'}, ${slotKey === 'activeQuiz' ? '자동' : '관리자'} 출제)`);
     const levelUpLine = result.leveledUp ? `\n<@${message.author.id}>님이 ${result.newLevel}레벨을 달성했어요. 🎉` : '';
     await message.reply({
       content: `⭕ 정답입니다! **${quiz.word}** (+${quiz.xpReward} XP)${levelUpLine}`,

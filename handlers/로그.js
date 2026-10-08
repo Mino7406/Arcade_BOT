@@ -25,7 +25,8 @@ const TMP_PATH = `${LOG_PATH}.tmp`;
 fs.mkdirSync(path.dirname(LOG_PATH), { recursive: true });
 
 // 로그가 무한정 커져 파일이 무거워지지 않도록 최근 이만큼만 보관한다(오래된 것부터 버림).
-const MAX_ENTRIES = 5000;
+// (XP 지급·게임 결과까지 남기게 되면서 5000개로는 금방 차서 10000개로 늘렸다)
+const MAX_ENTRIES = 10000;
 
 function nowKstStr() {
   const kst = new Date(Date.now() + KST_OFFSET_MS);
@@ -150,8 +151,77 @@ function describeInteraction(interaction) {
 // interaction이 아예 없는 곳(타이머로 도는 DM 발송 등)에서 봇이 스스로 겪은 일을 남긴다.
 // logAction은 interaction.user/channel에서 유저·채널을 뽑아 쓰므로 그런 경로에서는 못 쓴다.
 // 필드 구성(시각/유형/유저/채널/내용)은 동일하게 맞추고, 해당 없는 값만 '-'로 채운다.
-function logSystem({ 유형, 내용, 유저 = '-', 채널 = '-' }) {
-  writeEntry({ 시각: nowKstStr(), 유형, 유저, 채널, 내용 });
+// 수준('경고'/'오류')은 지정했을 때만 필드로 남긴다 — 평소 기록의 모양은 그대로 두고,
+// 파일에서 "수준" 으로 검색하면 문제 상황만 골라볼 수 있게 하기 위함.
+function logSystem({ 유형, 내용, 유저 = '-', 채널 = '-', 수준 }) {
+  const entry = { 시각: nowKstStr(), 유형, 유저, 채널, 내용 };
+  if (수준) entry.수준 = 수준;
+  writeEntry(entry);
+}
+
+// console.error만 하던 오류를 파일 로그에도 남긴다(봇이 꺼지면 콘솔은 사라지므로).
+// 로그 기록 자체가 또 다른 오류를 만들어 원래 처리 흐름을 깨면 안 되므로 여기서 삼킨다.
+function logError(유형, 내용, err, extra = {}) {
+  try {
+    const detail = err ? ` — ${err?.code ? `${err.code}: ` : ''}${err?.message ?? err}` : '';
+    logSystem({ 유형, 내용: `${내용}${detail}`, 수준: '오류', ...extra });
+  } catch (e) {
+    console.error('오류 로그 기록 실패:', e);
+  }
+}
+
+// 게임 3종(끝말잇기·오목·틱택토)의 내기/봇전 정산 결과(game.xpResult)를 한 줄 문구로 바꾼다.
+// XP가 실제로 오간 내역은 applyXp의 reason 로그가 유저별로 따로 남기므로, 여기서는 "정산이 어떻게
+// 처리됐는지"(내기 성사 / 봇전 보상 / 쿨다운·한도·정지로 보류)만 요약한다.
+function describeXpResult(r) {
+  if (!r) return '정산 없음';
+  switch (r.type) {
+    case 'wager': return `내기 정산 ${r.wager}XP`;
+    case 'bot_win': return `봇전 보상 지급${r.capped ? '(일일 한도로 일부 삭감)' : ''}`;
+    case 'cooldown': return '정산 보류 — 같은 유저 연속 정산 쿨다운';
+    case 'bot_daily_cap': return '정산 보류 — 봇전 일일 XP 한도';
+    case 'user_frozen': return '정산 보류 — XP 지급 정지 유저';
+    case 'frozen': return '정산 생략 — 미니게임 XP 긴급정지';
+    default: return `정산 ${r.type}`;
+  }
+}
+
+// 게임이 끝날 때 "누가 · 누구랑 · 어떻게 끝났는지"를 한 줄로 남긴다.
+// players: [{ id, name }], 결과: 사람이 읽는 승패/종료 사유 문구.
+function logGameResult(게임, { channel, players = [], 결과, xpResult }) {
+  const names = players.map(p => (p.id === 'BOT' ? '봇' : p.name ? `${p.name}(${p.id})` : userLabel(p.id))).join(', ');
+  logSystem({
+    유형: '게임 결과',
+    채널: channel?.name ? `#${channel.name}` : '-',
+    내용: `${게임} 종료 — 참가자: ${names || '-'} / ${결과} / ${describeXpResult(xpResult)}`,
+  });
+}
+
+// 30초 자동 저장처럼 반복되는 곳에서 같은 오류가 계속 나면 로그가 그것만으로 가득 찬다.
+// key별로 minIntervalMs 안에 다시 오는 건 건너뛰고, 건너뛴 횟수는 다음 기록에 함께 적는다.
+const throttleState = new Map(); // key → { last, skipped }
+function logErrorThrottled(key, 유형, 내용, err, extra = {}, minIntervalMs = 10 * 60 * 1000) {
+  const st = throttleState.get(key) || { last: 0, skipped: 0 };
+  const now = Date.now();
+  if (now - st.last < minIntervalMs) {
+    st.skipped++;
+    throttleState.set(key, st);
+    return;
+  }
+  const suffix = st.skipped ? ` (그동안 같은 오류 ${st.skipped}회 생략)` : '';
+  throttleState.set(key, { last: now, skipped: 0 });
+  logError(유형, `${내용}${suffix}`, err, extra);
+}
+
+// interaction이 없는 경로(XP 지급, 게임 정산 등)에서 유저를 "이름(ID)"로 적기 위한 조회.
+// 캐시에 없으면 ID만 적는다. index.js가 준비되면 setLogClient(client)로 클라이언트를 넘겨둔다.
+let logClient = null;
+function setLogClient(client) { logClient = client; }
+function userLabel(userId) {
+  if (!userId) return '-';
+  const u = logClient?.users?.cache?.get(userId);
+  const name = u ? (u.globalName || u.username) : null;
+  return name ? `${name}(${userId})` : `(${userId})`;
 }
 
 // 로그를 남기지 않을 상호작용의 customId 접두사.
@@ -188,4 +258,4 @@ function logAction(interaction, 유형, 내용) {
   });
 }
 
-module.exports = { logInteraction, logAction, logSystem, flushLogsSync };
+module.exports = { logInteraction, logAction, logSystem, logError, logErrorThrottled, logGameResult, setLogClient, userLabel, flushLogsSync };

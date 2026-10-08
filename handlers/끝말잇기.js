@@ -11,6 +11,7 @@ const {
   WAGER_XP, BOT_WIN_XP_MIN, BOT_WIN_XP_MAX, rollBotWinXp,
 } = require('./봇전한도');
 const { displayNameFromInteraction } = require('./이름');
+const { logGameResult, logError } = require('./로그');
 
 const TURN_MS  = 20_000;
 const TURN_SEC = TURN_MS / 1000;
@@ -151,6 +152,7 @@ function logStdictError(code, message) {
   if (lastStdictErrorLog.code === code && now - lastStdictErrorLog.at < STDICT_ERROR_LOG_INTERVAL_MS) return;
   lastStdictErrorLog = { code, at: now };
   console.error(`표준국어대사전 API 오류 [${code}] ${message} — 복구될 때까지 기초사전 판정만 사용됩니다.`);
+  logError('사전 API 오류', `표준국어대사전 API 오류 [${code}] ${message} — 복구될 때까지 기초사전 판정만 사용됨`);
 }
 
 async function lookupStdict(word) {
@@ -508,6 +510,7 @@ async function startRematchRequest(interaction, oldGame, humanPlayers, hadBot) {
     });
   } catch (err) {
     console.error('끝말잇기 재대결 신청 메시지 전송 실패:', err);
+    logError('게임 오류', '끝말잇기 재대결 신청 메시지 전송 실패', err);
     games.delete(gameId);
     await interaction.followUp({ content: '⚠️ **재대결 신청을 올리지 못했습니다.** 잠시 후 다시 시도해주세요.', flags: MessageFlags.Ephemeral }).catch(() => {});
     return false;
@@ -577,6 +580,7 @@ async function startRematchGame(interaction, gameId, humanPlayers, hadBot, { rep
     }
   } catch (err) {
     console.error('끝말잇기 재대결 시작 실패:', err);
+    logError('게임 오류', '끝말잇기 재대결 시작 실패', err);
     games.delete(gameId);
     await interaction.followUp({ content: '⚠️ **재대결을 시작하지 못했습니다.** 잠시 후 다시 시도해주세요.', flags: MessageFlags.Ephemeral }).catch(() => {});
     return false;
@@ -609,14 +613,14 @@ function settleWagerXp(game) {
   const wager = Math.min(WAGER_XP, loserLevelXp);
   if (wager <= 0) return null;
 
-  const loserResult = applyXp(game.guildId, game.loser, -wager);
+  const loserResult = applyXp(game.guildId, game.loser, -wager, '끝말잇기 내기 패배');
   const share = Math.floor(wager / eligible.length);
   let remainder = wager - share * eligible.length;
   const winnerResults = [];
   for (const id of eligible) {
     const amount = share + (remainder > 0 ? 1 : 0);
     if (remainder > 0) remainder--;
-    if (amount > 0) winnerResults.push({ userId: id, amount, ...applyXp(game.guildId, id, amount) });
+    if (amount > 0) winnerResults.push({ userId: id, amount, ...applyXp(game.guildId, id, amount, '끝말잇기 내기 승리') });
   }
   return { type: 'wager', wager, loserId: game.loser, loserResult, winnerResults };
 }
@@ -648,7 +652,7 @@ function settleBotWinXp(game) {
     if (grant <= 0) { capped = true; continue; }
     if (grant < rolled) capped = true;
     addBotMatchXp(game.guildId, id, grant);
-    winnerResults.push({ userId: id, amount: grant, ...applyXp(game.guildId, id, grant) });
+    winnerResults.push({ userId: id, amount: grant, ...applyXp(game.guildId, id, grant, '끝말잇기 봇전 승리') });
   }
   // 생존자 전원이 지급받지 못한 경우 — 한도 때문인지 정지 때문인지 구분해서 정확한 이유를 남긴다.
   if (!winnerResults.length) return { type: !capped && anyFrozen ? 'user_frozen' : 'bot_daily_cap' };
@@ -686,6 +690,7 @@ async function editWithRetry(message, payload, delays = FINISH_EDIT_RETRY_DELAYS
   } catch (err) {
     if (!delays.length) {
       console.error('끝말잇기 종료 임베드 갱신 최종 실패:', err);
+      logError('게임 오류', '끝말잇기 종료 임베드 갱신 최종 실패 — 결과를 새 메시지로 대신 전송', err);
       // 원본 메시지를 끝내 못 고치면(예: 메시지가 삭제된 경우) 재시도로는 영영 못 푼다.
       // 그러면 아무도 결과를 볼 수 없으므로 같은 채널에 새 메시지로라도 결과를 남긴다.
       // attachments는 편집 전용 옵션이라 새로 보낼 때는 빼야 한다.
@@ -717,6 +722,7 @@ async function react(message, emoji) {
       + `'메시지 기록 보기' 권한이 있는지 확인하세요:`,
       err?.message ?? err,
     );
+    logError('게임 오류', `끝말잇기 리액션(${emoji}) 실패 — 채널 ${message.channelId}에서 봇의 '반응 추가'/'메시지 기록 보기' 권한 확인 필요`, err);
   }
 }
 
@@ -790,6 +796,21 @@ function endGame(game, games, loserId, reason, failWord = null) {
     settleGameXp(game);
   } catch (err) {
     console.error('끝말잇기 XP 정산 실패:', err);
+    logError('정산 오류', `끝말잇기 XP 정산 실패 — 참가자: ${game.players.map(p => `${p.name}(${p.id})`).join(', ')}, 패자: ${game.loser}`, err);
+  }
+
+  try {
+    const loserP = game.players.find(p => p.id === game.loser);
+    logGameResult('끝말잇기', {
+      channel: game.message?.channel,
+      players: game.players,
+      결과: game.endReason === 'cancelled'
+        ? '방장이 취소'
+        : `패자: ${loserP ? (loserP.id === 'BOT' ? '봇' : loserP.name) : '-'} (${game.endReason}${game.failWord ? `: ${game.failWord}` : ''}), 단어 ${game.history.length}개`,
+      xpResult: game.endReason === 'cancelled' ? null : game.xpResult,
+    });
+  } catch (err) {
+    console.error('끝말잇기 결과 로그 실패:', err);
   }
 
   // 즉시 지우지 않고 잠시 남겨둬서 '재대결' 버튼이 원래 참가자 명단을 찾을 수 있게 함
@@ -800,6 +821,7 @@ function endGame(game, games, loserId, reason, failWord = null) {
     payload = { embeds: [buildFinishedEmbed(game)], components: buildFinishedComponents(game), attachments: [] };
   } catch (err) {
     console.error('끝말잇기 종료 임베드 생성 실패:', err);
+    logError('게임 오류', '끝말잇기 종료 임베드 생성 실패', err);
     payload = { content: '🔤 **끝말잇기가 종료되었습니다.**', embeds: [], components: [], attachments: [] };
   }
   finishBoard(game, payload);
@@ -1207,6 +1229,7 @@ async function handleWcMessage(message) {
       startTurn(game, games);
     } catch (err) {
       console.error('끝말잇기 단어 처리 실패:', err);
+      logError('게임 오류', '끝말잇기 단어 처리 실패', err);
       // 예외 때문에 타이머가 끊긴 채로 게임이 멈춰버리지 않도록 현재 차례 타이머를 다시 건다.
       if (games.get(game.id) === game && game.status === 'playing' && !game.timeoutId) startTurn(game, games);
     } finally {

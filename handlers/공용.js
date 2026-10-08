@@ -20,7 +20,7 @@ const {
 const { awardMatchCompletionXp, announceLevelUp } = require('./레벨링');
 const { KST_OFFSET_MS } = require('./시간');
 const { ADMIN_IDS, STEAM_EMOJI_ID } = require('../config');
-const { logSystem } = require('./로그');
+const { logSystem, logError, userLabel } = require('./로그');
 const { writeJsonIfChanged } = require('./저장');
 
 // 내전(naejeon)/모집(mojip) 두 시스템이 공유하는 게임 → 역할 이름 매핑.
@@ -97,6 +97,14 @@ function logDmFailure(err, { 종류, label, target, match }) {
   }
 }
 
+// 로그 한 줄에서 어떤 내전/모집인지 알아보기 위한 표기: "내전 '제목'(메시지ID)"
+function matchTag(match, label) {
+  return `${label ?? '내전/모집'} '${match?.data?.title ?? '?'}'(${match?.message?.id ?? '?'})`;
+}
+function matchChannelName(match) {
+  return match?.message?.channel?.name ? `#${match.message.channel.name}` : '-';
+}
+
 const AUTO_CLOSE_DELAY_MS = 6 * 60 * 60 * 1000;
 const CANCELLED_DELETE_DELAY_MS = 2 * 60 * 60 * 1000;
 const GENERAL_MESSAGE_DELETE_DELAY_MS = 1 * 60 * 60 * 1000;
@@ -119,6 +127,7 @@ async function deleteMentionMessage(client, match) {
     if (mentionMsg) await mentionMsg.delete();
   } catch (err) {
     console.error('멘션 메시지 자동 삭제 중 오류:', err);
+    logError('자동 삭제 실패', `${matchTag(match)} 참가자 멘션 메시지 삭제 실패`, err, { 채널: matchChannelName(match) });
   }
 }
 
@@ -255,7 +264,10 @@ function armNotifyReminder(matchesMap, msgId, match, label) {
     match._notifyTimer = null;
     const current = matchesMap.get(msgId);
     if (!current || current.data?.notifyAt !== notifyAt) return;
-    trySendNotify(current, label).catch(err => console.error('시작 시간 알림 DM 발송 중 오류:', err));
+    trySendNotify(current, label).catch(err => {
+      console.error('시작 시간 알림 DM 발송 중 오류:', err);
+      logError('매치 알림', `${matchTag(current, label)} 시작 알림 처리 중 오류`, err, { 채널: matchChannelName(current) });
+    });
   };
 
   if (delayMs <= 0) {
@@ -272,6 +284,8 @@ async function sendMatchStartDm(match, label) {
   const organizerId = match.data?.organizer?.id;
   const recipients = match.participants.filter(u => u?.id && u.id !== organizerId);
   const seen = new Set();
+  let sent = 0;
+  let failed = 0;
   for (const user of recipients) {
     if (seen.has(user.id)) continue;
     seen.add(user.id);
@@ -286,11 +300,19 @@ async function sendMatchStartDm(match, label) {
         .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
         .addTextDisplayComponents(td => td.setContent('-# 📬 예약된 알림 시각이 되어 참가자에게 자동으로 전송되었습니다.'));
       await target.send({ components: [container], flags: MessageFlags.IsComponentsV2 });
+      sent++;
     } catch (err) {
       // DM 차단 등으로 실패해도 다른 수신자 발송에는 영향 없음 — 기록만 남기고 다음 사람으로 넘어간다.
+      failed++;
       logDmFailure(err, { 종류: '시작 알림', label, target: user, match });
     }
   }
+  // 개별 실패는 위에서 한 줄씩 남기므로, 여기서는 "알림이 실제로 나갔다"는 요약만 남긴다.
+  logSystem({
+    유형: '매치 알림',
+    채널: matchChannelName(match),
+    내용: `${matchTag(match, label)} 시작 알림 DM 발송 — 성공 ${sent}명${failed ? `, 실패 ${failed}명` : ''}`,
+  });
 }
 
 // 마감(closed)된 시점부터 delayMs(기본 AUTO_CLOSE_DELAY_MS) 후 자동으로 메시지를 삭제한다.
@@ -309,8 +331,10 @@ function armAutoEnd(matchesMap, msgId, match, label, delayMs = AUTO_CLOSE_DELAY_
       matchesMap.delete(msgId);
       await deleteMentionMessage(current.message.client, current);
       await current.message.delete();
+      logSystem({ 유형: '자동 삭제', 채널: matchChannelName(current), 내용: `${matchTag(current, label)} 마감 후 자동 삭제` });
     } catch (err) {
       console.error('자동 삭제 처리 중 오류:', err);
+      logError('자동 삭제 실패', `${matchTag(current, label)} 마감 후 자동 삭제 실패`, err, { 채널: matchChannelName(current) });
     }
   }, delayMs);
 }
@@ -343,9 +367,13 @@ function scheduleCancelledDelete(client, msgId, channelId, cancelledAt = Date.no
     try {
       const channel = client.channels.cache.get(channelId) || await client.channels.fetch(channelId).catch(() => null);
       const message = channel && await channel.messages.fetch(msgId).catch(() => null);
-      if (message) await message.delete();
+      if (message) {
+        await message.delete();
+        logSystem({ 유형: '자동 삭제', 채널: channel?.name ? `#${channel.name}` : '-', 내용: `취소된 '${title ?? '?'}'(${msgId}) 임베드 자동 삭제` });
+      }
     } catch (err) {
       console.error('취소된 임베드 자동 삭제 중 오류:', err);
+      logError('자동 삭제 실패', `취소된 '${title ?? '?'}'(${msgId}) 임베드 자동 삭제 실패`, err);
     }
   }, delayMs);
 }
@@ -371,6 +399,7 @@ function scheduleMessageDelete(client, msgId, channelId, deleteAt = Date.now() +
       if (message) await message.delete();
     } catch (err) {
       console.error('메시지 자동 삭제 중 오류:', err);
+      logError('자동 삭제 실패', `인증 채널 일반 메시지(${msgId}) 자동 삭제 실패`, err);
     }
   }, delayMs);
 }
@@ -407,11 +436,19 @@ async function notifyOrganizerOnClose(match, label) {
 function markClosed(matchesMap, msgId, match, label, notify = true) {
   match.closed = true;
   match.closedAt = Date.now();
+  logSystem({
+    유형: '매치 마감',
+    채널: matchChannelName(match),
+    내용: `${matchTag(match, label)} 마감 (참가자 ${match.participants?.length ?? '?'}명${match.data?.autoClose ? ', 자동 삭제 예약' : ''})`,
+  });
   armAutoEnd(matchesMap, msgId, match, label);
   if (notify) notifyOrganizerOnClose(match, label).catch(() => {});
   // 알림 예약 시각이 이미 지나 있는데(마감 전이라 건너뛰었던 경우) 지금 막 마감됐다면 바로 발송.
   // 아직 시각이 안 지났으면 armNotifyReminder로 걸어둔 타이머가 그때 가서 처리하므로 여기선 아무것도 안 함.
-  trySendNotify(match, label).catch(err => console.error('시작 시간 알림 DM 발송 중 오류:', err));
+  trySendNotify(match, label).catch(err => {
+    console.error('시작 시간 알림 DM 발송 중 오류:', err);
+    logError('매치 알림', `${matchTag(match, label)} 시작 알림 처리 중 오류`, err, { 채널: matchChannelName(match) });
+  });
 }
 
 // 마감 해제(🔓) 상태로 전환하면서 예약돼 있던 자동 종료 타이머를 취소한다.
@@ -442,8 +479,10 @@ async function toggleAutoCloseWhileClosed(matchesMap, msgId, match, label, enabl
       matchesMap.delete(msgId);
       await deleteMentionMessage(match.message.client, match);
       await match.message.delete();
+      logSystem({ 유형: '자동 삭제', 채널: matchChannelName(match), 내용: `${matchTag(match, label)} 마감 후 자동 삭제(자동 삭제 켠 시점에 이미 시간 경과)` });
     } catch (err) {
       console.error('자동 삭제 처리 중 오류:', err);
+      logError('자동 삭제 실패', `${matchTag(match, label)} 마감 후 자동 삭제 실패`, err, { 채널: matchChannelName(match) });
     }
     return;
   }

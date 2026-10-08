@@ -11,6 +11,7 @@ const {
   WAGER_XP, BOT_WIN_XP_MIN, BOT_WIN_XP_MAX, rollBotWinXp,
 } = require('./봇전한도');
 const { displayNameFromInteraction } = require('./이름');
+const { logGameResult, userLabel } = require('./로그');
 
 const TIMEOUT_MS = 5 * 60 * 1000;
 // 대기 로비를 열어두는 시간 — 끝말잇기와 동일하게 2분. 그 안에 시작하지 않으면 자동 취소된다.
@@ -431,8 +432,8 @@ function settleWagerXp(game) {
   const wager = Math.min(WAGER_XP, loserLevelXp);
   if (wager <= 0) return null;
 
-  const loserResult = applyXp(game.guildId, loserId, -wager);
-  const winnerResult = applyXp(game.guildId, winnerId, wager);
+  const loserResult = applyXp(game.guildId, loserId, -wager, '틱택토 내기 패배');
+  const winnerResult = applyXp(game.guildId, winnerId, wager, '틱택토 내기 승리');
   return { type: 'wager', wager, winnerId, loserId, winnerResult, loserResult };
 }
 
@@ -457,7 +458,7 @@ function settleBotWinXp(game) {
   const rolled = rollBotWinXp();
   const amount = Math.min(rolled, remaining);
   addBotMatchXp(game.guildId, winnerId, amount);
-  const result = applyXp(game.guildId, winnerId, amount);
+  const result = applyXp(game.guildId, winnerId, amount, '틱택토 봇전 승리');
   return { type: 'bot_win', amount, winnerId, winnerResult: result, capped: amount < rolled };
 }
 
@@ -493,6 +494,21 @@ async function editWithRetry(message, buildPayload, attempts = 3) {
   return false;
 }
 
+// 게임이 끝날 때 결과를 파일 로그에 한 줄 남긴다(칸 클릭 자체는 로그에서 빼 두었으므로 이 줄이 판의 기록이다).
+function logTttResult(game, 사유) {
+  try {
+    const 승자 = game.winner === 'DRAW' ? null : game.players[game.winner];
+    logGameResult('틱택토', {
+      channel: game.message?.channel,
+      players: [{ id: game.players.X }, { id: game.players.O }],
+      결과: `${승자 ? `승자: ${game.winner === 'X' ? '❌' : '⭕'} ${승자 === 'BOT' ? '봇' : userLabel(승자)}` : '무승부'}${사유 ? ` (${사유})` : ''}${game.infinite ? ', 무한모드' : ''}`,
+      xpResult: 승자 ? game.xpResult : null,
+    });
+  } catch (err) {
+    console.error('틱택토 결과 로그 실패:', err);
+  }
+}
+
 function applyMove(game, games, idx, mark) {
   game.board[idx] = mark;
 
@@ -512,11 +528,13 @@ function applyMove(game, games, idx, mark) {
     clearTimeout(game.timeoutId);
     games.delete(game.id);
     settleGameXp(game);
+    logTttResult(game);
   } else if (isFull(game.board)) {
     game.status = 'finished';
     game.winner = 'DRAW';
     clearTimeout(game.timeoutId);
     games.delete(game.id);
+    logTttResult(game);
   } else {
     game.currentTurn = game.currentTurn === 'X' ? 'O' : 'X';
   }
@@ -530,6 +548,7 @@ function resetTimeout(game, games) {
     g.status = 'finished';
     g.winner = 'DRAW';
     games.delete(g.id);
+    logTttResult(g, '시간 초과');
     await g.message.edit({ content: '⏰ **시간 초과로 게임이 종료되었습니다.**', embeds: [buildEmbed(g)], components: buildBoard(g) }).catch(() => {});
   }, TIMEOUT_MS);
 }

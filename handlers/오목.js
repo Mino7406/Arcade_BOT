@@ -24,6 +24,7 @@ const {
   WAGER_XP, BOT_WIN_XP_MIN, BOT_WIN_XP_MAX, rollBotWinXp,
 } = require('./봇전한도');
 const { displayNameFromInteraction } = require('./이름');
+const { logGameResult, logError, userLabel } = require('./로그');
 
 const N = 15;
 const cellIdx = (x, y) => y * N + x;
@@ -427,6 +428,7 @@ async function react(message, emoji) {
       + `'메시지 기록 보기' 권한이 있는지 확인하세요:`,
       err?.message ?? err,
     );
+    logError('게임 오류', `오목 리액션(${emoji}) 실패 — 채널 ${message.channelId}에서 봇의 '반응 추가'/'메시지 기록 보기' 권한 확인 필요`, err);
   }
 }
 
@@ -444,6 +446,7 @@ async function deleteUserMessage(message) {
       `오목 좌표 메시지 삭제 실패 — 채널 ${message.channelId}에서 봇에게 '메시지 관리' 권한이 있는지 확인하세요:`,
       err?.message ?? err,
     );
+    logError('게임 오류', `오목 좌표 메시지 삭제 실패 — 채널 ${message.channelId}에서 봇의 '메시지 관리' 권한 확인 필요`, err);
   }
 }
 
@@ -464,8 +467,8 @@ function settleWagerXp(game) {
   const loserLevelXp = levelFromXp(getXp(game.guildId, loserId)).currentLevelXp;
   const wager = Math.min(WAGER_XP, loserLevelXp);
   if (wager <= 0) return null;
-  const loserResult = applyXp(game.guildId, loserId, -wager);
-  const winnerResult = applyXp(game.guildId, winnerId, wager);
+  const loserResult = applyXp(game.guildId, loserId, -wager, '오목 내기 패배');
+  const winnerResult = applyXp(game.guildId, winnerId, wager, '오목 내기 승리');
   return { type: 'wager', wager, winnerId, loserId, winnerResult, loserResult };
 }
 
@@ -484,7 +487,7 @@ function settleBotWinXp(game) {
   const rolled = rollBotWinXp();
   const amount = Math.min(rolled, remaining);
   addBotMatchXp(game.guildId, winnerId, amount);
-  const result = applyXp(game.guildId, winnerId, amount);
+  const result = applyXp(game.guildId, winnerId, amount, '오목 봇전 승리');
   return { type: 'bot_win', amount, winnerId, winnerResult: result, capped: amount < rolled };
 }
 
@@ -651,6 +654,7 @@ async function editWithRetry(message, payload, delays = FINISH_EDIT_RETRY_DELAYS
   } catch (err) {
     if (!delays.length) {
       console.error('오목 종료 임베드 갱신 최종 실패:', err);
+      logError('게임 오류', '오목 종료 임베드 갱신 최종 실패 — 결과를 새 메시지로 대신 전송', err);
       const { attachments, ...sendable } = payload;
       await message.channel?.send(sendable).catch(() => {});
       return;
@@ -677,7 +681,24 @@ function finishGame(game, games, winner, endReason, extra = {}) {
   game.timeoutId = null;
   games.delete(game.id);
   if (winner !== 'DRAW') {
-    try { settleGameXp(game); } catch (err) { console.error('오목 XP 정산 실패:', err); }
+    try {
+      settleGameXp(game);
+    } catch (err) {
+      console.error('오목 XP 정산 실패:', err);
+      logError('정산 오류', `오목 XP 정산 실패 — 흑 ${userLabel(game.players.B)}, 백 ${userLabel(game.players.W)}`, err);
+    }
+  }
+
+  try {
+    const winLabel = game.winner === 'DRAW' ? '무승부' : `승자: ${game.winner === 'B' ? '흑' : '백'} ${game.players[game.winner] === 'BOT' ? '봇' : userLabel(game.players[game.winner])}`;
+    logGameResult('오목', {
+      channel: game.message?.channel,
+      players: [{ id: game.players.B }, { id: game.players.W }],
+      결과: `${winLabel} (${endReason}${game.resignedBy ? `, 포기: ${userLabel(game.resignedBy)}` : ''})`,
+      xpResult: game.winner === 'DRAW' ? null : game.xpResult,
+    });
+  } catch (err) {
+    console.error('오목 결과 로그 실패:', err);
   }
 }
 

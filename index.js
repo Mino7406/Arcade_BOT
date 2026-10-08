@@ -36,7 +36,7 @@ const { handleRankingPageButton, handleRankingShareButton } = require('./command
 const { handleXpUserSelect, handleXpButton, handleXpModal } = require('./commands/XP');
 const { loadLevels, saveLevels, loadXpState, handleMessageXp, trackVoiceStateUpdate, initVoiceStates, startVoiceXpTicker, announceLevelUp, MATCH_BONUS_CHANNEL_ID } = require('./handlers/레벨링');
 const { handleTempVoiceState, reconcileTempChannels } = require('./handlers/음성채널');
-const { logInteraction, flushLogsSync } = require('./handlers/로그');
+const { logInteraction, logAction, logSystem, logError, logErrorThrottled, setLogClient, userLabel, flushLogsSync } = require('./handlers/로그');
 
 // 끝말잇기/틱택토/랭킹 명령어와 관련 버튼을 이 채널에서만 사용할 수 있게 제한한다.
 // ALLOWED_CHANNEL_IDS는 내전/모집/팀 상호작용을 허용할 채널 목록(비어 있으면 제한 없음).
@@ -220,6 +220,17 @@ async function reconcileMatchBonusMessages(c) {
   if (recovered > 0) console.log(`♻️  인증 채널 자동 삭제 예약 복구: ${recovered}건`);
 }
 
+// 채널 제한 등으로 막힌 시도를 로그에 남긴다. logInteraction이 "무엇을 눌렀는지"는 이미 남기지만
+// 그 결과가 "거부됨"이라는 건 안 보여서, "명령어가 안 먹혀요" 문의에 바로 답할 수 있게 따로 적는다.
+function logBlocked(interaction, 사유) {
+  try {
+    if (interaction.customId?.startsWith('ttt:move:')) return; // 칸 클릭은 평소에도 로그에서 뺀다
+    logAction(interaction, '차단', `${사유} — ${interaction.isChatInputCommand() ? `/${interaction.commandName}` : interaction.customId}`);
+  } catch (err) {
+    console.error('차단 로그 기록 실패:', err);
+  }
+}
+
 // ─── 봇 준비 완료 시 ──────────────────────────────────────────
 // 이벤트 이름이 discord.js 버전에 따라 'ready'/'clientReady'로 다르므로 Events.ClientReady 상수를 쓴다.
 // (문자열 'ready'를 직접 넘기면 v14.22+ 에서 DeprecationWarning이 뜬다.)
@@ -233,6 +244,7 @@ async function onReady(c) {
   if (_readyDone) return;
   _readyDone = true;
   console.log(`✅ 봇 로그인 완료: ${c.user.tag}`);
+  setLogClient(c); // 로그에 유저 이름을 적을 때 캐시에서 찾기 위함
   c.startedAt = new Date();
   await restoreMatches(c); // ⬅️ 추가: 저장된 내전/모집 복원
   loadLevels(); // ⬅️ 추가: 저장된 레벨/XP 복원
@@ -247,6 +259,10 @@ async function onReady(c) {
   await reconcileMatchBonusMessages(c); // 봇이 꺼져있던 동안 인증 채널에 올라와 예약이 빠진 메시지 복구
   startQuizScheduler(c); // 놀이터 채널에 하루 한 번 무작위 시각으로 상식퀴즈를 출제
   dataReady = true;
+  logSystem({
+    유형: '봇 상태',
+    내용: `봇 시작 — ${c.user.tag}, 서버 ${c.guilds.cache.size}개, 복원된 내전 ${c.naejeonMatches?.size ?? 0}건 / 모집 ${c.mojipMatches?.size ?? 0}건, Node ${process.version}`,
+  });
 }
 client.once(Events.ClientReady, onReady);
 
@@ -272,6 +288,7 @@ client.on('interactionCreate', async (interaction) => {
       interaction.customId?.startsWith('level:');
 
     if (isWordchainOrRanking && !skipChannelLimits && interaction.channelId !== WORDCHAIN_RANKING_CHANNEL_ID) {
+      logBlocked(interaction, '게임/랭킹 전용 채널이 아니라서 거부');
       if (interaction.isRepliable()) {
         await interaction.reply({ content: '❌ 이 채널에서는 사용할 수 없습니다.', flags: MessageFlags.Ephemeral });
       }
@@ -286,6 +303,7 @@ client.on('interactionCreate', async (interaction) => {
       interaction.customId === 'recruit:불러오기';
 
     if (isReload && !skipChannelLimits && interaction.channelId !== MATCH_BONUS_CHANNEL_ID) {
+      logBlocked(interaction, '불러오기 허용 채널이 아니라서 거부');
       if (interaction.isRepliable()) {
         await interaction.reply({ content: '❌ 이 채널에서는 사용할 수 없습니다.', flags: MessageFlags.Ephemeral });
       }
@@ -303,6 +321,7 @@ client.on('interactionCreate', async (interaction) => {
 
     if (!isChannelExempt && !skipChannelLimits) {
       if (allowedChannels.length > 0 && !allowedChannels.includes(interaction.channelId)) {
+        logBlocked(interaction, '허용 채널 목록에 없어서 거부');
         if (interaction.isRepliable()) {
           await interaction.reply({ content: '❌ 이 채널에서는 사용할 수 없습니다.', flags: MessageFlags.Ephemeral });
         }
@@ -411,6 +430,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply(buildCommandListPayload());
       } else if (interaction.customId === 'recruit:관리') {
         if (!ADMIN_IDS.includes(interaction.user.id)) {
+          logBlocked(interaction, '관리자 권한 없음');
           await interaction.reply({ content: '❌ **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
         } else {
           await interaction.reply({ ...buildAdminMenuPayload(interaction.message.id), flags: MessageFlags.Ephemeral });
@@ -425,6 +445,10 @@ client.on('interactionCreate', async (interaction) => {
     }
   } catch (error) {
     console.error(error);
+    logError('처리 오류', `${interaction.isChatInputCommand?.() ? `/${interaction.commandName}` : interaction.customId ?? '알 수 없는 상호작용'} 처리 중 오류 발생`, error, {
+      유저: interaction.user ? userLabel(interaction.user.id) : '-',
+      채널: interaction.guildId ? `#${interaction.channel?.name ?? interaction.channelId}` : 'DM',
+    });
     const msg = { content: '❌ 처리 중 오류가 발생했습니다.', flags: MessageFlags.Ephemeral };
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp(msg).catch(() => {});
@@ -439,18 +463,21 @@ client.on('messageCreate', async (message) => {
     await handleWcMessage(message);
   } catch (error) {
     console.error(error);
+    logErrorThrottled('msg:wc', '처리 오류', '끝말잇기 메시지 처리 중 오류', error);
   }
 
   try {
     await handleOmokMessage(message);
   } catch (error) {
     console.error(error);
+    logErrorThrottled('msg:omok', '처리 오류', '오목 메시지 처리 중 오류', error);
   }
 
   try {
     await handleQuizMessage(message);
   } catch (error) {
     console.error(error);
+    logErrorThrottled('msg:quiz', '처리 오류', '퀴즈 정답 처리 중 오류', error);
   }
 
   try {
@@ -460,6 +487,7 @@ client.on('messageCreate', async (message) => {
     }
   } catch (error) {
     console.error(error);
+    logErrorThrottled('msg:xp', '처리 오류', '메시지 XP 처리 중 오류', error);
   }
 
   // 내전/모집 인증 채널에 올라온 일반 유저 메시지는 GENERAL_MESSAGE_DELETE_DELAY_MS 후 자동 삭제한다(봇 메시지는 제외).
@@ -469,6 +497,7 @@ client.on('messageCreate', async (message) => {
     }
   } catch (error) {
     console.error('메시지 자동 삭제 예약 중 오류:', error);
+    logErrorThrottled('msg:autodelete', '처리 오류', '메시지 자동 삭제 예약 중 오류', error);
   }
 });
 
@@ -477,12 +506,14 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     trackVoiceStateUpdate(oldState, newState);
   } catch (error) {
     console.error('음성 상태 추적 실패:', error);
+    logErrorThrottled('voice:track', '처리 오류', '음성 상태 추적 실패', error);
   }
 
   try {
     await handleTempVoiceState(oldState, newState);
   } catch (error) {
     console.error('임시 음성채널 처리 실패:', error);
+    logErrorThrottled('voice:temp', '처리 오류', '임시 음성채널 처리 실패', error);
   }
 });
 
@@ -491,6 +522,7 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
     await handleRealmRulesReactionAdd(reaction, user);
   } catch (error) {
     console.error('렐름 규정집 반응 추가 처리 실패:', error);
+    logErrorThrottled('realm:react-add', '처리 오류', '렐름 규정집 반응 추가 처리 실패', error);
   }
 });
 
@@ -499,6 +531,7 @@ client.on(Events.MessageReactionRemove, async (reaction, user) => {
     await handleRealmRulesReactionRemove(reaction, user);
   } catch (error) {
     console.error('렐름 규정집 반응 제거 처리 실패:', error);
+    logErrorThrottled('realm:react-remove', '처리 오류', '렐름 규정집 반응 제거 처리 실패', error);
   }
 });
 
@@ -508,11 +541,11 @@ client.on(Events.MessageReactionRemove, async (reaction, user) => {
 // 아직 비어있는 메모리 상태로 기존 N-M.json/levels.json을 덮어써 초기화시킨다.
 setInterval(() => {
   if (!dataReady) return;
-  try { saveAll(client); } catch (e) { console.error('자동 저장 실패:', e); }
-  try { saveLevels(); } catch (e) { console.error('레벨 자동 저장 실패:', e); }
-  try { saveRoulette(); } catch (e) { console.error('룰렛 자동 저장 실패:', e); }
-  try { saveBotMatchXp(); } catch (e) { console.error('봇전 XP 한도 자동 저장 실패:', e); }
-  try { saveRealmRoster(); } catch (e) { console.error('렐름 승인 명단 자동 저장 실패:', e); }
+  try { saveAll(client); } catch (e) { console.error('자동 저장 실패:', e); logErrorThrottled('save:matches', '저장 오류', '내전/모집 자동 저장 실패', e); }
+  try { saveLevels(); } catch (e) { console.error('레벨 자동 저장 실패:', e); logErrorThrottled('save:levels', '저장 오류', 'levels.json 자동 저장 실패 — XP가 디스크에 반영되지 않는 중', e); }
+  try { saveRoulette(); } catch (e) { console.error('룰렛 자동 저장 실패:', e); logErrorThrottled('save:roulette', '저장 오류', 'roulette.json 자동 저장 실패', e); }
+  try { saveBotMatchXp(); } catch (e) { console.error('봇전 XP 한도 자동 저장 실패:', e); logErrorThrottled('save:botxp', '저장 오류', 'botMatchXp.json 자동 저장 실패', e); }
+  try { saveRealmRoster(); } catch (e) { console.error('렐름 승인 명단 자동 저장 실패:', e); logErrorThrottled('save:roster', '저장 오류', 'realm_roster.json 자동 저장 실패', e); }
 }, 30_000);
 
 // ─── 예기치 못한 예외로 봇 전체가 죽지 않도록 ─────────────────
@@ -521,13 +554,16 @@ setInterval(() => {
 // 하지 않게 된다. 원인은 로그로 남기되 프로세스는 계속 살려둔다.
 process.on('uncaughtException', (err) => {
   console.error('처리되지 않은 예외:', err);
+  logError('치명 오류', '처리되지 않은 예외(uncaughtException) — 봇은 계속 실행 중', err);
 });
 process.on('unhandledRejection', (reason) => {
   console.error('처리되지 않은 Promise 거부:', reason);
+  logError('치명 오류', '처리되지 않은 Promise 거부(unhandledRejection)', reason);
 });
 
 // ─── 종료 시 마지막으로 한 번 더 저장 ─────────────────────────
-function shutdown() {
+function shutdown(signal) {
+  logSystem({ 유형: '봇 상태', 내용: `봇 종료 — ${signal} 수신, 가동 ${client.readyAt ? `${Math.round((Date.now() - client.readyAt.getTime()) / 60000)}분` : '-'}` });
   if (dataReady) {
     try { saveAll(client); } catch (e) { console.error('종료 저장 실패:', e); }
     try { saveLevels(); } catch (e) { console.error('레벨 종료 저장 실패:', e); }
@@ -541,11 +577,13 @@ function shutdown() {
   client.destroy();
   process.exit(0);
 }
-process.on('SIGTERM', shutdown);
-process.on('SIGINT',  shutdown);
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT',  () => shutdown('SIGINT'));
 
 // 토큰이 없거나 잘못된 경우 unhandled rejection으로 조용히 죽지 않도록 이유를 남기고 종료한다.
 client.login(process.env.TOKEN).catch(err => {
   console.error('로그인 실패:', err);
+  logError('봇 상태', '디스코드 로그인 실패 — 프로세스 종료', err);
+  flushLogsSync();
   process.exit(1);
 });

@@ -16,6 +16,7 @@ const {
   buildNotifyModal: buildNotifyModalBase, parseNotifyTime, formatNotifyTimeSmart, isNotify12HourInput, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
 } = require('./공용');
 const { displayNameFromInteraction } = require('./이름');
+const { logAction, logError } = require('./로그');
 
 const GAMES = {
   lol:       { name: '리그 오브 레전드', emoji: '<:Lol:1510933684750913626>',    defaultPlayers: 5,   color: 0xC89B3C },
@@ -302,6 +303,7 @@ async function handleMojipButton(interaction) {
     delete data._previewInteraction; // 게시 후에는 필요 없으므로 여기서 끊어 매치가 Interaction 객체를 계속 붙들지 않게 한다.
     const match = { data, participants, message: msg, closed: false, closedAt: null, mentionSent: false, guildId: interaction.guildId };
     getMojips(interaction.client).set(msg.id, match);
+    logAction(interaction, '매치 생성', `모집 '${data.title}'(${msg.id}) 공개 게시 — ${data.gameInfo?.name ?? data.game}`);
     // 게시 전 미리보기 단계에서 이미 알림 예약을 해뒀다면, 그때는 매치가 없어 타이머를 못 걸었으므로 지금 건다.
     if (data.notifyAt) armNotifyReminder(getMojips(interaction.client), msg.id, match, '모집');
     await interaction.update({ content: '✅ **채널에 공개 게시되었습니다!**', embeds: [], attachments: [], components: [] });
@@ -667,6 +669,7 @@ async function handleMojipButton(interaction) {
       .setFooter({ text: cancelledByOrganizer ? '❌ 주최자에 의해 모집이 취소되었습니다.' : '⚙️ 관리자에 의해 모집이 취소 처리되었습니다.' })
       .setTimestamp();
 
+    logAction(interaction, '매치 취소', `모집 '${match.data.title}'(${msgId}) ${cancelledByOrganizer ? '주최자' : '관리자'}가 취소 (참가자 ${match.participants.length}명)`);
     clearNotifyTimer(match); // 취소된 매치는 알림을 보내지 않으므로 남은 예약 타이머를 취소한다.
     await match.message.edit({ content: '', embeds: [cancelledEmbed], components: [], attachments: [], allowedMentions: { parse: [] } });
     getMojips(interaction.client).delete(msgId);
@@ -914,7 +917,7 @@ async function handleMojipNotifyModal(interaction) {
     match.data.notify12h = false;
     match.notifySent = false;
     clearNotifyTimer(match);
-    await match.message.edit(buildMojipMessagePayload(match)).catch(err => console.error('알림 예약 아이콘 갱신 실패:', err));
+    await match.message.edit(buildMojipMessagePayload(match)).catch(err => { console.error('알림 예약 아이콘 갱신 실패:', err); logError('매치 알림', `${match.data?.title ?? '?'}(${match.message?.id}) 알림 예약 아이콘 갱신 실패`, err); });
     await interaction.reply({ content: '🔕 **알림 예약이 취소되었습니다.**', flags: MessageFlags.Ephemeral });
     return;
   }
@@ -933,7 +936,7 @@ async function handleMojipNotifyModal(interaction) {
   match.data.notify12h = isNotify12HourInput(raw);
   match.notifySent = false;
   armNotifyReminder(getMojips(interaction.client), msgId, match, '모집');
-  await match.message.edit(buildMojipMessagePayload(match)).catch(err => console.error('알림 예약 아이콘 갱신 실패:', err));
+  await match.message.edit(buildMojipMessagePayload(match)).catch(err => { console.error('알림 예약 아이콘 갱신 실패:', err); logError('매치 알림', `${match.data?.title ?? '?'}(${match.message?.id}) 알림 예약 아이콘 갱신 실패`, err); });
   await interaction.reply({
     content: `✅ **${formatNotifyTimeSmart(notifyAt, match.data.notify12h)}에 참가자에게 DM 알림을 보낼게요.**`,
     flags: MessageFlags.Ephemeral,

@@ -7,7 +7,7 @@ const path = require('path');
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp, isMinigameXpFrozen } = require('./레벨링');
 const { kstDateString, timeUntilKstMidnight } = require('./시간');
-const { logSystem } = require('./로그');
+const { logSystem, logAction, logError, userLabel } = require('./로그');
 const { writeJsonIfChanged } = require('./저장');
 
 const ROULETTE_PATH = path.join(__dirname, '..', 'DB', 'roulette.json');
@@ -202,6 +202,7 @@ async function startRouletteCommand(interaction) {
   }
 
   if (hasPlayedToday(guildId, userId)) {
+    logAction(interaction, '룰렛', '일일 1회 제한으로 거부됨');
     await interaction.reply({
       content: `⏳ **오늘은 이미 룰렛을 돌렸습니다.**\n다음 판까지 약 ${timeUntilKstMidnight()} 남았어요.`,
       flags: MessageFlags.Ephemeral,
@@ -252,6 +253,7 @@ async function spinLobby(interaction, lobby, lobbies) {
 
   // 관리자 긴급정지 중이면 오늘 기회를 소모하지 않고 안내만 한다.
   if (isMinigameXpFrozen()) {
+    logAction(interaction, '룰렛', '미니게임 XP 긴급정지 중이라 거부됨');
     await interaction.editReply({ content: '⚙️ **현재 관리자가 미니게임 XP를 일시 중지해 룰렛을 돌릴 수 없습니다.**', embeds: [], components: [] });
     return;
   }
@@ -275,7 +277,7 @@ async function spinLobby(interaction, lobby, lobbies) {
   const payout = Math.round(bet * multiplier);
   const net = payout - bet;
 
-  const result = applyXp(lobby.guildId, lobby.userId, net);
+  const result = applyXp(lobby.guildId, lobby.userId, net, `룰렛 (베팅 ${bet}, ${kind === 'triple' ? `${symbol} 트리플` : kind === 'two' ? '더블' : '꽝'} x${multiplier}, 지급 ${payout})`);
 
   const symbolLabel = symbol ? `${symbol} ${SYMBOL_NAMES[symbol]}` : '';
 
@@ -344,6 +346,7 @@ async function spinLobby(interaction, lobby, lobbies) {
     }
   } catch (err) {
     console.error('룰렛 결과 공개 실패:', err);
+    logError('게임 오류', `룰렛 결과 채널 공개 실패 — ${userLabel(lobby.userId)}에게만 결과 표시`, err);
     await interaction.editReply({ content: '', embeds: [resultEmbed], components: [] }).catch(() => {});
   }
 

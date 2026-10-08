@@ -3,7 +3,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { logSystem } = require('./로그');
+const { logSystem, logError, userLabel } = require('./로그');
 const { writeJsonIfChanged } = require('./저장');
 
 const {
@@ -79,6 +79,7 @@ function saveXpState() {
     writeJsonIfChanged(XP_STATE_PATH, xpState);
   } catch (err) {
     console.error('xp-state.json 저장 실패:', err);
+    logError('저장 오류', 'xp-state.json 저장 실패 — XP 정지/뉴비부스트 설정이 재시작하면 되돌아갈 수 있음', err);
   }
 }
 
@@ -209,14 +210,28 @@ function getXp(guildId, userId) {
 // 패자에게 applyXp(-금액), 승자에게 applyXp(+금액)을 따로 호출하는데, 부호를 안 가리고
 // 전부 막으면 정지된 패자가 내기에 져도 XP를 안 잃는 채로 승자만 그대로 받아가
 // 제로섬이 깨지고 XP가 허공에서 생겨난다.
-function applyXp(guildId, userId, amount) {
-  if (amount > 0 && isUserXpFrozen(guildId, userId)) return { leveledUp: false };
+//
+// reason을 넘기면 파일 로그에 "누가 · 얼마 · 왜 · 전후 XP/레벨"을 남긴다. 메시지·통화방 XP는
+// 수시로 들어와 로그를 도배하므로 reason을 안 넘겨 기록하지 않고, 게임·퀴즈·룰렛·완료 보너스만 남긴다.
+function applyXp(guildId, userId, amount, reason) {
+  if (amount > 0 && isUserXpFrozen(guildId, userId)) {
+    if (reason) logSystem({ 유형: 'XP 지급', 유저: userLabel(userId), 내용: `${reason} +${amount} XP 미지급 — 이 유저는 XP 지급 정지 중` });
+    return { leveledUp: false };
+  }
   const guildLevels = getGuildLevels(guildId);
   const oldXp = guildLevels[userId] || 0;
   const oldLevel = levelFromXp(oldXp).level;
   const newXp = oldXp + amount;
   guildLevels[userId] = newXp;
   const newLevel = levelFromXp(newXp).level;
+
+  if (reason) {
+    logSystem({
+      유형: 'XP 지급',
+      유저: userLabel(userId),
+      내용: `${reason} ${amount >= 0 ? '+' : ''}${amount} XP (${oldXp} → ${newXp}, Lv.${oldLevel}${newLevel !== oldLevel ? ` → Lv.${newLevel}` : ''})`,
+    });
+  }
 
   if (newLevel > oldLevel) return { leveledUp: true, newLevel };
   return { leveledUp: false };
@@ -310,7 +325,7 @@ function awardMatchCompletionXp(match) {
   // 먼저 세워버리면 해제 후에도 영영 못 받는다.
   if (organizerId && !match.xpAwardedUserIds[organizerId] && !isUserXpFrozen(guildId, organizerId)) {
     match.xpAwardedUserIds[organizerId] = true;
-    results.push({ userId: organizerId, ...applyXp(guildId, organizerId, ORGANIZER_BONUS_XP) });
+    results.push({ userId: organizerId, ...applyXp(guildId, organizerId, ORGANIZER_BONUS_XP, `완료 보너스(주최자) '${match.data?.title ?? '?'}'`) });
   }
 
   for (const participant of match.participants || []) {
@@ -319,7 +334,7 @@ function awardMatchCompletionXp(match) {
     if (isUserXpFrozen(guildId, participant.id)) continue; // 정지 중 — 플래그 세우지 않고 보류
     match.xpAwardedUserIds[participant.id] = true;
     const gained = randomMatchBonusXp();
-    results.push({ userId: participant.id, ...applyXp(guildId, participant.id, gained) });
+    results.push({ userId: participant.id, ...applyXp(guildId, participant.id, gained, `완료 보너스(참가자) '${match.data?.title ?? '?'}'`) });
   }
 
   return results.filter(r => r.leveledUp);
@@ -373,6 +388,7 @@ async function announceLevelUp(client, guildId, userId, newLevel) {
     });
   } catch (err) {
     console.error('레벨업 축하 메시지 전송 실패:', err);
+    logError('레벨업', `레벨업 축하 메시지 전송 실패(Lv.${newLevel})`, err, { 유저: userLabel(userId) });
   }
 }
 
