@@ -70,15 +70,17 @@ function buildComponents(page, totalPages, includeShare = true) {
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page >= totalPages),
   ];
+  const rows = [new ActionRowBuilder().addComponents(...buttons)];
+  // 공유하기 버튼은 2열로 따로 내린다.
   if (includeShare) {
-    buttons.push(
+    rows.push(new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`ranking:share:${page}`)
         .setLabel('📤 공유하기')
         .setStyle(ButtonStyle.Success),
-    );
+    ));
   }
-  return [new ActionRowBuilder().addComponents(...buttons)];
+  return rows;
 }
 
 // 반환값이 null이면 랭킹 기록이 없다는 뜻 (호출부에서 안내 메시지를 대신 보낸다).
