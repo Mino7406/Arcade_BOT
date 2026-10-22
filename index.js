@@ -30,6 +30,7 @@ const { buildReloadListPayload } = require('./commands/불러오기');
 const { buildTeamMatchListPayload } = require('./commands/팀');
 const { buildCommandListPayload, buildSetupPanelPayload, buildAdminMenuPayload, handlePanelButton, handlePanelMatchDeleteSelect, handlePanelBotMessageDeleteModal } = require('./commands/패널');
 const { handleRealmButton, handleRealmModal, handleRealmRosterModal, initRulesAgreementCache, handleRealmRulesReactionAdd, handleRealmRulesReactionRemove } = require('./forms/마크');
+const { handleCobblemonButton } = require('./forms/코블몬');
 const { handleFormSelectButton } = require('./commands/신청서');
 const { handleLevelShareButton } = require('./commands/레벨');
 const { handleRankingPageButton, handleRankingGotoButton, handleRankingGotoModal, handleRankingShareButton } = require('./commands/랭킹');
@@ -317,6 +318,7 @@ client.on('interactionCreate', async (interaction) => {
       interaction.customId?.startsWith('quiz:') ||
       interaction.customId?.startsWith('xp:') ||
       interaction.customId?.startsWith('realm:') ||
+      interaction.customId?.startsWith('cobblemon:') ||
       interaction.customId?.startsWith('form:');
 
     if (!isChannelExempt && !skipChannelLimits) {
@@ -445,6 +447,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleFormSelectButton(interaction);
       } else if (interaction.customId.startsWith('realm:')) {
         await handleRealmButton(interaction);
+      } else if (interaction.customId.startsWith('cobblemon:')) {
+        await handleCobblemonButton(interaction);
       }
     }
   } catch (error) {
