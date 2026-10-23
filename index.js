@@ -253,7 +253,7 @@ async function onReady(c) {
   loadRoulette(); // 룰렛 일일 플레이 기록 복원
   loadBotMatchXp(); // 끝말잇기·틱택토 봇전 일일 XP 한도 기록 복원
   loadRealmRoster(); // 마인크래프트 렐름 승인 명단 복원
-  startCobblemonOpenTimer(c); // 코블몬 설치기 오픈 시각에 패널 버튼을 다운로드 링크로 전환
+  startCobblemonOpenTimer(c); // 게시된 코블몬 패널을 최신 내용으로 갱신 + 설치기 오픈 시각에 버튼을 다운로드 링크로 전환
   await initRulesAgreementCache(c); // 렐름 규정집 반응(✅) 캐시 초기화
   initVoiceStates(c); // 재시작 전 이미 통화방에 있던 유저 추적 복원
   startVoiceXpTicker(c); // 통화방 체류 XP 1분 틱 시작

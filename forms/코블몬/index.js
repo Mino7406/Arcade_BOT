@@ -12,6 +12,8 @@ const { writeJsonIfChanged } = require('../../handlers/저장');
 const { logSystem, logError } = require('../../handlers/로그');
 
 const COBBLEMON_COLOR = 0xE8344E;
+// 패널 제목. 재시작 시 저장 목록이 비어 있으면 이 제목으로 게시된 패널을 찾는다.
+const PANEL_TITLE = 'ARCADE 코블몬 서버 안내';
 
 // 안내 패널 썸네일. 마크 패널과 같이 attachment:// 방식으로 매번 첨부해 올린다.
 const THUMBNAIL_PATH = path.join(__dirname, '..', '..', 'assets', 'cobblemon_thumbnail.png');
@@ -75,18 +77,18 @@ function buildCobblemonButtons() {
 function buildCobblemonPanelPayload(client) {
   const embed = new EmbedBuilder()
     .setColor(COBBLEMON_COLOR)
-    .setTitle('ARCADE 코블몬 서버 안내')
+    .setTitle(PANEL_TITLE)
     .setDescription(
       [
         '-# **2026.10.25 ~**',
         '',
-        '> **<:pokeball:1563009328368066590> 참가 방법**',
+        '> **<:pokeball_pixel:1563186516577091675> 참가 방법**',
         '**<:cobblemon:1562830370368528384>설치기 다운로드** 버튼을 누르면 다운로드 링크로 이동됩니다.\n해당 서버는 위 설치기를 통해야만 **접속이 가능합니다.**',
         '',
-        '> **<:greatball:1563009326543675493> 주의사항**',
+        '> **<:greatball_pixel:1563186514630942961> 주의사항**',
         '해당 서버는 렉을 최소화하기 위해 **월드 제한**을 두고 있습니다.\n**렉을 유발하는 장치 제작, 행동은 제제 대상**입니다.',
         '',
-        '> **<:ultraball:1563009329974747156> 행동 강령**',
+        '> **<:ultraball_pixel:1563186517986517137> 행동 강령**',
         'ARCADE 전용 모드 제작으로 갈등 발생을 최소화 하였으나 **갈등을 조장하는 장치 제작, 행동은 제제 대상**입니다.',
       ].join('\n'),
     )
@@ -110,35 +112,66 @@ function rememberCobblemonPanel(message) {
   savePanels(panels);
 }
 
-// 저장된 패널들의 버튼 줄을 지금 상태(오픈 전/후)로 다시 그린다. 지워진 메시지는 목록에서 뺀다.
+// 저장된 목록이 비어 있을 때(목록 저장 기능 이전에 게시했거나 DB를 옮긴 경우) 봇이 올린 패널을 채널에서 찾아 기억한다.
+// 각 텍스트 채널의 최근 메시지 100개 안에서 이 패널 제목을 가진 봇 메시지를 찾는다.
+async function discoverCobblemonPanels(client) {
+  const found = [];
+  for (const guild of client.guilds.cache.values()) {
+    const channels = await guild.channels.fetch().catch(() => null);
+    if (!channels) continue;
+    for (const channel of channels.values()) {
+      if (!channel?.isTextBased?.() || !channel.messages) continue;
+      const messages = await channel.messages.fetch({ limit: 100 }).catch(() => null);
+      if (!messages) continue;
+      for (const m of messages.values()) {
+        if (m.author.id === client.user.id && m.embeds[0]?.title === PANEL_TITLE) {
+          found.push({ channelId: m.channelId, messageId: m.id });
+        }
+      }
+    }
+  }
+  if (found.length) savePanels(found);
+  return found;
+}
+
+// 저장된 패널들을 지금 코드 기준(본문·이모지·썸네일·오픈 전/후 버튼)으로 다시 그린다. 지워진 메시지는 목록에서 뺀다.
 async function refreshCobblemonPanels(client) {
-  const panels = loadPanels();
+  let panels = loadPanels();
+  if (!panels.length) panels = await discoverCobblemonPanels(client);
   const kept = [];
   for (const p of panels) {
     const channel = await client.channels.fetch(p.channelId).catch(() => null);
     const message = channel && await channel.messages.fetch(p.messageId).catch(() => null);
     if (!message) continue;
     kept.push(p);
-    await message.edit({ components: [buildCobblemonButtons()] }).catch(err => {
-      console.error('코블몬 패널 버튼 갱신 실패:', err);
-      logError('처리 오류', `코블몬 패널 버튼 갱신 실패 (${p.channelId}/${p.messageId})`, err);
+    // attachments: []로 기존 썸네일 첨부를 비우고 새로 올려, 편집할 때마다 첨부가 쌓이지 않게 한다.
+    await message.edit({ ...buildCobblemonPanelPayload(client), attachments: [] }).catch(err => {
+      console.error('코블몬 패널 갱신 실패:', err);
+      logError('처리 오류', `코블몬 패널 갱신 실패 (${p.channelId}/${p.messageId})`, err);
     });
   }
   savePanels(kept);
   return kept.length;
 }
 
-// 봇 시작 시 호출. 오픈 전이면 오픈 시각에 패널 버튼을 링크로 바꾸도록 예약하고,
-// 이미 지났으면(꺼져 있던 동안 오픈 시각이 지난 경우 포함) 바로 한 번 맞춰 준다.
+// 봇 시작 시 호출. 게시된 패널을 지금 코드 내용으로 한 번 새로 그리고(재시작만으로 문구·이모지 수정이 반영되도록),
+// 오픈 전이면 오픈 시각에 다시 그려 버튼을 다운로드 링크로 바꾸도록 예약한다.
 function startCobblemonOpenTimer(client) {
-  const run = async () => {
-    const count = await refreshCobblemonPanels(client);
-    logSystem({ 유형: '봇 상태', 내용: `코블몬 설치기 오픈 — 패널 ${count}개의 버튼을 다운로드 링크로 전환` });
-  };
+  refreshCobblemonPanels(client)
+    .then(count => logSystem({ 유형: '봇 상태', 내용: `코블몬 패널 ${count}개를 최신 내용으로 갱신` }))
+    .catch(err => console.error('코블몬 패널 갱신 실패:', err));
+  scheduleOpenRefresh(client);
+}
+
+function scheduleOpenRefresh(client) {
   const wait = INSTALLER_OPEN_AT.getTime() - Date.now();
-  if (wait <= 0) { run().catch(err => console.error('코블몬 패널 갱신 실패:', err)); return; }
+  if (wait <= 0) return; // 이미 열렸으면 시작 시 갱신에서 링크 버튼으로 그려진다.
   // setTimeout 최대 지연(약 24.8일)을 넘으면 그 시점에 다시 예약한다.
-  setTimeout(() => startCobblemonOpenTimer(client), Math.min(wait, 2_000_000_000));
+  setTimeout(async () => {
+    if (INSTALLER_OPEN_AT.getTime() > Date.now()) { scheduleOpenRefresh(client); return; }
+    const count = await refreshCobblemonPanels(client).catch(err => { console.error('코블몬 패널 갱신 실패:', err); return 0; });
+    logSystem({ 유형: '봇 상태', 내용: `코블몬 설치기 오픈 — 패널 ${count}개의 버튼을 다운로드 링크로 전환` });
+  }, Math.min(wait, 2_000_000_000));
 }
 
 // ── "설치기 다운로드"(오픈 전)·"ARCADE 모드 사용법"(링크 미설정 시) 버튼 ('cobblemon:' 프리픽스) ──
