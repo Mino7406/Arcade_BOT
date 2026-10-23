@@ -12,8 +12,9 @@ const { writeJsonIfChanged } = require('../../handlers/저장');
 const { logSystem, logError } = require('../../handlers/로그');
 
 const COBBLEMON_COLOR = 0xE8344E;
-// 패널 제목. 재시작 시 저장 목록이 비어 있으면 이 제목으로 게시된 패널을 찾는다.
-const PANEL_TITLE = 'ARCADE 코블몬 서버 안내';
+// 패널 제목. 재시작 시 저장 목록이 비어 있으면 이 제목(또는 예전 제목)으로 게시된 패널을 찾는다.
+const PANEL_TITLE = '마인크래프트 ARCADE 코블몬 서버 안내';
+const PANEL_TITLES = [PANEL_TITLE, 'ARCADE 코블몬 서버 안내'];
 
 // 안내 패널 썸네일. 마크 패널과 같이 attachment:// 방식으로 매번 첨부해 올린다.
 const THUMBNAIL_PATH = path.join(__dirname, '..', '..', 'assets', 'cobblemon_thumbnail.png');
@@ -124,7 +125,7 @@ async function discoverCobblemonPanels(client) {
       const messages = await channel.messages.fetch({ limit: 100 }).catch(() => null);
       if (!messages) continue;
       for (const m of messages.values()) {
-        if (m.author.id === client.user.id && m.embeds[0]?.title === PANEL_TITLE) {
+        if (m.author.id === client.user.id && PANEL_TITLES.includes(m.embeds[0]?.title)) {
           found.push({ channelId: m.channelId, messageId: m.id });
         }
       }
