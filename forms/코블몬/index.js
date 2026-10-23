@@ -26,7 +26,7 @@ const INSTALLER_URL = 'https://github.com/Mino7406/ACI/releases/latest/download/
 const INSTALLER_OPEN_AT = new Date('2026-10-25T09:00:00+09:00');
 
 // "ARCADE 모드 사용법" 버튼이 여는 안내 페이지. 비어 있으면 "준비 중" 안내 버튼을 띄운다.
-const GUIDE_URL = 'https://claude.ai/artifact/Sef1yYhM1yExAnpyn6vXhQ';
+const GUIDE_URL = 'https://mino7406.github.io/ACI/';
 
 // 오픈 시각에 버튼을 바꿔줄 패널 메시지 목록. 재시작해도 어느 메시지를 고칠지 알도록 저장한다.
 // { panels: [{ channelId, messageId }] }
