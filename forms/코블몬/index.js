@@ -27,17 +27,17 @@ function buildCobblemonPanelPayload(client) {
       [
         '-# **2026.10.25 ~**',
         '',
-        '> **<:pokeball:1562831687803609169> 참가 방법**',
-        '**<:cobblemon:1562830370368528384>설치기** 버튼을 누르면 설치기 다운로드 링크로 이동됩니다.\n해당 서버는 **<:cobblemon:1562830370368528384>설치기**를 통해서 설치를 해야만 접속이 가능합니다.',
+        '> **<:pokeball:1563009328368066590> 참가 방법**',
+        '**<:cobblemon:1562830370368528384>설치기** 버튼을 누르면 설치기 다운로드 링크로 이동됩니다.\n해당 서버는 위 설치기를 통해서 설치를 해야만 **접속이 가능합니다.**',
         '',
-        '> **<:greatball:1562831686683590756> 주의사항**',
-        '해당 서버는 렉을 최소화하기 위해 **월드 제한**을 두고 있습니다. (반경 쓸 예정)\n**렉을 유발하는 장치 제작, 행동은 제제 대상**입니다.\nARCADE 전용 모드 제작으로 갈등 발생을 최소화 하였으나 **갈등을 조장하는 행동도 제제 대상**입니다.',
+        '> **<:greatball:1563009326543675493> 주의사항**',
+        '해당 서버는 렉을 최소화하기 위해 **월드 제한**을 두고 있습니다.\n**렉을 유발하는 장치 제작, 행동은 제제 대상**입니다.\nARCADE 전용 모드 제작으로 갈등 발생을 최소화 하였으나 **갈등을 조장하는 행동도 제제 대상**입니다.',
         '',
       ].join('\n'),
     )
     .setThumbnail(`attachment://${THUMBNAIL_FILENAME}`)
     .setFooter({
-      text: "문의는 임원 '김민호' 에게 해주시면 감사하겠습니다.",
+      text: "문의는 임원 '김민호' 에게 해주시면 됩니다.",
       iconURL: client?.user?.displayAvatarURL() ?? undefined,
     });
 
@@ -50,7 +50,7 @@ function buildCobblemonPanelPayload(client) {
     new ButtonBuilder()
       .setCustomId('cobblemon:guide')
       .setLabel('ARCADE 모드 사용법')
-      .setEmoji({ id: '1562831689565085866' }) // <:ultraball:...>
+      .setEmoji({ id: '1563009329974747156' }) // <:ultraball:...>
       .setStyle(ButtonStyle.Secondary),
   );
 
