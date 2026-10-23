@@ -7,6 +7,7 @@ const {
   AttachmentBuilder,
   MessageFlags,
 } = require('discord.js');
+const { ADMIN_IDS } = require('../../handlers/공용');
 
 const COBBLEMON_COLOR = 0xE8344E;
 
@@ -14,8 +15,15 @@ const COBBLEMON_COLOR = 0xE8344E;
 const THUMBNAIL_PATH = path.join(__dirname, '..', '..', 'assets', 'cobblemon_thumbnail.png');
 const THUMBNAIL_FILENAME = 'cobblemon_thumbnail.png';
 
-// "설치기 다운로드" 버튼이 여는 다운로드 링크. 비어 있으면 링크 버튼 대신 "준비 중" 안내 버튼을 띄운다.
+// "설치기 다운로드" 버튼을 누르면 안내하는 다운로드 링크. 비어 있으면 "준비 중"으로 안내한다.
 const INSTALLER_URL = 'https://github.com/Mino7406/ACI/releases/latest/download/ARCADE_Cobblemon_Installer.exe';
+
+// 서버 오픈 시각(KST). 이 전에는 어드민(ADMIN_IDS)에게만 다운로드 링크를 보여준다.
+// 링크 버튼은 누르는 순간을 막을 수 없어서, 일반 버튼으로 두고 눌렀을 때 시각을 확인한 뒤 링크를 건넨다.
+const INSTALLER_OPEN_AT = new Date('2026-10-25T09:00:00+09:00');
+
+// "ARCADE 모드 사용법" 버튼이 여는 안내 페이지. 비어 있으면 "준비 중" 안내 버튼을 띄운다.
+const GUIDE_URL = 'https://claude.ai/artifact/Sef1yYhM1yExAnpyn6vXhQ';
 
 // "코블몬" 안내 패널 — 신청 절차 없이 설치기 링크와 모드 사용법 버튼만 둔다.
 // client를 넘기면 footer 아이콘에 봇 프로필 사진을 붙인다(안 넘겨도 동작).
@@ -43,17 +51,15 @@ function buildCobblemonPanelPayload(client) {
       iconURL: client?.user?.displayAvatarURL() ?? undefined,
     });
 
-  const installerButton = INSTALLER_URL
-    ? new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(INSTALLER_URL)
-    : new ButtonBuilder().setCustomId('cobblemon:installer').setStyle(ButtonStyle.Success);
+  const installerButton = new ButtonBuilder().setCustomId('cobblemon:installer').setStyle(ButtonStyle.Success);
+
+  const guideButton = GUIDE_URL
+    ? new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(GUIDE_URL)
+    : new ButtonBuilder().setCustomId('cobblemon:guide').setStyle(ButtonStyle.Secondary);
 
   const row = new ActionRowBuilder().addComponents(
     installerButton.setLabel('설치기 다운로드').setEmoji({ id: '1562830370368528384' }), // <:cobblemon:...>
-    new ButtonBuilder()
-      .setCustomId('cobblemon:guide')
-      .setLabel('ARCADE 모드 사용법')
-      .setEmoji({ id: '1563093933809074247' }) // <:pokedex:...>
-      .setStyle(ButtonStyle.Secondary),
+    guideButton.setLabel('ARCADE 모드 사용법').setEmoji({ id: '1563093933809074247' }), // <:pokedex:...>
   );
 
   return {
@@ -63,10 +69,32 @@ function buildCobblemonPanelPayload(client) {
   };
 }
 
-// ── "설치기 다운로드"(링크 미설정 시)·"ARCADE 모드 사용법" 버튼 ('cobblemon:' 프리픽스) ──
+// ── "설치기 다운로드"·"ARCADE 모드 사용법"(링크 미설정 시) 버튼 ('cobblemon:' 프리픽스) ──
 async function handleCobblemonButton(interaction) {
   const sub = interaction.customId.split(':')[1];
-  if (sub === 'installer' || sub === 'guide') {
+  if (sub === 'installer') {
+    if (!INSTALLER_URL) {
+      await interaction.reply({ content: '**아직 준비 중입니다.**', flags: MessageFlags.Ephemeral });
+      return;
+    }
+    const isOpen = Date.now() >= INSTALLER_OPEN_AT.getTime() || ADMIN_IDS.includes(interaction.user.id);
+    if (!isOpen) {
+      const openAtUnix = Math.floor(INSTALLER_OPEN_AT.getTime() / 1000);
+      await interaction.reply({
+        content: `**설치기는 <t:${openAtUnix}:F>에 공개됩니다.** (<t:${openAtUnix}:R>)`,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    const linkRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setStyle(ButtonStyle.Link)
+        .setURL(INSTALLER_URL)
+        .setLabel('설치기 다운로드')
+        .setEmoji({ id: '1562830370368528384' }), // <:cobblemon:...>
+    );
+    await interaction.reply({ components: [linkRow], flags: MessageFlags.Ephemeral });
+  } else if (sub === 'guide') {
     await interaction.reply({ content: '**아직 준비 중입니다.**', flags: MessageFlags.Ephemeral });
   }
 }
