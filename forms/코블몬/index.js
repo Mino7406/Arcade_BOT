@@ -185,8 +185,11 @@ async function handleCobblemonButton(interaction) {
     }
     if (!isInstallerOpen()) {
       const openAtUnix = Math.floor(INSTALLER_OPEN_AT.getTime() / 1000);
+      // 남은 시간은 분 단위 올림 — 오픈 직전에도 '0h 0m'이 뜨지 않게.
+      const leftMin = Math.ceil((INSTALLER_OPEN_AT.getTime() - Date.now()) / 60000);
+      const leftText = `${Math.floor(leftMin / 60)}h ${leftMin % 60}m 후 OPEN`;
       await interaction.reply({
-        content: `🔒 **설치기는 <t:${openAtUnix}:F>에 열립니다.** (<t:${openAtUnix}:R>)`,
+        content: `🔒 **설치기는 <t:${openAtUnix}:F>에 열립니다.** (${leftText})`,
         flags: MessageFlags.Ephemeral,
       });
       return;
