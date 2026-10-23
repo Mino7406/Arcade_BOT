@@ -7,7 +7,6 @@ const {
   AttachmentBuilder,
   MessageFlags,
 } = require('discord.js');
-const { ADMIN_IDS } = require('../../handlers/공용');
 
 const COBBLEMON_COLOR = 0xE8344E;
 
@@ -18,7 +17,7 @@ const THUMBNAIL_FILENAME = 'cobblemon_thumbnail.png';
 // "설치기 다운로드" 버튼을 누르면 안내하는 다운로드 링크. 비어 있으면 "준비 중"으로 안내한다.
 const INSTALLER_URL = 'https://github.com/Mino7406/ACI/releases/latest/download/ARCADE_Cobblemon_Installer.exe';
 
-// 서버 오픈 시각(KST). 이 전에는 어드민(ADMIN_IDS)에게만 다운로드 링크를 보여준다.
+// 서버 오픈 시각(KST). 이 전에는 어드민·오너 포함 누구에게도 다운로드 링크를 보여주지 않는다.
 // 링크 버튼은 누르는 순간을 막을 수 없어서, 일반 버튼으로 두고 눌렀을 때 시각을 확인한 뒤 링크를 건넨다.
 const INSTALLER_OPEN_AT = new Date('2026-10-25T09:00:00+09:00');
 
@@ -77,8 +76,7 @@ async function handleCobblemonButton(interaction) {
       await interaction.reply({ content: '**아직 준비 중입니다.**', flags: MessageFlags.Ephemeral });
       return;
     }
-    const isOpen = Date.now() >= INSTALLER_OPEN_AT.getTime() || ADMIN_IDS.includes(interaction.user.id);
-    if (!isOpen) {
+    if (Date.now() < INSTALLER_OPEN_AT.getTime()) {
       const openAtUnix = Math.floor(INSTALLER_OPEN_AT.getTime() / 1000);
       await interaction.reply({
         content: `**설치기는 <t:${openAtUnix}:F>에 공개됩니다.** (<t:${openAtUnix}:R>)`,
