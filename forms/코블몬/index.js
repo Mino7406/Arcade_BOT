@@ -31,8 +31,10 @@ function buildCobblemonPanelPayload(client) {
         '**<:cobblemon:1562830370368528384>설치기 다운로드** 버튼을 누르면 다운로드 링크로 이동됩니다.\n해당 서버는 위 설치기를 통해야만 **접속이 가능합니다.**',
         '',
         '> **<:greatball:1563009326543675493> 주의사항**',
-        '해당 서버는 렉을 최소화하기 위해 **월드 제한**을 두고 있습니다.\n**렉을 유발하는 장치 제작, 행동은 제제 대상**입니다.\n\nARCADE 전용 모드 제작으로 갈등 발생을 최소화 하였으나 **갈등을 조장하는 행동도 제제 대상**입니다.',
+        '해당 서버는 렉을 최소화하기 위해 **월드 제한**을 두고 있습니다.\n**렉을 유발하는 장치 제작, 행동은 제제 대상**입니다.',
         '',
+        '> **<:ultraball:1563009329974747156> 행동 강령**',
+        '\n\nARCADE 전용 모드 제작으로 갈등 발생을 최소화 하였으나 **갈등을 조장하는 장치 제작, 행동은 제제 대상**입니다.',
       ].join('\n'),
     )
     .setThumbnail(`attachment://${THUMBNAIL_FILENAME}`)
@@ -50,7 +52,7 @@ function buildCobblemonPanelPayload(client) {
     new ButtonBuilder()
       .setCustomId('cobblemon:guide')
       .setLabel('ARCADE 모드 사용법')
-      .setEmoji({ id: '1563009329974747156' }) // <:ultraball:...>
+      .setEmoji({ id: '1563093933809074247' }) // <:pokedex:...>
       .setStyle(ButtonStyle.Secondary),
   );
 
