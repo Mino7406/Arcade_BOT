@@ -15,10 +15,11 @@ const {
 
 const { ADMIN_IDS } = require('../handlers/공용');
 const { buildRealmPanelPayload } = require('../forms/마크');
-const { buildCobblemonPanelPayload } = require('../forms/코블몬');
+const { buildCobblemonPanelPayload, rememberCobblemonPanel } = require('../forms/코블몬');
 
 // 신청서 종류 등록표. 새 신청서를 추가할 때는 여기에 { 종류: { label, emoji, build, done } } 한 줄만 더한다.
 // - build: 현재 채널에 보낼 패널 payload를 만드는 함수
+// - posted: (선택) 게시된 메시지를 받아 나중에 고칠 수 있게 기억해 두는 함수
 // - done:  게시 후 메뉴 자리에 남길 안내 문구
 const FORMS = {
   realm: {
@@ -31,6 +32,7 @@ const FORMS = {
     label: '코블몬',
     emoji: { id: '1562830370368528384' }, // <:cobblemon:...>
     build: buildCobblemonPanelPayload,
+    posted: rememberCobblemonPanel,
     done: '<:cobblemon:1562830370368528384> **코블몬 신청 패널을 게시했습니다.**',
   },
 };
@@ -65,7 +67,8 @@ async function handleFormSelectButton(interaction) {
   const form = FORMS[type];
   if (!form) return;
 
-  await interaction.channel.send(form.build(interaction.client));
+  const message = await interaction.channel.send(form.build(interaction.client));
+  form.posted?.(message);
   await interaction.update({ content: form.done, components: [] });
 }
 
