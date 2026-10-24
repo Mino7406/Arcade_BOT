@@ -26,7 +26,7 @@ const INSTALLER_URL = 'https://github.com/Mino7406/ACI/releases/latest/download/
 // 서버 오픈 시각(KST). 이 전에는 어드민·오너 포함 누구도 다운로드할 수 없다.
 // 링크 버튼은 누르는 순간을 막을 수 없어서, 오픈 전에는 같은 모양의 일반 버튼을 두고(누르면 "잠김" 안내)
 // 오픈 시각이 되면 게시된 패널의 버튼을 그 자리에서 진짜 링크 버튼으로 바꿔 한 번에 다운로드되게 한다.
-const INSTALLER_OPEN_AT = new Date('2026-10-25T09:00:00+09:00');
+const INSTALLER_OPEN_AT = new Date('2026-10-25T12:00:00+09:00');
 
 // "ARCADE 모드 사용법" 버튼이 여는 안내 페이지. 비어 있으면 "준비 중" 안내 버튼을 띄운다.
 const GUIDE_URL = 'https://mino7406.github.io/ACI/';
