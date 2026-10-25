@@ -16,12 +16,14 @@ const {
 } = require('./공용');
 const { displayNameFromInteraction } = require('./이름');
 const { logAction, logError } = require('./로그');
+const { OWNER_IDS } = require('../config');
 
 const GAMES = {
   lol:       { name: '리그 오브 레전드', emoji: '<:Lol:1510933684750913626>',    defaultPlayers: 10,   color: 0xC89B3C },
   valorant:  { name: '발로란트',         emoji: '<:Val:1510933698349109268>',    defaultPlayers: 10,   color: 0xFF4655 },
   overwatch: { name: '오버워치',         emoji: '<:Over:1510933569554612324>',   defaultPlayers: 10,   color: 0xF99E1A },
   pubg:      { name: '배틀그라운드',     emoji: '<:PUBG:1510933567646203964>',   defaultPlayers: 8,    color: 0xC8A96E },
+  cobblemon: { name: '코블몬 토너먼트',  emoji: '<:cobblemon:1562830370368528384>', defaultPlayers: 16, color: 0xE3350D },
   custom:    { name: '직접 입력',        emoji: '🎮',                            defaultPlayers: null, color: 0x5865F2 },
 };
 
@@ -287,8 +289,36 @@ function getPending(client) {
 
 // ─── 핸들러 ───────────────────────────────────────────────────
 
+// 코블몬 토너먼트 정원이 다 차면 참가자 전원을 멘션해 코블몬 서버에서 엔트리하라고 안내한다.
+// 수동 "참가자 멘션" 버튼과 같은 mentionSent/mentionMessageId를 써서 중복 멘션을 막고, 취소 시 함께 지워지게 한다.
+async function announceCobblemonEntry(match) {
+  if (match.data.game !== 'cobblemon' || match.mentionSent || match.participants.length === 0) return;
+  match.mentionSent = true;
+  const mentionText = match.participants.map(u => `<@${u.id}>`).join(' ');
+  try {
+    const msg = await match.message.channel.send({
+      content: [
+        `<:cobblemon:1562830370368528384> **${match.data.title} — 인원이 모두 모였습니다!**`,
+        mentionText,
+        '코블몬 서버에 접속해 **토너먼트에 엔트리**해 주세요.',
+      ].join('\n'),
+      allowedMentions: { parse: ['users'] },
+    });
+    match.mentionMessageId = msg.id;
+  } catch (err) {
+    match.mentionSent = false;
+    console.error('코블몬 엔트리 안내 전송 실패:', err);
+    logError('처리 오류', `코블몬 엔트리 안내 전송 실패 (${match.message.id})`, err);
+  }
+}
+
 async function handleGameSelect(interaction) {
   const game = interaction.values[0];
+  // 코블몬 토너먼트는 오너 전용 — 선택지는 오너에게만 보이지만, 남이 띄운 메뉴를 재사용하는 경우까지 막는다.
+  if (game === 'cobblemon' && !OWNER_IDS.includes(interaction.user.id)) {
+    await interaction.reply({ content: '⚠️ **코블몬 토너먼트는 소유자만 생성할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+    return;
+  }
   await interaction.showModal(buildModal(game));
 }
 
@@ -452,6 +482,7 @@ async function handleNaejeonButton(interaction) {
     await interaction.deferUpdate();
     await match.message.edit(buildPublicMessagePayload(match));
     if (match.closed) await announceMatchCompletionXp(match);
+    if (match.participants.length >= maxPlayers) await announceCobblemonEntry(match);
     await interaction.followUp({
       content: `✅ **참가 완료!** 명단에 등록되었습니다.\n취소하려면 아래 버튼을 눌러주세요.`,
       components: [buildLeaveButton(interaction.message.id)],
@@ -1135,6 +1166,7 @@ async function handleNaejeonMemberAdd(interaction) {
   if (justClosed) markClosed(getMatches(interaction.client), matchMsgId, match, '내전');
   await match.message.edit(buildPublicMessagePayload(match));
   if (justClosed) await announceMatchCompletionXp(match);
+  if (justClosed) await announceCobblemonEntry(match);
   const lines = [];
   if (added.length > 0)   lines.push(`✅ 추가됨: ${added.map(n => `**${n}**`).join(', ')}`);
   if (skipped.length > 0) lines.push(`⚠️ 이미 참가 중: ${skipped.map(n => `**${n}**`).join(', ')}`);

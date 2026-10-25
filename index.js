@@ -426,7 +426,7 @@ client.on('interactionCreate', async (interaction) => {
       } else if (interaction.customId.startsWith('xp:')) {
         await handleXpButton(interaction);
       } else if (interaction.customId === 'recruit:내전') {
-        await interaction.reply(buildNaejeonGameSelectPayload());
+        await interaction.reply(buildNaejeonGameSelectPayload(interaction.user.id));
       } else if (interaction.customId === 'recruit:모집') {
         await interaction.reply(buildMojipGameSelectPayload());
       } else if (interaction.customId === 'recruit:불러오기') {

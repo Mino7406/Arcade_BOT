@@ -27,6 +27,7 @@ const { writeJsonIfChanged } = require('./저장');
 // (역할 멘션 대상 채널이 있으면 해당 역할을 핑한다.)
 const ROLE_NAMES = {
   lol: '롤', valorant: '발로란트', overwatch: '오버워치', pubg: '배그',
+  cobblemon: '마크', // 코블몬 토너먼트(내전 전용) 게시 시 @마크 역할을 핑한다.
 };
 
 // client에 lazy 생성하는 Map을 돌려주는 공통 헬퍼. 예전엔 내전/모집/취소·삭제 예약마다
