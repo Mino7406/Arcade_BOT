@@ -1,6 +1,6 @@
 const { buildPublicMessagePayload } = require('./내전');
 const { buildMojipMessagePayload } = require('./모집');
-const { armAutoEnd, AUTO_CLOSE_DELAY_MS, armNotifyReminder } = require('./공용');
+const { armAutoEnd, AUTO_CLOSE_DELAY_MS, armNotifyReminder, saveNow } = require('./공용');
 
 async function handleRMatchSelect(interaction) {
   const value = interaction.values[0];
@@ -23,6 +23,7 @@ async function handleRMatchSelect(interaction) {
   matches.delete(msgId);
   match.message = newMsg;
   matches.set(newMsg.id, match);
+  saveNow(interaction.client); // 파일에 옛 메시지 ID만 남은 채 강제종료되면 새 임베드 추적이 끊긴다.
   // 재게시로 옛 메시지 ID에 걸려있던 자동 종료 타이머가 무효화되므로, 새 ID로 남은 시간만큼 다시 건다.
   // (마감 상태가 아니면 애초에 걸려있던 타이머가 없으므로 아무것도 하지 않는다.)
   if (match.closed && match.data?.autoClose) {

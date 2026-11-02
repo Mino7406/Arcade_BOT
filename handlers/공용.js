@@ -377,6 +377,45 @@ function scheduleCancelledDelete(client, msgId, channelId, cancelledAt = Date.no
       logError('자동 삭제 실패', `취소된 '${title ?? '?'}'(${msgId}) 임베드 자동 삭제 실패`, err);
     }
   }, delayMs);
+  saveNow(client);
+}
+
+// 저장 파일에서 빠진 취소 임베드(강제종료 직전 취소분, 자동 삭제 도중 실패분 등)를 메시지 기록에서
+// 직접 찾아 삭제 예약을 다시 건다. 이렇게 하면 관리 메뉴 삭제 목록에도 다시 나타나고, 이미 지연시간이
+// 지난 임베드는 바로 삭제된다. 취소 시각은 취소할 때 임베드에 찍어둔 타임스탬프를 쓴다.
+// 내전/모집은 메시지가 많지 않은 채널에서만 올라오므로 채널당 최근 500개까지만 훑는다.
+async function recoverCancelledEmbeds(client, channelIds) {
+  const tracked = getCancelledDeletions(client);
+  let recovered = 0;
+
+  for (const channelId of channelIds) {
+    const channel = await client.channels.fetch(channelId).catch(() => null);
+    if (!channel?.isTextBased()) continue;
+
+    let before;
+    for (let page = 0; page < 5; page++) {
+      const batch = await channel.messages.fetch({ limit: 100, ...(before ? { before } : {}) }).catch(() => null);
+      if (!batch || batch.size === 0) break;
+
+      for (const msg of batch.values()) {
+        if (msg.author.id !== client.user.id || tracked.has(msg.id)) continue;
+        const embed = msg.embeds[0];
+        if (!embed?.description?.includes('🔴 취소됨')) continue;
+        const cancelledAt = Date.parse(embed.timestamp) || msg.editedTimestamp || msg.createdTimestamp;
+        const title = embed.description.split('\n')[0].replace(/^## (<a?:\w+:\d+>\s+)?/, '');
+        scheduleCancelledDelete(client, msg.id, msg.channelId, cancelledAt, title);
+        recovered++;
+      }
+
+      const oldest = batch.last();
+      if (batch.size < 100 || !oldest) break;
+      before = oldest.id;
+    }
+  }
+  if (recovered > 0) {
+    console.log(`♻️  취소된 임베드 삭제 예약 복구: ${recovered}건`);
+    logSystem({ 유형: '자동 삭제', 내용: `추적이 끊긴 취소 임베드 ${recovered}건 삭제 예약 복구 (봇 재시작 후)` });
+  }
 }
 
 function getPendingMessageDeletions(client) {
@@ -739,6 +778,25 @@ function saveAll(client) {
   writeJsonIfChanged(DB_PATH, rows);
 }
 
+// 복원이 끝나기 전에 저장하면 아직 못 불러온 매치가 파일에서 지워지므로, index.js가 복원을 마친 뒤
+// enableSaveNow()를 호출해야 saveNow가 실제로 저장한다.
+let saveNowEnabled = false;
+function enableSaveNow() {
+  saveNowEnabled = true;
+}
+
+// 30초 자동 저장을 기다리면 안 되는 변경(게시/재게시/취소) 직후 바로 저장한다. 그 사이 강제종료되면
+// 임베드만 채널에 남고 파일에는 기록이 없어 관리 메뉴에도 안 뜨고 자동 삭제도 되지 않는다.
+function saveNow(client) {
+  if (!saveNowEnabled) return;
+  try {
+    saveAll(client);
+  } catch (err) {
+    console.error('즉시 저장 실패:', err);
+    logError('저장 오류', '내전/모집 즉시 저장 실패', err);
+  }
+}
+
 // 저장된 모든 행을 읽어옴 (봇 시작 시 복원할 때 사용)
 function loadRows() {
   try {
@@ -763,6 +821,7 @@ module.exports = {
   getMojipMatches,
   getCancelledDeletions,
   scheduleCancelledDelete,
+  recoverCancelledEmbeds,
   scheduleMessageDelete,
   deleteMentionMessage,
   shuffleIntoTeams,
@@ -790,5 +849,7 @@ module.exports = {
   clearNotifyTimer,
   isNotifyTooFar,
   saveAll,
+  saveNow,
+  enableSaveNow,
   loadRows,
 };

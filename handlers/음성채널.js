@@ -31,8 +31,25 @@ function loadTempChannels() {
   }
 }
 
+// reconcileTempChannels가 호출될 때가 아니라 모듈을 불러올 때 바로 읽는다. 봇 준비(onReady)는
+// 내전/모집 복원 때문에 한참 걸리는데, 그사이 누가 허브에 들어오면 빈 목록에 새 방 하나만 넣은 채
+// 저장돼 재시작 전 방들이 voiceRooms.json에서 통째로 사라졌다.
+loadTempChannels();
+
 function saveTempChannels() {
   writeJsonIfChanged(DATA_PATH, [...tempChannelIds]);
+}
+
+// channel.members는 멤버 캐시를 거치는데, index.js의 sweeper가 1시간마다 멤버 캐시를 비우기
+// 때문에 사람이 있어도 0명으로 보일 수 있다. 빈 방 판단은 음성 상태 캐시로 직접 한다.
+function isRoomEmpty(channel) {
+  return !channel.guild.voiceStates.cache.some(state => state.channelId === channel.id);
+}
+
+// 봇이 만든 방의 이름 형식(createTempChannel 참고). 저장 파일에 없어도 재시작 때 알아볼 수 있게
+// 이름으로도 찾는다 — 이름을 바꾼 방은 저장 파일로만 추적된다.
+function isTempChannelName(name) {
+  return name.startsWith('🔊│') && name.endsWith('의 방');
 }
 
 // 방이 얼마나 유지됐는지. 생성 시각을 따로 저장하지 않아도 채널 객체가 createdTimestamp를
@@ -46,31 +63,49 @@ function livedFor(channel) {
 
 // 봇 재시작 시 이전에 만든 임시 채널들을 다시 확인한다.
 // 그새 비어있으면 바로 삭제하고, 아직 사람이 있으면 계속 추적 대상에 남긴다.
+// 저장 파일에서 빠진 방(강제종료·파일 손상 등)도 임시 채널 카테고리의 이름 형식으로 찾아 다시 추적한다.
 async function reconcileTempChannels(client) {
-  loadTempChannels();
-  if (tempChannelIds.size === 0) return;
-
   const guild = await client.guilds.fetch(GUILD_ID).catch(() => null);
   if (!guild) return;
 
+  // 목록 조회가 실패했을 때 저장된 방을 "이미 사라짐"으로 오해해 추적을 끊으면 안 되므로 여기서 멈춘다.
+  const channels = await guild.channels.fetch().catch(err => {
+    console.error('임시 음성채널 확인용 채널 목록 조회 실패:', err);
+    return null;
+  });
+  if (!channels) return;
+
   let changed = false;
   for (const channelId of [...tempChannelIds]) {
-    const channel = await guild.channels.fetch(channelId).catch(() => null);
-    if (!channel) {
-      tempChannelIds.delete(channelId);
-      changed = true;
+    if (channels.get(channelId)) continue;
+    tempChannelIds.delete(channelId);
+    changed = true;
+  }
+  for (const channel of channels.values()) {
+    if (!channel || tempChannelIds.has(channel.id)) continue;
+    if (channel.id === HUB_CHANNEL_ID || channel.type !== ChannelType.GuildVoice) continue;
+    if (channel.parentId !== TEMP_CATEGORY_ID || !isTempChannelName(channel.name)) continue;
+    tempChannelIds.add(channel.id);
+    changed = true;
+  }
+
+  for (const channelId of [...tempChannelIds]) {
+    const channel = channels.get(channelId);
+    if (!isRoomEmpty(channel)) continue;
+    try {
+      await channel.delete();
+    } catch (err) {
+      // 추적에 남겨둬야 다음 퇴장이나 다음 재시작 때 다시 지울 수 있다.
+      console.error('임시 음성채널 삭제 실패:', err);
       continue;
     }
-    if (channel.members.size === 0) {
-      await channel.delete().catch(err => console.error('임시 음성채널 삭제 실패:', err));
-      logSystem({
-        유형: '음성채널',
-        채널: `#${channel.name}`,
-        내용: `임시 음성채널 삭제 — '${channel.name}'(${channel.id}), ${livedFor(channel)} (봇 재시작 후 빈 방 정리)`,
-      });
-      tempChannelIds.delete(channelId);
-      changed = true;
-    }
+    logSystem({
+      유형: '음성채널',
+      채널: `#${channel.name}`,
+      내용: `임시 음성채널 삭제 — '${channel.name}'(${channel.id}), ${livedFor(channel)} (봇 재시작 후 빈 방 정리)`,
+    });
+    tempChannelIds.delete(channelId);
+    changed = true;
   }
   if (changed) saveTempChannels();
 }
@@ -87,7 +122,7 @@ async function cleanupIfEmpty(oldState, newState) {
     saveTempChannels();
     return;
   }
-  if (channel.members.size === 0) {
+  if (isRoomEmpty(channel)) {
     tempChannelIds.delete(channel.id);
     saveTempChannels();
     await channel.delete().catch(err => console.error('임시 음성채널 삭제 실패:', err));

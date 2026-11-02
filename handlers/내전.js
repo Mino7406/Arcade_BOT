@@ -10,7 +10,7 @@ const {
 
 const {
   ADMIN_IDS, getClientMap, getNaejeonMatches: getMatches, shuffleIntoTeams, buildTeamResultEmbed, titleHeader, markClosed, markReopened, toggleAutoCloseWhileClosed, announceMatchCompletionXp,
-  ROLE_NAMES, buildPreviewEmbed, scheduleCancelledDelete, deleteMentionMessage, AUTO_CLOSE_DELAY_MS,
+  ROLE_NAMES, buildPreviewEmbed, scheduleCancelledDelete, deleteMentionMessage, AUTO_CLOSE_DELAY_MS, saveNow,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
   buildNotifyModal: buildNotifyModalBase, parseNotifyTime, formatNotifyTimeSmart, isNotify12HourInput, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
 } = require('./공용');
@@ -435,6 +435,7 @@ async function handleNaejeonButton(interaction) {
     delete data._previewInteraction; // 게시 후에는 필요 없으므로 여기서 끊어 매치가 Interaction 객체를 계속 붙들지 않게 한다.
     const match = { data, participants, message: msg, closed: false, closedAt: null, teams: null, mentionSent: false, roleContent, guildId: interaction.guildId };
     getMatches(interaction.client).set(msg.id, match);
+    saveNow(interaction.client);
     logAction(interaction, '매치 생성', `내전 '${data.title}'(${msg.id}) 공개 게시 — ${data.gameInfo?.name ?? data.game}, 정원 ${maxPlayers}명`);
     // 게시 전 미리보기 단계에서 이미 알림 예약을 해뒀다면, 그때는 매치가 없어 타이머를 못 걸었으므로 지금 건다.
     if (data.notifyAt) armNotifyReminder(getMatches(interaction.client), msg.id, match, '내전');

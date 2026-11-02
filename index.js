@@ -13,7 +13,7 @@ require('./migrate').migrateOldDbFiles();
 
 const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleNaejeonNotifyModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload: buildNaejeonMessagePayload } = require('./handlers/내전');
 const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipNotifyModal, handleMojipMemberAdd, handleMojipMemberRemove, buildMojipMessagePayload } = require('./handlers/모집');
-const { armAutoEnd, AUTO_CLOSE_DELAY_MS, GENERAL_MESSAGE_DELETE_DELAY_MS, announceMatchCompletionXp, scheduleCancelledDelete, scheduleMessageDelete, deleteMentionMessage, armNotifyReminder, ADMIN_IDS, saveAll, loadRows } = require('./handlers/공용');
+const { armAutoEnd, AUTO_CLOSE_DELAY_MS, GENERAL_MESSAGE_DELETE_DELAY_MS, announceMatchCompletionXp, scheduleCancelledDelete, scheduleMessageDelete, deleteMentionMessage, armNotifyReminder, ADMIN_IDS, saveAll, enableSaveNow, loadRows, recoverCancelledEmbeds } = require('./handlers/공용');
 const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/팀');
 const { handleRMatchSelect } = require('./handlers/불러오기');
 const { handleWcButton, handleWcMessage } = require('./handlers/끝말잇기');
@@ -92,6 +92,20 @@ for (const file of commandFiles) {
   }
 }
 
+// 메시지/채널이 실제로 없거나(10008, 10003) 접근 권한이 없는(50001) 경우는 재시도해도 소용없다.
+// 그 외 일시적인 네트워크/디스코드 오류로 항목을 버리면 임베드만 남고 추적이 끊기므로 몇 번 더 시도한다.
+const PERMANENT_FETCH_ERROR_CODES = new Set([10003, 10008, 50001]);
+async function fetchWithRetry(fetcher, attempts = 3) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fetcher();
+    } catch (err) {
+      if (attempt >= attempts || PERMANENT_FETCH_ERROR_CODES.has(err?.code)) throw err;
+      await new Promise(resolve => setTimeout(resolve, attempt * 2000));
+    }
+  }
+}
+
 // ─── DB에서 내전/모집 복원 ────────────────────────────────────
 // 봇이 켜질 때 N-M.json에 저장돼 있던 내전/모집을 다시 메모리로 불러옵니다.
 async function restoreMatches(c) {
@@ -137,8 +151,8 @@ async function restoreMatches(c) {
     try {
       const match = JSON.parse(row.data);
       // 저장 못 했던 '살아있는 메시지'를 디스코드에서 다시 가져와 연결합니다.
-      const channel = await c.channels.fetch(row.channel_id);
-      match.message = await channel.messages.fetch(row.message_id);
+      const channel = await fetchWithRetry(() => c.channels.fetch(row.channel_id));
+      match.message = await fetchWithRetry(() => channel.messages.fetch(row.message_id));
       // guildId가 없던 옛 데이터(업데이트 이전 생성분)도 실제 채널 기준으로 채워줍니다.
       match.guildId = channel.guildId;
 
@@ -179,9 +193,13 @@ async function restoreMatches(c) {
       }
 
       ok++;
-    } catch {
+    } catch (err) {
       // 메시지가 삭제됐거나 채널 접근 불가 → 그 항목은 버립니다.
       dropped++;
+      if (!PERMANENT_FETCH_ERROR_CODES.has(err?.code)) {
+        console.error('내전/모집 복원 실패:', err);
+        logError('복원 실패', `${row.type} 메시지(${row.message_id}) 복원 실패 — 추적에서 빠짐`, err);
+      }
     }
   }
   console.log(`♻️  복원 완료: ${ok}건 복원 / ${dropped}건 누락`);
@@ -248,6 +266,8 @@ async function onReady(c) {
   setLogClient(c); // 로그에 유저 이름을 적을 때 캐시에서 찾기 위함
   c.startedAt = new Date();
   await restoreMatches(c); // ⬅️ 추가: 저장된 내전/모집 복원
+  enableSaveNow(); // 복원이 끝났으므로 이제부터는 게시/취소 직후 바로 저장해도 안전하다
+  await recoverCancelledEmbeds(c, new Set([...allowedChannels, MATCH_BONUS_CHANNEL_ID])); // 저장 파일에서 빠진 취소 임베드 삭제 예약 복구
   loadLevels(); // ⬅️ 추가: 저장된 레벨/XP 복원
   loadXpState(); // XP 긴급정지/뉴비부스트 스위치 상태 복원
   loadRoulette(); // 룰렛 일일 플레이 기록 복원
