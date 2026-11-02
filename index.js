@@ -609,6 +609,45 @@ function shutdown(signal) {
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT',  () => shutdown('SIGINT'));
 
+// ─── 로그인 대기 진단 ─────────────────────────────────────────
+// discord.js는 로그인 중 REST 429를 받으면 Retry-After만큼 말없이 기다리고, 게이트웨이 접속이
+// 막혀도 debug 이벤트만 남긴 채 재시도한다. 어느 쪽이든 login()이 성공도 실패도 아닌 상태로 멈춰
+// 콘솔에 아무것도 안 남는다. 콘솔로 명령어를 칠 수 없는 호스팅이라 준비 완료 전까지만 discord.js
+// 내부 로그를 모아뒀다가, 토큰이 필요 없는 API 응답과 함께 주기적으로 출력한다.
+const LOGIN_DIAG_INTERVAL_MS = 30_000;
+const LOGIN_DIAG_MAX_LINES = 12;
+const loginDiagLines = [];
+function recordLoginDiag(message) {
+  const line = String(message).replace(/\s*\n\s*/g, ' | ');
+  // discord.js가 마스킹해도 토큰 앞부분은 남으므로, 콘솔 로그를 어디 붙여넣어도 괜찮게 뺀다.
+  if (line.startsWith('Provided token') || loginDiagLines.at(-1) === line) return;
+  loginDiagLines.push(line);
+  if (loginDiagLines.length > LOGIN_DIAG_MAX_LINES) loginDiagLines.shift();
+}
+async function probeDiscordApi() {
+  try {
+    const res = await fetch('https://discord.com/api/v10/gateway', { signal: AbortSignal.timeout(10_000) });
+    const body = (await res.text()).slice(0, 120);
+    return `HTTP ${res.status}, retry-after=${res.headers.get('retry-after') ?? '-'}, 본문=${body}`;
+  } catch (err) {
+    return `접속 실패 — ${err.cause?.code ?? err.name}: ${err.message}`;
+  }
+}
+const loginDiagStartedAt = Date.now();
+const loginDiagTimer = setInterval(async () => {
+  const lines = loginDiagLines.join('\n  ');
+  const probe = await probeDiscordApi();
+  if (client.isReady()) return; // 응답을 기다리는 사이 준비가 끝났으면 출력할 이유가 없다
+  console.warn(`⏳ 로그인 ${Math.round((Date.now() - loginDiagStartedAt) / 1000)}초째 대기 중 — Discord API 응답: ${probe}\n  ${lines}`);
+}, LOGIN_DIAG_INTERVAL_MS);
+client.on(Events.Debug, recordLoginDiag);
+client.rest.on('restDebug', recordLoginDiag);
+client.once(Events.ClientReady, () => {
+  clearInterval(loginDiagTimer);
+  client.off(Events.Debug, recordLoginDiag);
+  client.rest.off('restDebug', recordLoginDiag);
+});
+
 // 토큰이 없거나 잘못된 경우 unhandled rejection으로 조용히 죽지 않도록 이유를 남기고 종료한다.
 client.login(process.env.TOKEN).catch(err => {
   console.error('로그인 실패:', err);
