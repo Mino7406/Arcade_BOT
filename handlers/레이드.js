@@ -38,7 +38,7 @@ const SPAWN_INTERVAL_DAYS = 3;     // 출현 주기(일). 출현한 날로부터
 const SPAWN_WINDOW_START_HOUR = 12; // KST. 사람이 없는 새벽에 떠서 아무도 못 잡는 일이 없게 시간대를 둔다
 const SPAWN_WINDOW_END_HOUR = 23;
 const RECRUIT_MS = 10 * 60 * 1000;  // 모집 시간
-const TURN_MS = 30 * 1000;          // 턴당 행동 선택 시간(못 고르면 자동 공격)
+const TURN_MS = 60 * 1000;          // 턴당 행동 선택 시간(못 고르면 자동 공격)
 const RESULT_MS = 2500;             // 턴 결과 화면을 보여주는 시간 — 그동안 버튼이 꺼지고, 끝나면 다음 턴 선택 화면으로
 const BATTLE_LIMIT_MS = 10 * 60 * 1000; // 전투 제한 시간 — 넘기면 몬스터 도주
 const PARTY_MAX = 4;
@@ -218,9 +218,9 @@ async function battleView(r, { redraw = true } = {}) {
           ` · ✨${mem.cooldown > 0 ? `${mem.cooldown}턴` : '준비'} · 🍖×${mem.potions}`).join('\n'),
     });
   }
-  // 제목을 크게 바꿔 턴 전환이 눈에 띄게: 결과 화면 '📜 TURN N 결과' → 선택 화면 '⚔️ TURN N+1 · 행동을 고르세요'
+  // 제목을 크게 바꿔 턴 전환이 눈에 띄게: 결과 화면 '📜 TURN N 종료' → 선택 화면 '⚔️ TURN N+1 · 행동을 고르세요'
   if (r.showingResult) {
-    sections.push({ text: `## 📜 TURN ${b.lastTurn?.turn ?? b.turn - 1} 결과\n-# 잠시 후 TURN ${b.turn}이 시작돼요` });
+    sections.push({ text: `## 📜 TURN ${b.lastTurn?.turn ?? b.turn - 1} 종료\n-# 잠시 후 TURN ${b.turn}이 시작돼요` });
   } else {
     const pending = b.members.filter(mem => mem.hp > 0 && !mem.choice).map(mem => mem.name);
     sections.push({
@@ -288,7 +288,8 @@ async function endView(r, outcome, rewards = []) {
 function buildHelpText() {
   return [
     '## ❔ 긴급 퀘스트 플레이 방법',
-    '- 매 턴 **30초 안에** 행동을 하나 고르세요. 못 고르면 자동으로 공격합니다.',
+    '- 매 턴 **60초 안에** 행동을 하나 고르세요. 못 고르면 자동으로 공격합니다.',
+    '- 턴이 넘어가기 전까지는 다시 눌러 선택을 바꿀 수 있어요.',
     '- 파티원 전원이 고르면 바로 턴이 진행됩니다.',
     '- 몬스터는 **다음 행동을 미리 예고**합니다. 💥 큰 공격 예고에는 🛡️**방어**(피해 70% 감소)!',
     '- HP가 절반 아래로 떨어지면 몬스터가 **분노**해 더 아프게 때립니다.',
@@ -563,7 +564,7 @@ async function handleRaidButton(interaction) {
       return;
     }
     if (r.showingResult) {
-      await interaction.reply({ content: '📜 턴 결과를 보여주는 중이에요. 곧 다음 턴이 시작돼요!', flags: MessageFlags.Ephemeral });
+      await interaction.reply({ content: '📜 턴이 끝났어요. 곧 다음 턴이 시작돼요!', flags: MessageFlags.Ephemeral });
       return;
     }
     const error = checkChoice(r.battle, interaction.user.id, arg);
