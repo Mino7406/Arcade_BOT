@@ -569,6 +569,28 @@ async function handleRaidButton(interaction) {
     return;
   }
 
+  // 혼자 시작 확인 메시지의 버튼 — 레이드 메시지가 아니라 그 사람에게만 보이는 메시지에 달려 있다.
+  if (kind === 'solo') {
+    const rr = raid;
+    if (arg !== 'yes') {
+      await interaction.update({ content: '취소했어요. 동료를 더 기다려 볼게요!', components: [] });
+      return;
+    }
+    if (!rr || rr.phase !== 'recruit') {
+      await interaction.update({ content: '⌛ 이미 시작됐거나 끝난 레이드예요.', components: [] });
+      return;
+    }
+    const uid = interaction.user.id;
+    if (!rr.party.length || (rr.party[0].userId !== uid && !ADMIN_IDS.includes(uid))) {
+      await interaction.update({ content: '▶️ 바로 시작은 방장과 관리자만 할 수 있어요.', components: [] });
+      return;
+    }
+    logSystem({ 유형: '레이드', 유저: userLabel(uid), 내용: `바로 시작(혼자 확인) — ${rr.party.length}명으로 출발` });
+    startBattle(rr);
+    await interaction.update({ content: '⚔️ 레이드를 시작했어요!', components: [] });
+    return;
+  }
+
   const r = raid;
   if (!r || r.message?.id !== interaction.message.id) {
     await interaction.reply({ content: '⌛ 이미 끝난 레이드예요.', flags: MessageFlags.Ephemeral });
@@ -589,6 +611,18 @@ async function handleRaidButton(interaction) {
       }
       if (r.party[0].userId !== userId && !ADMIN_IDS.includes(userId)) {
         await interaction.reply({ content: `▶️ 바로 시작은 방장 **${r.party[0].name}**님과 관리자만 누를 수 있어요.`, flags: MessageFlags.Ephemeral });
+        return;
+      }
+      // 혼자면 실수로 누른 건 아닌지 본인에게만 한 번 더 묻는다.
+      if (r.party.length === 1) {
+        await interaction.reply({
+          content: '🙋 **지금 파티에 혼자예요.**\n정말 혼자 시작할까요? 도와줄 동료 없이 혼자 싸워야 해요.',
+          components: [new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('raid:solo:yes').setEmoji('⚔️').setLabel('혼자 시작').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId('raid:solo:no').setLabel('취소').setStyle(ButtonStyle.Secondary),
+          )],
+          flags: MessageFlags.Ephemeral,
+        });
         return;
       }
       logSystem({ 유형: '레이드', 유저: userLabel(userId), 내용: `바로 시작 — ${r.party.length}명으로 출발` });

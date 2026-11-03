@@ -16,6 +16,9 @@ const PARTY_BASE_SIZE = 4;       // 몬스터 baseHp가 기준으로 삼는 인�
 // 인원이 적으면 서로 지켜줄 수단(도발·회복)도 빠져 같은 HP 비율로는 훨씬 어렵다(시뮬레이션 기준
 // 혼자면 승률 20% 안팎). 그래서 인원수별로 HP를 한 번 더 깎는다.
 const SMALL_PARTY_HP_RATE = { 1: 0.75, 2: 0.9, 3: 0.95 };
+// HP를 맞출 때 기준으로 삼는 최소 인원. 지금은 HP 조절 테스트용으로 1(혼자면 1인 기준 HP).
+// 정식 오픈 때 2로 올리면 1인 구간이 없어진다 — 혼자 시작해도 2인 기준 HP(빈 자리는 평균 가중치 1.0으로 채움).
+const HP_MIN_PARTY = 1;
 
 // 역할은 파티당 한 명씩만 고를 수 있다. 공격력이 낮은 역할일수록 팀을 지키는 스킬을 가진다.
 // hpWeight: 몬스터 HP를 인원에 맞출 때 그 역할 한 명이 늘리는 몫(4종 합 4.0). 딜러가 빠지면 HP도 더 줄어든다.
@@ -117,8 +120,9 @@ function pickNextIntent(battle, rng) {
 
 // party: [{ userId, name, role }]
 function createBattle(monster, party, rng = Math.random) {
-  const weight = party.reduce((sum, p) => sum + ROLES[p.role].hpWeight, 0);
-  const smallPartyRate = SMALL_PARTY_HP_RATE[party.length] ?? 1;
+  const counted = Math.max(party.length, HP_MIN_PARTY);
+  const weight = party.reduce((sum, p) => sum + ROLES[p.role].hpWeight, 0) + (counted - party.length) * 1.0;
+  const smallPartyRate = SMALL_PARTY_HP_RATE[counted] ?? 1;
   const maxHp = Math.max(500, Math.round((monster.baseHp * weight * smallPartyRate) / PARTY_BASE_SIZE / 10) * 10);
   const battle = {
     monster,
