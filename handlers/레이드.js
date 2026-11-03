@@ -5,11 +5,10 @@
 // 흐름: 출현(XP 정지) → 모집 10분(역할 선택, 4명 차면 즉시 시작) → 턴제 전투(제한 10분)
 //       → 토벌 성공(보상 XP) / 전멸·시간 초과·무참가(몬스터 도주) → XP 정지 해제.
 //
-// 화면: Components V2 컨테이너 하나. 맨 위에 패널 그림(몬스터 + 파티 카드 4장), 그 아래 실시간 타이머
-// (<t:..:R> — 디스코드 앱이 알아서 줄여 보여줘 봇이 고칠 필요가 없다), 선택 현황, 지난 턴 기록, 버튼.
-// 그림은 판이 바뀔 때(참가자 변동·턴 진행·종료)만 새로 그려 올리고, 클릭마다 바뀌는 선택 현황은
-// 글자만 고친다(지난번 올린 그림 주소 r.imageUrl을 재사용) — 그래서 버튼 반응은 업로드 없이 즉시다.
-// 그림을 못 그리는 환경(라이브러리·폰트 없음)이면 같은 정보를 글자로 대신 보여준다.
+// 화면: 게임 화면처럼 — 그림 한 장이 곧 게임 화면이고(몬스터·카드 상태 리본·지난 턴 말풍선·피해 숫자),
+// 그 아래에는 상자 틀 없이 실시간 타이머 한 줄(<t:..:R> — 디스코드 앱이 알아서 줄여 보여줘 봇이 고칠
+// 필요가 없다)과 버튼만 둔다. 누가 행동을 고를 때마다 카드 리본이 바뀌도록 그림을 다시 그린다
+// (화면 대기열이 300ms 모아 한 번에). 그림을 못 그리는 환경이면 같은 정보를 글자로 대신 보여준다.
 //
 // 반응 속도: 버튼 응답(interaction.update)으로 바로 화면을 고친다. 마지막 파티원이 행동을 고르면
 // 그 응답 안에서 턴을 계산해 결과까지 한 번에 그린다. 타이머로 넘어가는 턴만 message.edit을 쓴다.
@@ -19,7 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, AttachmentBuilder,
-  ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, SeparatorSpacingSize, MediaGalleryBuilder, MediaGalleryItemBuilder,
+  TextDisplayBuilder, SeparatorBuilder, SeparatorSpacingSize, MediaGalleryBuilder, MediaGalleryItemBuilder,
   ComponentType, EmbedBuilder,
 } = require('discord.js');
 const { applyXp, isExcludedGuild, announceLevelUp, setRaidXpFrozen } = require('./레벨링');
@@ -103,7 +102,7 @@ function rescheduleOverdue(now = Date.now()) {
 
 // ── 화면 ────────────────────────────────────────────────────────
 const ts = (ms, style = 'R') => `<t:${Math.floor(ms / 1000)}:${style}>`;
-const ACCENT = { recruit: 0xED4245, battle: 0xD9A93F, rage: 0xED4245, clear: 0x57F287, end: 0x4E5058 };
+const END_EMBED_COLOR = 0x4E5058; // 옛 버전(임베드) 메시지를 정리할 때만 쓴다
 
 function bar(value, max, length) {
   const filled = Math.max(0, Math.min(length, Math.round((value / max) * length)));
@@ -113,20 +112,19 @@ function freezeNotice(r) {
   return r.freezesXp ? '\n> 🔧 **XP 시스템 고장!** 놀이터 미니게임 · 통화방 · 채팅 XP가 멈췄습니다.' : '';
 }
 
-// 컨테이너 하나 + (그림이 있으면) 맨 위 미디어 갤러리. sections: [{ text } | { separator } | { row }]
+// 상자(컨테이너) 없이 맨 위 단계에 그림 → 글자 → 버튼을 나열한다(임베드처럼 보이지 않게).
+// sections: [{ text } | { separator } | { row }]
 // image: { png } 새 그림 첨부 / { url } 지난번 올린 그림 재사용 / null 그림 없음.
-function assemble(accent, image, sections) {
-  const container = new ContainerBuilder().setAccentColor(accent);
+function assemble(image, sections) {
+  const components = [];
   const mediaUrl = image?.png ? `attachment://${IMAGE_NAME}` : image?.url;
-  if (mediaUrl) {
-    container.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(mediaUrl)));
-  }
+  if (mediaUrl) components.push(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(mediaUrl)));
   for (const s of sections) {
-    if (s.text) container.addTextDisplayComponents(new TextDisplayBuilder().setContent(s.text));
-    else if (s.separator) container.addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
-    else if (s.row) container.addActionRowComponents(s.row);
+    if (s.text) components.push(new TextDisplayBuilder().setContent(s.text));
+    else if (s.separator) components.push(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
+    else if (s.row) components.push(s.row);
   }
-  const payload = { components: [container], flags: MessageFlags.IsComponentsV2, allowedMentions: { parse: [] } };
+  const payload = { components, flags: MessageFlags.IsComponentsV2, allowedMentions: { parse: [] } };
   // 새 그림을 올릴 때는 이전 첨부를 지우고 교체한다. 글자만 고칠 때는 첨부를 건드리지 않아 기존 그림이 남는다.
   if (image?.png) { payload.files = [new AttachmentBuilder(image.png, { name: IMAGE_NAME })]; payload.attachments = []; }
   else if (image === null) payload.attachments = [];
@@ -148,8 +146,7 @@ async function pickImage(r, redraw, render) {
 // 보낸/고친 메시지에서 디스코드가 붙여준 그림 주소를 기억해, 다음 글자만 고치는 응답에 재사용한다.
 function rememberImageUrl(r, message) {
   try {
-    const container = message?.components?.[0]?.toJSON?.();
-    const gallery = container?.components?.find(c => c.type === ComponentType.MediaGallery);
+    const gallery = (message?.components ?? []).map(c => c.toJSON?.()).find(c => c?.type === ComponentType.MediaGallery);
     r.imageUrl = gallery?.items?.[0]?.media?.url ?? null;
   } catch {
     r.imageUrl = null;
@@ -170,10 +167,7 @@ async function recruitView(r, { redraw = true } = {}) {
         }).join('\n'),
     });
   }
-  sections.push({
-    text: `## ⏳ 모집 마감 ${ts(r.recruitEndsAt)}\n파티 **${r.party.length}/${PARTY_MAX}** · 4명이 모이면 바로 출발해요${freezeNotice(r)}`,
-  });
-  sections.push({ separator: true });
+  sections.push({ text: `⏳ **모집 마감 ${ts(r.recruitEndsAt)}** · 파티 ${r.party.length}/${PARTY_MAX}${image ? '' : freezeNotice(r)}` });
   sections.push({
     row: new ActionRowBuilder().addComponents(
       ...ROLE_ORDER.map(roleKey => {
@@ -196,10 +190,9 @@ async function recruitView(r, { redraw = true } = {}) {
     ),
   });
   sections.push({
-    text: `-# ▶️ 바로 시작은 ${r.party[0] ? `파티장 **${r.party[0].name}**` : '첫 번째 참가자'}님과 관리자만 누를 수 있어요\n` +
-      `-# 토벌 성공 시 파티원 전원 +${CLEAR_XP} XP · 최다 피해 MVP +${MVP_BONUS_XP} XP`,
+    text: `-# ▶️ 바로 시작: ${r.party[0] ? `파티장 ${r.party[0].name}` : '첫 참가자'} · 관리자 · 4명이 모이면 자동 출발 · 성공 시 +${CLEAR_XP} XP (MVP +${MVP_BONUS_XP})`,
   });
-  return assemble(ACCENT.recruit, image, sections);
+  return assemble(image, sections);
 }
 
 function memberStatus(mem) {
@@ -222,14 +215,15 @@ async function battleView(r, { redraw = true } = {}) {
           ` · ✨${mem.cooldown > 0 ? `${mem.cooldown}턴` : '준비'} · 🍖×${mem.potions}`).join('\n'),
     });
   }
+  const pending = b.members.filter(mem => mem.hp > 0 && !mem.choice).map(mem => mem.name);
   sections.push({
-    text: `## ⏳ 행동 마감 ${ts(r.turnEndsAt)}\n` +
-      `-# 턴 ${b.turn} · 전투 종료 ${ts(r.battleEndsAt)}${r.freezesXp ? ' · 🔧 XP 정지 중' : ''}\n` +
-      b.members.map(memberStatus).join('　'),
+    text: `⏳ **행동 마감 ${ts(r.turnEndsAt)}** · 턴 ${b.turn} · 전투 종료 ${ts(r.battleEndsAt)}\n` +
+      (pending.length ? `-# 아직 고르지 않음: ${pending.join(', ')}` : '-# 모두 골랐어요 — 곧 턴이 진행돼요'),
   });
-  if (b.log.length) {
-    sections.push({ separator: true });
-    sections.push({ text: `**📜 지난 턴**\n${b.log.join('\n')}` });
+  if (!image) {
+    // 그림이 없을 때만 지난 턴 기록을 글자로 보여준다(그림에는 말풍선·피해 숫자로 들어가 있다).
+    sections.push({ text: b.members.map(memberStatus).join('　') });
+    if (b.log.length) sections.push({ text: `**📜 지난 턴**\n${b.log.join('\n')}` });
   }
   sections.push({ separator: true });
   sections.push({
@@ -244,7 +238,7 @@ async function battleView(r, { redraw = true } = {}) {
       new ButtonBuilder().setCustomId('raid:help').setEmoji('❔').setStyle(ButtonStyle.Secondary),
     ),
   });
-  return assemble(b.rage ? ACCENT.rage : ACCENT.battle, image, sections);
+  return assemble(image, sections);
 }
 
 const OUTCOME_TEXT = {
@@ -271,16 +265,14 @@ async function endView(r, outcome, rewards = []) {
           return `${ROLES[mem.role].emoji} **${mem.name}** — 피해 ${mem.damage.toLocaleString()} · 회복 ${mem.healing}${xp}${idle}`;
         }).join('\n');
     }
+    if (r.freezesXp) body += '\n\n> 🔧 **XP 시스템이 복구되었습니다!**';
     sections.push({ text: body });
   } else {
-    sections.push({ text: `## ${OUTCOME_TEXT[outcome]}` });
+    const mvp = rewards.find(x => x.mvp);
+    const mvpName = mvp && b?.members.find(mem => mem.userId === mvp.userId)?.name;
+    sections.push({ text: `-# ${OUTCOME_TEXT[outcome]}${b ? ` · ${b.turn}턴` : ''}${mvpName ? ` · MVP ${mvpName} +${mvp.xp} XP` : ''}` });
   }
-  if (b?.log.length) {
-    sections.push({ separator: true });
-    sections.push({ text: `**📜 마지막 턴**\n${b.log.join('\n')}` });
-  }
-  if (r.freezesXp) sections.push({ text: '> 🔧 **XP 시스템이 복구되었습니다!**' });
-  return assemble(outcome === 'clear' ? ACCENT.clear : ACCENT.end, image, sections);
+  return assemble(image, sections);
 }
 
 function buildHelpText() {
@@ -556,9 +548,9 @@ async function handleRaidButton(interaction) {
     }
     choose(r.battle, interaction.user.id, arg);
     // 마지막 사람이 고르면 턴을 처리하고 결과(새 그림)를 바로 보낸다.
-    // 아직 남았으면 선택 현황 글자만 고친다(잠깐 모았다가 한 번에, 그림 업로드 없음).
+    // 아직 남았으면 카드 리본(행동 선택! → 준비)을 바꾼 그림을 잠깐 모았다가 한 번에 보낸다.
     if (allChosen(r.battle)) advanceTurn(r);
-    else requestRender(r);
+    else requestRender(r, { image: true });
     await interaction.deferUpdate();
   }
 }
@@ -575,7 +567,7 @@ async function recoverInterruptedRaid(client) {
   const ghost = { monster: MONSTERS[0], battle: null, party: [], freezesXp: false, imageUrl: null };
   // 예전 버전(임베드)으로 띄운 메시지는 V2로 바꿀 수 없을 수 있어, 실패하면 임베드로 정리한다.
   await message.edit(await endView(ghost, 'restart')).catch(() =>
-    message.edit({ embeds: [new EmbedBuilder().setColor(ACCENT.end).setDescription(`# ${OUTCOME_TEXT.restart}`)], components: [] }).catch(() => {}),
+    message.edit({ embeds: [new EmbedBuilder().setColor(END_EMBED_COLOR).setDescription(`# ${OUTCOME_TEXT.restart}`)], components: [] }).catch(() => {}),
   );
 }
 

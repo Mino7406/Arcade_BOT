@@ -181,8 +181,12 @@ function heal(member, amount) {
 
 // 한 턴을 처리한다. battle.log를 이번 턴 기록으로 바꾸고 결과를 돌려준다:
 // 'clear'(토벌) | 'wipe'(전멸) | null(계속).
+// battle.lastTurn에는 같은 내용을 그림용 데이터로 남긴다(카드 위 행동 말풍선·받은 피해 숫자 등):
+//   { turn, acts: { userId: { label, value, crit, heal, auto } }, hits: { userId: 피해 }, monsterDamage, monsterMove }
 function resolveTurn(battle, rng = Math.random) {
   const log = [];
+  const last = { turn: battle.turn, acts: {}, hits: {}, monsterDamage: 0, monsterMove: null };
+  battle.lastTurn = last;
   const ordered = ROLE_ORDER.map(r => battle.members.find(m => m.role === r)).filter(Boolean);
   const acting = ordered.filter(m => m.hp > 0);
 
@@ -202,6 +206,8 @@ function resolveTurn(battle, rng = Math.random) {
       if (crit) dmg = Math.round(dmg * role.critMultiplier);
       battle.hp -= dmg;
       m.damage += dmg;
+      last.acts[m.userId] = { label: '공격', value: dmg, crit, auto };
+      last.monsterDamage += dmg;
       log.push(`${role.emoji} **${m.name}** 공격${tag} → **${dmg}**${crit ? ' 💥치명타!' : ''}`);
     } else if (action === 'skill') {
       m.cooldown = role.skill.cooldown;
@@ -209,6 +215,8 @@ function resolveTurn(battle, rng = Math.random) {
         const dmg = randInt([250, 300], rng);
         battle.hp -= dmg;
         m.damage += dmg;
+        last.acts[m.userId] = { label: role.skill.name, value: dmg };
+        last.monsterDamage += dmg;
         log.push(`${role.emoji} **${m.name}** ✨${role.skill.name} → **${dmg}**`);
       } else if (m.role === 'archer') {
         let dmg = randInt([230, 270], rng);
@@ -216,9 +224,12 @@ function resolveTurn(battle, rng = Math.random) {
         if (crit) dmg = Math.round(dmg * role.critMultiplier);
         battle.hp -= dmg;
         m.damage += dmg;
+        last.acts[m.userId] = { label: role.skill.name, value: dmg, crit };
+        last.monsterDamage += dmg;
         log.push(`${role.emoji} **${m.name}** ✨${role.skill.name} → **${dmg}**${crit ? ' 💥치명타!' : ''}`);
       } else if (m.role === 'tank') {
         taunter = m;
+        last.acts[m.userId] = { label: role.skill.name };
         log.push(`${role.emoji} **${m.name}** ✨${role.skill.name}! 몬스터의 시선을 끈다`);
       } else if (m.role === 'healer') {
         let healed = 0;
@@ -228,14 +239,17 @@ function resolveTurn(battle, rng = Math.random) {
           else { t.hp = 25; healed += 25; revived.push(t.name); }
         }
         m.healing += healed;
+        last.acts[m.userId] = { label: role.skill.name, value: healed, heal: true };
         log.push(`${role.emoji} **${m.name}** ✨${role.skill.name} → 아군 회복${revived.length ? ` · **${revived.join(', ')}** 부활!` : ''}`);
       }
     } else if (action === 'guard') {
+      last.acts[m.userId] = { label: '방어' };
       log.push(`${role.emoji} **${m.name}** 방어 태세`);
     } else if (action === 'potion') {
       m.potions--;
       const healed = heal(m, POTION_HEAL);
       m.healing += healed;
+      last.acts[m.userId] = { label: '회복약', value: healed, heal: true };
       log.push(`${role.emoji} **${m.name}** 🍖회복약 → HP +${healed}`);
     }
 
@@ -259,13 +273,18 @@ function resolveTurn(battle, rng = Math.random) {
     return dmg;
   };
   const monsterName = battle.rage ? battle.monster.rageName : battle.monster.name;
+  last.monsterMove = move.name;
   if (move.target === 'none') {
     log.push(`${battle.monster.emoji} **${monsterName}**의 **${move.name}**! 다음 턴에 큰 공격이 온다…`);
   } else {
     const targets = move.target === 'all'
       ? aliveMembers(battle)
       : [taunter && taunter.hp > 0 ? taunter : aliveMembers(battle)[Math.floor(rng() * aliveMembers(battle).length)]];
-    const parts = targets.map(t => `${t.name} -${hit(t)}${t.hp <= 0 ? ' 💀' : ''}`);
+    const parts = targets.map(t => {
+      const dmg = hit(t);
+      last.hits[t.userId] = dmg;
+      return `${t.name} -${dmg}${t.hp <= 0 ? ' 💀' : ''}`;
+    });
     log.push(`${battle.monster.emoji} **${monsterName}**의 **${move.name}**! → ${parts.join(' · ')}`);
   }
 

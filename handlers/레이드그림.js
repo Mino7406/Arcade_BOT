@@ -10,7 +10,7 @@
 
 const path = require('path');
 const { Painter, loadFont } = require('./그림판');
-const { ROLES, ROLE_ORDER, PLAYER_MAX_HP } = require('./레이드전투');
+const { ROLES, ROLE_ORDER, PLAYER_MAX_HP, ACTIONS } = require('./레이드전투');
 
 const W = 900; // 설계 크기(좌표는 전부 이 기준)
 const H = 640;
@@ -171,12 +171,14 @@ function monsterBox(y, h) {
 // 카드 4장(역할 순서 고정). drawCard(x, y, w, h, roleKey, member)로 안쪽을 채운다.
 const CARD_Y = 362, CARD_H = 260, CARD_W = 203, CARD_GAP = 16;
 const NAME_SIZE = 28;
-// 카드 배경과 빈자리 테두리는 배경 캐시(background)에 이미 있다. 참가자 카드만 금색 테두리를 덧그린다.
-function cards(members, drawCard) {
+// 카드 배경과 빈자리 테두리는 배경 캐시(background)에 이미 있다. 참가자 카드만 테두리를 덧그린다.
+// border(m) → { color, width } | null 로 장면마다 테두리를 정할 수 있다(기본: 금색 2px).
+function cards(members, drawCard, border = () => ({ color: C.gold, width: 2 })) {
   ROLE_ORDER.forEach((roleKey, i) => {
     const x = 20 + i * (CARD_W + CARD_GAP);
     const m = members.find(q => q.role === roleKey) || null;
-    if (m) p.strokeRoundRect(x, CARD_Y, CARD_W, CARD_H, 14, 2, C.gold);
+    const b = m && border(m);
+    if (b) p.strokeRoundRect(x, CARD_Y, CARD_W, CARD_H, 14, b.width, b.color);
     drawCard(x, CARD_Y, CARD_W, CARD_H, roleKey, m);
   });
 }
@@ -224,6 +226,7 @@ function renderRecruit(r) {
     const tw = p.textWidth(B(), title, 46);
     text(title, W / 2, 54, 46, C.gold);
     siren(W / 2 - tw / 2 - 50, 56); siren(W / 2 + tw / 2 + 50, 56);
+    if (r.freezesXp) text('XP 시스템 고장 — 토벌하면 복구!', W / 2, 88, 18, '#ff8f7a');
     p.circle(W / 2 - 64, 130, 6, C.red);
     text('타겟 몬스터', W / 2 + 8, 130, 22, C.orange);
     drawMonster(r.monster, W / 2, 218, 112);
@@ -241,48 +244,102 @@ function renderRecruit(r) {
   });
 }
 
+// 카드 상태: 아직 고르지 않음(주황 리본·굵은 금테) / 고름(초록 리본·초록테, 고른 행동 표시) / 쓰러짐(회색).
+// 동시에 고르는 방식이라 "내 차례 = 아직 안 고름"이 한눈에 보이게 리본을 크게 띄운다.
+const RIBBON = {
+  pending: { fill: '#c4630f', color: '#ffffff' },
+  ready:   { fill: '#1e6b3c', color: '#d9ffe6' },
+  down:    { fill: '#3a3530', color: '#b0a89a' },
+};
+function memberState(mem) {
+  if (mem.hp <= 0) return 'down';
+  return mem.choice ? 'ready' : 'pending';
+}
+function choiceLabel(mem) {
+  if (mem.choice === 'skill') return ROLES[mem.role].skill.name;
+  return ACTIONS[mem.choice]?.name ?? '';
+}
+// 지난 턴 행동 말풍선 문구: "회전베기 280", "회복약 +45", "방어"
+function actLabel(act) {
+  if (!act) return null;
+  if (act.value === undefined) return act.label;
+  return act.heal ? `${act.label} +${act.value}` : `${act.label} ${act.value}`;
+}
+
 function renderBattle(r) {
   return render('전투', () => {
     const b = r.battle;
     const m = b.monster;
+    const last = b.lastTurn;
     background('battle', 120, 224);
-    const name = b.rage ? m.rageName : m.name;
-    const nw = p.textWidth(B(), name, 38);
-    text(name, W / 2 - (b.rage ? 34 : 0), 42, 38, b.rage ? C.red : C.gold);
-    if (b.rage) {
-      p.roundRect(W / 2 - 34 + nw / 2 + 12, 25, 64, 34, 8, '#5c1410');
-      text('분노', W / 2 - 34 + nw / 2 + 44, 42, 22, '#ffb4a8');
-    }
-    bar(50, 72, W - 100, 34, b.hp / b.maxHp, b.rage ? '#e5383b' : '#d94a2b');
-    p.strokeRoundRect(50, 72, W - 100, 34, 17, 2, C.gold);
-    text(`${b.hp.toLocaleString()} / ${b.maxHp.toLocaleString()}`, W / 2, 89, 24, '#ffffff');
 
-    drawMonster(m, W / 2, 196, 112, { rage: b.rage });
+    // 상단: TURN 배지 · 몬스터 이름(분노) · HP 바
+    p.roundRect(30, 20, 118, 42, 10, '#2a2119');
+    p.strokeRoundRect(30, 20, 118, 42, 10, 1.5, C.gold);
+    text(`TURN ${b.turn}`, 89, 41, 24, C.gold);
+    const name = b.rage ? m.rageName : m.name;
+    const nw = p.textWidth(B(), name, 36);
+    const nameX = W / 2 + 40 - (b.rage ? 34 : 0);
+    text(name, nameX, 41, 36, b.rage ? C.red : C.gold, { maxWidth: 560 });
+    if (b.rage) {
+      p.roundRect(nameX + nw / 2 + 12, 24, 64, 34, 8, '#5c1410');
+      text('분노', nameX + nw / 2 + 44, 41, 22, '#ffb4a8');
+    }
+    bar(50, 74, W - 100, 32, b.hp / b.maxHp, b.rage ? '#e5383b' : '#d94a2b');
+    p.strokeRoundRect(50, 74, W - 100, 32, 16, 2, C.gold);
+    text(`${b.hp.toLocaleString()} / ${b.maxHp.toLocaleString()}`, W / 2, 90, 22, '#ffffff');
+
+    // 몬스터 + 지난 턴 결과(입은 총피해 · 몬스터가 쓴 기술)
+    drawMonster(m, W / 2, 192, 112, { rage: b.rage });
+    if (last) {
+      if (last.monsterDamage > 0) text(`-${last.monsterDamage.toLocaleString()}`, W / 2 + 190, 178, 44, '#ff5a45');
+      if (last.monsterMove) {
+        p.roundRect(W / 2 - 330, 158, 220, 44, 10, '#3a1a12');
+        text(`${last.monsterMove}!`, W / 2 - 220, 180, 24, '#ffb08a', { maxWidth: 200 });
+      }
+    }
     const move = m.moves[b.intent];
     const warn = b.intent === 'smash';
-    p.roundRect(70, 270, W - 140, 56, 10, warn ? '#4a1410' : '#241c14');
-    p.strokeRoundRect(70, 270, W - 140, 56, 10, 1.5, warn ? C.red : C.frame);
-    text(`다음 행동 · ${move.telegraph}`, W / 2, 298, 26, warn ? '#ffc4b8' : C.sub, { maxWidth: W - 180 });
+    p.roundRect(70, 272, W - 140, 54, 10, warn ? '#4a1410' : '#241c14');
+    p.strokeRoundRect(70, 272, W - 140, 54, 10, 1.5, warn ? C.red : C.frame);
+    text(`다음 행동 · ${move.telegraph}`, W / 2, 299, 26, warn ? '#ffc4b8' : C.sub, { maxWidth: W - 180 });
 
     cards(b.members, (x, y, w, h, roleKey, mem) => {
       const role = ROLES[roleKey];
       if (!mem) {
-        roleIcon(roleKey, x + w / 2, y + 50, true);
-        text('빈자리', x + w / 2, y + 116, NAME_SIZE, C.dim);
-        text(role.name, x + w / 2, y + 152, 22, '#8a6a3a');
+        roleIcon(roleKey, x + w / 2, y + 60, true);
+        text('빈자리', x + w / 2, y + 122, NAME_SIZE, C.dim);
+        text(role.name, x + w / 2, y + 156, 22, '#8a6a3a');
         return;
       }
-      const down = mem.hp <= 0;
+      const state = memberState(mem);
+      const down = state === 'down';
+      const ribbon = RIBBON[state];
+      p.roundRect(x + 10, y + 10, w - 20, 34, 8, ribbon.fill);
+      text(state === 'pending' ? '행동 선택!' : state === 'ready' ? `준비 · ${choiceLabel(mem)}` : '쓰러짐',
+        x + w / 2, y + 27, 20, ribbon.color, { maxWidth: w - 32 });
+
+      roleIcon(roleKey, x + w / 2, y + 74, down);
+      const hit = last?.hits[mem.userId];
+      if (hit) text(`-${hit}`, x + w - 34, y + 66, 26, '#ff5a45');
+
+      text(mem.name, x + w / 2, y + 122, NAME_SIZE, down ? C.dim : C.text, { maxWidth: w - 20 });
       const ratio = mem.hp / PLAYER_MAX_HP;
-      roleIcon(roleKey, x + w / 2, y + 46, down);
-      text(mem.name, x + w / 2, y + 104, NAME_SIZE, down ? C.dim : C.text, { maxWidth: w - 20 });
-      text(role.name, x + w / 2, y + 136, 20, down ? '#8a6a3a' : C.orange);
-      bar(x + 14, y + 156, w - 28, 18, ratio, hpColor(ratio));
-      text(down ? '쓰러짐' : `HP ${mem.hp}`, x + w / 2, y + 194, 24, down ? '#f04b3a' : C.sub);
-      const half = (w - 36) / 2;
-      pill(x + 14, y + 214, half, 32, mem.cooldown > 0 ? `스킬 ${mem.cooldown}` : '스킬 OK', 19,
-        mem.cooldown > 0 ? '#2f2a24' : C.teal, mem.cooldown > 0 ? C.muted : C.tealText);
-      pill(x + 22 + half, y + 214, half, 32, `회복 ${mem.potions}`, 19, '#2f3a1e', '#d8f0b0');
+      bar(x + 14, y + 142, w - 28, 16, ratio, hpColor(ratio));
+      text(down ? 'HP 0' : `HP ${mem.hp}`, x + w / 2, y + 172, 22, down ? '#f04b3a' : C.sub);
+
+      const act = actLabel(last?.acts[mem.userId]);
+      if (act) {
+        const crit = last.acts[mem.userId].crit;
+        pill(x + 14, y + 190, w - 28, 32, crit ? `${act} 치명타!` : act, 19, crit ? '#7a3b0c' : '#3b2f22', crit ? '#ffd9a0' : '#f0e2c8');
+      }
+      text(`${mem.cooldown > 0 ? `스킬 ${mem.cooldown}턴` : '스킬 OK'} · 회복약 ${mem.potions}`, x + w / 2, y + 240, 18,
+        mem.cooldown > 0 ? C.muted : '#8fd6c6');
+    }, (mem) => {
+      const state = memberState(mem);
+      if (state === 'pending') return { color: '#ffb52e', width: 4 };
+      if (state === 'ready') return { color: '#3ecf6e', width: 2.5 };
+      return null;
     });
   });
 }
@@ -344,8 +401,13 @@ function warmUpLabels(monsters) {
   add('bold', '분노', 22);
   add('bold', '보상 없음', 20);
   for (const v of ['참가 완료', '참가 대기']) add('bold', v, 22);
-  for (const v of ['스킬 OK', '스킬 1', '스킬 2', '스킬 3', '회복 0', '회복 1', '회복 2']) add('bold', v, 19);
+  add('bold', '행동 선택!', 20);
+  add('bold', '쓰러짐', 20);
+  for (let t = 1; t <= 30; t++) add('bold', `TURN ${t}`, 24);
+  for (const sk of ['스킬 OK', '스킬 1턴', '스킬 2턴', '스킬 3턴']) for (let k = 0; k <= 2; k++) add('bold', `${sk} · 회복약 ${k}`, 18);
+  for (const a of ['공격', '방어', '회복약']) add('bold', `준비 · ${a}`, 20);
   for (const k of ROLE_ORDER) {
+    add('bold', `준비 · ${ROLES[k].skill.name}`, 20);
     add('bold', ROLES[k].name, 22);
     add('bold', ROLES[k].name, 20);
     add('bold', ROLES[k].skill.name, 20);
