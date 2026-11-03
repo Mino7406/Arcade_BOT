@@ -81,12 +81,12 @@ const MONSTERS = [
       rageColors: { a: '#4a1010', b: '#e5383b', g: '#ffb703' },
       glitchRows: [3, 9],
     },
-    baseHp: 4400,
+    baseHp: 6200,
     moves: {
-      attack: { name: '몸통 박치기', telegraph: '몸을 잔뜩 웅크린다', target: 'single', damage: [20, 26] },
-      sweep:  { name: '오류 파동',   telegraph: '몸이 지직거리기 시작한다', target: 'all', damage: [12, 17] },
+      attack: { name: '몸통 박치기', telegraph: '몸을 잔뜩 웅크린다', target: 'single', damage: [14, 19] },
+      sweep:  { name: '오류 파동',   telegraph: '몸이 지직거리기 시작한다', target: 'all', damage: [9, 12] },
       charge: { name: '데이터 압축', telegraph: '주변 데이터를 빨아들인다…', target: 'none' },
-      smash:  { name: '메모리 폭발', telegraph: '💥 폭발 직전! 방어하세요!', target: 'all', damage: [38, 46] },
+      smash:  { name: '메모리 폭발', telegraph: '💥 폭발 직전! 방어하세요!', target: 'all', damage: [28, 34] },
     },
   },
 ];
