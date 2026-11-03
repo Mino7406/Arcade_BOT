@@ -150,8 +150,11 @@ function drawPixels(ctx, sp, cx, cy, px, { dim = false, colors = null } = {}) {
     let color = palette[ch];
     if (dim) color = grayOf(color, 0.45);
     const shift = sp.glitchRows?.includes(y) ? px * 0.6 : 0;
+    // 칸 크기가 소수(3.5px 등)여도 칸 사이에 흐린 틈이 생기지 않게 경계를 정수 픽셀로 맞춘다.
+    const x0 = Math.round(cx - w / 2 + x * px + shift);
+    const y0 = Math.round(cy - h / 2 + y * px);
     ctx.fillStyle = color;
-    ctx.fillRect(cx - w / 2 + x * px + shift, cy - h / 2 + y * px, px, px);
+    ctx.fillRect(x0, y0, Math.round(cx - w / 2 + (x + 1) * px + shift) - x0, Math.round(cy - h / 2 + (y + 1) * px) - y0);
   }));
 }
 function grayOf(hex, k) {
@@ -160,8 +163,10 @@ function grayOf(hex, k) {
   return `#${g}${g}${g}`;
 }
 
+const ROLE_ICON_PX = 3.4; // 16칸 × 3.4 ≈ 54px
+
 function roleIcon(ctx, role, cx, cy, dim = false) {
-  drawPixels(ctx, ROLE_SPRITES[role], cx, cy, 4, { dim });
+  drawPixels(ctx, ROLE_SPRITES[role], cx, cy, ROLE_ICON_PX, { dim });
 }
 
 // 몬스터: sprite(픽셀 아트) 또는 image(파일). maxH 안에 맞춘다. gray: 도망/전멸 결과 화면용 흑백.
