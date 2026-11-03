@@ -52,16 +52,22 @@ const IMAGE_NAME = 'raid.png';
 
 const STATE_PATH = path.join(__dirname, '..', 'DB', 'raid.json');
 
-// 디스크 상태: { nextSpawnAt, active: { guildId, channelId, messageId } | null }
+// 디스크 상태: { autoSpawn, nextSpawnAt, active: { [guildId]: { channelId, messageId } } }
+// autoSpawn: 본서버 자동 출현 가동 여부(/xp → XP 관리에서 켜고 끔). 값이 없으면 중지로 본다.
 // active는 "재시작 직전에 진행 중이던 레이드" 표시용이다. 전투 자체는 저장하지 않으므로, 켜질 때
 // 남아 있으면 그 메시지를 '봇 점검으로 사라졌다'로 정리한다(XP 정지는 메모리 플래그라 자동으로 풀린다).
 function loadState() {
+  let st = null;
   try {
-    if (fs.existsSync(STATE_PATH)) return JSON.parse(fs.readFileSync(STATE_PATH, 'utf8'));
+    if (fs.existsSync(STATE_PATH)) st = JSON.parse(fs.readFileSync(STATE_PATH, 'utf8'));
   } catch (err) {
     console.error('raid.json 읽기 실패(새로 시작):', err);
   }
-  return { nextSpawnAt: null, active: null };
+  st = { autoSpawn: false, nextSpawnAt: null, active: {}, ...st };
+  // 예전 형식(레이드 하나: { guildId, channelId, messageId })이면 서버별 형식으로 옮긴다.
+  if (!st.active) st.active = {};
+  else if (st.active.guildId) st.active = { [st.active.guildId]: { channelId: st.active.channelId, messageId: st.active.messageId } };
+  return st;
 }
 function saveState(state) {
   try {
@@ -73,8 +79,9 @@ function saveState(state) {
 }
 let state = loadState();
 
-// 지금 진행 중인 레이드(메모리). 한 번에 하나만 돈다.
-let raid = null;
+// 진행 중인 레이드는 서버(길드)마다 따로 — 테스트 서버에서 띄운 레이드와 본서버 레이드는 서로 막지 않는다.
+const raids = new Map(); // guildId → r
+const isCurrent = (r) => raids.get(r.guildId) === r;
 
 // ── 출현 시각 계산 ──────────────────────────────────────────────
 function kstDayStartUtc(epochMs, addDays = 0) {
@@ -386,8 +393,11 @@ async function flush(r) {
       r.dirty = false;
       const redraw = r.imageDirty;
       r.imageDirty = false;
-      const payload = await currentView(r, redraw);
-      const ok = await editRaidMessage(r, payload);
+      // 놀이터 채팅에 묻혔으면(채널의 마지막 메시지가 레이드 메시지가 아니면) 맨 아래로 다시 올린다.
+      // 새 메시지에는 그림을 다시 첨부해야 하므로 그림도 새로 그린다. 끝난 레이드(결과 화면)는 그대로 둔다.
+      const buried = r.phase !== 'ended' && isBuried(r);
+      const payload = await currentView(r, redraw || (buried && r.hasImage));
+      const ok = buried ? await repostRaidMessage(r, payload) : await editRaidMessage(r, payload);
       // 메시지가 지워졌으면 계속 돌릴 화면이 없으므로 도주 처리한다.
       if (!ok && r.phase === 'battle') finishRaid(r, 'timeout');
     }
@@ -413,7 +423,48 @@ async function editRaidMessage(r, payload) {
   }
 }
 
+function isBuried(r) {
+  const lastId = r.message?.channel?.lastMessageId;
+  return !!lastId && lastId !== r.message.id;
+}
+
+async function repostRaidMessage(r, payload) {
+  const old = r.message;
+  let message;
+  try {
+    message = await old.channel.send(payload);
+  } catch (err) {
+    console.error('레이드 메시지 다시 올리기 실패(제자리 수정으로 대신):', err);
+    return editRaidMessage(r, payload);
+  }
+  r.message = message;
+  rememberImageUrl(r, message);
+  r.movedFrom.add(old.id);
+  saveActive(r);
+  old.delete().catch(err => console.error('예전 레이드 메시지 삭제 실패:', err));
+  return true;
+}
+
+// 놀이터에 다른 메시지가 올라오면 잠깐(BUMP_DELAY_MS) 모았다가 레이드 메시지를 맨 아래로 다시 올린다.
+// 채팅이 몰려도 이 간격에 한 번만 다시 올린다(타이머·버튼으로 화면이 바뀔 때도 묻혀 있으면 다시 올라간다).
+const BUMP_DELAY_MS = 3000;
+function noteChannelMessage(message) {
+  const r = raids.get(message.guildId);
+  if (!r || r.phase === 'ended' || !r.message || message.channelId !== r.channelId) return;
+  if (message.author?.id === message.client.user?.id) return; // 봇이 보낸 메시지(다시 올린 레이드 메시지 포함)
+  if (r.bumpTimer) return;
+  r.bumpTimer = setTimeout(() => {
+    r.bumpTimer = null;
+    if (isCurrent(r) && r.phase !== 'ended' && isBuried(r)) requestRender(r, { immediate: true });
+  }, BUMP_DELAY_MS);
+}
+
 // ── 진행 ────────────────────────────────────────────────────────
+function saveActive(r) {
+  state.active[r.guildId] = { channelId: r.channelId, messageId: r.message.id };
+  saveState(state);
+}
+
 function clearTimer(r) {
   if (r.timer) clearTimeout(r.timer);
   r.timer = null;
@@ -425,7 +476,7 @@ function startCountdown(r) {
   if (r.countdownTimer) clearTimeout(r.countdownTimer);
   const tick = () => {
     r.countdownTimer = null;
-    if (raid !== r || r.phase === 'ended') return;
+    if (!isCurrent(r) || r.phase === 'ended') return;
     if (!(r.phase === 'battle' && r.showingResult)) requestRender(r);
     r.countdownTimer = setTimeout(tick, COUNTDOWN_TICK_MS[r.phase] ?? COUNTDOWN_TICK_MS.recruit);
   };
@@ -434,7 +485,7 @@ function startCountdown(r) {
 
 // 레이드를 띄운다. channel: 출현할 채널. 실패하면 사유 문구, 성공하면 null.
 async function spawnRaid(client, channel, { forced = false } = {}) {
-  if (raid) return '이미 진행 중인 레이드가 있어요.';
+  if (raids.has(channel.guildId)) return '이 서버에 이미 진행 중인 레이드가 있어요.';
   const monster = MONSTERS[Math.floor(Math.random() * MONSTERS.length)];
   const now = Date.now();
   const r = {
@@ -453,20 +504,20 @@ async function spawnRaid(client, channel, { forced = false } = {}) {
     timer: null,
     // 레벨 시스템이 없는 서버(테스트 서버)에서 띄운 레이드는 본서버 XP를 멈추지 않는다.
     freezesXp: !isExcludedGuild(channel.guildId),
+    movedFrom: new Set(), // 아래로 다시 올리면서 지운 예전 메시지 id(그 버튼을 누르면 안내)
   };
-  raid = r;
+  raids.set(r.guildId, r);
   try {
     r.message = await channel.send(await recruitView(r));
     rememberImageUrl(r, r.message);
   } catch (err) {
-    raid = null;
+    raids.delete(r.guildId);
     console.error('레이드 출현 메시지 전송 실패:', err);
     logError('레이드', '레이드 출현 메시지 전송 실패', err);
     return '출현 메시지를 보내지 못했어요(채널 권한 확인).';
   }
   if (r.freezesXp) setRaidXpFrozen(true);
-  state.active = { guildId: r.guildId, channelId: r.channelId, messageId: r.message.id };
-  saveState(state);
+  saveActive(r);
   r.timer = setTimeout(() => onRecruitEnd(r).catch(err => console.error('레이드 모집 마감 처리 실패:', err)), RECRUIT_MS);
   startCountdown(r);
   logSystem({ 유형: '레이드', 채널: `#${channel.name ?? channel.id}`, 내용: `레이드 출현 — ${monster.name}${forced ? ' (관리자 소환)' : ''}${r.freezesXp ? ', XP 정지' : ''}` });
@@ -475,7 +526,7 @@ async function spawnRaid(client, channel, { forced = false } = {}) {
 
 // 모집 시간이 끝났을 때(타이머). 4명이 차서 이미 시작했으면 아무것도 하지 않는다.
 async function onRecruitEnd(r) {
-  if (raid !== r || r.phase !== 'recruit') return;
+  if (!isCurrent(r) || r.phase !== 'recruit') return;
   if (r.party.length === 0) finishRaid(r, 'noshow');
   else startBattle(r);
 }
@@ -498,7 +549,7 @@ function armTurnTimer(r) {
   r.turnEndsAt = Math.min(Date.now() + TURN_MS, r.battleEndsAt);
   const turn = r.battle.turn;
   r.timer = setTimeout(() => {
-    if (raid !== r || r.phase !== 'battle' || r.battle.turn !== turn) return;
+    if (!isCurrent(r) || r.phase !== 'battle' || r.battle.turn !== turn) return;
     advanceTurn(r);
   }, Math.max(0, r.turnEndsAt - Date.now()));
 }
@@ -515,7 +566,7 @@ function advanceTurn(r) {
   requestRender(r, { image: true, immediate: true });
   const turn = r.battle.turn;
   r.timer = setTimeout(() => {
-    if (raid !== r || r.phase !== 'battle' || r.battle.turn !== turn) return;
+    if (!isCurrent(r) || r.phase !== 'battle' || r.battle.turn !== turn) return;
     r.showingResult = false;
     armTurnTimer(r);
     requestRender(r, { image: true, immediate: true });
@@ -526,12 +577,13 @@ function advanceTurn(r) {
 function finishRaid(r, outcome) {
   clearTimer(r);
   if (r.countdownTimer) { clearTimeout(r.countdownTimer); r.countdownTimer = null; }
+  if (r.bumpTimer) { clearTimeout(r.bumpTimer); r.bumpTimer = null; }
   r.phase = 'ended';
   r.outcome = outcome;
   r.endedAt = Date.now();
-  if (raid === r) raid = null;
+  if (isCurrent(r)) raids.delete(r.guildId);
   if (r.freezesXp) setRaidXpFrozen(false);
-  state.active = null;
+  delete state.active[r.guildId];
   saveState(state);
 
   const rewards = [];
@@ -574,7 +626,7 @@ async function handleRaidButton(interaction) {
 
   // 혼자 시작 확인 메시지의 버튼 — 레이드 메시지가 아니라 그 사람에게만 보이는 메시지에 달려 있다.
   if (kind === 'solo') {
-    const rr = raid;
+    const rr = raids.get(interaction.guildId);
     if (arg !== 'yes') {
       await interaction.update({ content: '취소했어요. 동료를 더 기다려 볼게요!', components: [] });
       return;
@@ -594,7 +646,11 @@ async function handleRaidButton(interaction) {
     return;
   }
 
-  const r = raid;
+  const r = raids.get(interaction.guildId);
+  if (r?.movedFrom.has(interaction.message.id)) {
+    await interaction.reply({ content: '⬇️ 레이드 메시지가 채팅 맨 아래로 옮겨졌어요. 아래 메시지에서 다시 눌러 주세요!', flags: MessageFlags.Ephemeral });
+    return;
+  }
   if (!r || r.message?.id !== interaction.message.id) {
     await interaction.reply({ content: '⌛ 이미 끝난 레이드예요.', flags: MessageFlags.Ephemeral });
     return;
@@ -689,11 +745,14 @@ async function handleRaidButton(interaction) {
 }
 
 // ── 스케줄러 ────────────────────────────────────────────────────
-async function recoverInterruptedRaid(client) {
-  const active = state.active;
-  if (!active) return;
-  state.active = null;
+async function recoverInterruptedRaids(client) {
+  const list = Object.values(state.active);
+  if (!list.length) return;
+  state.active = {};
   saveState(state);
+  for (const active of list) await recoverInterruptedRaid(client, active).catch(err => console.error('중단된 레이드 정리 실패:', err));
+}
+async function recoverInterruptedRaid(client, active) {
   const channel = await client.channels.fetch(active.channelId).catch(() => null);
   const message = channel && await channel.messages.fetch(active.messageId).catch(() => null);
   if (!message) return;
@@ -705,7 +764,7 @@ async function recoverInterruptedRaid(client) {
 }
 
 async function spawnScheduled(client) {
-  if (raid) return;
+  if (raids.has(GUILD_ID)) return;
   const guild = client.guilds.cache.get(GUILD_ID);
   const channel = guild && await client.channels.fetch(PLAYGROUND_CHANNEL_ID).catch(() => null);
   scheduleNextSpawn(); // 성공 여부와 관계없이 다음 일정을 잡는다(실패한 출현을 1분마다 재시도하지 않게)
@@ -718,30 +777,41 @@ async function spawnScheduled(client) {
 
 function startRaidScheduler(client) {
   warmUp(MONSTERS); // 그림 엔진·글자 모양을 잘게 나눠 미리 준비(첫 레이드가 봇을 멈추지 않게)
-  recoverInterruptedRaid(client).catch(err => console.error('중단된 레이드 정리 실패:', err));
-  if (!state.nextSpawnAt) scheduleNextSpawn();
+  recoverInterruptedRaids(client).catch(err => console.error('중단된 레이드 정리 실패:', err));
+  if (!state.autoSpawn) {
+    if (state.nextSpawnAt) { state.nextSpawnAt = null; saveState(state); } // 중지 중엔 일정을 두지 않는다
+  } else if (!state.nextSpawnAt) scheduleNextSpawn();
   else if (Date.now() - state.nextSpawnAt > 60 * 60_000) rescheduleOverdue();
   setInterval(() => {
-    if (raid || !state.nextSpawnAt || Date.now() < state.nextSpawnAt) return;
+    if (!state.autoSpawn || raids.has(GUILD_ID) || !state.nextSpawnAt || Date.now() < state.nextSpawnAt) return;
     spawnScheduled(client).catch(err => console.error('레이드 자동 출현 실패:', err));
   }, SCHEDULER_TICK_MS);
 }
 
-// 레이드가 진행 중이라 놀이터(미니게임 시작·일일 퀴즈)를 멈춰야 하는지. XP를 멈추는 레이드
-// (= 레벨 시스템이 있는 본서버 레이드)일 때만 true — 테스트 서버에서 띄운 레이드는 본서버 놀이터를 막지 않는다.
-// guildId를 주면 그 서버의 레이드일 때만 true.
-function isPlaygroundPaused(guildId) {
-  return !!raid && raid.freezesXp && (!guildId || raid.guildId === guildId);
+// 그 서버에 레이드가 진행 중이라 놀이터(미니게임·/레벨·/랭킹·일일 퀴즈)를 멈춰야 하는지.
+// 서버마다 따로 본다 — 테스트 서버 레이드는 테스트 서버만, 본서버 레이드는 본서버만 막는다.
+function isPlaygroundPaused(guildId = GUILD_ID) {
+  return raids.has(guildId);
 }
 
 // ── 관리자(/xp → XP 관리)용 ─────────────────────────────────────
-function getRaidStatus() {
+function getRaidStatus(guildId) {
+  const r = raids.get(guildId);
   return {
-    active: !!raid,
-    phase: raid?.phase ?? null,
-    monsterName: raid?.monster.name ?? null,
+    active: !!r,
+    phase: r?.phase ?? null,
+    monsterName: r?.monster.name ?? null,
+    autoSpawn: !!state.autoSpawn,
     nextSpawnAt: state.nextSpawnAt,
   };
+}
+
+// 본서버 자동 출현 가동/중지. 켜면 오늘부터 SPAWN_INTERVAL_DAYS일 뒤 시간대에 첫 출현을 잡고, 끄면 일정을 지운다.
+function setAutoSpawn(on) {
+  state.autoSpawn = !!on;
+  if (on) scheduleNextSpawn();
+  else { state.nextSpawnAt = null; saveState(state); }
+  return getRaidStatus(GUILD_ID);
 }
 
 // 본서버에서는 놀이터에, 그 외(테스트 서버)에서는 버튼을 누른 채널에 띄운다.
@@ -753,8 +823,8 @@ async function forceSpawnRaid(interaction) {
   return spawnRaid(interaction.client, channel, { forced: true });
 }
 
-async function forceEndRaid() {
-  const r = raid;
+async function forceEndRaid(guildId) {
+  const r = raids.get(guildId);
   if (!r) return false;
   finishRaid(r, 'admin');
   return true;
@@ -765,6 +835,8 @@ module.exports = {
   startRaidScheduler,
   isPlaygroundPaused,
   getRaidStatus,
+  setAutoSpawn,
+  noteChannelMessage,
   forceSpawnRaid,
   forceEndRaid,
 };

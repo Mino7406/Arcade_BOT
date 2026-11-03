@@ -27,7 +27,7 @@ const {
   setUserXpFrozen,
 } = require('../handlers/레벨링');
 const { logAction } = require('../handlers/로그');
-const { getRaidStatus, forceSpawnRaid, forceEndRaid } = require('../handlers/레이드');
+const { getRaidStatus, setAutoSpawn, forceSpawnRaid, forceEndRaid } = require('../handlers/레이드');
 const { displayNameFromMember } = require('../handlers/이름');
 
 // 한 번에 조정 가능한 XP 폭 / 레벨 상한. 오타로 터무니없는 값이 들어가는 것만 막는 안전장치.
@@ -104,9 +104,9 @@ function buildMenuView() {
 }
 
 // ── "XP 관리" 패널: 일반파밍/미니게임 긴급정지 + 뉴비부스트 토글 ──
-function buildManageView(notice) {
+function buildManageView(notice, guildId) {
   const st = getXpState();
-  const raid = getRaidStatus();
+  const raid = getRaidStatus(guildId);
   const embed = new EmbedBuilder()
     .setColor(st.farmFrozen || st.minigameFrozen ? 0xED4245 : 0x57F287)
     .setDescription(
@@ -117,7 +117,9 @@ function buildManageView(notice) {
       `-# 오목 · 룰렛 · 틱택토 · 끝말잇기 · 퀴즈\n\n` +
       `**뉴비부스트(×2)** ${st.newbieBoostEnabled ? '🟢 ON' : '⚪ OFF'}\n` +
       `-# 뉴비부스트 역할의 메인·TTS·통화방 체류 XP 2배\n\n` +
-      raidStatusText(raid) + ' · 진행 중엔 채팅·통화방·미니게임 XP 정지' +
+      `**레이드 자동 출현** ${raid.autoSpawn ? '🟢 가동 중' : '🔴 중지됨'}\n` +
+      `-# 약 3일마다 놀이터에 출현 · 진행 중엔 채팅·통화방·미니게임 XP 정지\n\n` +
+      raidStatusText(raid) +
       (notice ? `\n\n${notice}` : ''),
     )
     .setTimestamp();
@@ -142,7 +144,13 @@ function buildManageView(notice) {
           .setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('xp:menu:home').setEmoji('↩️').setLabel('메뉴로').setStyle(ButtonStyle.Secondary),
       ),
-      new ActionRowBuilder().addComponents(raidButton(raid)),
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('xp:mng:raidauto')
+          .setEmoji(raid.autoSpawn ? '⏸️' : '▶️')
+          .setLabel(raid.autoSpawn ? '레이드 자동 출현 중지' : '레이드 자동 출현 가동')
+          .setStyle(raid.autoSpawn ? ButtonStyle.Danger : ButtonStyle.Success),
+        raidButton(raid),
+      ),
     ],
   };
 }
@@ -151,7 +159,7 @@ function buildManageView(notice) {
 function raidStatusText(raid) {
   const next = raid.nextSpawnAt ? Math.floor(raid.nextSpawnAt / 1000) : null;
   return `**레이드** ${raid.active ? `👾 ${raid.monsterName} 진행 중 (${raid.phase === 'recruit' ? '모집' : '전투'})` : '⚪ 대기'}\n` +
-    `-# ${next ? `다음 자동 출현 <t:${next}:f> (<t:${next}:R>)` : '다음 출현 일정 없음'}`;
+    `-# ${next ? `다음 자동 출현 <t:${next}:f> (<t:${next}:R>)` : raid.autoSpawn ? '다음 출현 일정 없음' : '자동 출현 중지 — 소환 버튼으로만 띄울 수 있어요'}`;
 }
 
 function raidButton(raid) {
@@ -162,21 +170,21 @@ function raidButton(raid) {
 
 // 소환/종료 후 다시 그릴 화면 — 테스트 서버면 테스트 화면, 아니면 XP 관리 패널.
 function raidResultView(interaction, notice) {
-  return isExcludedGuild(interaction.guildId) ? buildRaidTestView(notice) : buildManageView(notice);
+  return isExcludedGuild(interaction.guildId) ? buildRaidTestView(notice, interaction.guildId) : buildManageView(notice, interaction.guildId);
 }
 
 // 레벨 시스템이 꺼진 서버(테스트 서버)에서 /xp를 쓰면 XP 조정 대신 이 화면만 보여준다.
 // 레이드를 실제 서버 XP와 무관하게 시험해볼 수 있게 하기 위함(그 서버에서 띄운 레이드는
 // 버튼을 누른 채널에 뜨고, 본서버 XP를 멈추지도 보상을 주지도 않는다).
-function buildRaidTestView(notice) {
-  const raid = getRaidStatus();
+function buildRaidTestView(notice, guildId) {
+  const raid = getRaidStatus(guildId);
   const embed = new EmbedBuilder()
     .setColor(0x5865F2)
     .setDescription(
       `## 🧪 레이드 테스트\n` +
       `이 서버는 레벨 시스템이 꺼져 있어 XP 조정은 할 수 없고, 레이드만 시험할 수 있어요.\n` +
-      `-# 여기서 소환하면 이 채널에 뜨고, 본서버 XP를 멈추지도 보상을 주지도 않아요.\n\n` +
-      raidStatusText(raid) +
+      `-# 여기서 소환하면 이 채널에 뜨고, 이 서버의 놀이터 기능만 멈춰요(본서버와 따로 돌고, XP를 멈추지도 보상을 주지도 않아요).\n\n` +
+      `**레이드** ${raid.active ? `👾 ${raid.monsterName} 진행 중 (${raid.phase === 'recruit' ? '모집' : '전투'})` : '⚪ 대기'}` +
       (notice ? `\n\n${notice}` : ''),
     );
   return { content: '', embeds: [embed], components: [new ActionRowBuilder().addComponents(raidButton(raid))] };
@@ -279,7 +287,7 @@ module.exports = {
 
   async execute(interaction) {
     if (await denyGuard(interaction, { allowExcludedGuild: true })) return;
-    const view = isExcludedGuild(interaction.guildId) ? buildRaidTestView() : buildMenuView();
+    const view = isExcludedGuild(interaction.guildId) ? buildRaidTestView(undefined, interaction.guildId) : buildMenuView();
     await interaction.reply({ ...view, flags: MessageFlags.Ephemeral });
   },
 };
@@ -302,7 +310,7 @@ async function handleXpButton(interaction) {
     if (targetId === 'adjust') {
       await interaction.update({ content: '조정할 유저를 선택하세요.', embeds: [], components: [buildPickRow()] });
     } else if (targetId === 'manage') {
-      await interaction.update(buildManageView());
+      await interaction.update(buildManageView(undefined, interaction.guildId));
     } else if (targetId === 'home') {
       await interaction.update(buildMenuView());
     }
@@ -314,7 +322,11 @@ async function handleXpButton(interaction) {
     if (targetId === 'boost') {
       const st = setXpSwitch('newbieBoostEnabled', !getXpState().newbieBoostEnabled);
       logAction(interaction, 'XP 관리', `뉴비부스트 ${st.newbieBoostEnabled ? 'ON' : 'OFF'}`);
-      await interaction.update(buildManageView(`✅ 뉴비부스트를 **${st.newbieBoostEnabled ? '켰습니다' : '껐습니다'}**.`));
+      await interaction.update(buildManageView(`✅ 뉴비부스트를 **${st.newbieBoostEnabled ? '켰습니다' : '껐습니다'}**.`, interaction.guildId));
+    } else if (targetId === 'raidauto') {
+      const raid = setAutoSpawn(!getRaidStatus(interaction.guildId).autoSpawn);
+      logAction(interaction, 'XP 관리', `레이드 자동 출현 ${raid.autoSpawn ? '가동' : '중지'}`);
+      await interaction.update(buildManageView(raid.autoSpawn ? '▶️ **레이드 자동 출현을 가동했습니다.**' : '⏸️ **레이드 자동 출현을 중지했습니다.**', interaction.guildId));
     } else if (targetId === 'farm' || targetId === 'game') {
       await interaction.update(buildConfirmView(targetId));
     } else if (targetId === 'raid') {
@@ -326,14 +338,14 @@ async function handleXpButton(interaction) {
       await interaction.editReply(raidResultView(interaction, error ? `⚠️ ${error}` : '👾 **레이드를 소환했습니다.**'));
     } else if (targetId === 'raidend') {
       await interaction.deferUpdate();
-      const ended = await forceEndRaid();
+      const ended = await forceEndRaid(interaction.guildId);
       if (ended) logAction(interaction, 'XP 관리', '레이드 강제 종료');
       await interaction.editReply(raidResultView(interaction, ended ? '🛑 **레이드를 종료했습니다.** XP 정지도 풀렸습니다.' : '⚠️ 진행 중인 레이드가 없어요.'));
     }
     return;
   }
   if (action === 'mngno') {
-    await interaction.update(buildManageView());
+    await interaction.update(buildManageView(undefined, interaction.guildId));
     return;
   }
   if (action === 'mngyes') {
@@ -344,7 +356,7 @@ async function handleXpButton(interaction) {
     const st = setXpSwitch(key, next);
     logAction(interaction, 'XP 관리', `${label} XP ${next ? '긴급정지' : '재개'}`);
     await interaction.update(buildManageView(
-      st[key] ? `🛑 **${label} XP 지급을 정지**했습니다.` : `▶️ **${label} XP 지급을 재개**했습니다.`,
+      st[key] ? `🛑 **${label} XP 지급을 정지**했습니다.` : `▶️ **${label} XP 지급을 재개**했습니다.`, interaction.guildId,
     ));
     return;
   }

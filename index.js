@@ -23,8 +23,12 @@ const { loadRoulette, saveRoulette, handleRouletteButton } = require('./handlers
 const { loadBotMatchXp, saveBotMatchXp } = require('./handlers/봇전한도');
 const { loadRealmRoster, saveRealmRoster } = require('./forms/마크/명단');
 const { startQuizScheduler, handleQuizMessage } = require('./handlers/퀴즈');
-const { handleRaidButton, startRaidScheduler, isPlaygroundPaused } = require('./handlers/레이드');
-const PAUSED_MINIGAME_COMMANDS = ['끝말잇기', '틱택토', '오목', '룰렛']; // 레이드 중 시작 금지
+const { handleRaidButton, startRaidScheduler, isPlaygroundPaused, noteChannelMessage: noteRaidChannelMessage } = require('./handlers/레이드');
+// 레이드 중 막는 명령어 → 안내 문구의 "~수 없습니다" 앞부분(문구는 룰렛 안내와 같은 형식으로 통일)
+const RAID_PAUSED_COMMANDS = {
+  끝말잇기: '끝말잇기를 할', 틱택토: '틱택토를 할', 오목: '오목을 둘', 룰렛: '룰렛을 돌릴',
+  레벨: '레벨을 확인할', 랭킹: '랭킹을 확인할',
+};
 const { handleQuizAdminButton, handleQuizCreateModal } = require('./commands/퀴즈');
 const { buildGameSelectPayload: buildNaejeonGameSelectPayload } = require('./commands/내전');
 const { buildGameSelectPayload: buildMojipGameSelectPayload } = require('./commands/모집');
@@ -403,11 +407,11 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // 레이드 진행 중에는 놀이터 미니게임을 새로 시작할 수 없다(레이드에 집중하도록 일시 정지).
-    // 이미 진행 중이던 판은 그대로 끝까지 두고(XP는 어차피 멈춤), /레벨·/랭킹 조회는 막지 않는다.
-    if (interaction.isChatInputCommand() && PAUSED_MINIGAME_COMMANDS.includes(interaction.commandName) && isPlaygroundPaused(interaction.guildId)) {
-      logBlocked(interaction, '레이드 진행 중이라 미니게임 일시 정지');
-      await interaction.reply({ content: '👾 **레이드가 진행 중이라 놀이터 미니게임이 일시 정지됐어요.**\n레이드가 끝나면 다시 이용할 수 있어요.', flags: MessageFlags.Ephemeral });
+    // 레이드 진행 중에는 놀이터 미니게임·/레벨·/랭킹을 쓸 수 없다(그 서버의 레이드일 때만 — 서버별로 따로).
+    // 이미 진행 중이던 판은 그대로 끝까지 둔다(XP는 어차피 멈춤).
+    if (interaction.isChatInputCommand() && RAID_PAUSED_COMMANDS[interaction.commandName] && isPlaygroundPaused(interaction.guildId)) {
+      logBlocked(interaction, '레이드 진행 중이라 놀이터 일시 정지');
+      await interaction.reply({ content: `👾 **몬스터 때문에 XP 시스템이 고장 나 ${RAID_PAUSED_COMMANDS[interaction.commandName]} 수 없습니다.**`, flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -592,6 +596,13 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 client.on('messageCreate', async (message) => {
+  // 레이드 채널에 채팅이 올라오면 레이드 메시지를 맨 아래로 다시 올린다(묻히지 않게)
+  try {
+    noteRaidChannelMessage(message);
+  } catch (error) {
+    console.error('레이드 메시지 위치 확인 중 오류:', error);
+  }
+
   try {
     await handleWcMessage(message);
   } catch (error) {
