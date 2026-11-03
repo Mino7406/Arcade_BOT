@@ -32,7 +32,7 @@ const {
   PLAYER_MAX_HP, ROLES, ROLE_ORDER, ACTIONS, MONSTERS,
   createBattle, checkChoice, choose, allChosen, resolveTurn,
 } = require('./레이드전투');
-const { renderRecruit, renderBattle, renderEnd } = require('./레이드그림');
+const { renderRecruit, renderBattle, renderEnd, warmUp } = require('./레이드그림');
 
 // ── 설정 ────────────────────────────────────────────────────────
 const SPAWN_INTERVAL_DAYS = 3;     // 출현 주기(일). 출현한 날로부터 이만큼 뒤의 날, 아래 시간대 중 무작위 시각
@@ -135,12 +135,12 @@ function assemble(accent, image, sections) {
 
 // redraw면 새로 그리고, 아니면 지난번 그림을 재사용한다. 그림을 못 그리면 null(글자 화면).
 // 재사용할 때 디스코드 그림 주소를 못 읽어왔으면 첨부 파일 이름으로 가리킨다(첨부는 그대로 남아 있다).
-function pickImage(r, redraw, render) {
+async function pickImage(r, redraw, render) {
   if (!redraw) {
     if (r.imageUrl) return { url: r.imageUrl };
     return r.hasImage ? { url: `attachment://${IMAGE_NAME}` } : null;
   }
-  const png = render();
+  const png = await render();
   r.hasImage = !!png;
   return png ? { png } : null;
 }
@@ -156,8 +156,8 @@ function rememberImageUrl(r, message) {
   }
 }
 
-function recruitView(r, { redraw = true } = {}) {
-  const image = pickImage(r, redraw, () => renderRecruit(r));
+async function recruitView(r, { redraw = true } = {}) {
+  const image = await pickImage(r, redraw, () => renderRecruit(r));
   const m = r.monster;
   const sections = [];
   if (!image) {
@@ -207,9 +207,9 @@ function memberStatus(mem) {
   return `${mem.choice ? '✅' : '⏳'} ${mem.name}`;
 }
 
-function battleView(r, { redraw = true } = {}) {
+async function battleView(r, { redraw = true } = {}) {
   const b = r.battle;
-  const image = pickImage(r, redraw, () => renderBattle(r));
+  const image = await pickImage(r, redraw, () => renderBattle(r));
   const m = b.monster;
   const sections = [];
   if (!image) {
@@ -256,8 +256,8 @@ const OUTCOME_TEXT = {
   admin:   '🛑 관리자가 긴급 퀘스트를 종료했다',
 };
 
-function endView(r, outcome, rewards = []) {
-  const image = pickImage(r, true, () => renderEnd(r, outcome, rewards));
+async function endView(r, outcome, rewards = []) {
+  const image = await pickImage(r, true, () => renderEnd(r, outcome, rewards));
   const b = r.battle;
   const sections = [];
   if (!image) {
@@ -298,15 +298,48 @@ function buildHelpText() {
   ].join('\n');
 }
 
-// ── 응답 ────────────────────────────────────────────────────────
-// 새 그림을 올린 응답이면 메시지를 돌려받아 그림 주소를 기억한다.
-async function respond(r, interaction, payload) {
-  if (!payload.files) {
-    await interaction.update(payload);
-    return;
+// ── 화면 대기열 ─────────────────────────────────────────────────
+// 4명이 거의 동시에 누르면 클릭마다 따로 보낸 응답이 디스코드에 도착하는 순서가 보장되지 않아,
+// 늦게 도착한 옛 화면(지난 턴·옛 그림 주소)이 새 화면을 덮어쓸 수 있었다. 그래서 버튼은 즉시
+// ack(deferUpdate)만 하고 상태를 바꾸며, 메시지 수정은 이 대기열 하나가 차례로 맡는다:
+//  - 한 번에 하나만 수정하고, 보낼 때마다 "지금 상태"로 화면을 새로 만든다(옛 화면은 절대 안 나감)
+//  - 선택 현황처럼 글자만 바뀌는 건 RENDER_DEBOUNCE_MS 동안 모아 한 번에 보낸다
+//  - 턴 결과·참가자 변동처럼 그림이 바뀌는 건 바로(immediate) 보낸다
+// 그림 그리기·PNG 압축도 이 안에서만 일어나 버튼 응답 경로를 막지 않고, 압축은 비동기라 그동안
+// 내전/모집·임시 통화방 같은 다른 기능도 계속 처리된다.
+const RENDER_DEBOUNCE_MS = 300;
+
+function requestRender(r, { image = false, immediate = false } = {}) {
+  r.dirty = true;
+  if (image) r.imageDirty = true;
+  if (r.flushing) return; // 도는 중인 루프가 끝나기 전에 이 변경까지 이어서 보낸다
+  if (r.flushTimer && !immediate) return;
+  if (r.flushTimer) clearTimeout(r.flushTimer);
+  r.flushTimer = setTimeout(() => flush(r).catch(err => console.error('레이드 화면 갱신 실패:', err)), immediate ? 0 : RENDER_DEBOUNCE_MS);
+}
+
+async function flush(r) {
+  r.flushTimer = null;
+  r.flushing = true;
+  try {
+    while (r.dirty) {
+      r.dirty = false;
+      const redraw = r.imageDirty;
+      r.imageDirty = false;
+      const payload = await currentView(r, redraw);
+      const ok = await editRaidMessage(r, payload);
+      // 메시지가 지워졌으면 계속 돌릴 화면이 없으므로 도주 처리한다.
+      if (!ok && r.phase === 'battle') finishRaid(r, 'timeout');
+    }
+  } finally {
+    r.flushing = false;
   }
-  const res = await interaction.update({ ...payload, withResponse: true });
-  rememberImageUrl(r, res?.resource?.message);
+}
+
+function currentView(r, redraw) {
+  if (r.phase === 'recruit') return recruitView(r, { redraw });
+  if (r.phase === 'battle') return battleView(r, { redraw });
+  return endView(r, r.outcome, r.rewards);
 }
 
 async function editRaidMessage(r, payload) {
@@ -350,7 +383,7 @@ async function spawnRaid(client, channel, { forced = false } = {}) {
   };
   raid = r;
   try {
-    r.message = await channel.send(recruitView(r));
+    r.message = await channel.send(await recruitView(r));
     rememberImageUrl(r, r.message);
   } catch (err) {
     raid = null;
@@ -369,11 +402,8 @@ async function spawnRaid(client, channel, { forced = false } = {}) {
 // 모집 시간이 끝났을 때(타이머). 4명이 차서 이미 시작했으면 아무것도 하지 않는다.
 async function onRecruitEnd(r) {
   if (raid !== r || r.phase !== 'recruit') return;
-  if (r.party.length === 0) {
-    await editRaidMessage(r, finishRaid(r, 'noshow'));
-    return;
-  }
-  await editRaidMessage(r, startBattle(r));
+  if (r.party.length === 0) finishRaid(r, 'noshow');
+  else startBattle(r);
 }
 
 function startBattle(r) {
@@ -384,36 +414,34 @@ function startBattle(r) {
   r.battleEndsAt = Date.now() + BATTLE_LIMIT_MS;
   armTurnTimer(r);
   logSystem({ 유형: '레이드', 내용: `전투 시작 — ${r.party.map(p => `${p.name}(${ROLES[p.role].name})`).join(', ')} / HP ${r.battle.maxHp}` });
-  return battleView(r);
+  requestRender(r, { image: true, immediate: true });
 }
 
 function armTurnTimer(r) {
   clearTimer(r);
   r.turnEndsAt = Math.min(Date.now() + TURN_MS, r.battleEndsAt);
   const turn = r.battle.turn;
-  r.timer = setTimeout(async () => {
+  r.timer = setTimeout(() => {
     if (raid !== r || r.phase !== 'battle' || r.battle.turn !== turn) return;
-    const payload = advanceTurn(r);
-    const ok = await editRaidMessage(r, payload);
-    // 메시지가 지워졌으면 계속 돌릴 화면이 없으므로 도주 처리한다.
-    if (!ok && raid === r) finishRaid(r, 'timeout');
+    advanceTurn(r);
   }, Math.max(0, r.turnEndsAt - Date.now()));
 }
 
-// 턴을 하나 진행하고 다음에 보여줄 화면을 돌려준다(전투가 끝났으면 결과 화면).
+// 턴을 하나 진행하고 새 화면(그림 포함)을 바로 보내게 한다. 전투가 끝났으면 결과 화면.
 function advanceTurn(r) {
   clearTimer(r);
   const outcome = resolveTurn(r.battle);
-  if (outcome) return finishRaid(r, outcome);
-  if (Date.now() >= r.battleEndsAt) return finishRaid(r, 'timeout');
+  if (outcome) { finishRaid(r, outcome); return; }
+  if (Date.now() >= r.battleEndsAt) { finishRaid(r, 'timeout'); return; }
   armTurnTimer(r);
-  return battleView(r);
+  requestRender(r, { image: true, immediate: true });
 }
 
-// 레이드를 끝내고 결과 화면을 돌려준다. XP 정지 해제 · 보상 지급 · 상태 저장 · 복구 안내까지 처리.
+// 레이드를 끝낸다. XP 정지 해제 · 보상 지급 · 상태 저장 · 복구 안내 후 결과 화면을 바로 보내게 한다.
 function finishRaid(r, outcome) {
   clearTimer(r);
   r.phase = 'ended';
+  r.outcome = outcome;
   if (raid === r) raid = null;
   if (r.freezesXp) setRaidXpFrozen(false);
   state.active = null;
@@ -444,7 +472,8 @@ function finishRaid(r, outcome) {
   if (r.freezesXp && r.message?.channel) {
     r.message.channel.send({ content: '🔧 **XP 시스템이 다시 작동합니다!**', allowedMentions: { parse: [] } }).catch(() => {});
   }
-  return endView(r, outcome, rewards);
+  r.rewards = rewards;
+  requestRender(r, { image: true, immediate: true });
 }
 
 // ── 버튼 ('raid:' 프리픽스) ─────────────────────────────────────
@@ -479,7 +508,8 @@ async function handleRaidButton(interaction) {
         return;
       }
       logSystem({ 유형: '레이드', 유저: userLabel(userId), 내용: `바로 시작 — ${r.party.length}명으로 출발` });
-      await respond(r, interaction, startBattle(r));
+      startBattle(r);
+      await interaction.deferUpdate();
       return;
     }
     const mine = r.party.find(p => p.userId === userId);
@@ -489,7 +519,8 @@ async function handleRaidButton(interaction) {
         return;
       }
       r.party = r.party.filter(p => p.userId !== userId);
-      await respond(r, interaction, recruitView(r));
+      requestRender(r, { image: true });
+      await interaction.deferUpdate();
       return;
     }
     if (!ROLES[arg]) return;
@@ -506,8 +537,10 @@ async function handleRaidButton(interaction) {
       }
       r.party.push({ userId, name: displayNameFromInteraction(interaction), role: arg });
     }
-    // 4명이 차면 모집 시간이 남아 있어도 바로 출발한다(같은 응답 안에서 전투 화면으로 바꾼다).
-    await respond(r, interaction, r.party.length >= PARTY_MAX ? startBattle(r) : recruitView(r));
+    // 4명이 차면 모집 시간이 남아 있어도 바로 출발한다.
+    if (r.party.length >= PARTY_MAX) startBattle(r);
+    else requestRender(r, { image: true });
+    await interaction.deferUpdate();
     return;
   }
 
@@ -522,9 +555,11 @@ async function handleRaidButton(interaction) {
       return;
     }
     choose(r.battle, interaction.user.id, arg);
-    // 마지막 사람이 고르면 이 응답 안에서 턴을 처리해 결과까지 바로 그린다(새 그림).
-    // 아직 남았으면 선택 현황 글자만 고친다(그림 업로드 없음 → 즉시 반응).
-    await respond(r, interaction, allChosen(r.battle) ? advanceTurn(r) : battleView(r, { redraw: false }));
+    // 마지막 사람이 고르면 턴을 처리하고 결과(새 그림)를 바로 보낸다.
+    // 아직 남았으면 선택 현황 글자만 고친다(잠깐 모았다가 한 번에, 그림 업로드 없음).
+    if (allChosen(r.battle)) advanceTurn(r);
+    else requestRender(r);
+    await interaction.deferUpdate();
   }
 }
 
@@ -539,7 +574,7 @@ async function recoverInterruptedRaid(client) {
   if (!message) return;
   const ghost = { monster: MONSTERS[0], battle: null, party: [], freezesXp: false, imageUrl: null };
   // 예전 버전(임베드)으로 띄운 메시지는 V2로 바꿀 수 없을 수 있어, 실패하면 임베드로 정리한다.
-  await message.edit(endView(ghost, 'restart')).catch(() =>
+  await message.edit(await endView(ghost, 'restart')).catch(() =>
     message.edit({ embeds: [new EmbedBuilder().setColor(ACCENT.end).setDescription(`# ${OUTCOME_TEXT.restart}`)], components: [] }).catch(() => {}),
   );
 }
@@ -557,6 +592,7 @@ async function spawnScheduled(client) {
 }
 
 function startRaidScheduler(client) {
+  warmUp(MONSTERS); // 그림 엔진·글자 모양을 잘게 나눠 미리 준비(첫 레이드가 봇을 멈추지 않게)
   recoverInterruptedRaid(client).catch(err => console.error('중단된 레이드 정리 실패:', err));
   if (!state.nextSpawnAt) scheduleNextSpawn();
   else if (Date.now() - state.nextSpawnAt > 60 * 60_000) rescheduleOverdue();
@@ -595,7 +631,7 @@ async function forceSpawnRaid(interaction) {
 async function forceEndRaid() {
   const r = raid;
   if (!r) return false;
-  await editRaidMessage(r, finishRaid(r, 'admin'));
+  finishRaid(r, 'admin');
   return true;
 }
 

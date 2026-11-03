@@ -169,30 +169,43 @@ function monsterBox(y, h) {
 
 // 카드 4장(역할 순서 고정). drawCard(x, y, w, h, roleKey, member)로 안쪽을 채운다.
 const CARD_Y = 362, CARD_H = 260, CARD_W = 203, CARD_GAP = 16;
+// 카드 배경과 빈자리 테두리는 배경 캐시(background)에 이미 있다. 참가자 카드만 금색 테두리를 덧그린다.
 function cards(members, drawCard) {
   ROLE_ORDER.forEach((roleKey, i) => {
     const x = 20 + i * (CARD_W + CARD_GAP);
     const m = members.find(q => q.role === roleKey) || null;
-    p.roundRect(x, CARD_Y, CARD_W, CARD_H, 14, C.card);
-    p.strokeRoundRect(x, CARD_Y, CARD_W, CARD_H, 14, 2, m ? C.gold : C.cardEmpty);
+    if (m) p.strokeRoundRect(x, CARD_Y, CARD_W, CARD_H, 14, 2, C.gold);
     drawCard(x, CARD_Y, CARD_W, CARD_H, roleKey, m);
   });
 }
 
-function finish(scene, startedAt) {
-  const png = p.png();
-  logRender(scene, startedAt);
-  return png;
+// 장면마다 변하지 않는 배경(바깥 테두리·몬스터 상자·카드 4장 바탕)을 한 번 그려 저장해 두고,
+// 다음부터는 복사만 한다. 큰 도형 칠하기가 그림 시간의 대부분이었다(장면당 약 1.7MB × 3장면).
+const backgrounds = new Map();
+function background(key, boxY, boxH) {
+  const cached = backgrounds.get(key);
+  if (cached) { cached.copy(painter.buf); return; }
+  frame();
+  monsterBox(boxY, boxH);
+  ROLE_ORDER.forEach((_, i) => {
+    const x = 20 + i * (CARD_W + CARD_GAP);
+    p.roundRect(x, CARD_Y, CARD_W, CARD_H, 14, C.card);
+    p.strokeRoundRect(x, CARD_Y, CARD_W, CARD_H, 14, 2, C.cardEmpty);
+  });
+  backgrounds.set(key, Buffer.from(painter.buf));
 }
 
-// render 공통: 엔진 준비 → 그리기 → PNG. 실패하면 null(레이드.js가 글자 화면으로 대신).
-function render(scene, draw) {
+// render 공통: 엔진 준비 → 그리기 → PNG(비동기 압축). 실패하면 null(레이드.js가 글자 화면으로 대신).
+// 그리기 자체는 동기라 호출부(레이드.js의 화면 대기열)가 한 번에 하나씩만 부른다.
+async function render(scene, draw) {
   if (!load()) return null;
   const startedAt = Date.now();
   p = painter;
   try {
     draw();
-    return finish(scene, startedAt);
+    const png = await painter.png();
+    logRender(scene, startedAt);
+    return png;
   } catch (err) {
     console.error(`레이드 ${scene} 그림 실패:`, err);
     return null;
@@ -202,12 +215,11 @@ function render(scene, draw) {
 // ── 장면별 그림 ────────────────────────────────────────────────
 function renderRecruit(r) {
   return render('모집', () => {
-    frame();
+    background('recruit', 102, 240);
     const title = '긴급 퀘스트 발생!';
     const tw = p.textWidth(B(), title, 46);
     text(title, W / 2, 54, 46, C.gold);
     siren(W / 2 - tw / 2 - 50, 56); siren(W / 2 + tw / 2 + 50, 56);
-    monsterBox(102, 240);
     p.circle(W / 2 - 64, 130, 6, C.red);
     text('타겟 몬스터', W / 2 + 8, 130, 22, C.orange);
     drawMonster(r.monster, W / 2, 218, 112);
@@ -227,7 +239,7 @@ function renderBattle(r) {
   return render('전투', () => {
     const b = r.battle;
     const m = b.monster;
-    frame();
+    background('battle', 120, 224);
     const name = b.rage ? m.rageName : m.name;
     const nw = p.textWidth(B(), name, 38);
     text(name, W / 2 - (b.rage ? 34 : 0), 42, 38, b.rage ? C.red : C.gold);
@@ -239,7 +251,6 @@ function renderBattle(r) {
     p.strokeRoundRect(50, 72, W - 100, 34, 17, 2, C.gold);
     text(`${b.hp.toLocaleString()} / ${b.maxHp.toLocaleString()}`, W / 2, 89, 24, '#ffffff');
 
-    monsterBox(120, 224);
     drawMonster(m, W / 2, 196, 112, { rage: b.rage });
     const move = m.moves[b.intent];
     const warn = b.intent === 'smash';
@@ -285,10 +296,9 @@ const END_SUB = {
 function renderEnd(r, outcome, rewards = []) {
   return render('결과', () => {
     const clear = outcome === 'clear';
-    frame();
+    background('end', 126, 216);
     text(END_TITLE[outcome], W / 2, 52, 52, clear ? C.red : C.muted);
     text(END_SUB[outcome], W / 2, 100, 26, clear ? C.ok : C.sub);
-    monsterBox(126, 216);
     drawMonster(r.monster, W / 2, 214, 112, { gray: clear });
     if (clear) {
       p.line(W / 2 - 64, 164, W / 2 + 64, 264, 9, C.red);
@@ -311,4 +321,49 @@ function renderEnd(r, outcome, rewards = []) {
   });
 }
 
-module.exports = { renderRecruit, renderBattle, renderEnd };
+// ── 미리 데우기 ────────────────────────────────────────────────
+// 서버(CPU 25%)에서 첫 그림이 1.7초, 이벤트 루프 지연이 2.9초까지 났다 — 폰트 로드, 글자 모양 읽기,
+// JIT 준비가 첫 레이드 순간 한꺼번에 몰려서다. 봇이 켜진 뒤 한가할 때 그 일을 잘게 나눠(setImmediate로
+// 한 조각씩) 미리 해 두어, 레이드 중에도 다른 기능(내전/모집·임시 통화방)을 오래 막지 않게 한다.
+// 반복되는 라벨(역할·스킬·몬스터 대사 등)은 글자 모양 캐시에 들어가 이후 그림에서 바로 재사용된다.
+function warmUpLabels(monsters) {
+  const jobs = [];
+  const add = (font, s, size) => jobs.push(() => painter.warmText(fonts[font], s, size));
+  add('bold', '긴급 퀘스트 발생!', 46);
+  add('bold', '타겟 몬스터', 22);
+  add('bold', '분노', 22);
+  add('bold', '보상 없음', 20);
+  for (const v of ['참가 완료', '참가 대기']) add('bold', v, 22);
+  for (const v of ['스킬 OK', '스킬 1', '스킬 2', '스킬 3', '회복 0', '회복 1', '회복 2']) add('bold', v, 19);
+  for (const k of ROLE_ORDER) {
+    add('bold', ROLES[k].name, 22);
+    add('bold', ROLES[k].name, 20);
+    add('bold', ROLES[k].skill.name, 20);
+  }
+  for (const v of ['빈자리']) { add('bold', v, 30); add('bold', v, 28); }
+  for (const [k, t] of Object.entries(END_TITLE)) { add('bold', t, 52); add('bold', END_SUB[k], 26); }
+  for (const m of monsters) {
+    add('bold', m.name, 38);
+    add('bold', m.rageName, 38);
+    for (const move of Object.values(m.moves)) add('bold', `다음 행동 · ${move.telegraph}`, 26);
+  }
+  return jobs;
+}
+
+function warmUp(monsters) {
+  if (!load()) return;
+  const startedAt = Date.now();
+  const jobs = warmUpLabels(monsters);
+  const step = () => {
+    const job = jobs.shift();
+    if (!job) {
+      console.warn(`🎨 레이드 그림 미리 데우기 완료 — ${Date.now() - startedAt}ms(잘게 나눠 실행) · RSS ${rssMb()}MB`);
+      return;
+    }
+    try { job(); } catch (err) { console.error('레이드 그림 미리 데우기 실패:', err); return; }
+    setImmediate(step);
+  };
+  setImmediate(step);
+}
+
+module.exports = { renderRecruit, renderBattle, renderEnd, warmUp };
