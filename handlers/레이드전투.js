@@ -52,7 +52,7 @@ const ACTIONS = {
 // - target: 'single'(한 명) | 'all'(전원) | 'none'(피해 없음, charge 전용 — 다음 턴 smash 예고)
 // - sprite: 레이드 패널 그림(handlers/레이드그림.js)에 그릴 픽셀 아트. rows의 각 글자가 palette 색 한 칸('.'은 투명),
 //   glitchRows에 적은 줄은 옆으로 살짝 밀어 그린다. rageColors는 분노 시 바꿔 칠할 색.
-//   그림 파일을 쓰고 싶으면 sprite 대신 image: 'assets/파일.png'를 넣으면 그 그림을 그린다.
+//   (그림 파일 몬스터는 아직 지원하지 않는다 — 넣을 때 handlers/그림판.js에 PNG 해석을 추가)
 const MONSTERS = [
   {
     id: 'glitch',
