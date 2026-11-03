@@ -289,52 +289,59 @@ function renderBattle(r) {
     p.strokeRoundRect(50, 74, W - 100, 32, 16, 2, C.gold);
     text(`${b.hp.toLocaleString()} / ${b.maxHp.toLocaleString()}`, W / 2, 90, 22, '#ffffff');
 
-    // 몬스터 + 지난 턴 결과(입은 총피해 · 몬스터가 쓴 기술)
+    // 몬스터 + 지난 턴 결과(쓴 기술 · 입은 총피해) — 글자만 띄우고 상자는 쓰지 않는다
     drawMonster(m, W / 2, 192, 112, { rage: b.rage });
     if (last) {
-      if (last.monsterDamage > 0) text(`-${last.monsterDamage.toLocaleString()}`, W / 2 + 190, 178, 44, '#ff5a45');
-      if (last.monsterMove) {
-        p.roundRect(W / 2 - 330, 158, 220, 44, 10, '#3a1a12');
-        text(`${last.monsterMove}!`, W / 2 - 220, 180, 24, '#ffb08a', { maxWidth: 200 });
-      }
+      if (last.monsterMove) text(`${last.monsterMove}!`, W / 2 - 200, 186, 26, '#ffb08a', { maxWidth: 220 });
+      if (last.monsterDamage > 0) text(`-${last.monsterDamage.toLocaleString()}`, W / 2 + 190, 186, 44, '#ff5a45');
     }
+    // 다음 행동 예고: 평소엔 글자만, 큰 공격(방어해야 할 때)만 빨간 상자로 띄운다.
     const move = m.moves[b.intent];
-    const warn = b.intent === 'smash';
-    p.roundRect(70, 272, W - 140, 54, 10, warn ? '#4a1410' : '#241c14');
-    p.strokeRoundRect(70, 272, W - 140, 54, 10, 1.5, warn ? C.red : C.frame);
-    text(`다음 행동 · ${move.telegraph}`, W / 2, 299, 26, warn ? '#ffc4b8' : C.sub, { maxWidth: W - 180 });
+    if (b.intent === 'smash') {
+      p.roundRect(110, 274, W - 220, 52, 10, '#4a1410');
+      p.strokeRoundRect(110, 274, W - 220, 52, 10, 1.5, C.red);
+      text(`다음 행동 · ${move.telegraph}`, W / 2, 300, 26, '#ffc4b8', { maxWidth: W - 260 });
+    } else {
+      text(`다음 행동 · ${move.telegraph}`, W / 2, 300, 24, C.muted, { maxWidth: W - 200 });
+    }
 
     cards(b.members, (x, y, w, h, roleKey, mem) => {
       const role = ROLES[roleKey];
       if (!mem) {
-        roleIcon(roleKey, x + w / 2, y + 60, true);
-        text('빈자리', x + w / 2, y + 122, NAME_SIZE, C.dim);
-        text(role.name, x + w / 2, y + 156, 22, '#8a6a3a');
+        roleIcon(roleKey, x + w / 2, y + 72, true);
+        text('빈자리', x + w / 2, y + 138, NAME_SIZE, C.dim);
+        text(role.name, x + w / 2, y + 172, 20, '#8a6a3a');
         return;
       }
       const state = memberState(mem);
       const down = state === 'down';
       const ribbon = RIBBON[state];
-      p.roundRect(x + 10, y + 10, w - 20, 34, 8, ribbon.fill);
+      p.roundRect(x + 12, y + 12, w - 24, 30, 8, ribbon.fill);
       text(state === 'pending' ? '행동 선택!' : state === 'ready' ? `준비 · ${choiceLabel(mem)}` : '쓰러짐',
-        x + w / 2, y + 27, 20, ribbon.color, { maxWidth: w - 32 });
+        x + w / 2, y + 27, 19, ribbon.color, { maxWidth: w - 36 });
 
-      roleIcon(roleKey, x + w / 2, y + 74, down);
+      roleIcon(roleKey, x + w / 2, y + 86, down);
       const hit = last?.hits[mem.userId];
-      if (hit) text(`-${hit}`, x + w - 34, y + 66, 26, '#ff5a45');
+      if (hit) text(`-${hit}`, x + w - 38, y + 78, 24, '#ff5a45');
 
-      text(mem.name, x + w / 2, y + 122, NAME_SIZE, down ? C.dim : C.text, { maxWidth: w - 20 });
+      text(mem.name, x + w / 2, y + 138, NAME_SIZE, down ? C.dim : C.text, { maxWidth: w - 20 });
+      // HP는 바 안에 숫자로(한 줄 절약)
       const ratio = mem.hp / PLAYER_MAX_HP;
-      bar(x + 14, y + 142, w - 28, 16, ratio, hpColor(ratio));
-      text(down ? 'HP 0' : `HP ${mem.hp}`, x + w / 2, y + 172, 22, down ? '#f04b3a' : C.sub);
+      bar(x + 16, y + 160, w - 32, 22, ratio, hpColor(ratio));
+      // 숫자는 바 가운데 — 그 자리까지 색이 차 있으면 어두운 글씨, 비어 있으면 흰 글씨로 대비를 맞춘다
+      text(String(mem.hp), x + w / 2, y + 171, 16, ratio > 0.55 ? '#14110d' : '#ffffff');
 
-      const act = actLabel(last?.acts[mem.userId]);
-      if (act) {
-        const crit = last.acts[mem.userId].crit;
-        pill(x + 14, y + 190, w - 28, 32, crit ? `${act} 치명타!` : act, 19, crit ? '#7a3b0c' : '#3b2f22', crit ? '#ffd9a0' : '#f0e2c8');
-      }
-      text(`${mem.cooldown > 0 ? `스킬 ${mem.cooldown}턴` : '스킬 OK'} · 회복약 ${mem.potions}`, x + w / 2, y + 240, 18,
-        mem.cooldown > 0 ? C.muted : '#8fd6c6');
+      // 지난 턴 행동: 상자 없이 글자만, 치명타만 색으로 강조
+      const actData = last?.acts[mem.userId];
+      const act = actLabel(actData);
+      if (act) text(actData.crit ? `${act} 치명타` : act, x + w / 2, y + 204, 19, actData.crit ? '#ffb347' : '#cbbd9f', { maxWidth: w - 24 });
+
+      // 스킬·회복약: 작은 표시(스킬 칩 + 회복약 동그라미 2개)
+      const gx = x + w / 2 - 50;
+      const ready = mem.cooldown === 0;
+      p.roundRect(gx, y + 228, 60, 22, 11, ready ? C.teal : '#2f2a24');
+      text(ready ? '스킬' : `${mem.cooldown}턴`, gx + 30, y + 239, 15, ready ? '#bff4ea' : C.muted);
+      for (let k = 0; k < 2; k++) p.circle(gx + 80 + k * 18, y + 239, 6.5, k < mem.potions ? '#7ccf5a' : '#3a3328');
     }, (mem) => {
       const state = memberState(mem);
       if (state === 'pending') return { color: '#ffb52e', width: 4 };
@@ -401,13 +408,13 @@ function warmUpLabels(monsters) {
   add('bold', '분노', 22);
   add('bold', '보상 없음', 20);
   for (const v of ['참가 완료', '참가 대기']) add('bold', v, 22);
-  add('bold', '행동 선택!', 20);
-  add('bold', '쓰러짐', 20);
+  add('bold', '행동 선택!', 19);
+  add('bold', '쓰러짐', 19);
   for (let t = 1; t <= 30; t++) add('bold', `TURN ${t}`, 24);
-  for (const sk of ['스킬 OK', '스킬 1턴', '스킬 2턴', '스킬 3턴']) for (let k = 0; k <= 2; k++) add('bold', `${sk} · 회복약 ${k}`, 18);
-  for (const a of ['공격', '방어', '회복약']) add('bold', `준비 · ${a}`, 20);
+  for (const v of ['스킬', '1턴', '2턴', '3턴']) add('bold', v, 15);
+  for (const a of ['공격', '방어', '회복약']) add('bold', `준비 · ${a}`, 19);
   for (const k of ROLE_ORDER) {
-    add('bold', `준비 · ${ROLES[k].skill.name}`, 20);
+    add('bold', `준비 · ${ROLES[k].skill.name}`, 19);
     add('bold', ROLES[k].name, 22);
     add('bold', ROLES[k].name, 20);
     add('bold', ROLES[k].skill.name, 20);
