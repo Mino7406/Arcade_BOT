@@ -413,7 +413,8 @@ function startBattle(r) {
   r.phase = 'battle';
   r.party.sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role)); // 화면에 역할 순서대로
   r.battle = createBattle(r.monster, r.party);
-  r.battleEndsAt = Date.now() + BATTLE_LIMIT_MS;
+  r.battleStartedAt = Date.now(); // 종료 화면의 '걸린 시간'용
+  r.battleEndsAt = r.battleStartedAt + BATTLE_LIMIT_MS;
   armTurnTimer(r);
   logSystem({ 유형: '레이드', 내용: `전투 시작 — ${r.party.map(p => `${p.name}(${ROLES[p.role].name})`).join(', ')} / HP ${r.battle.maxHp}` });
   requestRender(r, { image: true, immediate: true });
@@ -453,6 +454,7 @@ function finishRaid(r, outcome) {
   clearTimer(r);
   r.phase = 'ended';
   r.outcome = outcome;
+  r.endedAt = Date.now();
   if (raid === r) raid = null;
   if (r.freezesXp) setRaidXpFrozen(false);
   state.active = null;

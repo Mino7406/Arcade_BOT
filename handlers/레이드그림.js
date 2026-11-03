@@ -250,7 +250,6 @@ const RIBBON = {
   pending: { fill: '#c4630f', color: '#ffffff' },
   ready:   { fill: '#1e6b3c', color: '#d9ffe6' },
   down:    { fill: '#3a3530', color: '#b0a89a' },
-  result:  { fill: '#3b2f22', color: '#e8d9bc' },
 };
 function memberState(mem, showingResult) {
   if (mem.hp <= 0) return 'down';
@@ -278,7 +277,7 @@ function renderBattle(r) {
     // 상단: TURN 배지 · 몬스터 이름(분노) · HP 바
     p.roundRect(30, 20, 118, 42, 10, '#2a2119');
     p.strokeRoundRect(30, 20, 118, 42, 10, 1.5, C.gold);
-    text(`TURN ${r.showingResult && last ? last.turn : b.turn}`, 89, 41, 24, C.gold);
+    text(`TURN ${b.turn}`, 89, 41, 24, C.gold);
     // 몬스터 이름은 정확히 가운데. 왼쪽 TURN 배지와 겹치지 않게 최대 폭을 둔다(분노 표시는 이름 오른쪽).
     const name = b.rage ? m.rageName : m.name;
     const NAME_MAX = 420;
@@ -309,12 +308,6 @@ function renderBattle(r) {
     const warn = b.intent === 'smash';
     const boxW = 540, boxH = 46, boxX = (W - boxW) / 2, boxY = 276;
     const midY = boxY + boxH / 2;
-    if (r.showingResult && last) {
-      // 결과 화면: 다음 행동 상자 자리에 금색 'TURN N 결과' 띠 — 선택 화면과 확 달라 보이게
-      p.roundRect(boxX, boxY - 2, boxW, boxH + 4, 11, '#2a2010');
-      p.strokeRoundRect(boxX, boxY - 2, boxW, boxH + 4, 11, 2, C.gold);
-      text(`TURN ${last.turn} 결과`, W / 2, midY, 30, C.gold);
-    } else {
     p.roundRect(boxX, boxY, boxW, boxH, 11, warn ? '#4a1410' : '#201810');
     p.strokeRoundRect(boxX, boxY, boxW, boxH, 11, 1.5, warn ? C.red : C.frame);
     p.roundRect(boxX + 9, boxY + 9, 94, 28, 7, warn ? '#7a1f16' : '#3a2f22');
@@ -328,7 +321,6 @@ function renderBattle(r) {
       p.rect(ix - 1.5, midY + 4, 3, 3, '#4a1410');
     }
     text(move.telegraph, tx, midY, 22, warn ? '#ffc4b8' : C.sub, { maxWidth: boxW - 170 });
-    }
 
 
     cards(b.members, (x, y, w, h, roleKey, mem) => {
@@ -341,10 +333,13 @@ function renderBattle(r) {
       }
       const state = memberState(mem, r.showingResult);
       const down = state === 'down';
-      const ribbon = RIBBON[state];
-      p.roundRect(x + 12, y + 12, w - 24, 30, 8, ribbon.fill);
-      text(state === 'pending' ? '행동 선택!' : state === 'ready' ? `준비 · ${choiceLabel(mem)}` : state === 'result' ? '결과' : '쓰러짐',
-        x + w / 2, y + 27, 19, ribbon.color, { maxWidth: w - 36 });
+      // 리본: 결과 단계(턴 전환 2.5초)에는 띄우지 않는다 — 그림은 평소대로 두고 전환은 글자 제목이 알린다
+      if (state !== 'result') {
+        const ribbon = RIBBON[state];
+        p.roundRect(x + 12, y + 12, w - 24, 30, 8, ribbon.fill);
+        text(state === 'pending' ? '행동 선택!' : state === 'ready' ? `준비 · ${choiceLabel(mem)}` : '쓰러짐',
+          x + w / 2, y + 27, 19, ribbon.color, { maxWidth: w - 36 });
+      }
 
       roleIcon(roleKey, x + w / 2, y + 86, down);
       const hit = last?.hits[mem.userId];
@@ -386,42 +381,112 @@ function renderBattle(r) {
   });
 }
 
+// ── 종료 화면 ──────────────────────────────────────────────────
+// 게임 결과 화면처럼: 상단 큰 결과 제목 · 왼쪽 몬스터와 전투 기록 · 오른쪽 실제 참가자만 피해량 순 결과표.
+// (예전엔 전투 화면 틀을 재활용해 카드 4장을 그렸는데, 참가자가 적으면 '빈자리'만 가득했다)
 // outcome: 'clear' | 'wipe' | 'timeout' | 'noshow' | 'restart' | 'admin'
 const END_TITLE = {
-  clear: 'QUEST CLEAR', wipe: '파티 전멸', timeout: '시간 초과', noshow: '몬스터가 사라졌다', restart: '몬스터가 사라졌다', admin: '퀘스트 종료',
+  clear: 'QUEST CLEAR', wipe: 'QUEST FAILED', timeout: 'QUEST FAILED', noshow: '몬스터가 사라졌다', restart: '퀘스트 중단', admin: '퀘스트 종료',
 };
 const END_SUB = {
-  clear: 'XP 시스템이 복구되었습니다!',
-  wipe: '몬스터가 도망쳤다… XP는 복구됨',
-  timeout: '몬스터가 도망쳤다… XP는 복구됨',
-  noshow: '아무도 오지 않았다',
-  restart: '봇 점검으로 사라졌다',
-  admin: '관리자가 종료했다',
+  clear: (m) => `${m.name} 토벌 성공!`,
+  wipe: () => '파티 전멸 — 몬스터가 도망쳤다',
+  timeout: () => '시간 초과 — 몬스터가 도망쳤다',
+  noshow: () => '아무도 오지 않아 몬스터가 떠났다',
+  restart: () => '봇 점검으로 퀘스트가 중단됐다',
+  admin: () => '관리자가 퀘스트를 종료했다',
 };
+const END_TITLE_COLOR = { clear: '#ffcf5a', wipe: '#ff6b5b', timeout: '#ff6b5b' };
+const LP = { x: 20, y: 150, w: 300, h: 470 };   // 왼쪽 패널(몬스터·기록)
+const RP = { x: 340, y: 150, w: 540, h: 470 };  // 오른쪽 패널(결과표)
+
+function endBackground() {
+  const cached = backgrounds.get('end-v2');
+  if (cached) { cached.copy(painter.buf); return; }
+  frame();
+  for (const q of [LP, RP]) {
+    p.roundRect(q.x, q.y, q.w, q.h, 14, C.box);
+    p.strokeRoundRect(q.x, q.y, q.w, q.h, 14, 1.5, C.frame);
+  }
+  backgrounds.set('end-v2', Buffer.from(painter.buf));
+}
+
+function formatDuration(ms) {
+  const sec = Math.max(0, Math.round(ms / 1000));
+  return sec >= 60 ? `${Math.floor(sec / 60)}분 ${sec % 60}초` : `${sec}초`;
+}
+
+function statRow(label, value, y) {
+  text(label, LP.x + 28, y, 20, C.muted, { align: 'left' });
+  text(value, LP.x + LP.w - 28, y, 22, C.text, { align: 'right' });
+  p.rect(LP.x + 24, y + 20, LP.w - 48, 1, '#2a2218');
+}
+
 function renderEnd(r, outcome, rewards = []) {
   return render('결과', () => {
     const clear = outcome === 'clear';
-    background('end', 126, 216);
-    text(END_TITLE[outcome], W / 2, 52, 52, clear ? C.red : C.muted);
-    text(END_SUB[outcome], W / 2, 100, 26, clear ? C.ok : C.sub);
-    drawMonster(r.monster, W / 2, 214, 112, { gray: clear });
-    if (clear) {
-      p.line(W / 2 - 64, 164, W / 2 + 64, 264, 9, C.red);
-      p.line(W / 2 + 64, 164, W / 2 - 64, 264, 9, C.red);
-    }
+    const fled = outcome === 'wipe' || outcome === 'timeout' || outcome === 'noshow';
     const b = r.battle;
-    text(b ? `${r.monster.name} · ${b.turn}턴` : r.monster.name, W / 2, 310, 28, C.gold);
-    const members = b ? b.members : r.party || [];
-    cards(members, (x, y, w, h, roleKey, mem) => {
-      const role = ROLES[roleKey];
-      roleIcon(roleKey, x + w / 2, y + 50, !mem);
-      text(mem ? mem.name : '빈자리', x + w / 2, y + 112, NAME_SIZE, mem ? C.text : C.dim, { maxWidth: w - 20 });
-      text(role.name, x + w / 2, y + 146, 20, mem ? C.orange : '#8a6a3a');
-      if (!mem || mem.damage === undefined) return;
-      text(`피해 ${mem.damage.toLocaleString()}`, x + w / 2, y + 180, 22, C.sub, { maxWidth: w - 20 });
+    endBackground();
+
+    // 상단: 결과 제목(그림자) + 한 줄 설명
+    const title = END_TITLE[outcome];
+    const titleColor = END_TITLE_COLOR[outcome] || C.muted;
+    text(title, W / 2 + 3, 63, 58, '#000000');
+    text(title, W / 2, 60, 58, titleColor);
+    text(END_SUB[outcome](r.monster), W / 2, 114, 24, clear ? C.ok : C.sub);
+
+    // 왼쪽: 몬스터 + 전투 기록
+    const mcx = LP.x + LP.w / 2;
+    drawMonster(r.monster, mcx, 262, 116, { gray: clear });
+    if (clear) {
+      p.line(mcx - 58, 214, mcx + 58, 310, 8, C.red);
+      p.line(mcx + 58, 214, mcx - 58, 310, 8, C.red);
+    } else if (fled) {
+      p.roundRect(mcx - 34, 172, 68, 28, 8, '#5c1410');
+      text('도주', mcx, 186, 17, '#ffb4a8');
+    }
+    text(r.monster.name, mcx, 362, 28, C.gold, { maxWidth: LP.w - 30 });
+    if (b) {
+      statRow('턴', `${b.turn}턴`, 420);
+      statRow('걸린 시간', r.battleStartedAt ? formatDuration((r.endedAt || Date.now()) - r.battleStartedAt) : '-', 470);
+      statRow('남은 HP', `${Math.min(100, Math.round((b.hp / b.maxHp) * 100))}%`, 520);
+    } else {
+      statRow('참가자', `${(r.party || []).length}명`, 420);
+    }
+
+    // 오른쪽: 결과표(피해 많은 순, 실제 참가자만)
+    text('파티 결과', RP.x + 26, RP.y + 34, 24, C.gold, { align: 'left' });
+    const COL = { dmg: RP.x + 314, heal: RP.x + 396, reward: RP.x + 470 };
+    text('피해', COL.dmg, RP.y + 34, 17, C.muted);
+    text('회복', COL.heal, RP.y + 34, 17, C.muted);
+    text('보상', COL.reward, RP.y + 34, 17, C.muted);
+    const members = (b ? [...b.members] : []).sort((q1, q2) => q2.damage - q1.damage);
+    if (!members.length) {
+      text('참가자가 없었다', RP.x + RP.w / 2, RP.y + RP.h / 2, 24, C.dim);
+      return;
+    }
+    members.forEach((mem, i) => {
+      const y = RP.y + 64 + i * 98;
       const reward = rewards.find(q => q.userId === mem.userId);
-      if (reward) pill(x + 14, y + 206, w - 28, 38, `+${reward.xp} XP${reward.mvp ? ' MVP' : ''}`, 22, reward.mvp ? '#6b4e12' : '#1f4a2c', reward.mvp ? '#ffe39a' : '#bff0cf');
-      else if (clear) text('보상 없음', x + w / 2, y + 225, 20, C.muted);
+      const mvp = !!reward?.mvp;
+      p.roundRect(RP.x + 14, y, RP.w - 28, 86, 12, mvp ? '#2c2210' : '#1d1711');
+      if (mvp) p.strokeRoundRect(RP.x + 14, y, RP.w - 28, 86, 12, 2, C.gold);
+      drawPixels(ROLE_SPRITES[mem.role], RP.x + 52, y + 43, 2.7, { dim: mem.hp <= 0 && !clear });
+      const nameX = RP.x + 86;
+      text(mem.name, nameX, y + 32, 26, C.text, { align: 'left', maxWidth: 170 });
+      // MVP 배지는 역할 줄 옆에(이름 줄에 두면 긴 이름일 때 피해 숫자와 겹친다)
+      const roleName = ROLES[mem.role].name;
+      text(roleName, nameX, y + 62, 18, C.orange, { align: 'left' });
+      if (mvp) {
+        const rw = p.textWidth(B(), roleName, 18);
+        p.roundRect(nameX + rw + 8, y + 51, 46, 22, 6, '#e2b14a');
+        text('MVP', nameX + rw + 31, y + 62, 14, '#2a1a04');
+      }
+      text(mem.damage.toLocaleString(), COL.dmg, y + 43, 24, C.text);
+      text(mem.healing ? mem.healing.toLocaleString() : '-', COL.heal, y + 43, 22, mem.healing ? '#8fe0a8' : C.dim);
+      if (reward) pill(COL.reward - 40, y + 27, 80, 32, `+${reward.xp}`, 20, mvp ? '#6b4e12' : '#1f4a2c', mvp ? '#ffe39a' : '#bff0cf');
+      else text('-', COL.reward, y + 43, 22, C.dim);
     });
   });
 }
@@ -434,9 +499,10 @@ function renderEnd(r, outcome, rewards = []) {
 function warmUpLabels(monsters) {
   const jobs = [];
   // 장면별 고정 배경도 미리 만들어 둔다(첫 그림에서 큰 도형을 칠하는 비용이 가장 컸다).
-  for (const [key, y, h] of [['recruit', 102, 240], ['battle', 120, 224], ['end', 126, 216]]) {
+  for (const [key, y, h] of [['recruit', 102, 240], ['battle', 120, 224]]) {
     jobs.push(() => { p = painter; background(key, y, h); });
   }
+  jobs.push(() => { p = painter; endBackground(); });
   const add = (font, s, size) => jobs.push(() => painter.warmText(fonts[font], s, size));
   add('bold', '긴급 퀘스트 발생!', 46);
   add('bold', '타겟 몬스터', 22);
@@ -447,8 +513,7 @@ function warmUpLabels(monsters) {
   for (const v of ['참가 완료', '참가 대기']) add('bold', v, 22);
   add('bold', '행동 선택!', 19);
   add('bold', '쓰러짐', 19);
-  for (let t = 1; t <= 30; t++) { add('bold', `TURN ${t}`, 24); add('bold', `TURN ${t} 결과`, 30); }
-  add('bold', '결과', 19);
+  for (let t = 1; t <= 30; t++) add('bold', `TURN ${t}`, 24);
   for (const v of ['스킬', '1턴', '2턴', '3턴']) add('bold', v, 15);
   for (const a of ['공격', '방어', '회복약']) add('bold', `준비 · ${a}`, 19);
   for (const k of ROLE_ORDER) {
@@ -458,7 +523,9 @@ function warmUpLabels(monsters) {
     add('bold', ROLES[k].skill.name, 20);
   }
   add('bold', '빈자리', NAME_SIZE);
-  for (const [k, t] of Object.entries(END_TITLE)) { add('bold', t, 52); add('bold', END_SUB[k], 26); }
+  for (const t of new Set(Object.values(END_TITLE))) add('bold', t, 58);
+  for (const v of ['파티 결과', '피해', '회복', '보상', '턴', '걸린 시간', '남은 HP', '도주']) add('bold', v, v === '파티 결과' ? 24 : 17);
+  add('bold', 'MVP', 14);
   for (const m of monsters) {
     add('bold', m.name, 38);
     add('bold', m.rageName, 38);
