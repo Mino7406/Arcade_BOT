@@ -170,6 +170,7 @@ function monsterBox(y, h) {
 
 // 카드 4장(역할 순서 고정). drawCard(x, y, w, h, roleKey, member)로 안쪽을 채운다.
 const CARD_Y = 362, CARD_H = 260, CARD_W = 203, CARD_GAP = 16;
+const NAME_SIZE = 28;
 // 카드 배경과 빈자리 테두리는 배경 캐시(background)에 이미 있다. 참가자 카드만 금색 테두리를 덧그린다.
 function cards(members, drawCard) {
   ROLE_ORDER.forEach((roleKey, i) => {
@@ -230,7 +231,9 @@ function renderRecruit(r) {
     cards(r.party, (x, y, w, h, roleKey, m) => {
       const role = ROLES[roleKey];
       roleIcon(roleKey, x + w / 2, y + 50, !m);
-      text(m ? m.name : '빈자리', x + w / 2, y + 116, 30, m ? C.text : C.dim, { maxWidth: w - 20 });
+      // 이름 크기는 모집·전투·결과 모두 NAME_SIZE로 같게 — 모집 때 만든 글자 모양을 전투·결과에서 그대로 재사용한다
+      // (크기가 다르면 서버에서 전투 시작 그림이 이름을 다시 그리느라 170ms 걸렸다).
+      text(m ? m.name : '빈자리', x + w / 2, y + 116, NAME_SIZE, m ? C.text : C.dim, { maxWidth: w - 20 });
       text(role.name, x + w / 2, y + 152, 22, m ? C.orange : '#8a6a3a');
       pill(x + 14, y + 176, w - 28, 34, role.skill.name, 20);
       text(m ? '참가 완료' : '참가 대기', x + w / 2, y + 234, 22, m ? C.ok : C.muted);
@@ -265,14 +268,14 @@ function renderBattle(r) {
       const role = ROLES[roleKey];
       if (!mem) {
         roleIcon(roleKey, x + w / 2, y + 50, true);
-        text('빈자리', x + w / 2, y + 116, 28, C.dim);
+        text('빈자리', x + w / 2, y + 116, NAME_SIZE, C.dim);
         text(role.name, x + w / 2, y + 152, 22, '#8a6a3a');
         return;
       }
       const down = mem.hp <= 0;
       const ratio = mem.hp / PLAYER_MAX_HP;
       roleIcon(roleKey, x + w / 2, y + 46, down);
-      text(mem.name, x + w / 2, y + 104, 28, down ? C.dim : C.text, { maxWidth: w - 20 });
+      text(mem.name, x + w / 2, y + 104, NAME_SIZE, down ? C.dim : C.text, { maxWidth: w - 20 });
       text(role.name, x + w / 2, y + 136, 20, down ? '#8a6a3a' : C.orange);
       bar(x + 14, y + 156, w - 28, 18, ratio, hpColor(ratio));
       text(down ? '쓰러짐' : `HP ${mem.hp}`, x + w / 2, y + 194, 24, down ? '#f04b3a' : C.sub);
@@ -313,7 +316,7 @@ function renderEnd(r, outcome, rewards = []) {
     cards(members, (x, y, w, h, roleKey, mem) => {
       const role = ROLES[roleKey];
       roleIcon(roleKey, x + w / 2, y + 50, !mem);
-      text(mem ? mem.name : '빈자리', x + w / 2, y + 112, 28, mem ? C.text : C.dim, { maxWidth: w - 20 });
+      text(mem ? mem.name : '빈자리', x + w / 2, y + 112, NAME_SIZE, mem ? C.text : C.dim, { maxWidth: w - 20 });
       text(role.name, x + w / 2, y + 146, 20, mem ? C.orange : '#8a6a3a');
       if (!mem || mem.damage === undefined) return;
       text(`피해 ${mem.damage.toLocaleString()}`, x + w / 2, y + 180, 22, C.sub, { maxWidth: w - 20 });
@@ -347,7 +350,7 @@ function warmUpLabels(monsters) {
     add('bold', ROLES[k].name, 20);
     add('bold', ROLES[k].skill.name, 20);
   }
-  for (const v of ['빈자리']) { add('bold', v, 30); add('bold', v, 28); }
+  add('bold', '빈자리', NAME_SIZE);
   for (const [k, t] of Object.entries(END_TITLE)) { add('bold', t, 52); add('bold', END_SUB[k], 26); }
   for (const m of monsters) {
     add('bold', m.name, 38);
