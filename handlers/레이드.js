@@ -45,6 +45,9 @@ const PARTY_MAX = 4;
 const CLEAR_XP = 300;               // 토벌 성공 시 파티원 1인당
 const MVP_BONUS_XP = 100;           // 가장 많은 피해를 준 파티원 추가 보상
 const SCHEDULER_TICK_MS = 60 * 1000;
+// 남은 시간 표시(00:52:30)를 글자만 고쳐 갱신하는 주기. 디스코드는 채널당 메시지 수정이 대략 5초에 5번까지라
+// 1초마다는 불가능하고 버튼 반응까지 밀린다 — 모집(최대 1시간)은 10초, 전투 턴(60초)은 5초마다.
+const COUNTDOWN_TICK_MS = { recruit: 10 * 1000, battle: 5 * 1000 };
 const IMAGE_NAME = 'raid.png';
 
 const STATE_PATH = path.join(__dirname, '..', 'DB', 'raid.json');
@@ -103,6 +106,13 @@ function rescheduleOverdue(now = Date.now()) {
 
 // ── 화면 ────────────────────────────────────────────────────────
 const ts = (ms, style = 'R') => `<t:${Math.floor(ms / 1000)}:${style}>`;
+// 마감까지 남은 시간 → withHours면 항상 '00:52:30', 아니면 1시간 미만일 때 '04:30'
+function clock(deadline, withHours = false) {
+  const sec = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+  const hh = Math.floor(sec / 3600), mm = Math.floor((sec % 3600) / 60), ss = sec % 60;
+  const two = (n) => String(n).padStart(2, '0');
+  return withHours || hh > 0 ? `${two(hh)}:${two(mm)}:${two(ss)}` : `${two(mm)}:${two(ss)}`;
+}
 // 컨테이너(임베드 창) 왼쪽 색 줄: 모집 빨강 · 전투 금색 · 분노 빨강 · 클리어 초록 · 그 외 종료 회색
 const ACCENT = { recruit: 0xED4245, battle: 0xD9A93F, rage: 0xED4245, clear: 0x57F287, end: 0x4E5058 };
 
@@ -170,7 +180,7 @@ async function recruitView(r, { redraw = true } = {}) {
         }).join('\n'),
     });
   }
-  sections.push({ text: `⏳ **모집 마감 ${ts(r.recruitEndsAt)}** · 파티 ${r.party.length}/${PARTY_MAX}${image ? '' : freezeNotice(r)}` });
+  sections.push({ text: `## ⏳ ${clock(r.recruitEndsAt, true)}\n-# 모집 대기 · 파티 ${r.party.length}/${PARTY_MAX} · 아무도 참가하지 않으면 몬스터가 도망쳐요${image ? '' : freezeNotice(r)}` });
   sections.push({
     row: new ActionRowBuilder().addComponents(
       ...ROLE_ORDER.map(roleKey => {
@@ -225,7 +235,7 @@ async function battleView(r, { redraw = true } = {}) {
     const pending = b.members.filter(mem => mem.hp > 0 && !mem.choice).map(mem => mem.name);
     sections.push({
       text: `## ⚔️ TURN ${b.turn} · 행동을 고르세요\n` +
-        `⏳ 마감 ${ts(r.turnEndsAt)} · 전투 종료 ${ts(r.battleEndsAt)}\n` +
+        `⏳ **${clock(r.turnEndsAt)}** 남음 · 전투 종료까지 ${clock(r.battleEndsAt)}\n` +
         (pending.length ? `-# 아직 고르지 않음: ${pending.join(', ')}` : '-# 모두 골랐어요 — 곧 턴이 진행돼요'),
     });
   }
@@ -398,6 +408,19 @@ function clearTimer(r) {
   r.timer = null;
 }
 
+// 남은 시간 글자를 주기적으로 갱신한다(그림은 다시 올리지 않음 — 화면 대기열이 글자만 고친다).
+// 결과 단계(턴 전환)·종료 후에는 멈춘다. 레이드가 끝날 때까지 스스로 다음 틱을 예약한다.
+function startCountdown(r) {
+  if (r.countdownTimer) clearTimeout(r.countdownTimer);
+  const tick = () => {
+    r.countdownTimer = null;
+    if (raid !== r || r.phase === 'ended') return;
+    if (!(r.phase === 'battle' && r.showingResult)) requestRender(r);
+    r.countdownTimer = setTimeout(tick, COUNTDOWN_TICK_MS[r.phase] ?? COUNTDOWN_TICK_MS.recruit);
+  };
+  r.countdownTimer = setTimeout(tick, COUNTDOWN_TICK_MS[r.phase] ?? COUNTDOWN_TICK_MS.recruit);
+}
+
 // 레이드를 띄운다. channel: 출현할 채널. 실패하면 사유 문구, 성공하면 null.
 async function spawnRaid(client, channel, { forced = false } = {}) {
   if (raid) return '이미 진행 중인 긴급 퀘스트가 있어요.';
@@ -434,6 +457,7 @@ async function spawnRaid(client, channel, { forced = false } = {}) {
   state.active = { guildId: r.guildId, channelId: r.channelId, messageId: r.message.id };
   saveState(state);
   r.timer = setTimeout(() => onRecruitEnd(r).catch(err => console.error('레이드 모집 마감 처리 실패:', err)), RECRUIT_MS);
+  startCountdown(r);
   logSystem({ 유형: '레이드', 채널: `#${channel.name ?? channel.id}`, 내용: `긴급 퀘스트 출현 — ${monster.name}${forced ? ' (관리자 소환)' : ''}${r.freezesXp ? ', XP 정지' : ''}` });
   return null;
 }
@@ -455,6 +479,7 @@ function startBattle(r) {
   armTurnTimer(r);
   logSystem({ 유형: '레이드', 내용: `전투 시작 — ${r.party.map(p => `${p.name}(${ROLES[p.role].name})`).join(', ')} / HP ${r.battle.maxHp}` });
   requestRender(r, { image: true, immediate: true });
+  startCountdown(r); // 전투는 5초 주기로
 }
 
 function armTurnTimer(r) {
@@ -489,6 +514,7 @@ function advanceTurn(r) {
 // 레이드를 끝낸다. XP 정지 해제 · 보상 지급 · 상태 저장 · 복구 안내 후 결과 화면을 바로 보내게 한다.
 function finishRaid(r, outcome) {
   clearTimer(r);
+  if (r.countdownTimer) { clearTimeout(r.countdownTimer); r.countdownTimer = null; }
   r.phase = 'ended';
   r.outcome = outcome;
   r.endedAt = Date.now();
