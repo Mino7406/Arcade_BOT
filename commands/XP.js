@@ -35,11 +35,13 @@ const MAX_ABS = 10_000_000;
 const MAX_LEVEL = 1000;
 
 // 조정 전 공통 관문 — 막히면 true. 순서 주의: 권한을 먼저 봐서 비관리자에게 내부 상태를 흘리지 않는다.
-async function denyGuard(interaction) {
+// allowExcludedGuild: 레벨 데이터를 건드리지 않는 조작(긴급 퀘스트 소환/종료)은 테스트 서버에서도 허용.
+async function denyGuard(interaction, { allowExcludedGuild = false } = {}) {
   if (!ADMIN_IDS.includes(interaction.user.id)) {
     await interaction.reply({ content: '❌ **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
     return true;
   }
+  if (allowExcludedGuild && isExcludedGuild(interaction.guildId)) return false;
   if (isExcludedGuild(interaction.guildId)) {
     await interaction.reply({ content: '⚠️ **이 서버는 레벨 시스템이 비활성화돼 있어 XP를 조정할 수 없습니다.**', flags: MessageFlags.Ephemeral });
     return true;
@@ -115,8 +117,7 @@ function buildManageView(notice) {
       `-# 오목 · 룰렛 · 틱택토 · 끝말잇기 · 퀴즈\n\n` +
       `**뉴비부스트(×2)** ${st.newbieBoostEnabled ? '🟢 ON' : '⚪ OFF'}\n` +
       `-# 뉴비부스트 역할의 메인·TTS·통화방 체류 XP 2배\n\n` +
-      `**긴급 퀘스트** ${raid.active ? `👾 ${raid.monsterName} 진행 중 (${raid.phase === 'recruit' ? '모집' : '전투'})` : '⚪ 대기'}\n` +
-      `-# ${raid.nextSpawnAt ? `다음 자동 출현 <t:${Math.floor(raid.nextSpawnAt / 1000)}:f> (<t:${Math.floor(raid.nextSpawnAt / 1000)}:R>)` : '다음 출현 일정 없음'} · 진행 중엔 채팅·통화방·미니게임 XP 정지` +
+      raidStatusText(raid) + ' · 진행 중엔 채팅·통화방·미니게임 XP 정지' +
       (notice ? `\n\n${notice}` : ''),
     )
     .setTimestamp();
@@ -141,13 +142,44 @@ function buildManageView(notice) {
           .setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('xp:menu:home').setEmoji('↩️').setLabel('메뉴로').setStyle(ButtonStyle.Secondary),
       ),
-      new ActionRowBuilder().addComponents(
-        raid.active
-          ? new ButtonBuilder().setCustomId('xp:mng:raidend').setEmoji('🛑').setLabel('긴급 퀘스트 종료').setStyle(ButtonStyle.Danger)
-          : new ButtonBuilder().setCustomId('xp:mng:raid').setEmoji('👾').setLabel('긴급 퀘스트 소환').setStyle(ButtonStyle.Danger),
-      ),
+      new ActionRowBuilder().addComponents(raidButton(raid)),
     ],
   };
+}
+
+// 긴급 퀘스트 상태 두 줄(진행 여부 / 다음 자동 출현 시각) — XP 관리 패널과 테스트 서버 화면이 공유.
+function raidStatusText(raid) {
+  const next = raid.nextSpawnAt ? Math.floor(raid.nextSpawnAt / 1000) : null;
+  return `**긴급 퀘스트** ${raid.active ? `👾 ${raid.monsterName} 진행 중 (${raid.phase === 'recruit' ? '모집' : '전투'})` : '⚪ 대기'}\n` +
+    `-# ${next ? `다음 자동 출현 <t:${next}:f> (<t:${next}:R>)` : '다음 출현 일정 없음'}`;
+}
+
+function raidButton(raid) {
+  return raid.active
+    ? new ButtonBuilder().setCustomId('xp:mng:raidend').setEmoji('🛑').setLabel('긴급 퀘스트 종료').setStyle(ButtonStyle.Danger)
+    : new ButtonBuilder().setCustomId('xp:mng:raid').setEmoji('👾').setLabel('긴급 퀘스트 소환').setStyle(ButtonStyle.Danger);
+}
+
+// 소환/종료 후 다시 그릴 화면 — 테스트 서버면 테스트 화면, 아니면 XP 관리 패널.
+function raidResultView(interaction, notice) {
+  return isExcludedGuild(interaction.guildId) ? buildRaidTestView(notice) : buildManageView(notice);
+}
+
+// 레벨 시스템이 꺼진 서버(테스트 서버)에서 /xp를 쓰면 XP 조정 대신 이 화면만 보여준다.
+// 긴급 퀘스트를 실제 서버 XP와 무관하게 시험해볼 수 있게 하기 위함(그 서버에서 띄운 레이드는
+// 버튼을 누른 채널에 뜨고, 본서버 XP를 멈추지도 보상을 주지도 않는다).
+function buildRaidTestView(notice) {
+  const raid = getRaidStatus();
+  const embed = new EmbedBuilder()
+    .setColor(0x5865F2)
+    .setDescription(
+      `## 🧪 긴급 퀘스트 테스트\n` +
+      `이 서버는 레벨 시스템이 꺼져 있어 XP 조정은 할 수 없고, 긴급 퀘스트만 시험할 수 있어요.\n` +
+      `-# 여기서 소환하면 이 채널에 뜨고, 본서버 XP를 멈추지도 보상을 주지도 않아요.\n\n` +
+      raidStatusText(raid) +
+      (notice ? `\n\n${notice}` : ''),
+    );
+  return { content: '', embeds: [embed], components: [new ActionRowBuilder().addComponents(raidButton(raid))] };
 }
 
 // ── 긴급정지 ON/OFF 확인 화면 ──────────────────────────────────
@@ -246,8 +278,9 @@ module.exports = {
     .setDescription('[관리자 전용] XP 수동 조정 · XP 시스템 긴급정지/뉴비부스트 관리.'),
 
   async execute(interaction) {
-    if (await denyGuard(interaction)) return;
-    await interaction.reply({ ...buildMenuView(), flags: MessageFlags.Ephemeral });
+    if (await denyGuard(interaction, { allowExcludedGuild: true })) return;
+    const view = isExcludedGuild(interaction.guildId) ? buildRaidTestView() : buildMenuView();
+    await interaction.reply({ ...view, flags: MessageFlags.Ephemeral });
   },
 };
 
@@ -260,8 +293,9 @@ async function handleXpUserSelect(interaction) {
 
 // ── 버튼 라우팅: 메뉴 분기 / XP 관리 토글 / ➕➖🔄 모달 오픈 ────
 async function handleXpButton(interaction) {
-  if (await denyGuard(interaction)) return;
   const [, action, targetId] = interaction.customId.split(':');
+  const isRaidAction = action === 'mng' && (targetId === 'raid' || targetId === 'raidend');
+  if (await denyGuard(interaction, { allowExcludedGuild: isRaidAction })) return;
 
   // 첫 화면 분기
   if (action === 'menu') {
@@ -289,12 +323,12 @@ async function handleXpButton(interaction) {
       await interaction.deferUpdate();
       const error = await forceSpawnRaid(interaction);
       if (!error) logAction(interaction, 'XP 관리', '긴급 퀘스트 수동 소환');
-      await interaction.editReply(buildManageView(error ? `⚠️ ${error}` : '👾 **긴급 퀘스트를 소환했습니다.**'));
+      await interaction.editReply(raidResultView(interaction, error ? `⚠️ ${error}` : '👾 **긴급 퀘스트를 소환했습니다.**'));
     } else if (targetId === 'raidend') {
       await interaction.deferUpdate();
       const ended = await forceEndRaid();
       if (ended) logAction(interaction, 'XP 관리', '긴급 퀘스트 강제 종료');
-      await interaction.editReply(buildManageView(ended ? '🛑 **긴급 퀘스트를 종료했습니다.** XP 정지도 풀렸습니다.' : '⚠️ 진행 중인 긴급 퀘스트가 없어요.'));
+      await interaction.editReply(raidResultView(interaction, ended ? '🛑 **긴급 퀘스트를 종료했습니다.** XP 정지도 풀렸습니다.' : '⚠️ 진행 중인 긴급 퀘스트가 없어요.'));
     }
     return;
   }
