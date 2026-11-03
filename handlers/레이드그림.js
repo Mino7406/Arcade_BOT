@@ -277,33 +277,51 @@ function renderBattle(r) {
     p.roundRect(30, 20, 118, 42, 10, '#2a2119');
     p.strokeRoundRect(30, 20, 118, 42, 10, 1.5, C.gold);
     text(`TURN ${b.turn}`, 89, 41, 24, C.gold);
+    // 몬스터 이름은 정확히 가운데. 왼쪽 TURN 배지와 겹치지 않게 최대 폭을 둔다(분노 표시는 이름 오른쪽).
     const name = b.rage ? m.rageName : m.name;
-    const nw = p.textWidth(B(), name, 36);
-    const nameX = W / 2 + 40 - (b.rage ? 34 : 0);
-    text(name, nameX, 41, 36, b.rage ? C.red : C.gold, { maxWidth: 560 });
+    const NAME_MAX = 420;
+    const nw = Math.min(p.textWidth(B(), name, 36), NAME_MAX);
+    text(name, W / 2, 41, 36, b.rage ? C.red : C.gold, { maxWidth: NAME_MAX });
     if (b.rage) {
-      p.roundRect(nameX + nw / 2 + 12, 24, 64, 34, 8, '#5c1410');
-      text('분노', nameX + nw / 2 + 44, 41, 22, '#ffb4a8');
+      p.roundRect(W / 2 + nw / 2 + 12, 24, 64, 34, 8, '#5c1410');
+      text('분노', W / 2 + nw / 2 + 44, 41, 22, '#ffb4a8');
     }
     bar(50, 74, W - 100, 32, b.hp / b.maxHp, b.rage ? '#e5383b' : '#d94a2b');
     p.strokeRoundRect(50, 74, W - 100, 32, 16, 2, C.gold);
     text(`${b.hp.toLocaleString()} / ${b.maxHp.toLocaleString()}`, W / 2, 90, 22, '#ffffff');
 
-    // 몬스터 + 지난 턴 결과(쓴 기술 · 입은 총피해) — 글자만 띄우고 상자는 쓰지 않는다
+    // 몬스터 + 지난 턴 결과: 왼쪽 '몬스터 행동' 상자, 오른쪽 '입힌 피해' 숫자를 몬스터 양옆에 대칭으로
+    const sideY = 196, sideDX = 205;
     drawMonster(m, W / 2, 192, 112, { rage: b.rage });
     if (last) {
-      if (last.monsterMove) text(`${last.monsterMove}!`, W / 2 - 200, 186, 26, '#ffb08a', { maxWidth: 220 });
-      if (last.monsterDamage > 0) text(`-${last.monsterDamage.toLocaleString()}`, W / 2 + 190, 186, 44, '#ff5a45');
+      if (last.monsterMove) {
+        text('몬스터 행동', W / 2 - sideDX, sideY - 38, 16, C.muted);
+        p.roundRect(W / 2 - sideDX - 105, sideY - 21, 210, 42, 10, '#3a1a12');
+        p.strokeRoundRect(W / 2 - sideDX - 105, sideY - 21, 210, 42, 10, 1.5, '#7a3320');
+        text(`${last.monsterMove}!`, W / 2 - sideDX, sideY, 22, '#ffb08a', { maxWidth: 190 });
+      }
+      if (last.monsterDamage > 0) {
+        text('입힌 피해', W / 2 + sideDX, sideY - 38, 16, C.muted);
+        text(`-${last.monsterDamage.toLocaleString()}`, W / 2 + sideDX, sideY + 2, 42, '#ff5a45');
+      }
     }
-    // 다음 행동 예고: 평소엔 글자만, 큰 공격(방어해야 할 때)만 빨간 상자로 띄운다.
+    // 다음 행동 예고 상자 — 왼쪽에 '다음 행동' 칩, 큰 공격(방어해야 할 때)은 빨간 상자 + 경고 삼각형
     const move = m.moves[b.intent];
-    if (b.intent === 'smash') {
-      p.roundRect(110, 274, W - 220, 52, 10, '#4a1410');
-      p.strokeRoundRect(110, 274, W - 220, 52, 10, 1.5, C.red);
-      text(`다음 행동 · ${move.telegraph}`, W / 2, 300, 26, '#ffc4b8', { maxWidth: W - 260 });
-    } else {
-      text(`다음 행동 · ${move.telegraph}`, W / 2, 300, 24, C.muted, { maxWidth: W - 200 });
+    const warn = b.intent === 'smash';
+    const boxX = 140, boxW = W - 280, boxY = 272, boxH = 52;
+    p.roundRect(boxX, boxY, boxW, boxH, 12, warn ? '#4a1410' : '#201810');
+    p.strokeRoundRect(boxX, boxY, boxW, boxH, 12, 1.5, warn ? C.red : C.frame);
+    p.roundRect(boxX + 10, boxY + 11, 104, 30, 8, warn ? '#7a1f16' : '#3a2f22');
+    text('다음 행동', boxX + 62, boxY + 26, 17, warn ? '#ffd0c4' : C.muted);
+    const tx = boxX + 124 + (boxW - 134) / 2;
+    if (warn) {
+      const ty = boxY + 26, tw = p.textWidth(B(), move.telegraph, 24);
+      const ix = tx - Math.min(tw, boxW - 190) / 2 - 22;
+      p.poly([ix, ty - 11, ix + 12, ty + 10, ix - 12, ty + 10], '#ffb4a8');
+      p.rect(ix - 1.5, ty - 4, 3, 8, '#4a1410');
+      p.rect(ix - 1.5, ty + 5, 3, 3, '#4a1410');
     }
+    text(move.telegraph, tx, boxY + 26, 24, warn ? '#ffc4b8' : C.sub, { maxWidth: boxW - 190 });
 
     cards(b.members, (x, y, w, h, roleKey, mem) => {
       const role = ROLES[roleKey];
@@ -405,6 +423,8 @@ function warmUpLabels(monsters) {
   const add = (font, s, size) => jobs.push(() => painter.warmText(fonts[font], s, size));
   add('bold', '긴급 퀘스트 발생!', 46);
   add('bold', '타겟 몬스터', 22);
+  for (const v of ['몬스터 행동', '입힌 피해']) add('bold', v, 16);
+  add('bold', '다음 행동', 17);
   add('bold', '분노', 22);
   add('bold', '보상 없음', 20);
   for (const v of ['참가 완료', '참가 대기']) add('bold', v, 22);
@@ -424,7 +444,7 @@ function warmUpLabels(monsters) {
   for (const m of monsters) {
     add('bold', m.name, 38);
     add('bold', m.rageName, 38);
-    for (const move of Object.values(m.moves)) add('bold', `다음 행동 · ${move.telegraph}`, 26);
+    for (const move of Object.values(m.moves)) { add('bold', move.telegraph, 24); add('bold', `${move.name}!`, 22); }
   }
   return jobs;
 }
