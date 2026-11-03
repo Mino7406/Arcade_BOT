@@ -566,6 +566,13 @@ function startRaidScheduler(client) {
   }, SCHEDULER_TICK_MS);
 }
 
+// 긴급 퀘스트가 진행 중이라 놀이터(미니게임 시작·일일 퀴즈)를 멈춰야 하는지. XP를 멈추는 레이드
+// (= 레벨 시스템이 있는 본서버 레이드)일 때만 true — 테스트 서버에서 띄운 레이드는 본서버 놀이터를 막지 않는다.
+// guildId를 주면 그 서버의 레이드일 때만 true.
+function isPlaygroundPaused(guildId) {
+  return !!raid && raid.freezesXp && (!guildId || raid.guildId === guildId);
+}
+
 // ── 관리자(/xp → XP 관리)용 ─────────────────────────────────────
 function getRaidStatus() {
   return {
@@ -595,6 +602,7 @@ async function forceEndRaid() {
 module.exports = {
   handleRaidButton,
   startRaidScheduler,
+  isPlaygroundPaused,
   getRaidStatus,
   forceSpawnRaid,
   forceEndRaid,

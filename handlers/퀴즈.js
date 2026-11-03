@@ -14,6 +14,7 @@ const { KST_OFFSET_MS } = require('./시간');
 const { QUIZ_CHANNEL_ID } = require('../config'); // 놀이터 채널 (config.js의 PLAYGROUND_CHANNEL_ID)
 const { logSystem, logError, userLabel } = require('./로그');
 const { writeJsonIfChanged } = require('./저장');
+const { isPlaygroundPaused } = require('./레이드');
 
 // KST 기준 출제 가능 시간대: 오전 10시 ~ 밤 11시. 이 시각(23:00)까지 봇이 안 켜져 있었다면
 // 그날 사이클은 건너뜀.
@@ -274,9 +275,16 @@ async function postQuiz(client, state, picked, slotKey = 'activeQuiz', extraFiel
   }
 }
 
+// 긴급 퀘스트가 진행 중이면 출제를 미루고 1분마다 다시 확인한다 — 퀘스트가 끝나면 곧바로 나간다.
+const RAID_RETRY_MS = 60 * 1000;
+
 async function fireQuiz(client) {
   const state = loadState();
   if (!state || state.posted) return; // 이미 다른 경로로 처리됨 (안전장치)
+  if (isPlaygroundPaused()) {
+    setTimeout(() => fireQuiz(client).catch(err => console.error('퀴즈 지연 출제 실패:', err)), RAID_RETRY_MS);
+    return;
+  }
   state.posted = true;
   // posted를 먼저 저장해둬야, postQuiz 안의 await(채널 fetch 등)가 걸려있는 사이에 10분
   // 하트비트(checkAndSchedule)가 끼어들어도 "아직 posted=false"로 잘못 읽고 fireQuiz를
@@ -489,6 +497,8 @@ function getQuizStatus() {
 // 메시지가 둘 중 하나의 정답과 일치하면 그 슬롯만 채점한다(다른 슬롯은 그대로 계속 열려있음).
 async function handleQuizMessage(message) {
   if (message.author.bot) return;
+  // 긴급 퀘스트 중에는 채점하지 않는다(문제는 열린 채로 두고, 퀘스트가 끝난 뒤 맞히면 정상 지급).
+  if (isPlaygroundPaused(message.guildId)) return;
 
   const client = message.client;
   const normalize = s => s.replace(/\s+/g, '');

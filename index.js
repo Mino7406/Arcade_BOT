@@ -23,7 +23,8 @@ const { loadRoulette, saveRoulette, handleRouletteButton } = require('./handlers
 const { loadBotMatchXp, saveBotMatchXp } = require('./handlers/봇전한도');
 const { loadRealmRoster, saveRealmRoster } = require('./forms/마크/명단');
 const { startQuizScheduler, handleQuizMessage } = require('./handlers/퀴즈');
-const { handleRaidButton, startRaidScheduler } = require('./handlers/레이드');
+const { handleRaidButton, startRaidScheduler, isPlaygroundPaused } = require('./handlers/레이드');
+const PAUSED_MINIGAME_COMMANDS = ['끝말잇기', '틱택토', '오목', '룰렛']; // 긴급 퀘스트 중 시작 금지
 const { handleQuizAdminButton, handleQuizCreateModal } = require('./commands/퀴즈');
 const { buildGameSelectPayload: buildNaejeonGameSelectPayload } = require('./commands/내전');
 const { buildGameSelectPayload: buildMojipGameSelectPayload } = require('./commands/모집');
@@ -399,6 +400,14 @@ client.on('interactionCreate', async (interaction) => {
       if (interaction.isRepliable()) {
         await interaction.reply({ content: '❌ 이 채널에서는 사용할 수 없습니다.', flags: MessageFlags.Ephemeral });
       }
+      return;
+    }
+
+    // 긴급 퀘스트 진행 중에는 놀이터 미니게임을 새로 시작할 수 없다(퀘스트에 집중하도록 일시 정지).
+    // 이미 진행 중이던 판은 그대로 끝까지 두고(XP는 어차피 멈춤), /레벨·/랭킹 조회는 막지 않는다.
+    if (interaction.isChatInputCommand() && PAUSED_MINIGAME_COMMANDS.includes(interaction.commandName) && isPlaygroundPaused(interaction.guildId)) {
+      logBlocked(interaction, '긴급 퀘스트 진행 중이라 미니게임 일시 정지');
+      await interaction.reply({ content: '👾 **긴급 퀘스트가 진행 중이라 놀이터 미니게임이 일시 정지됐어요.**\n퀘스트가 끝나면 다시 이용할 수 있어요.', flags: MessageFlags.Ephemeral });
       return;
     }
 
