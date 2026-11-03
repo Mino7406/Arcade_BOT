@@ -261,6 +261,12 @@ const loopDelay = monitorEventLoopDelay({ resolution: 20 });
 loopDelay.enable();
 const SLOW_INTERACTION_MS = 2500;  // 디스코드 응답 제한(3초)에 근접한 상호작용만 기록
 const MEMORY_WARN_RSS_MB = 200;    // 요금제 RAM 256MB 기준 경고선
+// 로그가 얼마나 자주 반복되는지 보이도록 각 줄 앞에 KST 시각을 붙인다.
+const { KST_OFFSET_MS } = require('./handlers/시간');
+function diagWarn(msg) {
+  const t = new Date(Date.now() + KST_OFFSET_MS).toISOString().slice(5, 19).replace('T', ' ');
+  console.warn(`[${t}] ${msg} — ${diagSnapshot()}`);
+}
 function diagSnapshot() {
   const mem = process.memoryUsage();
   const mb = (n) => Math.round(n / 1048576);
@@ -274,19 +280,19 @@ function checkInteractionAge(interaction) {
   if (ageMs < SLOW_INTERACTION_MS) return;
   const now = Date.now();
   if (now - slowWarnedAt < 10_000) { slowSkipped++; return; } // 몰릴 때 콘솔 도배 방지
-  console.warn(`🐢 상호작용이 ${ageMs}ms 늦게 도착 (${interaction.customId ?? `/${interaction.commandName}`})${slowSkipped ? `, 그동안 ${slowSkipped}건 더` : ''} — ${diagSnapshot()}`);
+  diagWarn(`🐢 상호작용이 ${ageMs}ms 늦게 도착 (${interaction.customId ?? `/${interaction.commandName}`})${slowSkipped ? `, 그동안 ${slowSkipped}건 더` : ''}`);
   slowWarnedAt = now;
   slowSkipped = 0;
 }
-client.on(Events.ShardDisconnect, (event) => console.warn(`🔌 게이트웨이 연결 끊김 (코드 ${event?.code ?? '-'}) — ${diagSnapshot()}`));
-client.on(Events.ShardReconnecting, () => console.warn(`🔌 게이트웨이 재연결 시도 — ${diagSnapshot()}`));
-client.on(Events.ShardResume, (_id, replayed) => console.warn(`🔌 게이트웨이 연결 재개 — 밀린 이벤트 ${replayed}건 재전송 — ${diagSnapshot()}`));
+client.on(Events.ShardDisconnect, (event) => diagWarn(`🔌 게이트웨이 연결 끊김 (코드 ${event?.code ?? '-'})`));
+client.on(Events.ShardReconnecting, () => diagWarn('🔌 게이트웨이 재연결 시도'));
+client.on(Events.ShardResume, (_id, replayed) => diagWarn(`🔌 게이트웨이 연결 재개 — 밀린 이벤트 ${replayed}건 재전송`));
 let memWarnedAt = 0;
 setInterval(() => {
   if (process.memoryUsage().rss < MEMORY_WARN_RSS_MB * 1048576) return;
   if (Date.now() - memWarnedAt < 30 * 60 * 1000) return;
   memWarnedAt = Date.now();
-  console.warn(`🧠 메모리 경고선(${MEMORY_WARN_RSS_MB}MB) 초과 — ${diagSnapshot()}`);
+  diagWarn(`🧠 메모리 경고선(${MEMORY_WARN_RSS_MB}MB) 초과`);
 }, 60_000);
 
 // ─── 봇 준비 완료 시 ──────────────────────────────────────────
