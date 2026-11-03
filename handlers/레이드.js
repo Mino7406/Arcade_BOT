@@ -213,7 +213,7 @@ async function recruitView(r, { redraw = true } = {}) {
   sections.push({
     row: new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('raid:start').setEmoji('▶️').setLabel('바로 시작').setStyle(ButtonStyle.Success).setDisabled(r.party.length === 0),
-      new ButtonBuilder().setCustomId('raid:leave').setEmoji('❌').setLabel('참가 취소').setStyle(ButtonStyle.Danger).setDisabled(r.party.length === 0),
+      new ButtonBuilder().setCustomId('raid:leave').setEmoji('⛔').setLabel('참가 취소').setStyle(ButtonStyle.Danger).setDisabled(r.party.length === 0),
       new ButtonBuilder().setCustomId('raid:help').setEmoji('❔').setLabel('플레이 방법').setStyle(ButtonStyle.Secondary),
     ),
   });
