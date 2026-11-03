@@ -73,7 +73,33 @@ function pill(x, y, w, h, label, size, fill = C.teal, color = C.tealText) {
   text(label, x + w / 2, y + h / 2, size, color, { maxWidth: w - 12 });
 }
 
-// 경광등(제목 양옆)
+// 모집 제목 양옆 아이콘(16×16 픽셀 아트, 오리지널). TITLE_ICON으로 고른다.
+const TITLE_ICON = 'skull';
+const TITLE_ICONS = {
+  skull: {
+    rows: [
+      '....dddddddd....', '...dwwwwwwwwd...', '..dwwwwwwwwwwd..', '.dwwwwwwwwwwwwd.',
+      '.dwwwwwwwwwwwwd.', '.dwkrkwwwwkrkwd.', '.dwkrkwwwwkrkwd.', '.dwwkwwwwwwkwwd.',
+      '.dwwwwwkkwwwwwd.', '..dwwwwkkwwwwd..', '...dwwwwwwwwd...', '....dwdwdwdwd...',
+      '....dwdwdwdwd...', '.....ddddddd....', '................', '................',
+    ],
+    palette: { d: '#2a1f1a', w: '#efe6d6', k: '#1a1210', r: '#ff3b2f' },
+  },
+  dragon: {
+    rows: [
+      '..dd........dd..', '.dgd........dgd.', '.dggd......dggd.', '..dgrrrrrrrrgd..',
+      '..drrrrrrrrrrd..', '.drryyrrrryyrrd.', '.drrykrrrrkyrrd.', '.drrrrrrrrrrrrd.',
+      '..drrrrrrrrrrd..', '..drrrrrrrrrrd..', '...drrkrrkrrd...', '...drrrrrrrrd...',
+      '....dwdrrdwd....', '.....dddddd.....', '................', '................',
+    ],
+    palette: { d: '#1a0f0a', g: '#c9b48a', r: '#c0392b', y: '#ffd23a', k: '#1a0f0a', w: '#f4efe6' },
+  },
+};
+function titleIcon(cx, cy) {
+  drawPixels(TITLE_ICONS[TITLE_ICON], cx, cy, 3);
+}
+
+// 경광등(예전 제목 양옆 장식 — 지금은 안 씀)
 function siren(cx, cy, s = 1) {
   const dome = [];
   for (let k = 0; k <= 10; k++) { const a = Math.PI + (k / 10) * Math.PI; dome.push(cx + Math.cos(a) * 14 * s, cy - 4 * s + Math.sin(a) * 14 * s); }
@@ -232,18 +258,16 @@ function renderRecruit(r) {
     const title = '몬스터 출현!';
     const tw = p.textWidth(B(), title, 46);
     text(title, W / 2, 47, 46, C.gold);
-    siren(W / 2 - tw / 2 - 50, 49); siren(W / 2 + tw / 2 + 50, 49);
+    titleIcon(W / 2 - tw / 2 - 46, 47); titleIcon(W / 2 + tw / 2 + 46, 47);
     text(`${r.monster.name}${subjectJosa(r.monster.name)} XP 시스템을 장악 중이에요!`, W / 2, 84, 21, '#ff8f7a', { maxWidth: W - 120 });
-    p.circle(W / 2 - 64, 130, 6, C.red);
-    text('타겟 몬스터', W / 2 + 8, 130, 22, C.orange);
-    drawMonster(r.monster, W / 2, 218, 112);
-    text(r.monster.name, W / 2, 308, 38, C.gold);
+    drawMonster(r.monster, W / 2, 206, 112);
+    text(r.monster.name, W / 2, 298, 38, C.gold);
     cards(r.party, (x, y, w, h, roleKey, m) => {
       const role = ROLES[roleKey];
       roleIcon(roleKey, x + w / 2, y + 50, !m);
       // 이름 크기는 모집·전투·결과 모두 NAME_SIZE로 같게 — 모집 때 만든 글자 모양을 전투·결과에서 그대로 재사용한다
       // (크기가 다르면 서버에서 전투 시작 그림이 이름을 다시 그리느라 170ms 걸렸다).
-      text(m ? m.name : '빈자리', x + w / 2, y + 116, NAME_SIZE, m ? C.text : C.dim, { maxWidth: w - 20 });
+      text(m ? m.name : '-', x + w / 2, y + 116, NAME_SIZE, m ? C.text : C.dim, { maxWidth: w - 20 });
       text(role.name, x + w / 2, y + 152, 22, m ? C.orange : '#8a6a3a');
       pill(x + 14, y + 176, w - 28, 34, role.skill.name, 20);
       text(m ? '참가 완료' : '참가 대기', x + w / 2, y + 234, 22, m ? C.ok : C.muted);
@@ -334,7 +358,7 @@ function renderBattle(r) {
       const role = ROLES[roleKey];
       if (!mem) {
         roleIcon(roleKey, x + w / 2, y + 72, true);
-        text('빈자리', x + w / 2, y + 138, NAME_SIZE, C.dim);
+        text('-', x + w / 2, y + 138, NAME_SIZE, C.dim);
         text(role.name, x + w / 2, y + 172, 20, '#8a6a3a');
         return;
       }
@@ -512,7 +536,6 @@ function warmUpLabels(monsters) {
   jobs.push(() => { p = painter; endBackground(); });
   const add = (font, s, size) => jobs.push(() => painter.warmText(fonts[font], s, size));
   add('bold', '몬스터 출현!', 46);
-  add('bold', '타겟 몬스터', 22);
   add('bold', '다음 행동', 16);
   add('bold', '치명타', 15);
   add('bold', '분노', 22);
@@ -529,7 +552,7 @@ function warmUpLabels(monsters) {
     add('bold', ROLES[k].name, 20);
     add('bold', ROLES[k].skill.name, 20);
   }
-  add('bold', '빈자리', NAME_SIZE);
+  add('bold', '-', NAME_SIZE);
   for (const t of new Set(Object.values(END_TITLE))) add('bold', t, 58);
   for (const v of ['파티 결과', '피해', '회복', '보상', '턴', '걸린 시간', '남은 HP', '도주']) add('bold', v, v === '파티 결과' ? 24 : 17);
   add('bold', 'MVP', 14);

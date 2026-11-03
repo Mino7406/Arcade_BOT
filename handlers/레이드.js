@@ -176,7 +176,7 @@ async function recruitView(r, { redraw = true } = {}) {
       text: `# 🚨 긴급 퀘스트 발생!\n## ${m.emoji} ${m.name} 출현!\n${m.lore}\n\n` +
         ROLE_ORDER.map(k => {
           const p = r.party.find(x => x.role === k);
-          return `${ROLES[k].emoji} **${ROLES[k].name}** — ${p ? `**${p.name}**` : '*빈자리*'}\n-# ✨ ${ROLES[k].skill.name}: ${ROLES[k].skill.desc}`;
+          return `${ROLES[k].emoji} **${ROLES[k].name}** — ${p ? `**${p.name}**` : '-'}\n-# ✨ ${ROLES[k].skill.name}: ${ROLES[k].skill.desc}`;
         }).join('\n'),
     });
   }
