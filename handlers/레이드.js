@@ -180,7 +180,12 @@ async function recruitView(r, { redraw = true } = {}) {
         }).join('\n'),
     });
   }
-  sections.push({ text: `## ⏳ ${clock(r.recruitEndsAt, true)}\n-# 모집 대기 · 파티 ${r.party.length}/${PARTY_MAX} · 아무도 참가하지 않으면 몬스터가 도망쳐요${image ? '' : freezeNotice(r)}` });
+  // 큰 타이머 → 파티 인원과 할 일 → 도주 조건, 한 줄에 하나씩
+  sections.push({
+    text: `## ⏳ ${clock(r.recruitEndsAt, true)}\n` +
+      `**파티 ${r.party.length} / ${PARTY_MAX}** · 역할 버튼을 눌러 참가하세요\n` +
+      `-# ${Math.round(RECRUIT_MS / 3600000) || 1}시간 안에 아무도 참가하지 않으면 몬스터가 도망쳐요${image ? '' : freezeNotice(r)}`,
+  });
   sections.push({
     row: new ActionRowBuilder().addComponents(
       ...ROLE_ORDER.map(roleKey => {
@@ -203,7 +208,9 @@ async function recruitView(r, { redraw = true } = {}) {
     ),
   });
   sections.push({
-    text: `-# ▶️ 바로 시작: ${r.party[0] ? `파티장 ${r.party[0].name}` : '첫 참가자'} · 관리자 · 4명이 모이면 자동 출발 · 성공 시 +${CLEAR_XP} XP (MVP +${MVP_BONUS_XP})`,
+    // 이름표를 붙인 인용 블록 두 줄 — 보상과 시작 규칙을 한눈에
+    text: `> 🎁 **보상**　전원 +${CLEAR_XP} XP · MVP +${MVP_BONUS_XP} XP\n` +
+      `> ▶️ **바로 시작**　${r.party[0] ? `파티장 ${r.party[0].name}` : '첫 참가자'} · 관리자 — 4명이 모이면 자동 출발`,
   });
   return assemble(ACCENT.recruit, image, sections);
 }
