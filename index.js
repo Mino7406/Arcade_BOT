@@ -23,6 +23,7 @@ const { loadRoulette, saveRoulette, handleRouletteButton } = require('./handlers
 const { loadBotMatchXp, saveBotMatchXp } = require('./handlers/봇전한도');
 const { loadRealmRoster, saveRealmRoster } = require('./forms/마크/명단');
 const { startQuizScheduler, handleQuizMessage } = require('./handlers/퀴즈');
+const { handleRaidButton, startRaidScheduler } = require('./handlers/레이드');
 const { handleQuizAdminButton, handleQuizCreateModal } = require('./commands/퀴즈');
 const { buildGameSelectPayload: buildNaejeonGameSelectPayload } = require('./commands/내전');
 const { buildGameSelectPayload: buildMojipGameSelectPayload } = require('./commands/모집');
@@ -325,6 +326,7 @@ async function onReady(c) {
   await reconcileTempChannels(c); // 재시작 전 만들어둔 임시 음성채널 중 빈 방 정리
   await reconcileMatchBonusMessages(c); // 봇이 꺼져있던 동안 인증 채널에 올라와 예약이 빠진 메시지 복구
   startQuizScheduler(c); // 놀이터 채널에 하루 한 번 무작위 시각으로 상식퀴즈를 출제
+  startRaidScheduler(c); // 약 3일마다 놀이터에 긴급 퀘스트(레이드) 몬스터 출현
   dataReady = true;
   logSystem({
     유형: '봇 상태',
@@ -408,6 +410,7 @@ client.on('interactionCreate', async (interaction) => {
       interaction.customId?.startsWith('xp:') ||
       interaction.customId?.startsWith('realm:') ||
       interaction.customId?.startsWith('cobblemon:') ||
+      interaction.customId?.startsWith('raid:') || // 레이드는 출현한 채널(놀이터·테스트 채널)에서 그대로 진행
       interaction.customId?.startsWith('form:');
 
     if (!isChannelExempt && !skipChannelLimits) {
@@ -538,6 +541,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleRealmButton(interaction);
       } else if (interaction.customId.startsWith('cobblemon:')) {
         await handleCobblemonButton(interaction);
+      } else if (interaction.customId.startsWith('raid:')) {
+        await handleRaidButton(interaction);
       }
     }
   } catch (error) {

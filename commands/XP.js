@@ -27,6 +27,7 @@ const {
   setUserXpFrozen,
 } = require('../handlers/레벨링');
 const { logAction } = require('../handlers/로그');
+const { getRaidStatus, forceSpawnRaid, forceEndRaid } = require('../handlers/레이드');
 const { displayNameFromMember } = require('../handlers/이름');
 
 // 한 번에 조정 가능한 XP 폭 / 레벨 상한. 오타로 터무니없는 값이 들어가는 것만 막는 안전장치.
@@ -103,6 +104,7 @@ function buildMenuView() {
 // ── "XP 관리" 패널: 일반파밍/미니게임 긴급정지 + 뉴비부스트 토글 ──
 function buildManageView(notice) {
   const st = getXpState();
+  const raid = getRaidStatus();
   const embed = new EmbedBuilder()
     .setColor(st.farmFrozen || st.minigameFrozen ? 0xED4245 : 0x57F287)
     .setDescription(
@@ -112,7 +114,9 @@ function buildManageView(notice) {
       `**미니게임 XP** ${st.minigameFrozen ? '🔴 정지됨' : '🟢 작동 중'}\n` +
       `-# 오목 · 룰렛 · 틱택토 · 끝말잇기 · 퀴즈\n\n` +
       `**뉴비부스트(×2)** ${st.newbieBoostEnabled ? '🟢 ON' : '⚪ OFF'}\n` +
-      `-# 뉴비부스트 역할의 메인·TTS·통화방 체류 XP 2배` +
+      `-# 뉴비부스트 역할의 메인·TTS·통화방 체류 XP 2배\n\n` +
+      `**긴급 퀘스트** ${raid.active ? `👾 ${raid.monsterName} 진행 중 (${raid.phase === 'recruit' ? '모집' : '전투'})` : '⚪ 대기'}\n` +
+      `-# ${raid.nextSpawnAt ? `다음 자동 출현 <t:${Math.floor(raid.nextSpawnAt / 1000)}:f> (<t:${Math.floor(raid.nextSpawnAt / 1000)}:R>)` : '다음 출현 일정 없음'} · 진행 중엔 채팅·통화방·미니게임 XP 정지` +
       (notice ? `\n\n${notice}` : ''),
     )
     .setTimestamp();
@@ -136,6 +140,11 @@ function buildManageView(notice) {
           .setLabel(st.newbieBoostEnabled ? '뉴비부스트 끄기' : '뉴비부스트 켜기')
           .setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('xp:menu:home').setEmoji('↩️').setLabel('메뉴로').setStyle(ButtonStyle.Secondary),
+      ),
+      new ActionRowBuilder().addComponents(
+        raid.active
+          ? new ButtonBuilder().setCustomId('xp:mng:raidend').setEmoji('🛑').setLabel('긴급 퀘스트 종료').setStyle(ButtonStyle.Danger)
+          : new ButtonBuilder().setCustomId('xp:mng:raid').setEmoji('👾').setLabel('긴급 퀘스트 소환').setStyle(ButtonStyle.Danger),
       ),
     ],
   };
@@ -274,6 +283,18 @@ async function handleXpButton(interaction) {
       await interaction.update(buildManageView(`✅ 뉴비부스트를 **${st.newbieBoostEnabled ? '켰습니다' : '껐습니다'}**.`));
     } else if (targetId === 'farm' || targetId === 'game') {
       await interaction.update(buildConfirmView(targetId));
+    } else if (targetId === 'raid') {
+      // 본서버에서는 놀이터에, 테스트 서버에서는 이 채널에 띄운다(handlers/레이드.js의 forceSpawnRaid).
+      // 출현 메시지 전송을 기다리는 동안 3초 응답 제한을 넘기지 않게 먼저 ack한다.
+      await interaction.deferUpdate();
+      const error = await forceSpawnRaid(interaction);
+      if (!error) logAction(interaction, 'XP 관리', '긴급 퀘스트 수동 소환');
+      await interaction.editReply(buildManageView(error ? `⚠️ ${error}` : '👾 **긴급 퀘스트를 소환했습니다.**'));
+    } else if (targetId === 'raidend') {
+      await interaction.deferUpdate();
+      const ended = await forceEndRaid();
+      if (ended) logAction(interaction, 'XP 관리', '긴급 퀘스트 강제 종료');
+      await interaction.editReply(buildManageView(ended ? '🛑 **긴급 퀘스트를 종료했습니다.** XP 정지도 풀렸습니다.' : '⚠️ 진행 중인 긴급 퀘스트가 없어요.'));
     }
     return;
   }

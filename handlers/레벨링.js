@@ -119,8 +119,15 @@ function setUserXpFrozen(guildId, userId, frozen) {
   saveXpState();
 }
 
+// 긴급 퀘스트(레이드) 중 XP 정지. 관리자 스위치(xpState)와 별개인 메모리 플래그라 /xp 패널의
+// 표시나 저장된 설정을 건드리지 않고, 봇이 재시작되면 자동으로 풀린다(레이드도 재시작 시 끝난다).
+// 범위: 메인·TTS 채팅 XP · 통화방 체류 XP · 미니게임 XP. 내전/모집 완료 보너스는 멈추지 않는다.
+let raidXpFrozen = false;
+function setRaidXpFrozen(frozen) { raidXpFrozen = !!frozen; }
+function isRaidXpFrozen() { return raidXpFrozen; }
+
 function isFarmXpFrozen() { return xpState.farmFrozen; }
-function isMinigameXpFrozen() { return xpState.minigameFrozen; }
+function isMinigameXpFrozen() { return xpState.minigameFrozen || raidXpFrozen; }
 function isNewbieBoostEnabled() { return xpState.newbieBoostEnabled; }
 
 // "뉴비부스트" 역할 보유자에게 곱해줄 배율. 메인/TTS 채널 메시지 XP와 통화방 체류 XP에만 적용하고,
@@ -279,7 +286,7 @@ function xpForLevelStart(level) {
 // 메시지 하나에 대해 쿨다운을 확인하고 XP를 지급. 레벨업 여부를 반환.
 function handleMessageXp(message) {
   if (message.author.bot || !message.guild) return null;
-  if (isFarmXpFrozen()) return null; // 관리자 긴급정지: 일반 파밍 XP 지급 중단
+  if (isFarmXpFrozen() || raidXpFrozen) return null; // 관리자 긴급정지 또는 긴급 퀘스트 진행 중
   const isMainChannel = message.channelId === XP_CHANNEL_ID;
   const isTtsChannel = XP_TTS_CHANNEL_IDS.includes(message.channelId);
   if (!isMainChannel && !isTtsChannel) return null;
@@ -406,7 +413,7 @@ function sweepCooldowns(now = Date.now()) {
 function startVoiceXpTicker(client) {
   setInterval(async () => {
     sweepCooldowns();
-    if (isFarmXpFrozen()) return; // 관리자 긴급정지: 통화방 체류 XP 지급 중단
+    if (isFarmXpFrozen() || raidXpFrozen) return; // 관리자 긴급정지 또는 긴급 퀘스트 진행 중: 통화방 체류 XP 지급 중단
     for (const key of activeVoiceUsers) {
       const [guildId, userId] = key.split(':');
       const guild = client.guilds.cache.get(guildId);
@@ -447,6 +454,8 @@ module.exports = {
   setXpSwitch,
   isFarmXpFrozen,
   isMinigameXpFrozen,
+  setRaidXpFrozen,
+  isRaidXpFrozen,
   isNewbieBoostEnabled,
   isUserXpFrozen,
   setUserXpFrozen,

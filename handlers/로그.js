@@ -196,7 +196,7 @@ function describeXpResult(r) {
     case 'cooldown': return '정산 보류 — 같은 유저 연속 정산 쿨다운';
     case 'bot_daily_cap': return '정산 보류 — 봇전 일일 XP 한도';
     case 'user_frozen': return '정산 보류 — XP 지급 정지 유저';
-    case 'frozen': return '정산 생략 — 미니게임 XP 긴급정지';
+    case 'frozen': return r.raid ? '정산 생략 — 긴급 퀘스트로 XP 정지 중' : '정산 생략 — 미니게임 XP 긴급정지';
     default: return `정산 ${r.type}`;
   }
 }
@@ -243,7 +243,7 @@ function userLabel(userId) {
 // 틱택토 칸(ttt:move:...)은 한 판에 수십 번 눌려 로그가 ⬜ 클릭으로만 가득 차고, 정작
 // 봐야 할 명령어·관리 버튼이 5000개 보관 한도 밖으로 밀려난다. 게임 진행 자체는 승패
 // 결과와 XP 지급 기록으로 충분히 추적되므로 칸 클릭은 남기지 않는다.
-const SKIP_LOG_PREFIXES = ['ttt:move:'];
+const SKIP_LOG_PREFIXES = ['ttt:move:', 'raid:act:']; // 레이드 행동 버튼도 한 판에 수십 번 눌려 같은 이유로 뺀다(결과는 '레이드' 로그로 남음)
 
 // 명령어/버튼/선택 메뉴/모달 제출 등 모든 상호작용을 기록한다.
 // (index.js의 interactionCreate 맨 앞에서, 채널 제한 등 다른 처리보다 먼저 호출 —
