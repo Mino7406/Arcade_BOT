@@ -59,7 +59,7 @@ function rr(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 // 이모지는 그림 폰트에 없어 네모로 나오므로 그림에 넣는 글자에서는 뺀다.
-const stripEmoji = (s) => String(s).replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '').trim();
+const stripEmoji = (s) => String(s).replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '').replace(/ {2,}/g, ' ').trim();
 function text(ctx, s, x, y, { size = 16, bold = false, color = C.text, align = 'center', maxWidth } = {}) {
   ctx.font = `${size}px ${bold ? 'RaidKRB' : 'RaidKR'}`;
   ctx.fillStyle = color;
