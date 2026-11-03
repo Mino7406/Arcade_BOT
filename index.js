@@ -661,7 +661,17 @@ setInterval(() => {
 // 타이머 콜백(예: 끝말잇기 턴 타이머)에서 예외가 나면 uncaughtException으로 프로세스가
 // 그대로 종료돼, 진행 중이던 게임 임베드가 전부 '진행 중'인 채 얼어붙고 아무 반응도
 // 하지 않게 된다. 원인은 로그로 남기되 프로세스는 계속 살려둔다.
+// 단, ws의 'Opening handshake has timed out'은 예외: @discordjs/ws가 재연결 도중 아직 접속 중인
+// 소켓을 버리면서 onerror만 떼고 닫지는 않아, 30초 뒤 그 소켓의 핸드셰이크 타임아웃이 리스너 없는
+// 'error'로 터진다(최신 2.x도 동일). 새 연결은 따로 진행 중이라 봇엔 영향이 없으니 한 줄 경고로만 남긴다.
+function isOrphanedHandshakeTimeout(err) {
+  return err?.message === 'Opening handshake has timed out' && /[\\/]ws[\\/]lib[\\/]websocket\.js/.test(err.stack ?? '');
+}
 process.on('uncaughtException', (err) => {
+  if (isOrphanedHandshakeTimeout(err)) {
+    diagWarn('🔌 버려진 게이트웨이 소켓 핸드셰이크 타임아웃 (무시됨)');
+    return;
+  }
   console.error('처리되지 않은 예외:', err);
   logError('치명 오류', '처리되지 않은 예외(uncaughtException) — 봇은 계속 실행 중', err);
 });
