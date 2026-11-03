@@ -347,10 +347,19 @@ function renderBattle(r) {
       // 숫자는 바 가운데 — 그 자리까지 색이 차 있으면 어두운 글씨, 비어 있으면 흰 글씨로 대비를 맞춘다
       text(String(mem.hp), x + w / 2, y + 171, 16, ratio > 0.55 ? '#14110d' : '#ffffff');
 
-      // 지난 턴 행동: 상자 없이 글자만, 치명타만 색으로 강조
+      // 지난 턴 행동: 글자만. 치명타면 수치를 밝게 하고 옆에 '치명타' 배지를 붙여 강조한다.
       const actData = last?.acts[mem.userId];
       const act = actLabel(actData);
-      if (act) text(actData.crit ? `${act} 치명타` : act, x + w / 2, y + 204, 19, actData.crit ? '#ffb347' : '#cbbd9f', { maxWidth: w - 24 });
+      if (act && actData.crit) {
+        const aw = Math.min(p.textWidth(B(), act, 19), w - 96);
+        const bw = p.textWidth(B(), '치명타', 15) + 16, gap = 8;
+        const left = x + w / 2 - (aw + gap + bw) / 2;
+        text(act, left + aw / 2, y + 204, 19, '#ffe0a8', { maxWidth: w - 96 });
+        p.roundRect(left + aw + gap, y + 192, bw, 24, 6, '#e8761c');
+        text('치명타', left + aw + gap + bw / 2, y + 204, 15, '#2a1204');
+      } else if (act) {
+        text(act, x + w / 2, y + 204, 19, '#cbbd9f', { maxWidth: w - 24 });
+      }
 
       // 스킬·회복약: 작은 표시(스킬 칩 + 회복약 동그라미 2개)
       const gx = x + w / 2 - 50;
@@ -422,6 +431,7 @@ function warmUpLabels(monsters) {
   add('bold', '긴급 퀘스트 발생!', 46);
   add('bold', '타겟 몬스터', 22);
   add('bold', '다음 행동', 16);
+  add('bold', '치명타', 15);
   add('bold', '분노', 22);
   add('bold', '보상 없음', 20);
   for (const v of ['참가 완료', '참가 대기']) add('bold', v, 22);
