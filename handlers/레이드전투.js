@@ -50,6 +50,9 @@ const ACTIONS = {
 // 지금은 임시 몬스터 하나뿐. 새 몬스터는 같은 모양으로 배열에 추가하면 출현 시 무작위로 고른다.
 // moves의 키(attack/sweep/charge/smash)는 전투 규칙이 쓰는 행동 종류라 그대로 두고 이름·대사만 바꾼다.
 // - target: 'single'(한 명) | 'all'(전원) | 'none'(피해 없음, charge 전용 — 다음 턴 smash 예고)
+// - sprite: 레이드 패널 그림(handlers/레이드그림.js)에 그릴 픽셀 아트. rows의 각 글자가 palette 색 한 칸('.'은 투명),
+//   glitchRows에 적은 줄은 옆으로 살짝 밀어 그린다. rageColors는 분노 시 바꿔 칠할 색.
+//   그림 파일을 쓰고 싶으면 sprite 대신 image: 'assets/파일.png'를 넣으면 그 그림을 그린다.
 const MONSTERS = [
   {
     id: 'glitch',
@@ -57,6 +60,27 @@ const MONSTERS = [
     emoji: '👾',
     rageName: '폭주한 글리치 슬라임',
     lore: 'XP 서버에 침입한 버그 덩어리. 이 녀석이 날뛰는 동안 XP가 쌓이지 않는다!',
+    sprite: {
+      rows: [
+        '......aaaaaa......',
+        '....aabbbbbbaa....',
+        '...abbbbbbbbbba...',
+        '..abbbbbbbbbbbba..',
+        '..abbwwbbbbwwbba..',
+        '.abbbwkbbbbwkbbba.',
+        '.abbbkkbbbbkkbbba.',
+        'abbbbbbbbbbbbbbbba',
+        'abbccbbbmmbbbccbba',
+        'abbbbbbbbbbbbbbbba',
+        'agggbbbbbbbbbbggga',
+        '.abbbbgggggbbbbba.',
+        '..aaabbbbbbbbaaa..',
+        '.....aaaaaaaa.....',
+      ],
+      palette: { a: '#2b1b4a', b: '#7c4dff', c: '#ff5c8a', w: '#ffffff', k: '#111111', m: '#1a1033', g: '#36f2c8' },
+      rageColors: { a: '#4a1010', b: '#e5383b', g: '#ffb703' },
+      glitchRows: [3, 9],
+    },
     baseHp: 4400,
     moves: {
       attack: { name: '몸통 박치기', telegraph: '몸을 잔뜩 웅크린다', target: 'single', damage: [20, 26] },

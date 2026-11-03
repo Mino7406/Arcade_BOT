@@ -1,18 +1,27 @@
 // 레이드.js — 긴급 퀘스트(레이드): 약 3일마다 놀이터에 몬스터가 출현해 XP 시스템을 멈춰 세우고,
-// 4인 선착순 파티가 턴제로 토벌하면 다시 풀린다. 전투 규칙·몬스터 데이터는 레이드전투.js에 있고,
-// 이 파일은 출현 스케줄·임베드 화면·버튼·타이머·XP 정지/보상을 맡는다.
+// 4인 선착순 파티가 턴제로 토벌하면 다시 풀린다. 전투 규칙·몬스터 데이터는 레이드전투.js, 패널 그림은
+// 레이드그림.js에 있고, 이 파일은 출현 스케줄·화면 조립·버튼·타이머·XP 정지/보상을 맡는다.
 //
 // 흐름: 출현(XP 정지) → 모집 10분(역할 선택, 4명 차면 즉시 시작) → 턴제 전투(제한 10분)
 //       → 토벌 성공(보상 XP) / 전멸·시간 초과·무참가(몬스터 도주) → XP 정지 해제.
 //
+// 화면: Components V2 컨테이너 하나. 맨 위에 패널 그림(몬스터 + 파티 카드 4장), 그 아래 실시간 타이머
+// (<t:..:R> — 디스코드 앱이 알아서 줄여 보여줘 봇이 고칠 필요가 없다), 선택 현황, 지난 턴 기록, 버튼.
+// 그림은 판이 바뀔 때(참가자 변동·턴 진행·종료)만 새로 그려 올리고, 클릭마다 바뀌는 선택 현황은
+// 글자만 고친다(지난번 올린 그림 주소 r.imageUrl을 재사용) — 그래서 버튼 반응은 업로드 없이 즉시다.
+// 그림을 못 그리는 환경(라이브러리·폰트 없음)이면 같은 정보를 글자로 대신 보여준다.
+//
 // 반응 속도: 버튼 응답(interaction.update)으로 바로 화면을 고친다. 마지막 파티원이 행동을 고르면
-// 그 응답 안에서 턴을 계산해 결과까지 한 번에 그리므로, 별도 메시지 수정 요청이 없다. 타이머로
-// 넘어가는 턴(늦게 고른 경우)만 message.edit을 쓴다. 남은 시간은 디스코드 시간 표시(<t:..:R>)가
-// 알아서 줄어들게 해 매초 수정하지 않는다. 전투 상태는 메모리에만 두고 시작/끝에만 저장한다.
+// 그 응답 안에서 턴을 계산해 결과까지 한 번에 그린다. 타이머로 넘어가는 턴만 message.edit을 쓴다.
+// 전투 상태는 메모리에만 두고 시작/끝에만 저장한다.
 
 const fs = require('fs');
 const path = require('path');
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
+const {
+  ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, AttachmentBuilder,
+  ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, SeparatorSpacingSize, MediaGalleryBuilder, MediaGalleryItemBuilder,
+  ComponentType, EmbedBuilder,
+} = require('discord.js');
 const { applyXp, isExcludedGuild, announceLevelUp, setRaidXpFrozen } = require('./레벨링');
 const { KST_OFFSET_MS } = require('./시간');
 const { GUILD_ID, PLAYGROUND_CHANNEL_ID } = require('../config');
@@ -21,8 +30,9 @@ const { writeJsonIfChanged } = require('./저장');
 const { displayNameFromInteraction } = require('./이름');
 const {
   PLAYER_MAX_HP, ROLES, ROLE_ORDER, ACTIONS, MONSTERS,
-  createBattle, getMember, checkChoice, choose, allChosen, resolveTurn,
+  createBattle, checkChoice, choose, allChosen, resolveTurn,
 } = require('./레이드전투');
+const { renderRecruit, renderBattle, renderEnd } = require('./레이드그림');
 
 // ── 설정 ────────────────────────────────────────────────────────
 const SPAWN_INTERVAL_DAYS = 3;     // 출현 주기(일). 출현한 날로부터 이만큼 뒤의 날, 아래 시간대 중 무작위 시각
@@ -35,12 +45,13 @@ const PARTY_MAX = 4;
 const CLEAR_XP = 300;               // 토벌 성공 시 파티원 1인당
 const MVP_BONUS_XP = 100;           // 가장 많은 피해를 준 파티원 추가 보상
 const SCHEDULER_TICK_MS = 60 * 1000;
+const IMAGE_NAME = 'raid.png';
 
 const STATE_PATH = path.join(__dirname, '..', 'DB', 'raid.json');
 
 // 디스크 상태: { nextSpawnAt, active: { guildId, channelId, messageId } | null }
 // active는 "재시작 직전에 진행 중이던 레이드" 표시용이다. 전투 자체는 저장하지 않으므로, 켜질 때
-// 남아 있으면 그 메시지를 '봇 점검으로 도망쳤다'로 정리한다(XP 정지는 메모리 플래그라 자동으로 풀린다).
+// 남아 있으면 그 메시지를 '봇 점검으로 사라졌다'로 정리한다(XP 정지는 메모리 플래그라 자동으로 풀린다).
 function loadState() {
   try {
     if (fs.existsSync(STATE_PATH)) return JSON.parse(fs.readFileSync(STATE_PATH, 'utf8'));
@@ -92,6 +103,8 @@ function rescheduleOverdue(now = Date.now()) {
 
 // ── 화면 ────────────────────────────────────────────────────────
 const ts = (ms, style = 'R') => `<t:${Math.floor(ms / 1000)}:${style}>`;
+const ACCENT = { recruit: 0xED4245, battle: 0xD9A93F, rage: 0xED4245, clear: 0x57F287, end: 0x4E5058 };
+
 function bar(value, max, length) {
   const filled = Math.max(0, Math.min(length, Math.round((value / max) * length)));
   return '▰'.repeat(filled) + '▱'.repeat(length - filled);
@@ -100,108 +113,170 @@ function freezeNotice(r) {
   return r.freezesXp ? '\n> 🔧 **XP 시스템 고장!** 놀이터 미니게임 · 통화방 · 채팅 XP가 멈췄습니다.' : '';
 }
 
-function buildRecruitPayload(r) {
+// 컨테이너 하나 + (그림이 있으면) 맨 위 미디어 갤러리. sections: [{ text } | { separator } | { row }]
+// image: { png } 새 그림 첨부 / { url } 지난번 올린 그림 재사용 / null 그림 없음.
+function assemble(accent, image, sections) {
+  const container = new ContainerBuilder().setAccentColor(accent);
+  const mediaUrl = image?.png ? `attachment://${IMAGE_NAME}` : image?.url;
+  if (mediaUrl) {
+    container.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(mediaUrl)));
+  }
+  for (const s of sections) {
+    if (s.text) container.addTextDisplayComponents(new TextDisplayBuilder().setContent(s.text));
+    else if (s.separator) container.addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
+    else if (s.row) container.addActionRowComponents(s.row);
+  }
+  const payload = { components: [container], flags: MessageFlags.IsComponentsV2, allowedMentions: { parse: [] } };
+  // 새 그림을 올릴 때는 이전 첨부를 지우고 교체한다. 글자만 고칠 때는 첨부를 건드리지 않아 기존 그림이 남는다.
+  if (image?.png) { payload.files = [new AttachmentBuilder(image.png, { name: IMAGE_NAME })]; payload.attachments = []; }
+  else if (image === null) payload.attachments = [];
+  return payload;
+}
+
+// redraw면 새로 그리고, 아니면 지난번 그림을 재사용한다. 그림을 못 그리면 null(글자 화면).
+// 재사용할 때 디스코드 그림 주소를 못 읽어왔으면 첨부 파일 이름으로 가리킨다(첨부는 그대로 남아 있다).
+function pickImage(r, redraw, render) {
+  if (!redraw) {
+    if (r.imageUrl) return { url: r.imageUrl };
+    return r.hasImage ? { url: `attachment://${IMAGE_NAME}` } : null;
+  }
+  const png = render();
+  r.hasImage = !!png;
+  return png ? { png } : null;
+}
+
+// 보낸/고친 메시지에서 디스코드가 붙여준 그림 주소를 기억해, 다음 글자만 고치는 응답에 재사용한다.
+function rememberImageUrl(r, message) {
+  try {
+    const container = message?.components?.[0]?.toJSON?.();
+    const gallery = container?.components?.find(c => c.type === ComponentType.MediaGallery);
+    r.imageUrl = gallery?.items?.[0]?.media?.url ?? null;
+  } catch {
+    r.imageUrl = null;
+  }
+}
+
+function recruitView(r, { redraw = true } = {}) {
+  const image = pickImage(r, redraw, () => renderRecruit(r));
   const m = r.monster;
-  const lines = ROLE_ORDER.map(roleKey => {
-    const role = ROLES[roleKey];
-    const p = r.party.find(x => x.role === roleKey);
-    return `${role.emoji} **${role.name}** — ${p ? `**${p.name}**` : '*빈자리*'}\n-# ✨ ${role.skill.name}: ${role.skill.desc}`;
+  const sections = [];
+  if (!image) {
+    // 그림이 없을 때는 그림에 있던 정보(몬스터·파티 자리)를 글자로 대신한다.
+    sections.push({
+      text: `# 🚨 긴급 퀘스트 발생!\n## ${m.emoji} ${m.name} 출현!\n${m.lore}\n\n` +
+        ROLE_ORDER.map(k => {
+          const p = r.party.find(x => x.role === k);
+          return `${ROLES[k].emoji} **${ROLES[k].name}** — ${p ? `**${p.name}**` : '*빈자리*'}\n-# ✨ ${ROLES[k].skill.name}: ${ROLES[k].skill.desc}`;
+        }).join('\n'),
+    });
+  }
+  sections.push({
+    text: `## ⏳ 모집 마감 ${ts(r.recruitEndsAt)}\n파티 **${r.party.length}/${PARTY_MAX}** · 4명이 모이면 바로 출발해요${freezeNotice(r)}`,
   });
-  const embed = new EmbedBuilder()
-    .setColor(0xED4245)
-    .setDescription(
-      `# 🚨 긴급 퀘스트 발생!\n` +
-      `## ${m.emoji} ${m.name} 출현!\n` +
-      `${m.lore}${freezeNotice(r)}\n\n` +
-      `**토벌 파티 모집 (${r.party.length}/${PARTY_MAX})** · 마감 ${ts(r.recruitEndsAt)}\n` +
-      `-# 역할 버튼을 눌러 참가하세요. 4명이 모이면 바로 출발합니다.\n\n` +
-      lines.join('\n') +
-      `\n\n-# 토벌 성공 시 파티원 전원 +${CLEAR_XP} XP · 최다 피해 MVP +${MVP_BONUS_XP} XP`,
-    );
-  const roleRow = new ActionRowBuilder().addComponents(
-    ...ROLE_ORDER.map(roleKey => {
-      const role = ROLES[roleKey];
-      const taken = r.party.find(x => x.role === roleKey);
-      return new ButtonBuilder()
-        .setCustomId(`raid:role:${roleKey}`)
-        .setEmoji(role.emoji)
-        .setLabel(taken ? `${role.name} · ${taken.name}`.slice(0, 80) : role.name)
-        .setStyle(taken ? ButtonStyle.Secondary : ButtonStyle.Primary)
-        .setDisabled(!!taken);
-    }),
-  );
-  const miscRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('raid:leave').setLabel('참가 취소').setStyle(ButtonStyle.Secondary).setDisabled(r.party.length === 0),
-    new ButtonBuilder().setCustomId('raid:help').setEmoji('❔').setLabel('플레이 방법').setStyle(ButtonStyle.Secondary),
-  );
-  return { content: '', embeds: [embed], components: [roleRow, miscRow] };
-}
-
-function memberLine(b, mem) {
-  const role = ROLES[mem.role];
-  let status;
-  if (mem.hp <= 0) status = '💀 쓰러짐';
-  else if (mem.choice) status = '✅ 선택 완료';
-  else status = '⏳ 선택 중';
-  const skill = mem.cooldown > 0 ? `✨${mem.cooldown}턴` : '✨준비';
-  return `${role.emoji} **${mem.name}** \`${bar(mem.hp, PLAYER_MAX_HP, 8)}\` ${mem.hp}/${PLAYER_MAX_HP} · ${status}\n-# ${skill} · 🍖×${mem.potions}`;
-}
-
-function buildBattlePayload(r) {
-  const b = r.battle;
-  const m = b.monster;
-  const intent = m.moves[b.intent];
-  const name = b.rage ? `🔥 ${m.rageName}` : `${m.emoji} ${m.name}`;
-  const intentHint = b.intent === 'smash' ? ' — **방어 추천!**' : (b.intent === 'attack' ? ' — 한 명을 노린다' : '');
-  const embed = new EmbedBuilder()
-    .setColor(b.rage ? 0xED4245 : 0xFEE75C)
-    .setDescription(
-      `## ${name}\n` +
-      `\`${bar(b.hp, b.maxHp, 16)}\` **${b.hp.toLocaleString()}** / ${b.maxHp.toLocaleString()}\n` +
-      `⚠️ 다음 행동: **${intent.telegraph}**${intentHint}\n\n` +
-      `**턴 ${b.turn}** · 행동 마감 ${ts(r.turnEndsAt)} · 전투 종료 ${ts(r.battleEndsAt)}${freezeNotice(r)}\n\n` +
-      b.members.map(mem => memberLine(b, mem)).join('\n') +
-      (b.log.length ? `\n\n**📜 지난 턴**\n${b.log.join('\n')}` : ''),
-    );
-  const row = new ActionRowBuilder().addComponents(
-    ...Object.entries(ACTIONS).map(([key, a]) =>
-      new ButtonBuilder()
-        .setCustomId(`raid:act:${key}`)
-        .setEmoji(a.emoji)
-        .setLabel(a.name)
-        .setStyle(key === 'attack' ? ButtonStyle.Danger : key === 'skill' ? ButtonStyle.Primary : key === 'potion' ? ButtonStyle.Success : ButtonStyle.Secondary),
+  sections.push({ separator: true });
+  sections.push({
+    row: new ActionRowBuilder().addComponents(
+      ...ROLE_ORDER.map(roleKey => {
+        const role = ROLES[roleKey];
+        const taken = r.party.find(x => x.role === roleKey);
+        return new ButtonBuilder()
+          .setCustomId(`raid:role:${roleKey}`)
+          .setEmoji(role.emoji)
+          .setLabel(taken ? `${role.name} · ${taken.name}`.slice(0, 80) : `${role.name} 참가`)
+          .setStyle(taken ? ButtonStyle.Secondary : ButtonStyle.Primary)
+          .setDisabled(!!taken);
+      }),
     ),
-    new ButtonBuilder().setCustomId('raid:help').setEmoji('❔').setStyle(ButtonStyle.Secondary),
-  );
-  return { content: '', embeds: [embed], components: [row] };
+  });
+  sections.push({
+    row: new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('raid:leave').setLabel('참가 취소').setStyle(ButtonStyle.Secondary).setDisabled(r.party.length === 0),
+      new ButtonBuilder().setCustomId('raid:help').setEmoji('❔').setLabel('플레이 방법').setStyle(ButtonStyle.Secondary),
+    ),
+  });
+  sections.push({ text: `-# 토벌 성공 시 파티원 전원 +${CLEAR_XP} XP · 최다 피해 MVP +${MVP_BONUS_XP} XP` });
+  return assemble(ACCENT.recruit, image, sections);
+}
+
+function memberStatus(mem) {
+  if (mem.hp <= 0) return `💀 ${mem.name}`;
+  return `${mem.choice ? '✅' : '⏳'} ${mem.name}`;
+}
+
+function battleView(r, { redraw = true } = {}) {
+  const b = r.battle;
+  const image = pickImage(r, redraw, () => renderBattle(r));
+  const m = b.monster;
+  const sections = [];
+  if (!image) {
+    const intent = m.moves[b.intent];
+    sections.push({
+      text: `## ${b.rage ? `🔥 ${m.rageName}` : `${m.emoji} ${m.name}`}\n` +
+        `\`${bar(b.hp, b.maxHp, 16)}\` **${b.hp.toLocaleString()}** / ${b.maxHp.toLocaleString()}\n` +
+        `⚠️ 다음 행동: **${intent.telegraph}**${b.intent === 'smash' ? ' — **방어 추천!**' : ''}\n\n` +
+        b.members.map(mem => `${ROLES[mem.role].emoji} **${mem.name}** \`${bar(mem.hp, PLAYER_MAX_HP, 8)}\` ${mem.hp}/${PLAYER_MAX_HP}` +
+          ` · ✨${mem.cooldown > 0 ? `${mem.cooldown}턴` : '준비'} · 🍖×${mem.potions}`).join('\n'),
+    });
+  }
+  sections.push({
+    text: `## ⏳ 행동 마감 ${ts(r.turnEndsAt)}\n` +
+      `-# 턴 ${b.turn} · 전투 종료 ${ts(r.battleEndsAt)}${r.freezesXp ? ' · 🔧 XP 정지 중' : ''}\n` +
+      b.members.map(memberStatus).join('　'),
+  });
+  if (b.log.length) {
+    sections.push({ separator: true });
+    sections.push({ text: `**📜 지난 턴**\n${b.log.join('\n')}` });
+  }
+  sections.push({ separator: true });
+  sections.push({
+    row: new ActionRowBuilder().addComponents(
+      ...Object.entries(ACTIONS).map(([key, a]) =>
+        new ButtonBuilder()
+          .setCustomId(`raid:act:${key}`)
+          .setEmoji(a.emoji)
+          .setLabel(a.name)
+          .setStyle(key === 'attack' ? ButtonStyle.Danger : key === 'skill' ? ButtonStyle.Primary : key === 'potion' ? ButtonStyle.Success : ButtonStyle.Secondary),
+      ),
+      new ButtonBuilder().setCustomId('raid:help').setEmoji('❔').setStyle(ButtonStyle.Secondary),
+    ),
+  });
+  return assemble(b.rage ? ACCENT.rage : ACCENT.battle, image, sections);
 }
 
 const OUTCOME_TEXT = {
-  clear:   { title: '🎉 QUEST CLEAR', color: 0x57F287 },
-  wipe:    { title: '☠️ 파티 전멸… 몬스터가 도망쳤다', color: 0x2B2D31 },
-  timeout: { title: '💨 시간 초과… 몬스터가 도망쳤다', color: 0x2B2D31 },
-  noshow:  { title: '💨 아무도 오지 않아 몬스터가 사라졌다', color: 0x2B2D31 },
-  restart: { title: '💨 봇 점검으로 몬스터가 사라졌다', color: 0x2B2D31 },
-  admin:   { title: '🛑 관리자가 긴급 퀘스트를 종료했다', color: 0x2B2D31 },
+  clear:   '🎉 QUEST CLEAR',
+  wipe:    '☠️ 파티 전멸… 몬스터가 도망쳤다',
+  timeout: '💨 시간 초과… 몬스터가 도망쳤다',
+  noshow:  '💨 아무도 오지 않아 몬스터가 사라졌다',
+  restart: '💨 봇 점검으로 몬스터가 사라졌다',
+  admin:   '🛑 관리자가 긴급 퀘스트를 종료했다',
 };
 
-function buildEndPayload(r, outcome, rewards = []) {
-  const o = OUTCOME_TEXT[outcome];
+function endView(r, outcome, rewards = []) {
+  const image = pickImage(r, true, () => renderEnd(r, outcome, rewards));
   const b = r.battle;
-  const m = r.monster;
-  let body = `# ${o.title}\n## ${m.emoji} ${m.name}\n`;
-  if (b) {
-    body += `남은 HP **${b.hp.toLocaleString()}** / ${b.maxHp.toLocaleString()} · ${b.turn}턴\n\n`;
-    body += b.members.map(mem => {
-      const reward = rewards.find(x => x.userId === mem.userId);
-      const xp = reward ? ` · **+${reward.xp} XP**${reward.mvp ? ' 👑MVP' : ''}` : '';
-      const idle = outcome === 'clear' && !reward ? ' · *(직접 행동하지 않아 보상 없음)*' : '';
-      return `${ROLES[mem.role].emoji} **${mem.name}** — 피해 ${mem.damage.toLocaleString()} · 회복 ${mem.healing}${xp}${idle}`;
-    }).join('\n');
-    if (b.log.length) body += `\n\n**📜 마지막 턴**\n${b.log.join('\n')}`;
+  const sections = [];
+  if (!image) {
+    let body = `# ${OUTCOME_TEXT[outcome]}\n## ${r.monster.emoji} ${r.monster.name}\n`;
+    if (b) {
+      body += `남은 HP **${b.hp.toLocaleString()}** / ${b.maxHp.toLocaleString()} · ${b.turn}턴\n\n` +
+        b.members.map(mem => {
+          const reward = rewards.find(x => x.userId === mem.userId);
+          const xp = reward ? ` · **+${reward.xp} XP**${reward.mvp ? ' 👑MVP' : ''}` : '';
+          const idle = outcome === 'clear' && !reward ? ' · *(직접 행동하지 않아 보상 없음)*' : '';
+          return `${ROLES[mem.role].emoji} **${mem.name}** — 피해 ${mem.damage.toLocaleString()} · 회복 ${mem.healing}${xp}${idle}`;
+        }).join('\n');
+    }
+    sections.push({ text: body });
+  } else {
+    sections.push({ text: `## ${OUTCOME_TEXT[outcome]}` });
   }
-  if (r.freezesXp) body += `\n\n> 🔧 **XP 시스템이 복구되었습니다!**`;
-  return { content: '', embeds: [new EmbedBuilder().setColor(o.color).setDescription(body).setTimestamp()], components: [] };
+  if (b?.log.length) {
+    sections.push({ separator: true });
+    sections.push({ text: `**📜 마지막 턴**\n${b.log.join('\n')}` });
+  }
+  if (r.freezesXp) sections.push({ text: '> 🔧 **XP 시스템이 복구되었습니다!**' });
+  return assemble(outcome === 'clear' ? ACCENT.clear : ACCENT.end, image, sections);
 }
 
 function buildHelpText() {
@@ -219,20 +294,32 @@ function buildHelpText() {
   ].join('\n');
 }
 
-// ── 진행 ────────────────────────────────────────────────────────
-function clearTimer(r) {
-  if (r.timer) clearTimeout(r.timer);
-  r.timer = null;
+// ── 응답 ────────────────────────────────────────────────────────
+// 새 그림을 올린 응답이면 메시지를 돌려받아 그림 주소를 기억한다.
+async function respond(r, interaction, payload) {
+  if (!payload.files) {
+    await interaction.update(payload);
+    return;
+  }
+  const res = await interaction.update({ ...payload, withResponse: true });
+  rememberImageUrl(r, res?.resource?.message);
 }
 
 async function editRaidMessage(r, payload) {
   try {
-    await r.message.edit(payload);
+    const message = await r.message.edit(payload);
+    if (payload.files || payload.attachments) rememberImageUrl(r, message);
     return true;
   } catch (err) {
     console.error('레이드 메시지 수정 실패:', err);
     return false;
   }
+}
+
+// ── 진행 ────────────────────────────────────────────────────────
+function clearTimer(r) {
+  if (r.timer) clearTimeout(r.timer);
+  r.timer = null;
 }
 
 // 레이드를 띄운다. channel: 출현할 채널. 실패하면 사유 문구, 성공하면 null.
@@ -246,6 +333,7 @@ async function spawnRaid(client, channel, { forced = false } = {}) {
     guildId: channel.guildId,
     channelId: channel.id,
     message: null,
+    imageUrl: null,
     phase: 'recruit',
     party: [], // { userId, name, role }
     recruitEndsAt: now + RECRUIT_MS,
@@ -258,7 +346,8 @@ async function spawnRaid(client, channel, { forced = false } = {}) {
   };
   raid = r;
   try {
-    r.message = await channel.send(buildRecruitPayload(r));
+    r.message = await channel.send(recruitView(r));
+    rememberImageUrl(r, r.message);
   } catch (err) {
     raid = null;
     console.error('레이드 출현 메시지 전송 실패:', err);
@@ -286,13 +375,12 @@ async function onRecruitEnd(r) {
 function startBattle(r) {
   clearTimer(r);
   r.phase = 'battle';
-  const now = Date.now();
   r.party.sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role)); // 화면에 역할 순서대로
   r.battle = createBattle(r.monster, r.party);
-  r.battleEndsAt = now + BATTLE_LIMIT_MS;
+  r.battleEndsAt = Date.now() + BATTLE_LIMIT_MS;
   armTurnTimer(r);
   logSystem({ 유형: '레이드', 내용: `전투 시작 — ${r.party.map(p => `${p.name}(${ROLES[p.role].name})`).join(', ')} / HP ${r.battle.maxHp}` });
-  return buildBattlePayload(r);
+  return battleView(r);
 }
 
 function armTurnTimer(r) {
@@ -315,7 +403,7 @@ function advanceTurn(r) {
   if (outcome) return finishRaid(r, outcome);
   if (Date.now() >= r.battleEndsAt) return finishRaid(r, 'timeout');
   armTurnTimer(r);
-  return buildBattlePayload(r);
+  return battleView(r);
 }
 
 // 레이드를 끝내고 결과 화면을 돌려준다. XP 정지 해제 · 보상 지급 · 상태 저장 · 복구 안내까지 처리.
@@ -343,7 +431,7 @@ function finishRaid(r, outcome) {
 
   logSystem({
     유형: '레이드',
-    내용: `긴급 퀘스트 종료 — ${r.monster.name} / ${OUTCOME_TEXT[outcome].title}` +
+    내용: `긴급 퀘스트 종료 — ${r.monster.name} / ${OUTCOME_TEXT[outcome]}` +
       (r.battle ? ` / ${r.battle.turn}턴, 남은 HP ${r.battle.hp}/${r.battle.maxHp}` : '') +
       (rewards.length ? ` / 보상: ${rewards.map(x => `${userLabel(x.userId)} +${x.xp}`).join(', ')}` : ''),
   });
@@ -352,7 +440,7 @@ function finishRaid(r, outcome) {
   if (r.freezesXp && r.message?.channel) {
     r.message.channel.send({ content: '🔧 **XP 시스템이 다시 작동합니다!**', allowedMentions: { parse: [] } }).catch(() => {});
   }
-  return buildEndPayload(r, outcome, rewards);
+  return endView(r, outcome, rewards);
 }
 
 // ── 버튼 ('raid:' 프리픽스) ─────────────────────────────────────
@@ -383,7 +471,7 @@ async function handleRaidButton(interaction) {
         return;
       }
       r.party = r.party.filter(p => p.userId !== userId);
-      await interaction.update(buildRecruitPayload(r));
+      await respond(r, interaction, recruitView(r));
       return;
     }
     if (!ROLES[arg]) return;
@@ -401,7 +489,7 @@ async function handleRaidButton(interaction) {
       r.party.push({ userId, name: displayNameFromInteraction(interaction), role: arg });
     }
     // 4명이 차면 모집 시간이 남아 있어도 바로 출발한다(같은 응답 안에서 전투 화면으로 바꾼다).
-    await interaction.update(r.party.length >= PARTY_MAX ? startBattle(r) : buildRecruitPayload(r));
+    await respond(r, interaction, r.party.length >= PARTY_MAX ? startBattle(r) : recruitView(r));
     return;
   }
 
@@ -416,8 +504,9 @@ async function handleRaidButton(interaction) {
       return;
     }
     choose(r.battle, interaction.user.id, arg);
-    // 마지막 사람이 고르면 이 응답 안에서 턴을 처리해 결과까지 바로 그린다.
-    await interaction.update(allChosen(r.battle) ? advanceTurn(r) : buildBattlePayload(r));
+    // 마지막 사람이 고르면 이 응답 안에서 턴을 처리해 결과까지 바로 그린다(새 그림).
+    // 아직 남았으면 선택 현황 글자만 고친다(그림 업로드 없음 → 즉시 반응).
+    await respond(r, interaction, allChosen(r.battle) ? advanceTurn(r) : battleView(r, { redraw: false }));
   }
 }
 
@@ -430,8 +519,11 @@ async function recoverInterruptedRaid(client) {
   const channel = await client.channels.fetch(active.channelId).catch(() => null);
   const message = channel && await channel.messages.fetch(active.messageId).catch(() => null);
   if (!message) return;
-  const ghost = { monster: MONSTERS[0], battle: null, freezesXp: false };
-  await message.edit(buildEndPayload(ghost, 'restart')).catch(() => {});
+  const ghost = { monster: MONSTERS[0], battle: null, party: [], freezesXp: false, imageUrl: null };
+  // 예전 버전(임베드)으로 띄운 메시지는 V2로 바꿀 수 없을 수 있어, 실패하면 임베드로 정리한다.
+  await message.edit(endView(ghost, 'restart')).catch(() =>
+    message.edit({ embeds: [new EmbedBuilder().setColor(ACCENT.end).setDescription(`# ${OUTCOME_TEXT.restart}`)], components: [] }).catch(() => {}),
+  );
 }
 
 async function spawnScheduled(client) {
