@@ -180,11 +180,10 @@ async function recruitView(r, { redraw = true } = {}) {
         }).join('\n'),
     });
   }
-  // 큰 타이머 → 파티 인원과 할 일 → 도주 조건, 한 줄에 하나씩
+  // 큰 타이머 → 파티 인원과 할 일, 한 줄에 하나씩
   sections.push({
     text: `## ⏳ ${clock(r.recruitEndsAt, true)}\n` +
-      `**파티 ${r.party.length} / ${PARTY_MAX}** · 역할 버튼을 눌러 참가하세요\n` +
-      `-# ${Math.round(RECRUIT_MS / 3600000) || 1}시간 안에 아무도 참가하지 않으면 몬스터가 도망쳐요${image ? '' : freezeNotice(r)}`,
+      `**파티 ${r.party.length} / ${PARTY_MAX}** · 역할 버튼을 눌러 참가하세요${image ? '' : freezeNotice(r)}`,
   });
   sections.push({
     row: new ActionRowBuilder().addComponents(

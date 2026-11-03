@@ -100,6 +100,13 @@ function drawPixels(sp, cx, cy, px, { dim = false, colors = null } = {}) {
     p.rect(x0, y0, Math.round(cx - w / 2 + (x + 1) * px + shift) - x0, Math.round(cy - h / 2 + (y + 1) * px) - y0, color);
   }));
 }
+// 이름 끝 글자 받침에 따라 '이'/'가'(한글이 아니면 '이(가)')
+function subjectJosa(name) {
+  const code = String(name).trim().slice(-1).charCodeAt(0) - 0xAC00;
+  if (code < 0 || code > 11171) return '이(가)';
+  return code % 28 ? '이' : '가';
+}
+
 function grayOf(hex, k) {
   const v = Math.round((parseInt(hex.slice(1, 3), 16) * 0.3 + parseInt(hex.slice(3, 5), 16) * 0.59 + parseInt(hex.slice(5, 7), 16) * 0.11) * k);
   const g = v.toString(16).padStart(2, '0');
@@ -222,11 +229,11 @@ async function render(scene, draw) {
 function renderRecruit(r) {
   return render('모집', () => {
     background('recruit', 102, 240);
-    const title = '긴급 퀘스트 발생!';
+    const title = '몬스터 출현!';
     const tw = p.textWidth(B(), title, 46);
-    text(title, W / 2, 54, 46, C.gold);
-    siren(W / 2 - tw / 2 - 50, 56); siren(W / 2 + tw / 2 + 50, 56);
-    if (r.freezesXp) text('XP 시스템 고장 — 토벌하면 복구!', W / 2, 88, 18, '#ff8f7a');
+    text(title, W / 2, 47, 46, C.gold);
+    siren(W / 2 - tw / 2 - 50, 49); siren(W / 2 + tw / 2 + 50, 49);
+    text(`${r.monster.name}${subjectJosa(r.monster.name)} XP 시스템을 장악 중이에요!`, W / 2, 84, 21, '#ff8f7a', { maxWidth: W - 120 });
     p.circle(W / 2 - 64, 130, 6, C.red);
     text('타겟 몬스터', W / 2 + 8, 130, 22, C.orange);
     drawMonster(r.monster, W / 2, 218, 112);
@@ -504,7 +511,7 @@ function warmUpLabels(monsters) {
   }
   jobs.push(() => { p = painter; endBackground(); });
   const add = (font, s, size) => jobs.push(() => painter.warmText(fonts[font], s, size));
-  add('bold', '긴급 퀘스트 발생!', 46);
+  add('bold', '몬스터 출현!', 46);
   add('bold', '타겟 몬스터', 22);
   add('bold', '다음 행동', 16);
   add('bold', '치명타', 15);
