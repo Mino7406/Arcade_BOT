@@ -28,10 +28,9 @@ const { buildGameSelectPayload: buildNaejeonGameSelectPayload } = require('./com
 const { buildGameSelectPayload: buildMojipGameSelectPayload } = require('./commands/모집');
 const { buildReloadListPayload } = require('./commands/불러오기');
 const { buildTeamMatchListPayload } = require('./commands/팀');
-const { buildCommandListPayload, buildSetupPanelPayload, buildAdminMenuPayload, handlePanelButton, handlePanelMatchDeleteSelect, handlePanelBotMessageDeleteModal } = require('./commands/패널');
+const { buildCommandListPayload, buildSetupPanelPayload, buildAdminMenuPayload, handlePanelButton, handlePanelMatchDeleteSelect, handlePanelBotMessageDeleteModal, handlePanelSelectButton } = require('./commands/패널');
 const { handleRealmButton, handleRealmModal, handleRealmRosterModal, initRulesAgreementCache, handleRealmRulesReactionAdd, handleRealmRulesReactionRemove } = require('./forms/마크');
 const { handleCobblemonButton, startCobblemonOpenTimer } = require('./forms/코블몬');
-const { handleFormSelectButton } = require('./commands/신청서');
 const { handleLevelShareButton } = require('./commands/레벨');
 const { handleRankingPageButton, handleRankingGotoButton, handleRankingGotoModal, handleRankingShareButton } = require('./commands/랭킹');
 const { handleXpUserSelect, handleXpButton, handleXpModal } = require('./commands/XP');
@@ -41,7 +40,7 @@ const { logInteraction, logAction, logSystem, logError, logErrorThrottled, setLo
 
 // 끝말잇기/틱택토/랭킹 명령어와 관련 버튼을 이 채널에서만 사용할 수 있게 제한한다.
 // ALLOWED_CHANNEL_IDS는 내전/모집/팀 상호작용을 허용할 채널 목록(비어 있으면 제한 없음).
-const { WORDCHAIN_RANKING_CHANNEL_ID, ALLOWED_CHANNEL_IDS: allowedChannels, isTestGuild } = require('./config');
+const { WORDCHAIN_RANKING_CHANNEL_ID, ALLOWED_CHANNEL_IDS: allowedChannels, isTestGuild, GUILD_ID, TEST_GUILD_IDS } = require('./config');
 
 const client = new Client({
   intents: [
@@ -328,6 +327,28 @@ async function onReady(c) {
 }
 client.once(Events.ClientReady, onReady);
 
+// ─── 슬래시 명령어 자동 등록 ──────────────────────────────────
+// 토큰이 호스팅에만 있어 deploy-commands.js를 따로 돌릴 수 없으므로, 켤 때마다 commands/ 폴더의
+// 명령어 목록으로 길드 명령어를 통째로 덮어쓴다(deploy-commands.js와 같은 대상: GUILD_ID + TEST_GUILD_IDS).
+// 같은 목록이면 디스코드 쪽에서 바뀌는 것이 없고, 명령어를 추가·삭제한 뒤 재시작하면 바로 반영된다.
+async function syncGuildCommands(c) {
+  const body = [...c.commands.values()].map(cmd => cmd.data); // 빌더를 그대로 넘기면 discord.js가 toJSON()한다(deploy-commands.js와 동일한 결과)
+  const guildIds = [...new Set([...GUILD_ID.split(','), ...TEST_GUILD_IDS].map(id => id.trim()).filter(Boolean))];
+  let synced = 0;
+  for (const guildId of guildIds) {
+    if (!c.guilds.cache.has(guildId)) continue; // 봇이 없는 길드는 등록할 수 없다
+    try {
+      await c.application.commands.set(body, guildId);
+      synced++;
+    } catch (err) {
+      console.error(`명령어 등록 실패 (길드 ${guildId}):`, err);
+      logError('봇 상태', `슬래시 명령어 등록 실패 (길드 ${guildId})`, err);
+    }
+  }
+  console.log(`✅ 슬래시 명령어 ${body.length}개 등록 (길드 ${synced}곳)`);
+}
+client.once(Events.ClientReady, (c) => { syncGuildCommands(c).catch(err => console.error('명령어 등록 중 오류:', err)); });
+
 client.on('interactionCreate', async (interaction) => {
   try {
     // 채널 제한 등으로 막히는 시도까지 포함해, 명령어/버튼/선택 메뉴/모달 제출을 전부 기록한다.
@@ -374,7 +395,7 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     const isChannelExempt =
-      (interaction.isChatInputCommand() && ['패널', '퀴즈', 'xp', '신청서'].includes(interaction.commandName)) ||
+      (interaction.isChatInputCommand() && ['패널', '퀴즈', 'xp'].includes(interaction.commandName)) ||
       isWordchainOrRanking ||
       isReload ||
       interaction.customId?.startsWith('quiz:') ||
@@ -506,7 +527,7 @@ client.on('interactionCreate', async (interaction) => {
       } else if (interaction.customId.startsWith('panel:')) {
         await handlePanelButton(interaction);
       } else if (interaction.customId.startsWith('form:')) {
-        await handleFormSelectButton(interaction);
+        await handlePanelSelectButton(interaction);
       } else if (interaction.customId.startsWith('realm:')) {
         await handleRealmButton(interaction);
       } else if (interaction.customId.startsWith('cobblemon:')) {

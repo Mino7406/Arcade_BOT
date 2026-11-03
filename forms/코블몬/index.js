@@ -106,7 +106,7 @@ function buildCobblemonPanelPayload(client) {
   };
 }
 
-// /신청서로 패널을 게시한 직후 호출 — 오픈 시각에 버튼을 바꿀 수 있게 메시지 위치를 기억해 둔다.
+// /패널 → 코블몬으로 패널을 게시한 직후 호출 — 오픈 시각에 버튼을 바꿀 수 있게 메시지 위치를 기억해 둔다.
 function rememberCobblemonPanel(message) {
   const panels = loadPanels().filter(p => p.messageId !== message.id);
   panels.push({ channelId: message.channelId, messageId: message.id });

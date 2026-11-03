@@ -434,7 +434,7 @@ function buildRealmResultDm(status, nickname, processedByName) {
   return { components: [container], flags: MessageFlags.IsComponentsV2 };
 }
 
-// "마크" 신청서 모듈 — /신청서(commands/신청서.js)가 선택 메뉴에서 이 폼을 고르면
+// "마크" 신청서 모듈 — /패널(commands/패널.js)의 선택 메뉴에서 이 폼을 고르면
 // buildRealmPanelPayload로 패널을 게시하고, 이후 버튼/모달 상호작용은 아래 핸들러들이 처리한다.
 module.exports = {
   buildRealmPanelPayload,

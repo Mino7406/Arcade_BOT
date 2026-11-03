@@ -14,6 +14,70 @@ const {
 const { ADMIN_IDS, AUTO_CLOSE_DELAY_MS, disarmAutoEnd, clearNotifyTimer, deleteMentionMessage, announceMatchCompletionXp, getCancelledDeletions } = require('../handlers/공용');
 // 끝말잇기/틱택토/레벨/랭킹은 이 채널(놀이터)에서만 사용 가능.
 const { PLAYGROUND_CHANNEL_ID } = require('../config');
+const { buildRealmPanelPayload } = require('../forms/마크');
+const { buildCobblemonPanelPayload, rememberCobblemonPanel } = require('../forms/코블몬');
+
+// /패널 실행 시 뜨는 선택 메뉴에서 고를 수 있는 패널 등록표. 각 항목이 버튼 하나('form:publish:<종류>')가 된다.
+// (예전엔 게임모집 패널은 /패널, 신청서 패널은 /신청서로 따로 게시했다 — 버튼 커스텀ID는 그대로 유지해
+//  이미 열려 있던 /신청서 메뉴도 동작한다.) 새 신청서는 forms/ 아래에 폼 모듈을 만들고 여기 한 줄만 추가.
+// - build:  현재 채널에 보낼 패널 payload를 만드는 함수 (interaction을 받는다)
+// - posted: (선택) 게시된 메시지를 받아 나중에 고칠 수 있게 기억해 두는 함수
+// - done:   게시 후 메뉴 자리에 남길 안내 문구
+const PANELS = {
+  recruit: {
+    label: '게임모집',
+    emoji: { name: '🎮' },
+    build: (interaction) => buildSetupPanelPayload(interaction),
+    done: '🎮 **게임모집 패널을 게시했습니다.**',
+  },
+  realm: {
+    label: '마크',
+    emoji: { id: '1544570096859742248' }, // <:MC:...>
+    build: (interaction) => buildRealmPanelPayload(interaction.client),
+    done: '<:MC:1544570096859742248> **마크 신청 패널을 게시했습니다.**',
+  },
+  cobblemon: {
+    label: '코블몬',
+    emoji: { id: '1562830370368528384' }, // <:cobblemon:...>
+    build: (interaction) => buildCobblemonPanelPayload(interaction.client),
+    posted: rememberCobblemonPanel,
+    done: '<:cobblemon:1562830370368528384> **코블몬 신청 패널을 게시했습니다.**',
+  },
+};
+
+function buildPanelSelectPayload() {
+  const row = new ActionRowBuilder().addComponents(
+    ...Object.entries(PANELS).map(([type, panel]) =>
+      new ButtonBuilder()
+        .setCustomId(`form:publish:${type}`)
+        .setLabel(panel.label)
+        .setEmoji(panel.emoji)
+        .setStyle(ButtonStyle.Success),
+    ),
+  );
+
+  return {
+    content: '**게시할 패널을 선택하십시오.**',
+    components: [row],
+    flags: MessageFlags.Ephemeral,
+  };
+}
+
+// ── 선택 메뉴 버튼('form:publish:<종류>') → 고른 패널을 현재 채널에 게시 ──
+async function handlePanelSelectButton(interaction) {
+  if (!ADMIN_IDS.includes(interaction.user.id)) {
+    await interaction.reply({ content: '<:Barrier:1544331503448625233> **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  const type = interaction.customId.split(':')[2];
+  const panel = PANELS[type];
+  if (!panel) return;
+
+  const message = await interaction.channel.send(panel.build(interaction));
+  panel.posted?.(message);
+  await interaction.update({ content: panel.done, components: [] });
+}
 
 // 안내 패널의 "명령어 보기" 버튼(index.js)에서 재사용.
 const COMMAND_LIST = [
@@ -360,7 +424,7 @@ function buildBotMessageDeleteModal(panelMessageId) {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('패널')
-    .setDescription('[관리자 전용] 현재 채널에 내전/모집 안내 패널을 게시합니다.'),
+    .setDescription('[관리자 전용] 게시할 패널(게임모집·신청서)을 골라 현재 채널에 게시합니다.'),
 
   async execute(interaction) {
     if (!ADMIN_IDS.includes(interaction.user.id)) {
@@ -368,10 +432,10 @@ module.exports = {
       return;
     }
 
-    await interaction.channel.send(buildSetupPanelPayload(interaction));
-    await interaction.reply({ content: '✅ **안내 패널을 게시했습니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.reply(buildPanelSelectPayload());
   },
 
+  handlePanelSelectButton,
   buildSetupPanelPayload,
   buildCommandListPayload,
   buildAdminMenuPayload,
