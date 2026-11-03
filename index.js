@@ -250,6 +250,46 @@ function logBlocked(interaction, 사유) {
   }
 }
 
+// ─── 응답 지연·메모리 진단 ────────────────────────────────────
+// 버튼을 누르자마자 ack하는 핸들러에서도 Unknown interaction(10062)이 몰려서 나고, 호스팅이
+// 메모리 초과(exit 137)로 강제 종료한 적이 있다. 원인 후보는 셋이다:
+//  (1) 이벤트 루프가 멈춤(CPU 25% 제한·GC) → 아래 '루프 지연 최대'가 커진다
+//  (2) 게이트웨이 연결이 끊겼다 재개되며 밀린 이벤트가 늦게 도착 → '연결 재개' 로그가 같이 찍힌다
+//  (3) 메모리가 256MB 한도에 근접 → RSS가 높게 찍힌다
+// 콘솔로만 남긴다(호스팅 콘솔에서 바로 보이게). 평소엔 아무것도 출력하지 않는다.
+const { monitorEventLoopDelay } = require('perf_hooks');
+const loopDelay = monitorEventLoopDelay({ resolution: 20 });
+loopDelay.enable();
+const SLOW_INTERACTION_MS = 2500;  // 디스코드 응답 제한(3초)에 근접한 상호작용만 기록
+const MEMORY_WARN_RSS_MB = 200;    // 요금제 RAM 256MB 기준 경고선
+function diagSnapshot() {
+  const mem = process.memoryUsage();
+  const mb = (n) => Math.round(n / 1048576);
+  const snap = `RSS ${mb(mem.rss)}MB · 힙 ${mb(mem.heapUsed)}/${mb(mem.heapTotal)}MB · 루프 지연 최대 ${Math.round(loopDelay.max / 1e6)}ms · 핑 ${client.ws.ping}ms`;
+  loopDelay.reset();
+  return snap;
+}
+let slowWarnedAt = 0, slowSkipped = 0;
+function checkInteractionAge(interaction) {
+  const ageMs = Date.now() - interaction.createdTimestamp;
+  if (ageMs < SLOW_INTERACTION_MS) return;
+  const now = Date.now();
+  if (now - slowWarnedAt < 10_000) { slowSkipped++; return; } // 몰릴 때 콘솔 도배 방지
+  console.warn(`🐢 상호작용이 ${ageMs}ms 늦게 도착 (${interaction.customId ?? `/${interaction.commandName}`})${slowSkipped ? `, 그동안 ${slowSkipped}건 더` : ''} — ${diagSnapshot()}`);
+  slowWarnedAt = now;
+  slowSkipped = 0;
+}
+client.on(Events.ShardDisconnect, (event) => console.warn(`🔌 게이트웨이 연결 끊김 (코드 ${event?.code ?? '-'}) — ${diagSnapshot()}`));
+client.on(Events.ShardReconnecting, () => console.warn(`🔌 게이트웨이 재연결 시도 — ${diagSnapshot()}`));
+client.on(Events.ShardResume, (_id, replayed) => console.warn(`🔌 게이트웨이 연결 재개 — 밀린 이벤트 ${replayed}건 재전송 — ${diagSnapshot()}`));
+let memWarnedAt = 0;
+setInterval(() => {
+  if (process.memoryUsage().rss < MEMORY_WARN_RSS_MB * 1048576) return;
+  if (Date.now() - memWarnedAt < 30 * 60 * 1000) return;
+  memWarnedAt = Date.now();
+  console.warn(`🧠 메모리 경고선(${MEMORY_WARN_RSS_MB}MB) 초과 — ${diagSnapshot()}`);
+}, 60_000);
+
 // ─── 봇 준비 완료 시 ──────────────────────────────────────────
 // 이벤트 이름이 discord.js 버전에 따라 'ready'/'clientReady'로 다르므로 Events.ClientReady 상수를 쓴다.
 // (문자열 'ready'를 직접 넘기면 v14.22+ 에서 DeprecationWarning이 뜬다.)
@@ -294,6 +334,7 @@ client.on('interactionCreate', async (interaction) => {
     // (아래에서 무엇이 됐든 판단하기 전에 가장 먼저 남겨야 실제로 들어온 입력을 놓치지 않음)
     // 로그 기록 실패(디스크 문제 등)가 실제 상호작용 처리까지 막아버리면 안 되므로 따로 감싼다.
     try { logInteraction(interaction); } catch (err) { console.error('상호작용 로그 기록 실패:', err); }
+    checkInteractionAge(interaction);
 
     // 테스트 서버(config.js의 TEST_GUILD_IDS)에서는 아래 채널 제한을 전부 건너뛴다 —
     // 기능을 확인하려면 아무 채널에서나 쓸 수 있어야 하기 때문.
@@ -473,6 +514,13 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
   } catch (error) {
+    // 응답 제한(3초)을 넘겨 만료된 상호작용. 코드 오류가 아니라 지연 때문이고(원인은 위 🐢 진단 로그),
+    // 이미 만료돼 안내 메시지도 보낼 수 없으므로 스택 대신 한 줄만 남긴다.
+    if (error?.code === 10062) {
+      console.warn(`⌛ 만료된 상호작용(10062): ${interaction.customId ?? `/${interaction.commandName}`}, ${Date.now() - interaction.createdTimestamp}ms 경과`);
+      logErrorThrottled('interaction:expired', '처리 오류', '응답 제한(3초)을 넘겨 만료된 상호작용(10062)', error);
+      return;
+    }
     console.error(error);
     logError('처리 오류', `${interaction.isChatInputCommand?.() ? `/${interaction.commandName}` : interaction.customId ?? '알 수 없는 상호작용'} 처리 중 오류 발생`, error, {
       유저: interaction.user ? userLabel(interaction.user.id) : '-',

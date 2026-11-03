@@ -228,7 +228,7 @@ async function handleMojipModal(interaction) {
     return;
   }
 
-  const data = { game, gameInfo, title, datetime, players, description, autoClose: true, organizer: { id: interaction.user.id, displayName: displayNameFromInteraction(interaction) }, _previewInteraction: interaction };
+  const data = { game, gameInfo, title, datetime, players, description, autoClose: true, organizer: { id: interaction.user.id, displayName: displayNameFromInteraction(interaction) } };
   getPending(interaction.client).set(interaction.user.id, data);
 
   await interaction.reply({
@@ -257,23 +257,22 @@ async function handleMojipEditModal(interaction) {
   }
 
   const data = getPending(interaction.client).get(interaction.user.id);
-  if (!data || !data._previewInteraction) {
+  if (!data || !interaction.isFromMessage()) {
     await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/모집\`을 실행해주세요.`, flags: MessageFlags.Ephemeral });
     return;
   }
 
   Object.assign(data, { gameInfo, title, datetime, players, description });
 
-  await data._previewInteraction.editReply({
+  // 미리보기의 [수정] 버튼에서 연 모달이라 update()로 그 미리보기 메시지를 바로 고친다.
+  // (예전엔 처음 미리보기를 띄운 인터랙션을 보관해 editReply했는데, 토큰이 15분이면 만료돼
+  //  미리보기를 오래 띄워두고 수정하면 Invalid Webhook Token(50027)으로 실패했다.)
+  await interaction.update({
     content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
     embeds: [buildPreviewEmbed(data)],
     components: buildPreviewComponents(data),
     attachments: [],
   });
-
-  // 모달 인터랙션을 조용히 마무리 (새 메시지 생성 없이)
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  await interaction.deleteReply();
 }
 
 async function handleMojipButton(interaction) {
@@ -300,7 +299,6 @@ async function handleMojipButton(interaction) {
       attachments: [],
       allowedMentions: { roles: role ? [role.id] : [], users: [] },
     });
-    delete data._previewInteraction; // 게시 후에는 필요 없으므로 여기서 끊어 매치가 Interaction 객체를 계속 붙들지 않게 한다.
     const match = { data, participants, message: msg, closed: false, closedAt: null, mentionSent: false, guildId: interaction.guildId };
     getMojips(interaction.client).set(msg.id, match);
     saveNow(interaction.client);
@@ -876,7 +874,7 @@ async function handleMojipNotifyModal(interaction) {
   // 게시 전 미리보기 단계: msgId가 없으므로 유저 ID로 보관된 대기 데이터를 사용한다.
   if (msgId === 'preview') {
     const data = getPending(interaction.client).get(interaction.user.id);
-    if (!data || !data._previewInteraction) {
+    if (!data || !interaction.isFromMessage()) {
       await interaction.reply({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/모집\`을 실행해주세요.`, flags: MessageFlags.Ephemeral });
       return;
     }
@@ -896,14 +894,12 @@ async function handleMojipNotifyModal(interaction) {
       data.notifyAt = null;
       data.notify12h = false;
     }
-    await data._previewInteraction.editReply({
+    await interaction.update({
       content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
       embeds: [buildPreviewEmbed(data)],
       components: buildPreviewComponents(data),
       attachments: [],
     });
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    await interaction.deleteReply();
     return;
   }
 

@@ -731,8 +731,7 @@ fs.mkdirSync(DB_DIR, { recursive: true });
 // match 객체 안의 직렬화 불가 객체(Discord 객체)를 제거하고 JSON 문자열로 변환
 function matchToJSON(match) {
   const { message, data, _autoEndTimer, _notifyTimer, ...rest } = match;
-  const { _previewInteraction, ...cleanData } = data || {};
-  return JSON.stringify({ ...rest, data: cleanData });
+  return JSON.stringify({ ...rest, data: data || {} });
 }
 
 // 현재 메모리의 모든 내전/모집을 N-M.json에 저장
