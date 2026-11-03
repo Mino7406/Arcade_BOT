@@ -79,11 +79,11 @@ const TITLE_ICONS = {
   skull: {
     rows: [
       '....dddddddd....', '...dwwwwwwwwd...', '..dwwwwwwwwwwd..', '.dwwwwwwwwwwwwd.',
-      '.dwwwwwwwwwwwwd.', '.dwkrkwwwwkrkwd.', '.dwkrkwwwwkrkwd.', '.dwwkwwwwwwkwwd.',
+      '.dwwwwwwwwwwwwd.', '.dwkkkwwwwkkkwd.', '.dwkkkwwwwkkkwd.', '.dwwkwwwwwwkwwd.',
       '.dwwwwwkkwwwwwd.', '..dwwwwkkwwwwd..', '...dwwwwwwwwd...', '....dwdwdwdwd...',
       '....dwdwdwdwd...', '.....ddddddd....', '................', '................',
     ],
-    palette: { d: '#2a1f1a', w: '#efe6d6', k: '#1a1210', r: '#ff3b2f' },
+    palette: { d: '#2a1f1a', w: '#efe6d6', k: '#1a1210' },
   },
   dragon: {
     rows: [
