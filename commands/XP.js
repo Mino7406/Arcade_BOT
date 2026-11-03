@@ -35,7 +35,7 @@ const MAX_ABS = 10_000_000;
 const MAX_LEVEL = 1000;
 
 // 조정 전 공통 관문 — 막히면 true. 순서 주의: 권한을 먼저 봐서 비관리자에게 내부 상태를 흘리지 않는다.
-// allowExcludedGuild: 레벨 데이터를 건드리지 않는 조작(긴급 퀘스트 소환/종료)은 테스트 서버에서도 허용.
+// allowExcludedGuild: 레벨 데이터를 건드리지 않는 조작(레이드 소환/종료)은 테스트 서버에서도 허용.
 async function denyGuard(interaction, { allowExcludedGuild = false } = {}) {
   if (!ADMIN_IDS.includes(interaction.user.id)) {
     await interaction.reply({ content: '❌ **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
@@ -147,17 +147,17 @@ function buildManageView(notice) {
   };
 }
 
-// 긴급 퀘스트 상태 두 줄(진행 여부 / 다음 자동 출현 시각) — XP 관리 패널과 테스트 서버 화면이 공유.
+// 레이드 상태 두 줄(진행 여부 / 다음 자동 출현 시각) — XP 관리 패널과 테스트 서버 화면이 공유.
 function raidStatusText(raid) {
   const next = raid.nextSpawnAt ? Math.floor(raid.nextSpawnAt / 1000) : null;
-  return `**긴급 퀘스트** ${raid.active ? `👾 ${raid.monsterName} 진행 중 (${raid.phase === 'recruit' ? '모집' : '전투'})` : '⚪ 대기'}\n` +
+  return `**레이드** ${raid.active ? `👾 ${raid.monsterName} 진행 중 (${raid.phase === 'recruit' ? '모집' : '전투'})` : '⚪ 대기'}\n` +
     `-# ${next ? `다음 자동 출현 <t:${next}:f> (<t:${next}:R>)` : '다음 출현 일정 없음'}`;
 }
 
 function raidButton(raid) {
   return raid.active
-    ? new ButtonBuilder().setCustomId('xp:mng:raidend').setEmoji('🛑').setLabel('긴급 퀘스트 종료').setStyle(ButtonStyle.Danger)
-    : new ButtonBuilder().setCustomId('xp:mng:raid').setEmoji('👾').setLabel('긴급 퀘스트 소환').setStyle(ButtonStyle.Danger);
+    ? new ButtonBuilder().setCustomId('xp:mng:raidend').setEmoji('🛑').setLabel('레이드 종료').setStyle(ButtonStyle.Danger)
+    : new ButtonBuilder().setCustomId('xp:mng:raid').setEmoji('👾').setLabel('레이드 소환').setStyle(ButtonStyle.Danger);
 }
 
 // 소환/종료 후 다시 그릴 화면 — 테스트 서버면 테스트 화면, 아니면 XP 관리 패널.
@@ -166,15 +166,15 @@ function raidResultView(interaction, notice) {
 }
 
 // 레벨 시스템이 꺼진 서버(테스트 서버)에서 /xp를 쓰면 XP 조정 대신 이 화면만 보여준다.
-// 긴급 퀘스트를 실제 서버 XP와 무관하게 시험해볼 수 있게 하기 위함(그 서버에서 띄운 레이드는
+// 레이드를 실제 서버 XP와 무관하게 시험해볼 수 있게 하기 위함(그 서버에서 띄운 레이드는
 // 버튼을 누른 채널에 뜨고, 본서버 XP를 멈추지도 보상을 주지도 않는다).
 function buildRaidTestView(notice) {
   const raid = getRaidStatus();
   const embed = new EmbedBuilder()
     .setColor(0x5865F2)
     .setDescription(
-      `## 🧪 긴급 퀘스트 테스트\n` +
-      `이 서버는 레벨 시스템이 꺼져 있어 XP 조정은 할 수 없고, 긴급 퀘스트만 시험할 수 있어요.\n` +
+      `## 🧪 레이드 테스트\n` +
+      `이 서버는 레벨 시스템이 꺼져 있어 XP 조정은 할 수 없고, 레이드만 시험할 수 있어요.\n` +
       `-# 여기서 소환하면 이 채널에 뜨고, 본서버 XP를 멈추지도 보상을 주지도 않아요.\n\n` +
       raidStatusText(raid) +
       (notice ? `\n\n${notice}` : ''),
@@ -322,13 +322,13 @@ async function handleXpButton(interaction) {
       // 출현 메시지 전송을 기다리는 동안 3초 응답 제한을 넘기지 않게 먼저 ack한다.
       await interaction.deferUpdate();
       const error = await forceSpawnRaid(interaction);
-      if (!error) logAction(interaction, 'XP 관리', '긴급 퀘스트 수동 소환');
-      await interaction.editReply(raidResultView(interaction, error ? `⚠️ ${error}` : '👾 **긴급 퀘스트를 소환했습니다.**'));
+      if (!error) logAction(interaction, 'XP 관리', '레이드 수동 소환');
+      await interaction.editReply(raidResultView(interaction, error ? `⚠️ ${error}` : '👾 **레이드를 소환했습니다.**'));
     } else if (targetId === 'raidend') {
       await interaction.deferUpdate();
       const ended = await forceEndRaid();
-      if (ended) logAction(interaction, 'XP 관리', '긴급 퀘스트 강제 종료');
-      await interaction.editReply(raidResultView(interaction, ended ? '🛑 **긴급 퀘스트를 종료했습니다.** XP 정지도 풀렸습니다.' : '⚠️ 진행 중인 긴급 퀘스트가 없어요.'));
+      if (ended) logAction(interaction, 'XP 관리', '레이드 강제 종료');
+      await interaction.editReply(raidResultView(interaction, ended ? '🛑 **레이드를 종료했습니다.** XP 정지도 풀렸습니다.' : '⚠️ 진행 중인 레이드가 없어요.'));
     }
     return;
   }

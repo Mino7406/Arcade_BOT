@@ -196,7 +196,7 @@ function describeXpResult(r) {
     case 'cooldown': return '정산 보류 — 같은 유저 연속 정산 쿨다운';
     case 'bot_daily_cap': return '정산 보류 — 봇전 일일 XP 한도';
     case 'user_frozen': return '정산 보류 — XP 지급 정지 유저';
-    case 'frozen': return r.raid ? '정산 생략 — 긴급 퀘스트로 XP 정지 중' : '정산 생략 — 미니게임 XP 긴급정지';
+    case 'frozen': return r.raid ? '정산 생략 — 레이드로 XP 정지 중' : '정산 생략 — 미니게임 XP 긴급정지';
     default: return `정산 ${r.type}`;
   }
 }

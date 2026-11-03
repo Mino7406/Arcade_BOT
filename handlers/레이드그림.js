@@ -1,4 +1,4 @@
-// 레이드그림.js — 긴급 퀘스트 패널(모집·전투·결과)을 PNG 한 장으로 그린다.
+// 레이드그림.js — 레이드 패널(모집·전투·결과)을 PNG 한 장으로 그린다.
 // 디스코드 V2 컴포넌트로는 카드 가로 배치·가운데 정렬이 안 돼서, 몬스터와 파티 카드 4장이 있는
 // "판"만 그림으로 만들고 타이머·버튼·클릭마다 바뀌는 선택 상태는 글자 컴포넌트로 둔다(handlers/레이드.js).
 //
@@ -417,15 +417,15 @@ function renderBattle(r) {
 // (예전엔 전투 화면 틀을 재활용해 카드 4장을 그렸는데, 참가자가 적으면 '빈자리'만 가득했다)
 // outcome: 'clear' | 'wipe' | 'timeout' | 'noshow' | 'restart' | 'admin'
 const END_TITLE = {
-  clear: 'QUEST CLEAR', wipe: 'QUEST FAILED', timeout: 'QUEST FAILED', noshow: '몬스터가 사라졌다', restart: '퀘스트 중단', admin: '퀘스트 종료',
+  clear: 'RAID CLEAR', wipe: 'RAID FAILED', timeout: 'RAID FAILED', noshow: '몬스터가 사라졌다', restart: '레이드 중단', admin: '레이드 종료',
 };
 const END_SUB = {
   clear: (m) => `${m.name} 토벌 성공!`,
   wipe: () => '파티 전멸 — 몬스터가 도망쳤다',
   timeout: () => '시간 초과 — 몬스터가 도망쳤다',
   noshow: () => '아무도 오지 않아 몬스터가 떠났다',
-  restart: () => '봇 점검으로 퀘스트가 중단됐다',
-  admin: () => '관리자가 퀘스트를 종료했다',
+  restart: () => '봇 점검으로 레이드가 중단됐다',
+  admin: () => '관리자가 레이드를 종료했다',
 };
 const END_TITLE_COLOR = { clear: '#ffcf5a', wipe: '#ff6b5b', timeout: '#ff6b5b' };
 const LP = { x: 20, y: 150, w: 300, h: 470 };   // 왼쪽 패널(몬스터·기록)

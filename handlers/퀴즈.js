@@ -275,7 +275,7 @@ async function postQuiz(client, state, picked, slotKey = 'activeQuiz', extraFiel
   }
 }
 
-// 긴급 퀘스트가 진행 중이면 출제를 미루고 1분마다 다시 확인한다 — 퀘스트가 끝나면 곧바로 나간다.
+// 레이드가 진행 중이면 출제를 미루고 1분마다 다시 확인한다 — 레이드가 끝나면 곧바로 나간다.
 const RAID_RETRY_MS = 60 * 1000;
 
 async function fireQuiz(client) {
@@ -497,7 +497,7 @@ function getQuizStatus() {
 // 메시지가 둘 중 하나의 정답과 일치하면 그 슬롯만 채점한다(다른 슬롯은 그대로 계속 열려있음).
 async function handleQuizMessage(message) {
   if (message.author.bot) return;
-  // 긴급 퀘스트 중에는 채점하지 않는다(문제는 열린 채로 두고, 퀘스트가 끝난 뒤 맞히면 정상 지급).
+  // 레이드 중에는 채점하지 않는다(문제는 열린 채로 두고, 레이드가 끝난 뒤 맞히면 정상 지급).
   if (isPlaygroundPaused(message.guildId)) return;
 
   const client = message.client;

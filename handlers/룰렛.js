@@ -255,7 +255,7 @@ async function spinLobby(interaction, lobby, lobbies) {
   if (isMinigameXpFrozen()) {
     logAction(interaction, '룰렛', '미니게임 XP 긴급정지 중이라 거부됨');
     const content = isRaidXpFrozen()
-      ? '👾 **몬스터 때문에 XP 시스템이 고장 나 룰렛을 돌릴 수 없습니다.** 놀이터의 긴급 퀘스트를 확인하세요! (오늘 기회는 그대로 남아 있어요)'
+      ? '👾 **몬스터 때문에 XP 시스템이 고장 나 룰렛을 돌릴 수 없습니다.** 놀이터의 레이드를 확인하세요! (오늘 기회는 그대로 남아 있어요)'
       : '⚙️ **현재 관리자가 미니게임 XP를 일시 중지해 룰렛을 돌릴 수 없습니다.**';
     await interaction.editReply({ content, embeds: [], components: [] });
     return;

@@ -24,7 +24,7 @@ const { loadBotMatchXp, saveBotMatchXp } = require('./handlers/봇전한도');
 const { loadRealmRoster, saveRealmRoster } = require('./forms/마크/명단');
 const { startQuizScheduler, handleQuizMessage } = require('./handlers/퀴즈');
 const { handleRaidButton, startRaidScheduler, isPlaygroundPaused } = require('./handlers/레이드');
-const PAUSED_MINIGAME_COMMANDS = ['끝말잇기', '틱택토', '오목', '룰렛']; // 긴급 퀘스트 중 시작 금지
+const PAUSED_MINIGAME_COMMANDS = ['끝말잇기', '틱택토', '오목', '룰렛']; // 레이드 중 시작 금지
 const { handleQuizAdminButton, handleQuizCreateModal } = require('./commands/퀴즈');
 const { buildGameSelectPayload: buildNaejeonGameSelectPayload } = require('./commands/내전');
 const { buildGameSelectPayload: buildMojipGameSelectPayload } = require('./commands/모집');
@@ -340,7 +340,7 @@ async function onReady(c) {
   await reconcileTempChannels(c); // 재시작 전 만들어둔 임시 음성채널 중 빈 방 정리
   await reconcileMatchBonusMessages(c); // 봇이 꺼져있던 동안 인증 채널에 올라와 예약이 빠진 메시지 복구
   startQuizScheduler(c); // 놀이터 채널에 하루 한 번 무작위 시각으로 상식퀴즈를 출제
-  startRaidScheduler(c); // 약 3일마다 놀이터에 긴급 퀘스트(레이드) 몬스터 출현
+  startRaidScheduler(c); // 약 3일마다 놀이터에 레이드 몬스터 출현
   dataReady = true;
   diagWarn(`📊 시작 직후 메모리 (${runtimeInfo()})`);
   rssPeakMb = process.memoryUsage().rss / 1048576;
@@ -403,11 +403,11 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // 긴급 퀘스트 진행 중에는 놀이터 미니게임을 새로 시작할 수 없다(퀘스트에 집중하도록 일시 정지).
+    // 레이드 진행 중에는 놀이터 미니게임을 새로 시작할 수 없다(레이드에 집중하도록 일시 정지).
     // 이미 진행 중이던 판은 그대로 끝까지 두고(XP는 어차피 멈춤), /레벨·/랭킹 조회는 막지 않는다.
     if (interaction.isChatInputCommand() && PAUSED_MINIGAME_COMMANDS.includes(interaction.commandName) && isPlaygroundPaused(interaction.guildId)) {
-      logBlocked(interaction, '긴급 퀘스트 진행 중이라 미니게임 일시 정지');
-      await interaction.reply({ content: '👾 **긴급 퀘스트가 진행 중이라 놀이터 미니게임이 일시 정지됐어요.**\n퀘스트가 끝나면 다시 이용할 수 있어요.', flags: MessageFlags.Ephemeral });
+      logBlocked(interaction, '레이드 진행 중이라 미니게임 일시 정지');
+      await interaction.reply({ content: '👾 **레이드가 진행 중이라 놀이터 미니게임이 일시 정지됐어요.**\n레이드가 끝나면 다시 이용할 수 있어요.', flags: MessageFlags.Ephemeral });
       return;
     }
 

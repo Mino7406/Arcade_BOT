@@ -1,4 +1,4 @@
-// 레이드.js — 긴급 퀘스트(레이드): 약 3일마다 놀이터에 몬스터가 출현해 XP 시스템을 멈춰 세우고,
+// 레이드.js — 레이드: 약 3일마다 놀이터에 몬스터가 출현해 XP 시스템을 멈춰 세우고,
 // 4인 선착순 파티가 턴제로 토벌하면 다시 풀린다. 전투 규칙·몬스터 데이터는 레이드전투.js, 패널 그림은
 // 레이드그림.js에 있고, 이 파일은 출현 스케줄·화면 조립·버튼·타이머·XP 정지/보상을 맡는다.
 //
@@ -146,7 +146,9 @@ function assemble(accent, image, sections) {
 // 재사용할 때 디스코드 그림 주소를 못 읽어왔으면 첨부 파일 이름으로 가리킨다(첨부는 그대로 남아 있다).
 async function pickImage(r, redraw, render) {
   if (!redraw) {
-    if (r.imageUrl) return { url: r.imageUrl };
+    // 디스코드가 돌려준 CDN 주소를 다시 넣으면 '외부 링크 그림'으로 취급돼 수정할 때마다 다시 불러와
+    // 그림이 깜빡였다(타이머가 5~10초마다 바뀔 때마다). 첨부 파일 이름으로 가리키면 이미 붙어 있는
+    // 같은 첨부를 그대로 쓴다(글자만 고칠 때는 attachments를 보내지 않아 첨부가 유지된다).
     return r.hasImage ? { url: `attachment://${IMAGE_NAME}` } : null;
   }
   const png = await render();
@@ -173,7 +175,7 @@ async function recruitView(r, { redraw = true } = {}) {
   if (!image) {
     // 그림이 없을 때는 그림에 있던 정보(몬스터·파티 자리)를 글자로 대신한다.
     sections.push({
-      text: `# 🚨 긴급 퀘스트 발생!\n## ${m.emoji} ${m.name} 출현!\n${m.lore}\n\n` +
+      text: `# 🚨 레이드 발생!\n## ${m.emoji} ${m.name} 출현!\n${m.lore}\n\n` +
         ROLE_ORDER.map(k => {
           const p = r.party.find(x => x.role === k);
           return `${ROLES[k].emoji} **${ROLES[k].name}** — ${p ? `**${p.name}**` : '-'}\n-# ✨ ${ROLES[k].skill.name}: ${ROLES[k].skill.desc}`;
@@ -183,7 +185,9 @@ async function recruitView(r, { redraw = true } = {}) {
   // 큰 타이머 → 파티 인원과 할 일, 한 줄에 하나씩
   sections.push({
     text: `## ⏳ ${clock(r.recruitEndsAt, true)}\n` +
-      `**파티 ${r.party.length} / ${PARTY_MAX}** · 역할 버튼을 눌러 참가하세요${image ? '' : freezeNotice(r)}`,
+      `**파티 ${r.party.length} / ${PARTY_MAX}** · 역할 버튼을 눌러 참가하세요\n` +
+      // 몬스터 때문에 XP가 멈췄다는 걸 알려 참가 동기를 준다(레벨 시스템이 없는 테스트 서버에서도 문구는 보여줌)
+      '> ⚠️ 몬스터가 XP 시스템을 장악해 **채팅 · 통화방 · 미니게임 XP가 멈췄어요!** 토벌하면 다시 돌아와요.',
   });
   sections.push({
     row: new ActionRowBuilder().addComponents(
@@ -208,8 +212,8 @@ async function recruitView(r, { redraw = true } = {}) {
   });
   sections.push({
     // 이름표를 붙인 인용 블록 두 줄 — 보상과 시작 규칙을 한눈에
-    text: `> 🎁 **보상**　전원 +${CLEAR_XP} XP · MVP +${MVP_BONUS_XP} XP\n` +
-      `> ▶️ **바로 시작**　${r.party[0] ? `파티장 ${r.party[0].name}` : '첫 참가자'} · 관리자 — 4명이 모이면 자동 출발`,
+    text: `> 🎁 **보상** : +${CLEAR_XP} XP\n` +
+      '> ▶️ **바로 시작** : 첫 참가자가 방장이 되며 시작 여부를 결정할 수 있어요.',
   });
   return assemble(ACCENT.recruit, image, sections);
 }
@@ -268,18 +272,18 @@ async function battleView(r, { redraw = true } = {}) {
 }
 
 const OUTCOME_TEXT = {
-  clear:   '🎉 QUEST CLEAR',
+  clear:   '🎉 RAID CLEAR',
   wipe:    '☠️ 파티 전멸… 몬스터가 도망쳤다',
   timeout: '💨 시간 초과… 몬스터가 도망쳤다',
   noshow:  '💨 아무도 오지 않아 몬스터가 사라졌다',
   restart: '💨 봇 점검으로 몬스터가 사라졌다',
-  admin:   '🛑 관리자가 긴급 퀘스트를 종료했다',
+  admin:   '🛑 관리자가 레이드를 종료했다',
 };
 
 // 종료 화면 그림 아래 요약 카드: 큰 제목 · 인용 블록(핵심 결과) · 작은 글씨(기록·복구·다음 출현).
 const END_HEADING = {
   clear: '🏆 토벌 성공!', wipe: '☠️ 파티 전멸', timeout: '⌛ 시간 초과',
-  noshow: '💨 아무도 오지 않았다', restart: '💨 봇 점검으로 중단', admin: '🛑 퀘스트 종료',
+  noshow: '💨 아무도 오지 않았다', restart: '💨 봇 점검으로 중단', admin: '🛑 레이드 종료',
 };
 function formatDuration(ms) {
   const sec = Math.max(0, Math.round(ms / 1000));
@@ -303,14 +307,12 @@ function endSummary(r, outcome, rewards) {
   } else if (outcome === 'wipe' || outcome === 'timeout' || outcome === 'noshow') {
     lines.push(`> 💨 ${r.monster.name}${subjectJosa(r.monster.name)} 도망쳤다 — 보상 없음`);
   } else if (outcome === 'admin') {
-    lines.push('> 관리자가 긴급 퀘스트를 종료했어요');
+    lines.push('> 관리자가 레이드를 종료했어요');
   }
   const meta = [];
   if (b) meta.push(`⏱️ ${b.turn}턴${r.battleStartedAt ? ` · ${formatDuration((r.endedAt || Date.now()) - r.battleStartedAt)}` : ''}`);
   if (r.freezesXp) meta.push('🔧 XP 시스템 복구됨');
   if (meta.length) lines.push(`-# ${meta.join(' · ')}`);
-  // 다음 자동 출현 시각 — 디스코드 시간 표시라 시간이 지나면 저절로 줄어든다
-  if (state.nextSpawnAt && state.nextSpawnAt > Date.now()) lines.push(`-# 📅 다음 긴급 퀘스트 ${ts(state.nextSpawnAt)}`);
   return lines.join('\n');
 }
 
@@ -339,7 +341,7 @@ async function endView(r, outcome, rewards = []) {
 
 function buildHelpText() {
   return [
-    '## ❔ 긴급 퀘스트 플레이 방법',
+    '## ❔ 레이드 플레이 방법',
     '- 매 턴 **60초 안에** 행동을 하나 고르세요. 못 고르면 자동으로 공격합니다.',
     '- 턴이 넘어가기 전까지는 다시 눌러 선택을 바꿀 수 있어요.',
     '- 파티원 전원이 고르면 바로 턴이 진행됩니다.',
@@ -429,7 +431,7 @@ function startCountdown(r) {
 
 // 레이드를 띄운다. channel: 출현할 채널. 실패하면 사유 문구, 성공하면 null.
 async function spawnRaid(client, channel, { forced = false } = {}) {
-  if (raid) return '이미 진행 중인 긴급 퀘스트가 있어요.';
+  if (raid) return '이미 진행 중인 레이드가 있어요.';
   const monster = MONSTERS[Math.floor(Math.random() * MONSTERS.length)];
   const now = Date.now();
   const r = {
@@ -456,7 +458,7 @@ async function spawnRaid(client, channel, { forced = false } = {}) {
   } catch (err) {
     raid = null;
     console.error('레이드 출현 메시지 전송 실패:', err);
-    logError('레이드', '긴급 퀘스트 출현 메시지 전송 실패', err);
+    logError('레이드', '레이드 출현 메시지 전송 실패', err);
     return '출현 메시지를 보내지 못했어요(채널 권한 확인).';
   }
   if (r.freezesXp) setRaidXpFrozen(true);
@@ -464,7 +466,7 @@ async function spawnRaid(client, channel, { forced = false } = {}) {
   saveState(state);
   r.timer = setTimeout(() => onRecruitEnd(r).catch(err => console.error('레이드 모집 마감 처리 실패:', err)), RECRUIT_MS);
   startCountdown(r);
-  logSystem({ 유형: '레이드', 채널: `#${channel.name ?? channel.id}`, 내용: `긴급 퀘스트 출현 — ${monster.name}${forced ? ' (관리자 소환)' : ''}${r.freezesXp ? ', XP 정지' : ''}` });
+  logSystem({ 유형: '레이드', 채널: `#${channel.name ?? channel.id}`, 내용: `레이드 출현 — ${monster.name}${forced ? ' (관리자 소환)' : ''}${r.freezesXp ? ', XP 정지' : ''}` });
   return null;
 }
 
@@ -538,14 +540,14 @@ function finishRaid(r, outcome) {
       const xp = CLEAR_XP + (mem === mvp ? MVP_BONUS_XP : 0);
       rewards.push({ userId: mem.userId, xp, mvp: mem === mvp });
       if (isExcludedGuild(r.guildId)) continue;
-      const result = applyXp(r.guildId, mem.userId, xp, `긴급 퀘스트 토벌 '${r.monster.name}'${mem === mvp ? ' (MVP)' : ''}`);
+      const result = applyXp(r.guildId, mem.userId, xp, `레이드 토벌 '${r.monster.name}'${mem === mvp ? ' (MVP)' : ''}`);
       if (result.leveledUp) announceLevelUp(r.client, r.guildId, mem.userId, result.newLevel);
     }
   }
 
   logSystem({
     유형: '레이드',
-    내용: `긴급 퀘스트 종료 — ${r.monster.name} / ${OUTCOME_TEXT[outcome]}` +
+    내용: `레이드 종료 — ${r.monster.name} / ${OUTCOME_TEXT[outcome]}` +
       (r.battle ? ` / ${r.battle.turn}턴, 남은 HP ${r.battle.hp}/${r.battle.maxHp}` : '') +
       (rewards.length ? ` / 보상: ${rewards.map(x => `${userLabel(x.userId)} +${x.xp}`).join(', ')}` : ''),
   });
@@ -569,7 +571,7 @@ async function handleRaidButton(interaction) {
 
   const r = raid;
   if (!r || r.message?.id !== interaction.message.id) {
-    await interaction.reply({ content: '⌛ 이미 끝난 긴급 퀘스트예요.', flags: MessageFlags.Ephemeral });
+    await interaction.reply({ content: '⌛ 이미 끝난 레이드예요.', flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -579,14 +581,14 @@ async function handleRaidButton(interaction) {
       return;
     }
     const userId = interaction.user.id;
-    // 바로 시작: 파티장(지금 남아 있는 가장 먼저 참가한 사람)과 관리자만. 모집 시간을 다 기다리지 않고 출발한다.
+    // 바로 시작: 방장(지금 남아 있는 가장 먼저 참가한 사람)과 관리자만. 모집 시간을 다 기다리지 않고 출발한다.
     if (kind === 'start') {
       if (r.party.length === 0) {
         await interaction.reply({ content: '아직 참가자가 없어요.', flags: MessageFlags.Ephemeral });
         return;
       }
       if (r.party[0].userId !== userId && !ADMIN_IDS.includes(userId)) {
-        await interaction.reply({ content: `▶️ 바로 시작은 파티장 **${r.party[0].name}**님과 관리자만 누를 수 있어요.`, flags: MessageFlags.Ephemeral });
+        await interaction.reply({ content: `▶️ 바로 시작은 방장 **${r.party[0].name}**님과 관리자만 누를 수 있어요.`, flags: MessageFlags.Ephemeral });
         return;
       }
       logSystem({ 유형: '레이드', 유저: userLabel(userId), 내용: `바로 시작 — ${r.party.length}명으로 출발` });
@@ -671,7 +673,7 @@ async function spawnScheduled(client) {
   const channel = guild && await client.channels.fetch(PLAYGROUND_CHANNEL_ID).catch(() => null);
   scheduleNextSpawn(); // 성공 여부와 관계없이 다음 일정을 잡는다(실패한 출현을 1분마다 재시도하지 않게)
   if (!channel) {
-    logError('레이드', '긴급 퀘스트 자동 출현 실패 — 놀이터 채널을 찾을 수 없음', null);
+    logError('레이드', '레이드 자동 출현 실패 — 놀이터 채널을 찾을 수 없음', null);
     return;
   }
   await spawnRaid(client, channel);
@@ -688,7 +690,7 @@ function startRaidScheduler(client) {
   }, SCHEDULER_TICK_MS);
 }
 
-// 긴급 퀘스트가 진행 중이라 놀이터(미니게임 시작·일일 퀴즈)를 멈춰야 하는지. XP를 멈추는 레이드
+// 레이드가 진행 중이라 놀이터(미니게임 시작·일일 퀴즈)를 멈춰야 하는지. XP를 멈추는 레이드
 // (= 레벨 시스템이 있는 본서버 레이드)일 때만 true — 테스트 서버에서 띄운 레이드는 본서버 놀이터를 막지 않는다.
 // guildId를 주면 그 서버의 레이드일 때만 true.
 function isPlaygroundPaused(guildId) {
