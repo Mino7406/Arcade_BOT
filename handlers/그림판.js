@@ -51,16 +51,16 @@ function ensureScratch(width) {
     scratch.diff = new Float32Array(width + 2);
   }
 }
-function scan(contours, width, height, emit) {
+function scan(contours, width, height, emit, scale = 1) {
   // 모서리 목록(위→아래 방향으로 정규화)
   const edges = [];
   let minY = Infinity, maxY = -Infinity;
   for (const pts of contours) {
     const n = pts.length / 2;
     for (let k = 0; k < n; k++) {
-      const x0 = pts[k * 2], y0 = pts[k * 2 + 1];
+      const x0 = pts[k * 2] * scale, y0 = pts[k * 2 + 1] * scale;
       const k2 = (k + 1) % n;
-      const x1 = pts[k2 * 2], y1 = pts[k2 * 2 + 1];
+      const x1 = pts[k2 * 2] * scale, y1 = pts[k2 * 2 + 1] * scale;
       if (y0 === y1) continue;
       if (y1 > y0) edges.push({ ya: y0, yb: y1, xa: x0, slope: (x1 - x0) / (y1 - y0), dir: 1 });
       else edges.push({ ya: y1, yb: y0, xa: x1, slope: (x0 - x1) / (y0 - y1), dir: -1 });
@@ -223,11 +223,15 @@ function pngChunk(type, data) {
   return Buffer.concat([len, typeBuf, data, crc]);
 }
 
+// width·height·좌표·글자 크기는 모두 "설계 크기" 기준으로 받고, 실제 그림은 scale배로 작게 만든다.
+// 디스코드가 그림을 채팅 폭(약 550px)으로 줄여 보여주므로, 설계 크기 900px을 0.75배(675px)로 그려도
+// 화면에 보이는 글자 크기는 같고 칠할 픽셀은 44% 준다(CPU 25% 서버에서 그림 시간이 그만큼 준다).
 class Painter {
-  constructor(width, height) {
-    this.w = width;
-    this.h = height;
-    this.buf = Buffer.alloc(width * height * 3);
+  constructor(width, height, scale = 1) {
+    this.s = scale;
+    this.w = Math.round(width * scale); // 실제 버퍼 크기(픽셀)
+    this.h = Math.round(height * scale);
+    this.buf = Buffer.alloc(this.w * this.h * 3);
   }
 
   // 덮인 비율 a(0~1)만큼 색을 섞는다.
@@ -239,13 +243,18 @@ class Painter {
     b[i + 2] += (c[2] - b[i + 2]) * a;
   }
 
-  clear(hex) { this.rect(0, 0, this.w, this.h, hex); }
+  clear(hex) {
+    const c = rgb(hex);
+    for (let i = 0; i < this.buf.length; i += 3) { this.buf[i] = c[0]; this.buf[i + 1] = c[1]; this.buf[i + 2] = c[2]; }
+  }
 
-  // 정수 픽셀 사각형(안티앨리어싱 없음 — 픽셀 아트·배경용).
+  // 정수 픽셀 사각형(안티앨리어싱 없음 — 픽셀 아트·배경용). 시작·끝을 각각 반올림해, 맞닿은
+  // 사각형(픽셀 아트 칸)끼리는 배율이 소수여도 틈이나 겹침이 생기지 않는다.
   rect(x, y, w, h, hex) {
     const c = rgb(hex);
-    const x0 = Math.max(0, Math.round(x)), x1 = Math.min(this.w, Math.round(x + w));
-    const y0 = Math.max(0, Math.round(y)), y1 = Math.min(this.h, Math.round(y + h));
+    const s = this.s;
+    const x0 = Math.max(0, Math.round(x * s)), x1 = Math.min(this.w, Math.round((x + w) * s));
+    const y0 = Math.max(0, Math.round(y * s)), y1 = Math.min(this.h, Math.round((y + h) * s));
     for (let yy = y0; yy < y1; yy++) {
       let i = (yy * this.w + x0) * 3;
       for (let xx = x0; xx < x1; xx++, i += 3) { this.buf[i] = c[0]; this.buf[i + 1] = c[1]; this.buf[i + 2] = c[2]; }
@@ -256,7 +265,7 @@ class Painter {
   fill(contours, hex, alpha = 1) {
     const c = rgb(hex);
     const w = this.w;
-    scan(contours, this.w, this.h, (px, py, a) => this.blend((py * w + px) * 3, c, a * alpha));
+    scan(contours, this.w, this.h, (px, py, a) => this.blend((py * w + px) * 3, c, a * alpha), this.s);
   }
 
   // ── 도형 → 윤곽선 ────────────────────────────────────────────
@@ -319,9 +328,10 @@ class Painter {
     if (!str) return;
     let w = font.getAdvanceWidth(str, size);
     if (maxWidth && w > maxWidth) { size = size * (maxWidth / w); w = maxWidth; }
-    const left = Math.round(align === 'center' ? x - w / 2 : align === 'right' ? x - w : x);
-    const baseline = Math.round(y + size * 0.36);
-    const m = textMask(font, str, size);
+    const k = this.s; // 배율
+    const left = Math.round((align === 'center' ? x - w / 2 : align === 'right' ? x - w : x) * k);
+    const baseline = Math.round((y + size * 0.36) * k);
+    const m = textMask(font, str, size * k);
     const c = rgb(color);
     for (let my = 0; my < m.h; my++) {
       const py = baseline + m.y0 + my;
@@ -339,12 +349,12 @@ class Painter {
   // 글자 모양을 미리 만들어 캐시에 넣는다(첫 그림이 느리지 않게, 봇 시작 후 잘게 나눠 호출).
   warmText(font, s, size) {
     const str = cleanText(font, s);
-    if (str) textMask(font, str, size);
+    if (str) textMask(font, str, size * this.s);
   }
 
   // RGB 버퍼 → PNG. 압축은 동기(deflateSync)로 한다 — 측정상 한 장 0.5ms(서버 약 5ms)로 작고,
   // 비동기(zlib 스레드 풀)로 하면 스레드별 메모리 때문에 RSS가 30MB 더 높게 유지됐다.
-  // 압축 레벨 3(단색 위주라 크기 차이는 작고 시간은 크게 준다).
+  // 압축 레벨 1(가장 빠름 — 단색 위주라 크기 차이는 작다).
   png() {
     const sig = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
     const ihdr = Buffer.alloc(13);
@@ -358,7 +368,7 @@ class Painter {
       this.raw[y * (stride + 1)] = 0;
       this.buf.copy(this.raw, y * (stride + 1) + 1, y * stride, y * stride + stride);
     }
-    const idat = zlib.deflateSync(this.raw, { level: 3 });
+    const idat = zlib.deflateSync(this.raw, { level: 1 });
     return Buffer.concat([sig, pngChunk('IHDR', ihdr), pngChunk('IDAT', idat), pngChunk('IEND', Buffer.alloc(0))]);
   }
 }

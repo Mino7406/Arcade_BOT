@@ -12,8 +12,9 @@ const path = require('path');
 const { Painter, loadFont } = require('./그림판');
 const { ROLES, ROLE_ORDER, PLAYER_MAX_HP } = require('./레이드전투');
 
-const W = 900;
+const W = 900; // 설계 크기(좌표는 전부 이 기준)
 const H = 640;
+const RENDER_SCALE = 0.75; // 실제 그림은 675×480 — 디스코드가 어차피 채팅 폭으로 줄여 보여줘 글자 크기는 같고 픽셀은 44% 준다
 const C = {
   bg: '#17120e', frame: '#8a6a2c', gold: '#e2b14a', box: '#0c0a08', card: '#2a2119', cardEmpty: '#4a3d2a',
   teal: '#1d4c56', tealText: '#e6f4f6', orange: '#f5ab2e', text: '#ffffff', sub: '#eee6d8', dim: '#7d7466',
@@ -27,10 +28,10 @@ const FONT_FILES = { regular: 'NanumGothic-Regular.ttf', bold: 'NanumGothic-Bold
 // 처음 몇 장·이후 10장마다 RSS와 그리는 시간을 남긴다.
 const rssMb = () => Math.round(process.memoryUsage().rss / 1048576);
 let renderCount = 0;
-function logRender(scene, startedAt) {
+function logRender(scene, drawMs, pngMs, bytes) {
   renderCount++;
   if (renderCount > 3 && renderCount % 10 !== 0) return;
-  console.warn(`🎨 레이드 그림 #${renderCount}(${scene}) ${Date.now() - startedAt}ms · RSS ${rssMb()}MB`);
+  console.warn(`🎨 레이드 그림 #${renderCount}(${scene}) 그리기 ${drawMs.toFixed(0)}ms + 압축 ${pngMs.toFixed(0)}ms · ${Math.round(bytes / 1024)}KB · RSS ${rssMb()}MB`);
 }
 
 let fonts = null;
@@ -45,7 +46,7 @@ function load() {
       regular: loadFont(path.join(FONT_DIR, FONT_FILES.regular)),
       bold: loadFont(path.join(FONT_DIR, FONT_FILES.bold)),
     };
-    painter = new Painter(W, H);
+    painter = new Painter(W, H, RENDER_SCALE);
     console.warn(`🎨 레이드 그림 엔진 로드 — RSS ${before}→${rssMb()}MB, ${Date.now() - startedAt}ms`);
   } catch (err) {
     unavailable = true;
@@ -195,16 +196,18 @@ function background(key, boxY, boxH) {
   backgrounds.set(key, Buffer.from(painter.buf));
 }
 
-// render 공통: 엔진 준비 → 그리기 → PNG(비동기 압축). 실패하면 null(레이드.js가 글자 화면으로 대신).
-// 그리기 자체는 동기라 호출부(레이드.js의 화면 대기열)가 한 번에 하나씩만 부른다.
+// render 공통: 엔진 준비 → 그리기 → PNG. 실패하면 null(레이드.js가 글자 화면으로 대신).
+// 전부 동기라 중간에 다른 처리가 끼지 않고, 호출부(레이드.js의 화면 대기열)가 한 번에 하나씩만 부른다.
+// (async인 건 호출부와의 약속일 뿐 — 그리기 시간 측정에 다른 작업이 섞이지 않게 await 없이 끝낸다)
 async function render(scene, draw) {
   if (!load()) return null;
-  const startedAt = Date.now();
   p = painter;
   try {
+    const t0 = process.hrtime.bigint();
     draw();
-    const png = await painter.png();
-    logRender(scene, startedAt);
+    const t1 = process.hrtime.bigint();
+    const png = painter.png();
+    logRender(scene, Number(t1 - t0) / 1e6, Number(process.hrtime.bigint() - t1) / 1e6, png.length);
     return png;
   } catch (err) {
     console.error(`레이드 ${scene} 그림 실패:`, err);
@@ -328,6 +331,10 @@ function renderEnd(r, outcome, rewards = []) {
 // 반복되는 라벨(역할·스킬·몬스터 대사 등)은 글자 모양 캐시에 들어가 이후 그림에서 바로 재사용된다.
 function warmUpLabels(monsters) {
   const jobs = [];
+  // 장면별 고정 배경도 미리 만들어 둔다(첫 그림에서 큰 도형을 칠하는 비용이 가장 컸다).
+  for (const [key, y, h] of [['recruit', 102, 240], ['battle', 120, 224], ['end', 126, 216]]) {
+    jobs.push(() => { p = painter; background(key, y, h); });
+  }
   const add = (font, s, size) => jobs.push(() => painter.warmText(fonts[font], s, size));
   add('bold', '긴급 퀘스트 발생!', 46);
   add('bold', '타겟 몬스터', 22);
