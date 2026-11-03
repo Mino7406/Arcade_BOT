@@ -290,21 +290,18 @@ function renderBattle(r) {
     p.strokeRoundRect(50, 74, W - 100, 32, 16, 2, C.gold);
     text(`${b.hp.toLocaleString()} / ${b.maxHp.toLocaleString()}`, W / 2, 90, 22, '#ffffff');
 
-    // 몬스터 + 지난 턴 결과: 왼쪽 '몬스터 행동' 상자, 오른쪽 '입힌 피해' 숫자를 몬스터 양옆에 대칭으로
-    const sideY = 196, sideDX = 205;
-    drawMonster(m, W / 2, 192, 112, { rage: b.rage });
-    if (last) {
-      if (last.monsterMove) {
-        text('몬스터 행동', W / 2 - sideDX, sideY - 38, 16, C.muted);
-        p.roundRect(W / 2 - sideDX - 105, sideY - 21, 210, 42, 10, '#3a1a12');
-        p.strokeRoundRect(W / 2 - sideDX - 105, sideY - 21, 210, 42, 10, 1.5, '#7a3320');
-        text(`${last.monsterMove}!`, W / 2 - sideDX, sideY, 22, '#ffb08a', { maxWidth: 190 });
-      }
-      if (last.monsterDamage > 0) {
-        text('입힌 피해', W / 2 + sideDX, sideY - 38, 16, C.muted);
-        text(`-${last.monsterDamage.toLocaleString()}`, W / 2 + sideDX, sideY + 2, 42, '#ff5a45');
-      }
+    // 몬스터 + 지난 턴 결과: 게임처럼 몬스터가 쓴 기술을 머리 왼쪽 위 말풍선으로 띄운다
+    // (파티가 입힌 총피해 숫자는 일단 빼 둠 — 카드마다 행동 수치가 있어 중복이라)
+    drawMonster(m, W / 2, 196, 112, { rage: b.rage });
+    if (last?.monsterMove) {
+      const label = `${last.monsterMove}!`;
+      const bw = Math.min(p.textWidth(B(), label, 22), 200) + 36;
+      const bx = W / 2 - 92 - bw, by = 132;
+      p.roundRect(bx, by, bw, 44, 14, '#f4e6cf');
+      p.poly([bx + bw - 26, by + 40, bx + bw - 6, by + 40, bx + bw + 12, by + 58], '#f4e6cf'); // 말꼬리 → 몬스터
+      text(label, bx + bw / 2, by + 22, 22, '#3a1a12', { maxWidth: 200 });
     }
+
     // 다음 행동 예고 상자 — 왼쪽에 '다음 행동' 칩, 큰 공격(방어해야 할 때)은 빨간 상자 + 경고 삼각형
     const move = m.moves[b.intent];
     const warn = b.intent === 'smash';
@@ -423,7 +420,6 @@ function warmUpLabels(monsters) {
   const add = (font, s, size) => jobs.push(() => painter.warmText(fonts[font], s, size));
   add('bold', '긴급 퀘스트 발생!', 46);
   add('bold', '타겟 몬스터', 22);
-  for (const v of ['몬스터 행동', '입힌 피해']) add('bold', v, 16);
   add('bold', '다음 행동', 17);
   add('bold', '분노', 22);
   add('bold', '보상 없음', 20);
