@@ -305,20 +305,21 @@ function renderBattle(r) {
     // 다음 행동 예고 상자 — 왼쪽에 '다음 행동' 칩, 큰 공격(방어해야 할 때)은 빨간 상자 + 경고 삼각형
     const move = m.moves[b.intent];
     const warn = b.intent === 'smash';
-    const boxX = 140, boxW = W - 280, boxY = 272, boxH = 52;
-    p.roundRect(boxX, boxY, boxW, boxH, 12, warn ? '#4a1410' : '#201810');
-    p.strokeRoundRect(boxX, boxY, boxW, boxH, 12, 1.5, warn ? C.red : C.frame);
-    p.roundRect(boxX + 10, boxY + 11, 104, 30, 8, warn ? '#7a1f16' : '#3a2f22');
-    text('다음 행동', boxX + 62, boxY + 26, 17, warn ? '#ffd0c4' : C.muted);
-    const tx = boxX + 124 + (boxW - 134) / 2;
+    const boxW = 540, boxH = 46, boxX = (W - boxW) / 2, boxY = 276;
+    const midY = boxY + boxH / 2;
+    p.roundRect(boxX, boxY, boxW, boxH, 11, warn ? '#4a1410' : '#201810');
+    p.strokeRoundRect(boxX, boxY, boxW, boxH, 11, 1.5, warn ? C.red : C.frame);
+    p.roundRect(boxX + 9, boxY + 9, 94, 28, 7, warn ? '#7a1f16' : '#3a2f22');
+    text('다음 행동', boxX + 56, midY, 16, warn ? '#ffd0c4' : C.muted);
+    const tx = boxX + 112 + (boxW - 120) / 2;
     if (warn) {
-      const ty = boxY + 26, tw = p.textWidth(B(), move.telegraph, 24);
-      const ix = tx - Math.min(tw, boxW - 190) / 2 - 22;
-      p.poly([ix, ty - 11, ix + 12, ty + 10, ix - 12, ty + 10], '#ffb4a8');
-      p.rect(ix - 1.5, ty - 4, 3, 8, '#4a1410');
-      p.rect(ix - 1.5, ty + 5, 3, 3, '#4a1410');
+      const tw = p.textWidth(B(), move.telegraph, 22);
+      const ix = tx - Math.min(tw, boxW - 170) / 2 - 20;
+      p.poly([ix, midY - 10, ix + 11, midY + 9, ix - 11, midY + 9], '#ffb4a8');
+      p.rect(ix - 1.5, midY - 4, 3, 7, '#4a1410');
+      p.rect(ix - 1.5, midY + 4, 3, 3, '#4a1410');
     }
-    text(move.telegraph, tx, boxY + 26, 24, warn ? '#ffc4b8' : C.sub, { maxWidth: boxW - 190 });
+    text(move.telegraph, tx, midY, 22, warn ? '#ffc4b8' : C.sub, { maxWidth: boxW - 170 });
 
     cards(b.members, (x, y, w, h, roleKey, mem) => {
       const role = ROLES[roleKey];
@@ -420,7 +421,7 @@ function warmUpLabels(monsters) {
   const add = (font, s, size) => jobs.push(() => painter.warmText(fonts[font], s, size));
   add('bold', '긴급 퀘스트 발생!', 46);
   add('bold', '타겟 몬스터', 22);
-  add('bold', '다음 행동', 17);
+  add('bold', '다음 행동', 16);
   add('bold', '분노', 22);
   add('bold', '보상 없음', 20);
   for (const v of ['참가 완료', '참가 대기']) add('bold', v, 22);
@@ -440,7 +441,7 @@ function warmUpLabels(monsters) {
   for (const m of monsters) {
     add('bold', m.name, 38);
     add('bold', m.rageName, 38);
-    for (const move of Object.values(m.moves)) { add('bold', move.telegraph, 24); add('bold', `${move.name}!`, 22); }
+    for (const move of Object.values(m.moves)) { add('bold', move.telegraph, 22); add('bold', `${move.name}!`, 22); }
   }
   return jobs;
 }
