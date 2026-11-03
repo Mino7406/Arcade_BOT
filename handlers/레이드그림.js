@@ -250,9 +250,11 @@ const RIBBON = {
   pending: { fill: '#c4630f', color: '#ffffff' },
   ready:   { fill: '#1e6b3c', color: '#d9ffe6' },
   down:    { fill: '#3a3530', color: '#b0a89a' },
+  result:  { fill: '#3b2f22', color: '#e8d9bc' },
 };
-function memberState(mem) {
+function memberState(mem, showingResult) {
   if (mem.hp <= 0) return 'down';
+  if (showingResult) return 'result';
   return mem.choice ? 'ready' : 'pending';
 }
 function choiceLabel(mem) {
@@ -276,7 +278,7 @@ function renderBattle(r) {
     // 상단: TURN 배지 · 몬스터 이름(분노) · HP 바
     p.roundRect(30, 20, 118, 42, 10, '#2a2119');
     p.strokeRoundRect(30, 20, 118, 42, 10, 1.5, C.gold);
-    text(`TURN ${b.turn}`, 89, 41, 24, C.gold);
+    text(`TURN ${r.showingResult && last ? last.turn : b.turn}`, 89, 41, 24, C.gold);
     // 몬스터 이름은 정확히 가운데. 왼쪽 TURN 배지와 겹치지 않게 최대 폭을 둔다(분노 표시는 이름 오른쪽).
     const name = b.rage ? m.rageName : m.name;
     const NAME_MAX = 420;
@@ -307,6 +309,12 @@ function renderBattle(r) {
     const warn = b.intent === 'smash';
     const boxW = 540, boxH = 46, boxX = (W - boxW) / 2, boxY = 276;
     const midY = boxY + boxH / 2;
+    if (r.showingResult && last) {
+      // 결과 화면: 다음 행동 상자 자리에 금색 'TURN N 결과' 띠 — 선택 화면과 확 달라 보이게
+      p.roundRect(boxX, boxY - 2, boxW, boxH + 4, 11, '#2a2010');
+      p.strokeRoundRect(boxX, boxY - 2, boxW, boxH + 4, 11, 2, C.gold);
+      text(`TURN ${last.turn} 결과`, W / 2, midY, 30, C.gold);
+    } else {
     p.roundRect(boxX, boxY, boxW, boxH, 11, warn ? '#4a1410' : '#201810');
     p.strokeRoundRect(boxX, boxY, boxW, boxH, 11, 1.5, warn ? C.red : C.frame);
     p.roundRect(boxX + 9, boxY + 9, 94, 28, 7, warn ? '#7a1f16' : '#3a2f22');
@@ -320,6 +328,8 @@ function renderBattle(r) {
       p.rect(ix - 1.5, midY + 4, 3, 3, '#4a1410');
     }
     text(move.telegraph, tx, midY, 22, warn ? '#ffc4b8' : C.sub, { maxWidth: boxW - 170 });
+    }
+
 
     cards(b.members, (x, y, w, h, roleKey, mem) => {
       const role = ROLES[roleKey];
@@ -329,11 +339,11 @@ function renderBattle(r) {
         text(role.name, x + w / 2, y + 172, 20, '#8a6a3a');
         return;
       }
-      const state = memberState(mem);
+      const state = memberState(mem, r.showingResult);
       const down = state === 'down';
       const ribbon = RIBBON[state];
       p.roundRect(x + 12, y + 12, w - 24, 30, 8, ribbon.fill);
-      text(state === 'pending' ? '행동 선택!' : state === 'ready' ? `준비 · ${choiceLabel(mem)}` : '쓰러짐',
+      text(state === 'pending' ? '행동 선택!' : state === 'ready' ? `준비 · ${choiceLabel(mem)}` : state === 'result' ? '결과' : '쓰러짐',
         x + w / 2, y + 27, 19, ribbon.color, { maxWidth: w - 36 });
 
       roleIcon(roleKey, x + w / 2, y + 86, down);
@@ -368,7 +378,7 @@ function renderBattle(r) {
       text(ready ? '스킬' : `${mem.cooldown}턴`, gx + 30, y + 239, 15, ready ? '#bff4ea' : C.muted);
       for (let k = 0; k < 2; k++) p.circle(gx + 80 + k * 18, y + 239, 6.5, k < mem.potions ? '#7ccf5a' : '#3a3328');
     }, (mem) => {
-      const state = memberState(mem);
+      const state = memberState(mem, r.showingResult);
       if (state === 'pending') return { color: '#ffb52e', width: 4 };
       if (state === 'ready') return { color: '#3ecf6e', width: 2.5 };
       return null;
@@ -437,7 +447,8 @@ function warmUpLabels(monsters) {
   for (const v of ['참가 완료', '참가 대기']) add('bold', v, 22);
   add('bold', '행동 선택!', 19);
   add('bold', '쓰러짐', 19);
-  for (let t = 1; t <= 30; t++) add('bold', `TURN ${t}`, 24);
+  for (let t = 1; t <= 30; t++) { add('bold', `TURN ${t}`, 24); add('bold', `TURN ${t} 결과`, 30); }
+  add('bold', '결과', 19);
   for (const v of ['스킬', '1턴', '2턴', '3턴']) add('bold', v, 15);
   for (const a of ['공격', '방어', '회복약']) add('bold', `준비 · ${a}`, 19);
   for (const k of ROLE_ORDER) {

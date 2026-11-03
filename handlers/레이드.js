@@ -6,7 +6,7 @@
 //       → 토벌 성공(보상 XP) / 전멸·시간 초과·무참가(몬스터 도주) → XP 정지 해제.
 //
 // 화면: 게임 화면처럼 — 그림 한 장이 곧 게임 화면이고(몬스터·카드 상태 리본·지난 턴 말풍선·피해 숫자),
-// 그 아래에는 상자 틀 없이 실시간 타이머 한 줄(<t:..:R> — 디스코드 앱이 알아서 줄여 보여줘 봇이 고칠
+// 그 아래에는 컨테이너(임베드 창) 안에 실시간 타이머 한 줄(<t:..:R> — 디스코드 앱이 알아서 줄여 보여줘 봇이 고칠
 // 필요가 없다)과 버튼만 둔다. 누가 행동을 고를 때마다 카드 리본이 바뀌도록 그림을 다시 그린다
 // (화면 대기열이 300ms 모아 한 번에). 그림을 못 그리는 환경이면 같은 정보를 글자로 대신 보여준다.
 //
@@ -18,7 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, AttachmentBuilder,
-  TextDisplayBuilder, SeparatorBuilder, SeparatorSpacingSize, MediaGalleryBuilder, MediaGalleryItemBuilder,
+  ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, SeparatorSpacingSize, MediaGalleryBuilder, MediaGalleryItemBuilder,
   ComponentType, EmbedBuilder,
 } = require('discord.js');
 const { applyXp, isExcludedGuild, announceLevelUp, setRaidXpFrozen } = require('./레벨링');
@@ -39,6 +39,7 @@ const SPAWN_WINDOW_START_HOUR = 12; // KST. 사람이 없는 새벽에 떠서 �
 const SPAWN_WINDOW_END_HOUR = 23;
 const RECRUIT_MS = 10 * 60 * 1000;  // 모집 시간
 const TURN_MS = 30 * 1000;          // 턴당 행동 선택 시간(못 고르면 자동 공격)
+const RESULT_MS = 2500;             // 턴 결과 화면을 보여주는 시간 — 그동안 버튼이 꺼지고, 끝나면 다음 턴 선택 화면으로
 const BATTLE_LIMIT_MS = 10 * 60 * 1000; // 전투 제한 시간 — 넘기면 몬스터 도주
 const PARTY_MAX = 4;
 const CLEAR_XP = 300;               // 토벌 성공 시 파티원 1인당
@@ -102,7 +103,8 @@ function rescheduleOverdue(now = Date.now()) {
 
 // ── 화면 ────────────────────────────────────────────────────────
 const ts = (ms, style = 'R') => `<t:${Math.floor(ms / 1000)}:${style}>`;
-const END_EMBED_COLOR = 0x4E5058; // 옛 버전(임베드) 메시지를 정리할 때만 쓴다
+// 컨테이너(임베드 창) 왼쪽 색 줄: 모집 빨강 · 전투 금색 · 분노 빨강 · 클리어 초록 · 그 외 종료 회색
+const ACCENT = { recruit: 0xED4245, battle: 0xD9A93F, rage: 0xED4245, clear: 0x57F287, end: 0x4E5058 };
 
 function bar(value, max, length) {
   const filled = Math.max(0, Math.min(length, Math.round((value / max) * length)));
@@ -112,19 +114,18 @@ function freezeNotice(r) {
   return r.freezesXp ? '\n> 🔧 **XP 시스템 고장!** 놀이터 미니게임 · 통화방 · 채팅 XP가 멈췄습니다.' : '';
 }
 
-// 상자(컨테이너) 없이 맨 위 단계에 그림 → 글자 → 버튼을 나열한다(임베드처럼 보이지 않게).
-// sections: [{ text } | { separator } | { row }]
+// 컨테이너(임베드 창) 하나 안에 그림 → 글자 → 버튼을 담는다. sections: [{ text } | { separator } | { row }]
 // image: { png } 새 그림 첨부 / { url } 지난번 올린 그림 재사용 / null 그림 없음.
-function assemble(image, sections) {
-  const components = [];
+function assemble(accent, image, sections) {
+  const container = new ContainerBuilder().setAccentColor(accent);
   const mediaUrl = image?.png ? `attachment://${IMAGE_NAME}` : image?.url;
-  if (mediaUrl) components.push(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(mediaUrl)));
+  if (mediaUrl) container.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(mediaUrl)));
   for (const s of sections) {
-    if (s.text) components.push(new TextDisplayBuilder().setContent(s.text));
-    else if (s.separator) components.push(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
-    else if (s.row) components.push(s.row);
+    if (s.text) container.addTextDisplayComponents(new TextDisplayBuilder().setContent(s.text));
+    else if (s.separator) container.addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
+    else if (s.row) container.addActionRowComponents(s.row);
   }
-  const payload = { components, flags: MessageFlags.IsComponentsV2, allowedMentions: { parse: [] } };
+  const payload = { components: [container], flags: MessageFlags.IsComponentsV2, allowedMentions: { parse: [] } };
   // 새 그림을 올릴 때는 이전 첨부를 지우고 교체한다. 글자만 고칠 때는 첨부를 건드리지 않아 기존 그림이 남는다.
   if (image?.png) { payload.files = [new AttachmentBuilder(image.png, { name: IMAGE_NAME })]; payload.attachments = []; }
   else if (image === null) payload.attachments = [];
@@ -146,7 +147,9 @@ async function pickImage(r, redraw, render) {
 // 보낸/고친 메시지에서 디스코드가 붙여준 그림 주소를 기억해, 다음 글자만 고치는 응답에 재사용한다.
 function rememberImageUrl(r, message) {
   try {
-    const gallery = (message?.components ?? []).map(c => c.toJSON?.()).find(c => c?.type === ComponentType.MediaGallery);
+    const top = (message?.components ?? []).map(c => c.toJSON?.()).filter(Boolean);
+    const all = top.flatMap(c => (c.type === ComponentType.Container ? c.components : [c]));
+    const gallery = all.find(c => c?.type === ComponentType.MediaGallery);
     r.imageUrl = gallery?.items?.[0]?.media?.url ?? null;
   } catch {
     r.imageUrl = null;
@@ -192,7 +195,7 @@ async function recruitView(r, { redraw = true } = {}) {
   sections.push({
     text: `-# ▶️ 바로 시작: ${r.party[0] ? `파티장 ${r.party[0].name}` : '첫 참가자'} · 관리자 · 4명이 모이면 자동 출발 · 성공 시 +${CLEAR_XP} XP (MVP +${MVP_BONUS_XP})`,
   });
-  return assemble(image, sections);
+  return assemble(ACCENT.recruit, image, sections);
 }
 
 function memberStatus(mem) {
@@ -215,11 +218,17 @@ async function battleView(r, { redraw = true } = {}) {
           ` · ✨${mem.cooldown > 0 ? `${mem.cooldown}턴` : '준비'} · 🍖×${mem.potions}`).join('\n'),
     });
   }
-  const pending = b.members.filter(mem => mem.hp > 0 && !mem.choice).map(mem => mem.name);
-  sections.push({
-    text: `⏳ **행동 마감 ${ts(r.turnEndsAt)}** · 턴 ${b.turn} · 전투 종료 ${ts(r.battleEndsAt)}\n` +
-      (pending.length ? `-# 아직 고르지 않음: ${pending.join(', ')}` : '-# 모두 골랐어요 — 곧 턴이 진행돼요'),
-  });
+  // 제목을 크게 바꿔 턴 전환이 눈에 띄게: 결과 화면 '📜 TURN N 결과' → 선택 화면 '⚔️ TURN N+1 · 행동을 고르세요'
+  if (r.showingResult) {
+    sections.push({ text: `## 📜 TURN ${b.lastTurn?.turn ?? b.turn - 1} 결과\n-# 잠시 후 TURN ${b.turn}이 시작돼요` });
+  } else {
+    const pending = b.members.filter(mem => mem.hp > 0 && !mem.choice).map(mem => mem.name);
+    sections.push({
+      text: `## ⚔️ TURN ${b.turn} · 행동을 고르세요\n` +
+        `⏳ 마감 ${ts(r.turnEndsAt)} · 전투 종료 ${ts(r.battleEndsAt)}\n` +
+        (pending.length ? `-# 아직 고르지 않음: ${pending.join(', ')}` : '-# 모두 골랐어요 — 곧 턴이 진행돼요'),
+    });
+  }
   if (!image) {
     // 그림이 없을 때만 지난 턴 기록을 글자로 보여준다(그림에는 말풍선·피해 숫자로 들어가 있다).
     sections.push({ text: b.members.map(memberStatus).join('　') });
@@ -233,12 +242,13 @@ async function battleView(r, { redraw = true } = {}) {
           .setCustomId(`raid:act:${key}`)
           .setEmoji(a.emoji)
           .setLabel(a.name)
-          .setStyle(key === 'attack' ? ButtonStyle.Danger : key === 'skill' ? ButtonStyle.Primary : key === 'potion' ? ButtonStyle.Success : ButtonStyle.Secondary),
+          .setStyle(key === 'attack' ? ButtonStyle.Danger : key === 'skill' ? ButtonStyle.Primary : key === 'potion' ? ButtonStyle.Success : ButtonStyle.Secondary)
+          .setDisabled(!!r.showingResult),
       ),
       new ButtonBuilder().setCustomId('raid:help').setEmoji('❔').setStyle(ButtonStyle.Secondary),
     ),
   });
-  return assemble(image, sections);
+  return assemble(b.rage ? ACCENT.rage : ACCENT.battle, image, sections);
 }
 
 const OUTCOME_TEXT = {
@@ -272,7 +282,7 @@ async function endView(r, outcome, rewards = []) {
     const mvpName = mvp && b?.members.find(mem => mem.userId === mvp.userId)?.name;
     sections.push({ text: `-# ${OUTCOME_TEXT[outcome]}${b ? ` · ${b.turn}턴` : ''}${mvpName ? ` · MVP ${mvpName} +${mvp.xp} XP` : ''}` });
   }
-  return assemble(image, sections);
+  return assemble(outcome === 'clear' ? ACCENT.clear : ACCENT.end, image, sections);
 }
 
 function buildHelpText() {
@@ -419,14 +429,23 @@ function armTurnTimer(r) {
   }, Math.max(0, r.turnEndsAt - Date.now()));
 }
 
-// 턴을 하나 진행하고 새 화면(그림 포함)을 바로 보내게 한다. 전투가 끝났으면 결과 화면.
+// 턴을 하나 진행한다. 전투가 끝났으면 결과 화면, 아니면 턴 전환 연출:
+// ① 결과 화면(TURN N 결과 띠, 버튼 꺼짐)을 RESULT_MS 동안 보여주고 ② 다음 턴 선택 화면으로 넘어가며
+// 그때부터 행동 선택 시간을 잰다. 같은 메시지에서 그림만 조금 바뀌면 턴이 넘어간 걸 알아채기 어려워서다.
 function advanceTurn(r) {
   clearTimer(r);
   const outcome = resolveTurn(r.battle);
   if (outcome) { finishRaid(r, outcome); return; }
   if (Date.now() >= r.battleEndsAt) { finishRaid(r, 'timeout'); return; }
-  armTurnTimer(r);
+  r.showingResult = true;
   requestRender(r, { image: true, immediate: true });
+  const turn = r.battle.turn;
+  r.timer = setTimeout(() => {
+    if (raid !== r || r.phase !== 'battle' || r.battle.turn !== turn) return;
+    r.showingResult = false;
+    armTurnTimer(r);
+    requestRender(r, { image: true, immediate: true });
+  }, RESULT_MS);
 }
 
 // 레이드를 끝낸다. XP 정지 해제 · 보상 지급 · 상태 저장 · 복구 안내 후 결과 화면을 바로 보내게 한다.
@@ -541,6 +560,10 @@ async function handleRaidButton(interaction) {
       await interaction.reply({ content: '⏳ 아직 모집 중이에요.', flags: MessageFlags.Ephemeral });
       return;
     }
+    if (r.showingResult) {
+      await interaction.reply({ content: '📜 턴 결과를 보여주는 중이에요. 곧 다음 턴이 시작돼요!', flags: MessageFlags.Ephemeral });
+      return;
+    }
     const error = checkChoice(r.battle, interaction.user.id, arg);
     if (error) {
       await interaction.reply({ content: `⚠️ ${error}`, flags: MessageFlags.Ephemeral });
@@ -567,7 +590,7 @@ async function recoverInterruptedRaid(client) {
   const ghost = { monster: MONSTERS[0], battle: null, party: [], freezesXp: false, imageUrl: null };
   // 예전 버전(임베드)으로 띄운 메시지는 V2로 바꿀 수 없을 수 있어, 실패하면 임베드로 정리한다.
   await message.edit(await endView(ghost, 'restart')).catch(() =>
-    message.edit({ embeds: [new EmbedBuilder().setColor(END_EMBED_COLOR).setDescription(`# ${OUTCOME_TEXT.restart}`)], components: [] }).catch(() => {}),
+    message.edit({ embeds: [new EmbedBuilder().setColor(ACCENT.end).setDescription(`# ${OUTCOME_TEXT.restart}`)], components: [] }).catch(() => {}),
   );
 }
 
