@@ -260,6 +260,44 @@ const OUTCOME_TEXT = {
   admin:   '🛑 관리자가 긴급 퀘스트를 종료했다',
 };
 
+// 종료 화면 그림 아래 요약 카드: 큰 제목 · 인용 블록(핵심 결과) · 작은 글씨(기록·복구·다음 출현).
+const END_HEADING = {
+  clear: '🏆 토벌 성공!', wipe: '☠️ 파티 전멸', timeout: '⌛ 시간 초과',
+  noshow: '💨 아무도 오지 않았다', restart: '💨 봇 점검으로 중단', admin: '🛑 퀘스트 종료',
+};
+function formatDuration(ms) {
+  const sec = Math.max(0, Math.round(ms / 1000));
+  return sec >= 60 ? `${Math.floor(sec / 60)}분 ${sec % 60}초` : `${sec}초`;
+}
+// 이름 끝 글자 받침에 따라 '이'/'가'를 고른다(한글이 아니면 '이(가)')
+function subjectJosa(name) {
+  const code = String(name).trim().slice(-1).charCodeAt(0) - 0xAC00;
+  if (code < 0 || code > 11171) return '이(가)';
+  return code % 28 ? '이' : '가';
+}
+function endSummary(r, outcome, rewards) {
+  const b = r.battle;
+  const lines = [`## ${END_HEADING[outcome]}`];
+  if (outcome === 'clear') {
+    const mvp = rewards.find(x => x.mvp);
+    const mvpName = mvp && b?.members.find(mem => mem.userId === mvp.userId)?.name;
+    if (mvpName) lines.push(`> 👑 MVP **${mvpName}** · **+${mvp.xp} XP**`);
+    if (rewards.some(x => !x.mvp)) lines.push(`> 🎁 파티원 **+${CLEAR_XP} XP**`);
+    if (!rewards.length) lines.push('> 직접 행동한 파티원이 없어 보상이 없어요');
+  } else if (outcome === 'wipe' || outcome === 'timeout' || outcome === 'noshow') {
+    lines.push(`> 💨 ${r.monster.name}${subjectJosa(r.monster.name)} 도망쳤다 — 보상 없음`);
+  } else if (outcome === 'admin') {
+    lines.push('> 관리자가 긴급 퀘스트를 종료했어요');
+  }
+  const meta = [];
+  if (b) meta.push(`⏱️ ${b.turn}턴${r.battleStartedAt ? ` · ${formatDuration((r.endedAt || Date.now()) - r.battleStartedAt)}` : ''}`);
+  if (r.freezesXp) meta.push('🔧 XP 시스템 복구됨');
+  if (meta.length) lines.push(`-# ${meta.join(' · ')}`);
+  // 다음 자동 출현 시각 — 디스코드 시간 표시라 시간이 지나면 저절로 줄어든다
+  if (state.nextSpawnAt && state.nextSpawnAt > Date.now()) lines.push(`-# 📅 다음 긴급 퀘스트 ${ts(state.nextSpawnAt)}`);
+  return lines.join('\n');
+}
+
 async function endView(r, outcome, rewards = []) {
   const image = await pickImage(r, true, () => renderEnd(r, outcome, rewards));
   const b = r.battle;
@@ -278,9 +316,7 @@ async function endView(r, outcome, rewards = []) {
     if (r.freezesXp) body += '\n\n> 🔧 **XP 시스템이 복구되었습니다!**';
     sections.push({ text: body });
   } else {
-    const mvp = rewards.find(x => x.mvp);
-    const mvpName = mvp && b?.members.find(mem => mem.userId === mvp.userId)?.name;
-    sections.push({ text: `-# ${OUTCOME_TEXT[outcome]}${b ? ` · ${b.turn}턴` : ''}${mvpName ? ` · MVP ${mvpName} +${mvp.xp} XP` : ''}` });
+    sections.push({ text: endSummary(r, outcome, rewards) });
   }
   return assemble(outcome === 'clear' ? ACCENT.clear : ACCENT.end, image, sections);
 }
