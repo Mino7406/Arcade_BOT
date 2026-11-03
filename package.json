@@ -4,7 +4,7 @@
   "description": "Discord 아케이드 봇",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "node --max-old-space-size=160 --max-semi-space-size=8 index.js",
     "deploy": "node deploy-commands.js"
   },
   "dependencies": {

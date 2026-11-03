@@ -67,9 +67,14 @@ function readLogs() {
 // 직렬화 1.4ms + 동기 쓰기 0.9ms가 매 클릭마다 이벤트 루프를 통째로 멈춰, 여러 명이 동시에
 // 버튼을 누르면 그만큼 봇 응답이 밀린다. 지금은 (1) 쓰기가 비동기라 루프를 막지 않고,
 // (2) 쓰기가 도는 동안 쌓인 기록들이 한 번의 저장으로 합쳐진다.
-// 저장을 미루지는 않으므로(요청 즉시 시작) 크래시 대비 write-through 성격은 그대로다.
+// 그래도 로그가 10000개(pretty-print 약 2MB)까지 커지면서 클릭마다 2MB 문자열을 새로 만들고
+// 2MB를 디스크에 쓰게 됐다 — CPU 25%·RAM 256MB 호스팅에선 GC 압박과 응답 지연으로 이어진다.
+// 그래서 첫 기록 후 LOG_FLUSH_DELAY_MS 동안 들어온 기록을 모아 한 번에 저장한다. 강제 종료(SIGKILL)
+// 시 최대 그만큼의 로그만 잃고, 정상 종료(SIGTERM/SIGINT)는 flushLogsSync가 마저 저장한다.
+const LOG_FLUSH_DELAY_MS = 10_000;
 let writing = false;
 let dirty = false;
+let flushTimer = null;
 
 function serialize() {
   return JSON.stringify(logs, null, 2); // 사람이 읽는 감사 로그라 pretty-print 유지
@@ -85,13 +90,23 @@ async function flushLoop() {
   }
 }
 
-function scheduleWrite() {
-  dirty = true;
+function startFlush() {
+  flushTimer = null;
   if (writing) return; // 이미 도는 루프가 방금 바뀐 내용까지 같이 저장한다
   writing = true;
   flushLoop()
     .catch(err => console.error('로그 파일 저장 실패:', err))
-    .finally(() => { writing = false; });
+    .finally(() => {
+      writing = false;
+      if (dirty) scheduleWrite(); // 루프가 끝난 직후~여기 사이에 들어온 기록도 놓치지 않게
+    });
+}
+
+function scheduleWrite() {
+  dirty = true;
+  if (flushTimer || writing) return;
+  flushTimer = setTimeout(startFlush, LOG_FLUSH_DELAY_MS);
+  flushTimer.unref(); // 이 타이머 하나 때문에 프로세스가 종료를 미루지 않게
 }
 
 // 종료 직전 한 번만 동기로 저장한다. shutdown()이 process.exit()을 부르면 진행 중이던

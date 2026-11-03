@@ -9,21 +9,34 @@ const MEDALS = ['🥇', '🥈', '🥉'];
 const BAR_LENGTH = 10;
 const MEMBER_FETCH_CHUNK_SIZE = 100; // 디스코드 게이트웨이 멤버 조회 1회 요청당 유저 ID 최대 개수
 
-// userIds가 100개를 넘으면 한 번에 조회가 안 되므로 100개씩 나눠 병렬로 조회한 뒤 합친다.
-async function fetchMembersById(guild, userIds) {
-  if (userIds.length === 0) return new Map();
+// 랭킹은 서버에 남아있는 유저만 보여주려고 XP가 있는 전원을 조회하는데, 예전엔 ◀ ▶ 를 누를
+// 때마다 수백 명을 다시 조회했다. 이름·잔류 여부는 몇 분 사이에 거의 안 바뀌므로 서버별로
+// 이름만(멤버 객체는 들고 있지 않음) MEMBER_NAMES_TTL_MS 동안 재사용하고, 그 사이 랭킹에 새로
+// 들어온 유저만 추가로 조회한다.
+const MEMBER_NAMES_TTL_MS = 5 * 60 * 1000;
+const memberNamesCache = new Map(); // guildId → { at, checked: Set<userId>, names: Map<userId, displayName> }
+
+// userIds가 100개를 넘으면 한 번에 조회가 안 되므로 100개씩 나눠 병렬로 조회한다.
+// 조회에 실패한 묶음은 checked에 넣지 않는다 — 일시적 오류로 그 유저들이 TTL 동안 "서버를
+// 나간 사람"처럼 랭킹에서 빠지지 않고, 다음 페이지 이동 때 다시 조회되게.
+async function getMemberNames(guild, userIds) {
+  let entry = memberNamesCache.get(guild.id);
+  if (!entry || Date.now() - entry.at > MEMBER_NAMES_TTL_MS) {
+    entry = { at: Date.now(), checked: new Set(), names: new Map() };
+    memberNamesCache.set(guild.id, entry);
+  }
+  const missing = userIds.filter(id => !entry.checked.has(id));
   const chunks = [];
-  for (let i = 0; i < userIds.length; i += MEMBER_FETCH_CHUNK_SIZE) {
-    chunks.push(userIds.slice(i, i + MEMBER_FETCH_CHUNK_SIZE));
+  for (let i = 0; i < missing.length; i += MEMBER_FETCH_CHUNK_SIZE) {
+    chunks.push(missing.slice(i, i + MEMBER_FETCH_CHUNK_SIZE));
   }
-  const results = await Promise.all(
-    chunks.map(chunk => guild.members.fetch({ user: chunk }).catch(() => new Map())),
-  );
-  const merged = new Map();
-  for (const result of results) {
-    for (const [id, member] of result) merged.set(id, member);
-  }
-  return merged;
+  await Promise.all(chunks.map(async (chunk) => {
+    const members = await guild.members.fetch({ user: chunk }).catch(() => null);
+    if (!members) return;
+    for (const id of chunk) entry.checked.add(id);
+    for (const [id, member] of members) entry.names.set(id, member.displayName);
+  }));
+  return entry.names;
 }
 
 function formatEntry(entry, name) {
@@ -92,8 +105,8 @@ async function buildRankingView(guild, page, includeShare = true) {
   // 전체 랭킹을 먼저 가져와 멤버 여부를 확인한 뒤 걸러내고 그 결과로 페이지를 나눠야 한다.
   // (레벨 데이터는 파일 하나짜리 인메모리 객체라 전체를 훑어도 부담이 없다.)
   const allEntries = getLeaderboard(guild.id, rawTotal, 0);
-  const members = await fetchMembersById(guild, allEntries.map(e => e.userId));
-  const entries = allEntries.filter(e => members.has(e.userId));
+  const names = await getMemberNames(guild, allEntries.map(e => e.userId));
+  const entries = allEntries.filter(e => names.has(e.userId));
   if (entries.length === 0) return null;
 
   const total = entries.length;
@@ -102,7 +115,7 @@ async function buildRankingView(guild, page, includeShare = true) {
   const offset = (clampedPage - 1) * PAGE_SIZE;
   const pageEntries = entries.slice(offset, offset + PAGE_SIZE);
 
-  const lines = pageEntries.map((entry) => formatEntry(entry, members.get(entry.userId).displayName));
+  const lines = pageEntries.map((entry) => formatEntry(entry, names.get(entry.userId)));
 
   const embed = new EmbedBuilder()
     .setColor(0xFEE75C)
