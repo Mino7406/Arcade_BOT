@@ -10,7 +10,7 @@
 
 const path = require('path');
 const { Painter, loadFont } = require('./그림판');
-const { ROLES, ROLE_ORDER, PLAYER_MAX_HP, ACTIONS } = require('./레이드전투');
+const { ROLES, ROLE_ORDER, PLAYER_MAX_HP, ACTIONS, createBattle, choose, resolveTurn } = require('./레이드전투');
 
 const W = 900; // 설계 크기(좌표는 전부 이 기준)
 const H = 640;
@@ -28,7 +28,9 @@ const FONT_FILES = { regular: 'NanumGothic-Regular.ttf', bold: 'NanumGothic-Bold
 // 처음 몇 장·이후 10장마다 RSS와 그리는 시간을 남긴다.
 const rssMb = () => Math.round(process.memoryUsage().rss / 1048576);
 let renderCount = 0;
+let warming = false; // 미리 데우기 중에 그린 그림은 기록하지 않는다
 function logRender(scene, drawMs, pngMs, bytes) {
+  if (warming) return;
   renderCount++;
   if (renderCount > 3 && renderCount % 10 !== 0) return;
   console.warn(`🎨 레이드 그림 #${renderCount}(${scene}) 그리기 ${drawMs.toFixed(0)}ms + 압축 ${pngMs.toFixed(0)}ms · ${Math.round(bytes / 1024)}KB · RSS ${rssMb()}MB`);
@@ -561,7 +563,29 @@ function warmUpLabels(monsters) {
     add('bold', m.rageName, 38);
     for (const move of Object.values(m.moves)) { add('bold', move.telegraph, 22); add('bold', `${move.name}!`, 22); }
   }
+  // 마지막으로 장면마다 한 장씩 실제로 그려 본다. 배경·글자 모양만 데워 두니 서버에서 첫 모집 그림이 여전히
+  // 그리기 412ms + 압축 298ms(이벤트 루프 지연 826ms)였다 — 글자·픽셀 붙이기와 PNG 만들기 반복문이 처음 돌 때
+  // 느린 탓이라, 봇이 한가한 시작 직후에 한 번씩 돌려 둔다. 결과 그림은 버리고 콘솔 기록도 남기지 않는다.
+  for (const scene of sampleScenes(monsters[0])) jobs.push(() => { warming = true; try { scene(); } finally { warming = false; } });
   return jobs;
+}
+
+// 미리 그려 볼 가짜 레이드(4인 파티, 한 턴 진행)
+function sampleScenes(monster) {
+  const party = ROLE_ORDER.map((role, i) => ({ userId: `warm${i}`, name: ['아케이드', '레이드원', 'Player', '테스트'][i], role }));
+  const battle = createBattle(monster, party);
+  const r = { monster, party, battle, battleStartedAt: Date.now() - 180000, endedAt: Date.now(), showingResult: false };
+  return [
+    () => renderRecruit({ monster, party: party.slice(0, 2) }),
+    () => {
+      ['attack', 'skill', 'guard', 'potion'].forEach((action, i) => choose(battle, party[i].userId, action));
+      resolveTurn(battle);
+      r.showingResult = true;
+      renderBattle(r);
+    },
+    () => { r.showingResult = false; renderBattle(r); },
+    () => renderEnd(r, 'clear', party.map((m, i) => ({ userId: m.userId, xp: 300, mvp: i === 0 }))),
+  ];
 }
 
 function warmUp(monsters) {

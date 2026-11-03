@@ -187,7 +187,7 @@ async function recruitView(r, { redraw = true } = {}) {
     text: `## ⏳ ${clock(r.recruitEndsAt, true)}\n` +
       `**파티 ${r.party.length} / ${PARTY_MAX}** · 역할 버튼을 눌러 참가하세요\n` +
       // 몬스터 때문에 XP가 멈췄다는 걸 알려 참가 동기를 준다(레벨 시스템이 없는 테스트 서버에서도 문구는 보여줌)
-      '> ⚠️ 몬스터가 XP 시스템을 장악해 **채팅 · 통화방 · 미니게임 XP가 멈췄어요!** 토벌하면 다시 돌아와요.',
+      '> ⚠️ 몬스터가 XP 시스템을 장악해 **채팅 · 통화방 · 미니게임 XP 지급이 멈췄어요!**',
   });
   sections.push({
     row: new ActionRowBuilder().addComponents(
@@ -245,7 +245,7 @@ async function battleView(r, { redraw = true } = {}) {
     const pending = b.members.filter(mem => mem.hp > 0 && !mem.choice).map(mem => mem.name);
     sections.push({
       text: `## ⚔️ TURN ${b.turn} · 행동을 고르세요\n` +
-        `⏳ **${clock(r.turnEndsAt)}** 남음 · 전투 종료까지 ${clock(r.battleEndsAt)}\n` +
+        `⏳ **${clock(r.turnEndsAt)}** 남음\n` +
         (pending.length ? `-# 아직 고르지 않음: ${pending.join(', ')}` : '-# 모두 골랐어요 — 곧 턴이 진행돼요'),
     });
   }
@@ -268,6 +268,8 @@ async function battleView(r, { redraw = true } = {}) {
       new ButtonBuilder().setCustomId('raid:help').setEmoji('❔').setStyle(ButtonStyle.Secondary),
     ),
   });
+  // 전투 전체 제한 시간은 턴 타이머와 헷갈리지 않게 버튼 아래 작은 글씨로 따로 둔다.
+  sections.push({ text: `-# ⌛ 전투 종료까지 ${clock(r.battleEndsAt)}` });
   return assemble(b.rage ? ACCENT.rage : ACCENT.battle, image, sections);
 }
 
@@ -301,8 +303,9 @@ function endSummary(r, outcome, rewards) {
   if (outcome === 'clear') {
     const mvp = rewards.find(x => x.mvp);
     const mvpName = mvp && b?.members.find(mem => mem.userId === mvp.userId)?.name;
-    if (mvpName) lines.push(`> 👑 MVP **${mvpName}** · **+${mvp.xp} XP**`);
-    if (rewards.some(x => !x.mvp)) lines.push(`> 🎁 파티원 **+${CLEAR_XP} XP**`);
+    if (mvpName) lines.push(`> 👑 **MVP** : ${mvpName} · (+${mvp.xp} XP)`);
+    const others = rewards.filter(x => !x.mvp).map(x => b.members.find(mem => mem.userId === x.userId)?.name).filter(Boolean);
+    if (others.length) lines.push(`> 🎁 **보상** : ${others.join(', ')} · (+${CLEAR_XP} XP)`);
     if (!rewards.length) lines.push('> 직접 행동한 파티원이 없어 보상이 없어요');
   } else if (outcome === 'wipe' || outcome === 'timeout' || outcome === 'noshow') {
     lines.push(`> 💨 ${r.monster.name}${subjectJosa(r.monster.name)} 도망쳤다 — 보상 없음`);
