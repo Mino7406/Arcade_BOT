@@ -99,27 +99,68 @@ function title(ctx, s, color, withSirens) {
   if (withSirens) { siren(ctx, W / 2 - tw / 2 - 44, 46); siren(ctx, W / 2 + tw / 2 + 44, 46); }
 }
 
-// 역할 아이콘(단순 도형, 오리지널)
-function roleIcon(ctx, role, cx, cy, color = '#e8e2d6') {
-  ctx.save(); ctx.translate(cx, cy);
-  ctx.fillStyle = color; ctx.strokeStyle = color; ctx.lineWidth = 4; ctx.lineCap = 'round';
-  if (role === 'sword') {
-    ctx.rotate(-Math.PI / 4); ctx.fillRect(-4, -30, 8, 40); ctx.fillRect(-14, 10, 28, 6); ctx.fillRect(-3, 16, 6, 14);
-  } else if (role === 'archer') {
-    const a = Math.PI / 2.4, tipX = -8 + 28 * Math.cos(a), tipY = 28 * Math.sin(a);
-    ctx.beginPath(); ctx.arc(-8, 0, 28, -a, a); ctx.stroke();
-    ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(tipX, -tipY); ctx.lineTo(tipX, tipY); ctx.stroke();
-    ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-20, 0); ctx.lineTo(26, 0); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(26, 0); ctx.lineTo(18, -6); ctx.lineTo(18, 6); ctx.closePath(); ctx.fill();
-  } else if (role === 'tank') {
-    ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(24, -20); ctx.lineTo(20, 10); ctx.quadraticCurveTo(10, 26, 0, 32);
-    ctx.quadraticCurveTo(-10, 26, -20, 10); ctx.lineTo(-24, -20); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = C.card; ctx.fillRect(-3, -18, 6, 34); ctx.fillRect(-14, -6, 28, 6);
-  } else {
-    ctx.beginPath(); ctx.moveTo(0, 26); ctx.bezierCurveTo(-36, 2, -20, -30, 0, -12); ctx.bezierCurveTo(20, -30, 36, 2, 0, 26); ctx.fill();
-    ctx.fillStyle = C.card; ctx.fillRect(-3, -10, 6, 22); ctx.fillRect(-11, -2, 22, 6);
-  }
-  ctx.restore();
+// 역할 아이콘: 몬스터와 같은 16×16 픽셀 아트(오리지널). '.'은 투명.
+const ROLE_SPRITES = {
+  sword: {
+    rows: [
+      '.............ddd', '............dwsd', '...........dwsd.', '..........dwsd..',
+      '.........dwsd...', '........dwsd....', '.......dwsd.....', '..dd..dwsd......',
+      '..dgddwsd.......', '...dgwsd........', '....dgd.........', '...dbdgd........',
+      '..dbd.dgd.......', '.dbd...dd.......', 'dpd.............', 'dd..............',
+    ],
+    palette: { d: '#15151b', w: '#ffffff', s: '#a9bdd4', g: '#e8b34a', b: '#7a4a26', p: '#e8b34a' },
+  },
+  archer: {
+    rows: [
+      '.........dbdd...', '........dbhd....', '.......dbhdl....', '.....dbhd..l....',
+      '.....dbhd..l....', '....dbhd...l....', 'fffdbhd....l.g..', '.aaaaaaaaaaaaggd',
+      'fffdbhd....l.g..', '...dbhd....l....', '....dbhd...l....', '.....dbhd..l....',
+      '.....dbhd..l....', '.......dbhdl....', '........dbhd....', '.........dbdd...',
+    ],
+    palette: { d: '#15151b', b: '#8b5a2b', h: '#c98c4a', l: '#f1e7d0', a: '#d9c7a3', g: '#a9bdd4', f: '#e5484d' },
+  },
+  tank: {
+    rows: [
+      '..dddddddddddd..', '.dggggggggggggd.', '.dguuuuwwuuuugd.', '.dguhuuwwuuuugd.',
+      '.dguhuuwwuuuugd.', '.dgwwwwwwwwwwgd.', '.dgwwwwwwwwwwgd.', '.dguhuuwwuuuugd.',
+      '.dguuuuwwuuuugd.', '..dguuuwwuuugd..', '..dguuuwwuuugd..', '...dguuwwuugd...',
+      '....dguwwugd....', '.....dgwwgd.....', '......dggd......', '.......dd.......',
+    ],
+    palette: { d: '#15151b', g: '#e8b34a', u: '#3566c9', h: '#6f9cff', w: '#f4f1e8' },
+  },
+  healer: {
+    rows: [
+      '................', '..dddd....dddd..', '.drrrrd..drrrrd.', 'drhhrrrddrrrrrrd',
+      'drhrrrrrrrrrrrrd', 'drrrrrrwwrrrrrrd', 'drrrrrrwwrrrrrrd', 'drrrrwwwwwwrrrrd',
+      '.drrrwwwwwwrrrd.', '.drrrrrwwrrrrrd.', '..drrrrwwrrrrd..', '...drrrrrrrrd...',
+      '....drrrrrrd....', '.....drrrrd.....', '......drrd......', '.......dd.......',
+    ],
+    palette: { d: '#15151b', r: '#e5484d', h: '#ff9aa0', w: '#ffffff' },
+  },
+};
+
+// 픽셀 아트 한 장을 (cx, cy) 가운데에 칸 크기 px로 그린다. dim이면 어둡게(빈자리·쓰러짐).
+function drawPixels(ctx, sp, cx, cy, px, { dim = false, colors = null } = {}) {
+  const w = sp.rows[0].length * px;
+  const h = sp.rows.length * px;
+  const palette = colors ? { ...sp.palette, ...colors } : sp.palette;
+  sp.rows.forEach((row, y) => [...row].forEach((ch, x) => {
+    if (ch === '.') return;
+    let color = palette[ch];
+    if (dim) color = grayOf(color, 0.45);
+    const shift = sp.glitchRows?.includes(y) ? px * 0.6 : 0;
+    ctx.fillStyle = color;
+    ctx.fillRect(cx - w / 2 + x * px + shift, cy - h / 2 + y * px, px, px);
+  }));
+}
+function grayOf(hex, k) {
+  const v = Math.round((parseInt(hex.slice(1, 3), 16) * 0.3 + parseInt(hex.slice(3, 5), 16) * 0.59 + parseInt(hex.slice(5, 7), 16) * 0.11) * k);
+  const g = v.toString(16).padStart(2, '0');
+  return `#${g}${g}${g}`;
+}
+
+function roleIcon(ctx, role, cx, cy, dim = false) {
+  drawPixels(ctx, ROLE_SPRITES[role], cx, cy, 4, { dim });
 }
 
 // 몬스터: sprite(픽셀 아트) 또는 image(파일). maxH 안에 맞춘다. gray: 도망/전멸 결과 화면용 흑백.
@@ -140,19 +181,7 @@ function drawMonster(ctx, monster, cx, cy, maxH, { rage = false, gray = false } 
   }
   const sp = monster.sprite;
   if (!sp) return;
-  const px = Math.floor(maxH / sp.rows.length);
-  const w = sp.rows[0].length * px;
-  const x0 = cx - w / 2;
-  const y0 = cy - (sp.rows.length * px) / 2;
-  const palette = rage ? { ...sp.palette, ...sp.rageColors } : sp.palette;
-  sp.rows.forEach((row, y) => [...row].forEach((ch, x) => {
-    if (ch === '.') return;
-    let color = palette[ch];
-    if (gray) { const v = parseInt(color.slice(1, 3), 16) * 0.3 + parseInt(color.slice(3, 5), 16) * 0.59 + parseInt(color.slice(5, 7), 16) * 0.11; const g = Math.round(v * 0.55).toString(16).padStart(2, '0'); color = `#${g}${g}${g}`; }
-    const shift = sp.glitchRows?.includes(y) ? px * 0.6 : 0;
-    ctx.fillStyle = color;
-    ctx.fillRect(x0 + x * px + shift, y0 + y * px, px, px);
-  }));
+  drawPixels(ctx, sp, cx, cy, Math.floor(maxH / sp.rows.length), { dim: gray, colors: rage ? sp.rageColors : null });
 }
 
 function frame(ctx) {
@@ -201,7 +230,7 @@ function renderRecruit(r) {
     text(ctx, r.monster.name, W / 2, 310, { size: 28, bold: true, color: C.gold });
     cards(ctx, r.party, (ctx, x, y, w, h, roleKey, m) => {
       const role = ROLES[roleKey];
-      roleIcon(ctx, roleKey, x + w / 2, y + 52, m ? '#e8e2d6' : '#8a8172');
+      roleIcon(ctx, roleKey, x + w / 2, y + 52, !m);
       text(ctx, m ? m.name : '빈자리', x + w / 2, y + 110, { size: 20, bold: true, color: m ? C.text : C.dim, maxWidth: w - 20 });
       text(ctx, role.name, x + w / 2, y + 138, { size: 14, bold: true, color: C.orange });
       pill(ctx, x + 16, y + 156, w - 32, `스킬 · ${role.skill.name}`);
@@ -245,14 +274,14 @@ function renderBattle(r) {
     cards(ctx, b.members, (ctx, x, y, w, h, roleKey, mem) => {
       const role = ROLES[roleKey];
       if (!mem) {
-        roleIcon(ctx, roleKey, x + w / 2, y + 52, '#5a5248');
+        roleIcon(ctx, roleKey, x + w / 2, y + 52, true);
         text(ctx, '빈자리', x + w / 2, y + 110, { size: 18, bold: true, color: C.dim });
         text(ctx, role.name, x + w / 2, y + 138, { size: 14, bold: true, color: '#8a6a3a' });
         return;
       }
       const down = mem.hp <= 0;
       const ratio = mem.hp / PLAYER_MAX_HP;
-      roleIcon(ctx, roleKey, x + w / 2, y + 46, down ? '#5a5248' : '#e8e2d6');
+      roleIcon(ctx, roleKey, x + w / 2, y + 46, down);
       text(ctx, mem.name, x + w / 2, y + 96, { size: 19, bold: true, color: down ? C.dim : C.text, maxWidth: w - 20 });
       text(ctx, role.name, x + w / 2, y + 120, { size: 13, bold: true, color: down ? '#8a6a3a' : C.orange });
       bar(ctx, x + 16, y + 138, w - 32, 12, ratio, hpColor(ratio));
@@ -300,7 +329,7 @@ function renderEnd(r, outcome, rewards = []) {
     const members = b ? b.members : r.party || [];
     cards(ctx, members, (ctx, x, y, w, h, roleKey, mem) => {
       const role = ROLES[roleKey];
-      roleIcon(ctx, roleKey, x + w / 2, y + 48, mem ? '#e8e2d6' : '#5a5248');
+      roleIcon(ctx, roleKey, x + w / 2, y + 48, !mem);
       text(ctx, mem ? mem.name : '빈자리', x + w / 2, y + 100, { size: 19, bold: true, color: mem ? C.text : C.dim, maxWidth: w - 20 });
       text(ctx, role.name, x + w / 2, y + 124, { size: 13, bold: true, color: mem ? C.orange : '#8a6a3a' });
       if (!mem || mem.damage === undefined) return;

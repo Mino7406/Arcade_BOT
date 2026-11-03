@@ -24,7 +24,7 @@ const {
 } = require('discord.js');
 const { applyXp, isExcludedGuild, announceLevelUp, setRaidXpFrozen } = require('./레벨링');
 const { KST_OFFSET_MS } = require('./시간');
-const { GUILD_ID, PLAYGROUND_CHANNEL_ID } = require('../config');
+const { GUILD_ID, PLAYGROUND_CHANNEL_ID, ADMIN_IDS } = require('../config');
 const { logSystem, logError, userLabel } = require('./로그');
 const { writeJsonIfChanged } = require('./저장');
 const { displayNameFromInteraction } = require('./이름');
@@ -190,11 +190,15 @@ function recruitView(r, { redraw = true } = {}) {
   });
   sections.push({
     row: new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('raid:start').setEmoji('▶️').setLabel('바로 시작').setStyle(ButtonStyle.Success).setDisabled(r.party.length === 0),
       new ButtonBuilder().setCustomId('raid:leave').setLabel('참가 취소').setStyle(ButtonStyle.Secondary).setDisabled(r.party.length === 0),
       new ButtonBuilder().setCustomId('raid:help').setEmoji('❔').setLabel('플레이 방법').setStyle(ButtonStyle.Secondary),
     ),
   });
-  sections.push({ text: `-# 토벌 성공 시 파티원 전원 +${CLEAR_XP} XP · 최다 피해 MVP +${MVP_BONUS_XP} XP` });
+  sections.push({
+    text: `-# ▶️ 바로 시작은 ${r.party[0] ? `파티장 **${r.party[0].name}**` : '첫 번째 참가자'}님과 관리자만 누를 수 있어요\n` +
+      `-# 토벌 성공 시 파티원 전원 +${CLEAR_XP} XP · 최다 피해 MVP +${MVP_BONUS_XP} XP`,
+  });
   return assemble(ACCENT.recruit, image, sections);
 }
 
@@ -458,12 +462,26 @@ async function handleRaidButton(interaction) {
     return;
   }
 
-  if (kind === 'role' || kind === 'leave') {
+  if (kind === 'role' || kind === 'leave' || kind === 'start') {
     if (r.phase !== 'recruit') {
       await interaction.reply({ content: '⚔️ 이미 전투가 시작됐어요.', flags: MessageFlags.Ephemeral });
       return;
     }
     const userId = interaction.user.id;
+    // 바로 시작: 파티장(지금 남아 있는 가장 먼저 참가한 사람)과 관리자만. 모집 시간을 다 기다리지 않고 출발한다.
+    if (kind === 'start') {
+      if (r.party.length === 0) {
+        await interaction.reply({ content: '아직 참가자가 없어요.', flags: MessageFlags.Ephemeral });
+        return;
+      }
+      if (r.party[0].userId !== userId && !ADMIN_IDS.includes(userId)) {
+        await interaction.reply({ content: `▶️ 바로 시작은 파티장 **${r.party[0].name}**님과 관리자만 누를 수 있어요.`, flags: MessageFlags.Ephemeral });
+        return;
+      }
+      logSystem({ 유형: '레이드', 유저: userLabel(userId), 내용: `바로 시작 — ${r.party.length}명으로 출발` });
+      await respond(r, interaction, startBattle(r));
+      return;
+    }
     const mine = r.party.find(p => p.userId === userId);
     if (kind === 'leave') {
       if (!mine) {
