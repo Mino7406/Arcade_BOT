@@ -111,13 +111,14 @@ const ROLE_SPRITES = {
     palette: { d: '#15151b', w: '#ffffff', s: '#a9bdd4', g: '#e8b34a', b: '#7a4a26', p: '#e8b34a' },
   },
   archer: {
+    // 활대는 화살 방향(오른쪽)으로 휘고, 시위는 왼쪽, 화살은 시위에 걸려 손잡이 위로 지나간다.
     rows: [
-      '.........dbdd...', '........dbhd....', '.......dbhdl....', '.....dbhd..l....',
-      '.....dbhd..l....', '....dbhd...l....', 'fffdbhd....l.g..', '.aaaaaaaaaaaaggd',
-      'fffdbhd....l.g..', '...dbhd....l....', '....dbhd...l....', '.....dbhd..l....',
-      '.....dbhd..l....', '.......dbhdl....', '........dbhd....', '.........dbdd...',
+      '....dhbd........', '....ldhbd.......', '....ldhbd.......', '....l.dhbd......',
+      '....l.dhbd......', '....l..dhbd.....', '.fffl..dwwd.dgd.', 'f.aaaaadwwdaaggd',
+      '.fffl..dwwd.dgd.', '....l..dhbd.....', '....l..dhbd.....', '....l.dhbd......',
+      '....l.dhbd......', '....ldhbd.......', '....ldhbd.......', '....dhbd........',
     ],
-    palette: { d: '#15151b', b: '#8b5a2b', h: '#c98c4a', l: '#f1e7d0', a: '#d9c7a3', g: '#a9bdd4', f: '#e5484d' },
+    palette: { d: '#15151b', b: '#8b5a2b', h: '#c98c4a', w: '#5a3418', l: '#f1e7d0', a: '#d9c7a3', g: '#a9bdd4', f: '#e5484d' },
   },
   tank: {
     rows: [
