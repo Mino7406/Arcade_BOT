@@ -271,7 +271,8 @@ function diagWarn(msg) {
 function diagSnapshot() {
   const mem = process.memoryUsage();
   const mb = (n) => Math.round(n / 1048576);
-  const snap = `RSS ${mb(mem.rss)}MB · 힙 ${mb(mem.heapUsed)}/${mb(mem.heapTotal)}MB · 루프 지연 최대 ${Math.round(loopDelay.max / 1e6)}ms · 핑 ${client.ws.ping}ms`;
+  // 외부 = Buffer 등 V8 힙 밖에서 JS가 잡은 메모리. RSS에서 힙·외부를 빼고 남는 큰 덩어리는 네이티브 라이브러리 몫이다.
+  const snap = `RSS ${mb(mem.rss)}MB · 힙 ${mb(mem.heapUsed)}/${mb(mem.heapTotal)}MB · 외부 ${mb(mem.external)}MB · 루프 지연 최대 ${Math.round(loopDelay.max / 1e6)}ms · 핑 ${client.ws.ping}ms`;
   loopDelay.reset();
   return snap;
 }
@@ -289,12 +290,24 @@ client.on(Events.ShardDisconnect, (event) => diagWarn(`🔌 게이트웨이 연�
 client.on(Events.ShardReconnecting, () => diagWarn('🔌 게이트웨이 재연결 시도'));
 client.on(Events.ShardResume, (_id, replayed) => diagWarn(`🔌 게이트웨이 연결 재개 — 밀린 이벤트 ${replayed}건 재전송`));
 let memWarnedAt = 0;
+// RSS가 지금까지의 최고치보다 MEMORY_STEP_MB 넘게 오를 때마다 한 줄 남긴다 — 어느 시점(레이드·명령어 등)에
+// 메모리가 뛰는지 콘솔 시각으로 맞춰볼 수 있게. 최고치 기준이라 오르내리기만 하면 다시 찍히지 않는다.
+const MEMORY_STEP_MB = 20;
+let rssPeakMb = 0;
 setInterval(() => {
-  if (process.memoryUsage().rss < MEMORY_WARN_RSS_MB * 1048576) return;
+  const rssMb = process.memoryUsage().rss / 1048576;
+  if (rssPeakMb && rssMb > rssPeakMb + MEMORY_STEP_MB) diagWarn(`📈 메모리 최고치 갱신 (+${Math.round(rssMb - rssPeakMb)}MB)`);
+  rssPeakMb = Math.max(rssPeakMb, rssMb);
+  if (rssMb < MEMORY_WARN_RSS_MB) return;
   if (Date.now() - memWarnedAt < 30 * 60 * 1000) return;
   memWarnedAt = Date.now();
   diagWarn(`🧠 메모리 경고선(${MEMORY_WARN_RSS_MB}MB) 초과`);
 }, 60_000);
+// C 라이브러리 종류(glibc/musl)와 메모리 관련 환경변수 — 네이티브 메모리 대책을 고를 때 필요하다.
+function runtimeInfo() {
+  const glibc = process.report?.getReport?.()?.header?.glibcVersionRuntime;
+  return `Node ${process.version} · ${process.platform}/${process.arch} · ${glibc ? `glibc ${glibc}` : 'glibc 아님(musl 등)'} · MALLOC_ARENA_MAX=${process.env.MALLOC_ARENA_MAX ?? '미설정'}`;
+}
 
 // ─── 봇 준비 완료 시 ──────────────────────────────────────────
 // 이벤트 이름이 discord.js 버전에 따라 'ready'/'clientReady'로 다르므로 Events.ClientReady 상수를 쓴다.
@@ -328,6 +341,8 @@ async function onReady(c) {
   startQuizScheduler(c); // 놀이터 채널에 하루 한 번 무작위 시각으로 상식퀴즈를 출제
   startRaidScheduler(c); // 약 3일마다 놀이터에 긴급 퀘스트(레이드) 몬스터 출현
   dataReady = true;
+  diagWarn(`📊 시작 직후 메모리 (${runtimeInfo()})`);
+  rssPeakMb = process.memoryUsage().rss / 1048576;
   logSystem({
     유형: '봇 상태',
     내용: `봇 시작 — ${c.user.tag}, 서버 ${c.guilds.cache.size}개, 복원된 내전 ${c.naejeonMatches?.size ?? 0}건 / 모집 ${c.mojipMatches?.size ?? 0}건, Node ${process.version}`,

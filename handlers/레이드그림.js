@@ -30,8 +30,20 @@ let unavailable = false; // 한 번 실패하면 다시 시도하지 않는다(�
 let canvas = null;
 const imageCache = new Map();
 
+// 서버(256MB)에서 그림 엔진이 메모리를 얼마나 쓰는지 확인하기 위한 콘솔 기록. 로드 전후와
+// 처음 몇 장·이후 10장마다 RSS와 그리는 시간을 남긴다.
+const rssMb = () => Math.round(process.memoryUsage().rss / 1048576);
+let renderCount = 0;
+function logRender(scene, startedAt) {
+  renderCount++;
+  if (renderCount > 3 && renderCount % 10 !== 0) return;
+  console.warn(`🎨 레이드 그림 #${renderCount}(${scene}) ${Date.now() - startedAt}ms · RSS ${rssMb()}MB`);
+}
+
 function load() {
   if (lib || unavailable) return lib;
+  const before = rssMb();
+  const startedAt = Date.now();
   try {
     const { createCanvas, GlobalFonts, Image } = require('@napi-rs/canvas');
     const regular = FONT_CANDIDATES.regular.find(p => fs.existsSync(p));
@@ -41,6 +53,7 @@ function load() {
     GlobalFonts.registerFromPath(bold, 'RaidKRB');
     lib = { createCanvas, Image };
     canvas = createCanvas(W, H);
+    console.warn(`🎨 레이드 그림 엔진 로드 — RSS ${before}→${rssMb()}MB, ${Date.now() - startedAt}ms, 폰트 ${path.basename(regular)}`);
   } catch (err) {
     unavailable = true;
     console.error('레이드 그림 기능을 쓸 수 없어 글자 화면으로 대신합니다:', err.message);
@@ -216,14 +229,17 @@ function pill(ctx, x, y, w, label, fill = C.teal, color = C.tealText) {
   text(ctx, label, x + w / 2, y + 12, { size: 12, bold: true, color, maxWidth: w - 10 });
 }
 
-function finish() {
-  return canvas.encodeSync('png');
+function finish(scene, startedAt) {
+  const png = canvas.encodeSync('png');
+  logRender(scene, startedAt);
+  return png;
 }
 
 // ── 장면별 그림 ────────────────────────────────────────────────
 // r: handlers/레이드.js의 레이드 객체(monster, party, battle …). 실패하면 null.
 function renderRecruit(r) {
   if (!load()) return null;
+  const startedAt = Date.now();
   try {
     const ctx = canvas.getContext('2d');
     frame(ctx);
@@ -242,7 +258,7 @@ function renderRecruit(r) {
       pill(ctx, x + 16, y + 156, w - 32, `스킬 · ${role.skill.name}`);
       text(ctx, m ? '참가 완료' : '참가 대기', x + w / 2, y + 198, { size: 13, color: m ? C.ok : C.muted });
     });
-    return finish();
+    return finish('모집', startedAt);
   } catch (err) {
     console.error('레이드 모집 그림 실패:', err);
     return null;
@@ -251,6 +267,7 @@ function renderRecruit(r) {
 
 function renderBattle(r) {
   if (!load()) return null;
+  const startedAt = Date.now();
   try {
     const b = r.battle;
     const m = b.monster;
@@ -295,7 +312,7 @@ function renderBattle(r) {
       pill(ctx, x + 16, y + 180, (w - 40) / 2, mem.cooldown > 0 ? `스킬 ${mem.cooldown}턴` : '스킬 준비', mem.cooldown > 0 ? '#2f2a24' : C.teal, mem.cooldown > 0 ? C.muted : C.tealText);
       pill(ctx, x + 24 + (w - 40) / 2, y + 180, (w - 40) / 2, `회복약 ${mem.potions}`, '#2f3a1e', '#d8f0b0');
     });
-    return finish();
+    return finish('전투', startedAt);
   } catch (err) {
     console.error('레이드 전투 그림 실패:', err);
     return null;
@@ -316,6 +333,7 @@ const END_SUB = {
 };
 function renderEnd(r, outcome, rewards = []) {
   if (!load()) return null;
+  const startedAt = Date.now();
   try {
     const ctx = canvas.getContext('2d');
     const clear = outcome === 'clear';
@@ -344,7 +362,7 @@ function renderEnd(r, outcome, rewards = []) {
       if (reward) pill(ctx, x + 16, y + 168, w - 32, `+${reward.xp} XP${reward.mvp ? ' · MVP' : ''}`, reward.mvp ? '#6b4e12' : '#1f4a2c', reward.mvp ? '#ffe39a' : '#bff0cf');
       else if (clear) text(ctx, '행동하지 않아 보상 없음', x + w / 2, y + 180, { size: 12, color: C.muted });
     });
-    return finish();
+    return finish('결과', startedAt);
   } catch (err) {
     console.error('레이드 결과 그림 실패:', err);
     return null;
