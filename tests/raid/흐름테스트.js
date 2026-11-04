@@ -278,5 +278,24 @@ let ok4;
     turnWith(b, 'heal');
     assert(b.lastTurn.monsterHeal === Math.round(b.maxHp * E.MONSTERS[0].moves.heal.healRate), '재생으로 몬스터 HP 6% 회복');
   }
+
+  // 13) 몬스터 파일(Monster 폴더): 슬라임.json을 읽고, 깨진 파일은 그 파일만 건너뛴다
+  {
+    const E = require(path.join(root, 'handlers/레이드전투.js'));
+    assert(E.MONSTERS.length === 1 && E.MONSTERS[0].id === 'slime' && !('_메모' in E.MONSTERS[0]), 'Monster/슬라임.json 불러옴(_메모는 제외)');
+    const dir = fs.mkdtempSync(path.join(root, 'monster-'));
+    const slime = fs.readFileSync(path.join(root, 'Monster', '슬라임.json'), 'utf8');
+    fs.writeFileSync(path.join(dir, '가.json'), slime);
+    fs.writeFileSync(path.join(dir, '나.json'), '{ 깨진 파일');
+    const bad = JSON.parse(slime); bad.id = 'bad'; bad.sprite.rows[0] = 'zz' + bad.sprite.rows[0]; delete bad.moves.heal;
+    fs.writeFileSync(path.join(dir, '다.json'), JSON.stringify(bad));
+    fs.writeFileSync(path.join(dir, '라.json'), slime); // id 중복
+    const origError = console.error; const errors = []; console.error = (...a) => errors.push(a.join(' '));
+    const list = E.loadMonsters(dir);
+    console.error = origError;
+    assert(list.length === 1 && list[0].id === 'slime', '깨진 JSON · 칸 빠진 파일 · id 중복 파일은 건너뜀');
+    assert(errors.some(e => e.includes('palette에 없는 글자: z')) && errors.some(e => e.includes('moves.heal 없음')) && errors.some(e => e.includes('겹침')), '건너뛴 사유를 콘솔에 남김');
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
   console.log('그림 업로드 횟수:', images.length, '· RSS', Math.round(process.memoryUsage().rss/1048576), 'MB');
 })().catch(e => { console.error('테스트 실패', e); process.exitCode = 1; });

@@ -509,6 +509,7 @@ function startCountdown(r) {
 // 레이드를 띄운다. channel: 출현할 채널. 실패하면 사유 문구, 성공하면 null.
 async function spawnRaid(client, channel, { forced = false } = {}) {
   if (raids.has(channel.guildId)) return '이 서버에 이미 진행 중인 레이드가 있어요.';
+  if (!MONSTERS.length) return '등록된 몬스터가 없어요. Monster 폴더의 JSON 파일과 콘솔 오류를 확인하세요.';
   const monster = MONSTERS[Math.floor(Math.random() * MONSTERS.length)];
   const now = Date.now();
   const r = {
@@ -786,7 +787,7 @@ async function recoverInterruptedRaids(client) {
 async function recoverInterruptedRaid(client, active) {
   const channel = await client.channels.fetch(active.channelId).catch(() => null);
   const message = channel && await channel.messages.fetch(active.messageId).catch(() => null);
-  if (!message) return;
+  if (!message || !MONSTERS.length) return;
   const ghost = { monster: MONSTERS[0], battle: null, party: [], freezesXp: false, imageUrl: null };
   // 예전 버전(임베드)으로 띄운 메시지는 V2로 바꿀 수 없을 수 있어, 실패하면 임베드로 정리한다.
   await message.edit(await endView(ghost, 'restart')).catch(() =>

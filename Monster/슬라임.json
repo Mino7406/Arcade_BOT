@@ -1,0 +1,132 @@
+{
+  "_메모": [
+    "레이드 몬스터 데이터 파일. 봇이 켜질 때 Monster 폴더의 .json을 전부 읽어 출현 후보로 쓴다(파일 하나 = 몬스터 하나).",
+    "sprite.rows: 기본 모습 픽셀 그림. 글자 하나 = 칸 하나, 점(.)은 빈칸, 글자 색은 palette에서 고른다. 자세마다 줄 수를 같게 맞춘다(줄이 적을수록 크게 그려짐).",
+    "슬라임 palette: a 외곽선 · h 하이라이트 · o 밝은 겉면 · b 몸 · d 그늘 · c 볼 · w 흰자/송곳니 · k 눈동자 · m 입 · s 충격 별.",
+    "sprite.rageColors: 분노(HP 절반 미만) 때 바꿔 칠할 색. 모양은 그대로 두고 색만 바뀐다.",
+    "sprite.poses: 기술을 쓴 직후(턴 결과 화면) 모습. 키는 moves와 같다. charge(부푼 모습)는 smash 예고 중인 선택 화면에도 쓴다.",
+    "슬라임 poses: attack 납작하게 눌렸다 튀어나감 · sweep 몸을 털어 점액 방울 · charge 빵빵하게 부풂 · smash 바닥에 철퍼덕 + 충격 별 · heal 눈 감고 회복.",
+    "moves 키(attack/sweep/charge/smash/heal)를 그대로 쓰면 연출과 효과가 자동으로 붙는다. target: single(한 명) · all(전원) · none · self, effect: slow(점액) · shield(보호막) · stun(기절), heal은 healRate(최대 HP 비율).",
+    "intentWeights: 다음 행동을 뽑는 가중치(normal 평상시 / rage 분노). 필살기(smash)는 7턴 동안 없으면 반드시, 두 번 연속 없음, 첫 턴엔 없음(공통 규칙).",
+    "baseHp는 4인 기준 HP. 바꾸면 node tests/raid/밸런스시뮬.js로 승률·턴을 다시 확인한다."
+  ],
+  "id": "slime",
+  "name": "슬라임",
+  "emoji": "👾",
+  "rageName": "폭주한 슬라임",
+  "lore": "말랑한 겉껍질 속에 단단한 속살을 품은 초록 점액 덩어리. 이 녀석이 서버를 뒤덮는 동안 XP가 쌓이지 않는다!",
+  "baseHp": 6100,
+  "sprite": {
+    "rows": [
+      ".........aaaa.........",
+      ".......aahhooaa.......",
+      ".....aahhooooooaa.....",
+      "...aahhooooooooodaa...",
+      "..ahhobbbbbbbbbbddda..",
+      ".ahobbbbbbbbbbbbbddda.",
+      ".aobbbwwbbbbbbwwbbbda.",
+      "aobbbbwkbbbbbbwkbbbbda",
+      "aobbbbkkbbbbbbkkbbbbda",
+      "aobbccbbbmmmmbbbccbbda",
+      "aobbbbbbbbwbbbbbbbbdda",
+      "aobbbbbbbbbbbbbbbbddda",
+      ".addbbbbbbbbbbbbbddda.",
+      "..aaaaaaaaaaaaaaaaaa.."
+    ],
+    "poses": {
+      "attack": [
+        "......................",
+        "......................",
+        "......................",
+        ".......aaaaaaaa.......",
+        "....aahhooooooodaa....",
+        "..ahhobbbbbbbbbbddda..",
+        ".aobbbbbbbbbbbbbbbbda.",
+        "aobbbkbbbbbbbbbbkbbbda",
+        "aobbbbkkbbbbbbkkbbbbda",
+        "aobbbkbbbbmmbbbbkbbbda",
+        "aobccbbbbmmmmbbbbccbda",
+        "aobbbbbbbbwbbbbbbbddda",
+        ".addbbbbbbbbbbbbbddda.",
+        ".aaaaaaaaaaaaaaaaaaaa."
+      ],
+      "sweep": [
+        ".o.......aaaa.......o.",
+        "o......aahhooaa......o",
+        ".....aahhooooooaa.....",
+        ".o.aahhooooooooodaa.o.",
+        "..ahhobbbbbbbbbbddda..",
+        ".ahobbbbbbbbbbbbbddda.",
+        ".aobbbbbbbbbbbbbbbbda.",
+        "aobbbkkkbbbbbbkkkbbbda",
+        "aobbbbbbbbbbbbbbbbbbda",
+        "aobbccbbbbmmbbbbccbbda",
+        "aobbbbbbbmmmmbbbbbbdda",
+        "aobbbbbbbbbbbbbbbbddda",
+        "oaddbbbbbbbbbbbbbdddao",
+        "..aaaaaaaaaaaaaaaaaa.."
+      ],
+      "charge": [
+        ".......aaaaaaaa.......",
+        "....aahhooooooodaa....",
+        "..aahhooooooooooddaa..",
+        ".ahhoooooooooooooddda.",
+        "ahhobbbbbbbbbbbbbbddda",
+        "ahobbkbbbbbbbbbbkbddda",
+        "aobbbbkkbbbbbbkkbbbdda",
+        "aobbbbwkbbbbbbkwbbbbda",
+        "aobbbbkkbbbbbbkkbbbbda",
+        "aobcccbbbbmmbbbbcccbda",
+        "aobcccbbbbbbbbbbcccdda",
+        "aobbbbbbbbbbbbbbbbddda",
+        ".addbbbbbbbbbbbbbddda.",
+        "..aaaaaaaaaaaaaaaaaa.."
+      ],
+      "smash": [
+        "......................",
+        "......................",
+        "..s.......s.......s...",
+        "...s......s......s....",
+        "......................",
+        "......................",
+        ".......aaaaaaaa.......",
+        "...aaahhooooooodddaa..",
+        ".aahhobbbbbbbbbbbdddaa",
+        "aobbbkkbbbbbbbbkkbbbda",
+        "aobccbbbbbmmbbbbbccbda",
+        "aobbbbbbbbbbbbbbbbddda",
+        "adddbbbbbbbbbbbbbbddda",
+        "aaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "heal": [
+        ".........aaaa.........",
+        ".......aahhooaa.......",
+        ".....aahhooooooaa.....",
+        "...aahhooooooooodaa...",
+        "..ahhobbbbbbbbbbddda..",
+        ".ahobbbbbbbbbbbbbddda.",
+        ".aobbbbbbbbbbbbbbbbda.",
+        "aobbbkkkbbbbbbkkkbbbda",
+        "aobbbbbbbbbbbbbbbbbbda",
+        "aobbccbbbmmmmbbbccbbda",
+        "aobbbbbbbbwbbbbbbbbdda",
+        "aobbbbbbbbbbbbbbbbddda",
+        ".addbbbbbbbbbbbbbddda.",
+        "..aaaaaaaaaaaaaaaaaa.."
+      ]
+    },
+    "palette": {"a":"#123d1c","o":"#7fdc8c","b":"#3fbf55","d":"#278a3b","h":"#e6ffd9","c":"#ff5c8a","w":"#ffffff","k":"#111111","m":"#0b2611","s":"#fff1a8"},
+    "rageColors": {"a":"#4a1010","o":"#f07a6e","b":"#e5383b","d":"#a3242a","h":"#ffd6cf","m":"#1a1033"}
+  },
+  "moves": {
+    "attack": {"name":"몸통 박치기","telegraph":"몸을 납작하게 웅크린다...","target":"single","damage":[8,10]},
+    "sweep": {"name":"점액 흩뿌리기","telegraph":"몸이 부르르 떨리기 시작한다...","target":"all","damage":[5,7],"effect":"slow"},
+    "charge": {"name":"단단해지기","telegraph":"주변 점액을 빨아들여 부풀어 오른다...","target":"none","effect":"shield"},
+    "smash": {"name":"필살 짓누르기","telegraph":"💥 필살기를 준비 중입니다! 방어하세요!","target":"all","damage":[15,19],"effect":"stun"},
+    "heal": {"name":"재생","telegraph":"몸에서 초록 거품이 보글거린다...","target":"self","healRate":0.06}
+  },
+  "intentWeights": {
+    "normal": {"attack":4,"sweep":2,"charge":2,"smash":1,"heal":2},
+    "rage": {"attack":3.5,"sweep":2,"charge":2,"smash":1.5,"heal":2.5}
+  }
+}

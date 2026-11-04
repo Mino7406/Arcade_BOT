@@ -5,6 +5,9 @@
 // 한 턴의 흐름: 살아있는 파티원이 각자 행동을 고른다(못 고르면 자동 공격) → 아군 행동 처리
 // → 몬스터가 지난 턴에 예고한 행동 실행 → 다음 행동 예고. 몬스터 HP가 절반 밑이면 분노해 더 세진다.
 
+const fs = require('fs');
+const path = require('path');
+
 const PLAYER_MAX_HP = 100;
 const POTIONS_PER_BATTLE = 2;
 const POTION_HEAL = 45;
@@ -59,140 +62,61 @@ const ACTIONS = {
 };
 
 // ── 몬스터 ──────────────────────────────────────────────────────
-// 지금은 임시 몬스터 하나뿐. 새 몬스터는 같은 모양으로 배열에 추가하면 출현 시 무작위로 고른다.
-// moves의 키(attack/sweep/charge/smash)는 전투 규칙이 쓰는 행동 종류라 그대로 두고 이름·대사만 바꾼다.
+// 몬스터 데이터는 프로젝트 맨 위 Monster 폴더에 몬스터 하나당 JSON 파일 하나로 둔다(예: Monster/슬라임.json).
+// 봇이 켜질 때 폴더의 .json을 이름순으로 전부 읽어 출현 후보로 쓰고, 출현할 때 무작위로 고른다.
+// 새 몬스터는 슬라임.json을 복사해 고치면 된다 — 파일 안 "_메모"에 각 칸 설명이 있다("_"로 시작하는 키는 무시).
+// moves의 키(attack/sweep/charge/smash/heal)는 전투 규칙·연출이 쓰는 행동 종류라 그대로 두고 이름·대사·수치만 바꾼다.
 // - target: 'single'(한 명) | 'all'(전원) | 'none'(피해 없음, 효과만) | 'self'(자기 회복)
 // - sprite: 레이드 패널 그림(handlers/레이드그림.js)에 그릴 픽셀 아트. rows의 각 글자가 palette 색 한 칸('.'은 투명),
-//   glitchRows에 적은 줄은 옆으로 살짝 밀어 그린다. rageColors는 분노 시 바꿔 칠할 색.
-//   (그림 파일 몬스터는 아직 지원하지 않는다 — 넣을 때 handlers/그림판.js에 PNG 해석을 추가)
-const MONSTERS = [
-  {
-    id: 'slime',
-    name: '슬라임',
-    emoji: '👾',
-    rageName: '폭주한 슬라임',
-    lore: '말랑한 겉껍질 속에 단단한 속살을 품은 초록 점액 덩어리. 이 녀석이 서버를 뒤덮는 동안 XP가 쌓이지 않는다!',
-    // 꼭대기가 살짝 솟은 둥근 물방울 몸. 왼쪽 위에서 빛을 받는 입체감: 하이라이트(h)·밝은 겉면(o) → 몸(b) → 그늘(d).
-    // 송곳니(w) 하나로 적 느낌만 살짝. 분노는 같은 모양에 색만 바뀐다(rageColors).
-    // poses: 기술을 쓴 직후(턴 결과 화면) 모습, 키는 moves와 같다. charge(부푼 모습)는 큰 한 방(smash) 예고 중인 선택 화면에도 쓴다.
-    // 칸 크기가 같게 모든 자세를 14줄로 맞춘다(줄 수가 적을수록 크게 그려진다).
-    sprite: {
-      rows: [
-        '.........aaaa.........',
-        '.......aahhooaa.......',
-        '.....aahhooooooaa.....',
-        '...aahhooooooooodaa...',
-        '..ahhobbbbbbbbbbddda..',
-        '.ahobbbbbbbbbbbbbddda.',
-        '.aobbbwwbbbbbbwwbbbda.',
-        'aobbbbwkbbbbbbwkbbbbda',
-        'aobbbbkkbbbbbbkkbbbbda',
-        'aobbccbbbmmmmbbbccbbda',
-        'aobbbbbbbbwbbbbbbbbdda',
-        'aobbbbbbbbbbbbbbbbddda',
-        '.addbbbbbbbbbbbbbddda.',
-        '..aaaaaaaaaaaaaaaaaa..',
-      ],
-      poses: {
-        attack: [ // 몸통 박치기: 납작하게 눌렸다 튀어나가는 순간, > < 눈에 이를 악문 입
-          '......................',
-          '......................',
-          '......................',
-          '.......aaaaaaaa.......',
-          '....aahhooooooodaa....',
-          '..ahhobbbbbbbbbbddda..',
-          '.aobbbbbbbbbbbbbbbbda.',
-          'aobbbkbbbbbbbbbbkbbbda',
-          'aobbbbkkbbbbbbkkbbbbda',
-          'aobbbkbbbbmmbbbbkbbbda',
-          'aobccbbbbmmmmbbbbccbda',
-          'aobbbbbbbbwbbbbbbbddda',
-          '.addbbbbbbbbbbbbbddda.',
-          '.aaaaaaaaaaaaaaaaaaaa.',
-        ],
-        sweep: [ // 점액 흩뿌리기: 눈을 질끈 감고 몸을 털어 점액 방울이 사방으로
-          '.o.......aaaa.......o.',
-          'o......aahhooaa......o',
-          '.....aahhooooooaa.....',
-          '.o.aahhooooooooodaa.o.',
-          '..ahhobbbbbbbbbbddda..',
-          '.ahobbbbbbbbbbbbbddda.',
-          '.aobbbbbbbbbbbbbbbbda.',
-          'aobbbkkkbbbbbbkkkbbbda',
-          'aobbbbbbbbbbbbbbbbbbda',
-          'aobbccbbbbmmbbbbccbbda',
-          'aobbbbbbbmmmmbbbbbbdda',
-          'aobbbbbbbbbbbbbbbbddda',
-          'oaddbbbbbbbbbbbbbdddao',
-          '..aaaaaaaaaaaaaaaaaa..',
-        ],
-        charge: [ // 단단해지기: 숨을 들이켜 위로 빵빵하게 부풀고 눈을 부릅뜬다
-          '.......aaaaaaaa.......',
-          '....aahhooooooodaa....',
-          '..aahhooooooooooddaa..',
-          '.ahhoooooooooooooddda.',
-          'ahhobbbbbbbbbbbbbbddda',
-          'ahobbkbbbbbbbbbbkbddda',
-          'aobbbbkkbbbbbbkkbbbdda',
-          'aobbbbwkbbbbbbkwbbbbda',
-          'aobbbbkkbbbbbbkkbbbbda',
-          'aobcccbbbbmmbbbbcccbda',
-          'aobcccbbbbbbbbbbcccdda',
-          'aobbbbbbbbbbbbbbbbddda',
-          '.addbbbbbbbbbbbbbddda.',
-          '..aaaaaaaaaaaaaaaaaa..',
-        ],
-        smash: [ // 필살 짓누르기: 떨어져 바닥에 철퍼덕 — 납작한 몸 위로 충격 별
-          '......................',
-          '......................',
-          '..s.......s.......s...',
-          '...s......s......s....',
-          '......................',
-          '......................',
-          '.......aaaaaaaa.......',
-          '...aaahhooooooodddaa..',
-          '.aahhobbbbbbbbbbbdddaa',
-          'aobbbkkbbbbbbbbkkbbbda',
-          'aobccbbbbbmmbbbbbccbda',
-          'aobbbbbbbbbbbbbbbbddda',
-          'adddbbbbbbbbbbbbbbddda',
-          'aaaaaaaaaaaaaaaaaaaaaa',
-        ],
-        heal: [ // 재생: 눈을 감고 상처를 메운다(둘레 초록 십자는 그림 쪽 연출)
-          '.........aaaa.........',
-          '.......aahhooaa.......',
-          '.....aahhooooooaa.....',
-          '...aahhooooooooodaa...',
-          '..ahhobbbbbbbbbbddda..',
-          '.ahobbbbbbbbbbbbbddda.',
-          '.aobbbbbbbbbbbbbbbbda.',
-          'aobbbkkkbbbbbbkkkbbbda',
-          'aobbbbbbbbbbbbbbbbbbda',
-          'aobbccbbbmmmmbbbccbbda',
-          'aobbbbbbbbwbbbbbbbbdda',
-          'aobbbbbbbbbbbbbbbbddda',
-          '.addbbbbbbbbbbbbbddda.',
-          '..aaaaaaaaaaaaaaaaaa..',
-        ],
-      },
-      palette: { a: '#123d1c', o: '#7fdc8c', b: '#3fbf55', d: '#278a3b', h: '#e6ffd9', c: '#ff5c8a', w: '#ffffff', k: '#111111', m: '#0b2611', s: '#fff1a8' },
-      rageColors: { a: '#4a1010', o: '#f07a6e', b: '#e5383b', d: '#a3242a', h: '#ffd6cf', m: '#1a1033' },
-    },
-    baseHp: 6100,
-    moves: {
-      attack: { name: '몸통 박치기',   telegraph: '몸을 납작하게 웅크린다...', target: 'single', damage: [8, 10] },
-      sweep:  { name: '점액 흩뿌리기', telegraph: '몸이 부르르 떨리기 시작한다...', target: 'all', damage: [5, 7], effect: 'slow' },
-      charge: { name: '단단해지기',     telegraph: '주변 점액을 빨아들여 부풀어 오른다...', target: 'none', effect: 'shield' },
-      smash:  { name: '필살 짓누르기', telegraph: '💥 필살기를 준비 중입니다! 방어하세요!', target: 'all', damage: [15, 19], effect: 'stun' },
-      heal:   { name: '재생',         telegraph: '몸에서 초록 거품이 보글거린다...', target: 'self', healRate: 0.06 },
-    },
-    // 다음 행동 가중치(평상시/분노). 기술마다 따로 뽑는다(단단해지기와 필살기는 서로 묶이지 않음). heal은 HP가 많이 남았으면 attack으로 바꾼다.
-    intentWeights: {
-      normal: { attack: 4, sweep: 2, charge: 2, smash: 1, heal: 2 },
-      rage:   { attack: 3.5, sweep: 2, charge: 2, smash: 1.5, heal: 2.5 },
-    },
-  },
-];
+//   rageColors는 분노 시 바꿔 칠할 색, poses는 기술별 자세(키는 moves와 같음).
+const MONSTER_DIR = path.join(__dirname, '..', 'Monster');
+const MOVE_KEYS = ['attack', 'sweep', 'charge', 'smash', 'heal'];
+
+// 고칠 때 자주 틀리는 것만 확인한다. 문제가 있으면 사유 목록, 없으면 빈 배열.
+function monsterProblems(m) {
+  const problems = [];
+  for (const key of ['id', 'name', 'emoji', 'rageName', 'lore']) if (typeof m[key] !== 'string' || !m[key]) problems.push(`${key} 없음`);
+  if (!(m.baseHp > 0)) problems.push('baseHp는 0보다 큰 숫자');
+  const s = m.sprite;
+  if (!Array.isArray(s?.rows) || !s.rows.length || !s.palette) problems.push('sprite.rows/palette 없음');
+  else {
+    const used = new Set([s.rows, ...Object.values(s.poses ?? {})].flat().join('').replace(/\./g, ''));
+    const missing = [...used].filter(ch => !s.palette[ch]);
+    if (missing.length) problems.push(`palette에 없는 글자: ${missing.join(' ')}`);
+  }
+  for (const key of MOVE_KEYS) if (!m.moves?.[key]?.name) problems.push(`moves.${key} 없음`);
+  for (const mode of ['normal', 'rage']) {
+    const w = m.intentWeights?.[mode];
+    if (!w || !Object.keys(w).length) problems.push(`intentWeights.${mode} 없음`);
+    else for (const key of Object.keys(w)) if (!MOVE_KEYS.includes(key)) problems.push(`intentWeights.${mode}에 모르는 기술: ${key}`);
+  }
+  return problems;
+}
+
+// 파일 하나가 깨져도 봇 전체가 멈추지 않게, 그 파일만 빼고 콘솔에 사유를 남긴다.
+function loadMonsters(dir = MONSTER_DIR) {
+  let files = [];
+  try { files = fs.readdirSync(dir).filter(f => f.endsWith('.json')).sort(); } catch (err) {
+    console.error(`👾 몬스터 폴더를 읽지 못함(${dir}) — 레이드가 출현하지 않습니다:`, err.message);
+    return [];
+  }
+  const list = [];
+  for (const file of files) {
+    try {
+      const data = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'));
+      const monster = Object.fromEntries(Object.entries(data).filter(([key]) => !key.startsWith('_')));
+      const problems = monsterProblems(monster);
+      if (problems.length) throw new Error(problems.join(', '));
+      if (list.some(m => m.id === monster.id)) throw new Error(`id "${monster.id}"가 다른 파일과 겹침`);
+      list.push(monster);
+    } catch (err) {
+      console.error(`👾 몬스터 파일 ${file}을 건너뜀 — ${err.message}`);
+    }
+  }
+  if (!list.length) console.error('👾 쓸 수 있는 몬스터가 없습니다 — 레이드가 출현하지 않습니다.');
+  return list;
+}
+const MONSTERS = loadMonsters();
 
 // 몬스터 데이터에 intentWeights가 없을 때 쓰는 기본 가중치.
 const INTENT_WEIGHTS = {
@@ -471,6 +395,7 @@ module.exports = {
   ROLE_ORDER,
   ACTIONS,
   MONSTERS,
+  loadMonsters,
   createBattle,
   getMember,
   aliveMembers,
