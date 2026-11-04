@@ -231,14 +231,14 @@ function memberStatus(b, mem) {
   if (isStunned(b, mem)) return `💫 ${mem.name}`;
   return `${mem.choice ? '✅' : '⏳'} ${mem.name}`;
 }
-// 선택 화면 아래 상태 효과 안내(몬스터 보호막 · 기절 · 둔화)
+// 선택 화면 아래 상태 효과 안내(몬스터 보호막 · 기절 · 점액)
 function effectLines(b) {
   const lines = [];
   if (isShielded(b)) lines.push(`🛡️ **${b.monster.name}**${subjectJosa(b.monster.name)} 단단해졌어요 — 이번 턴 주는 피해 **-${Math.round((1 - SHIELD_DAMAGE_RATE) * 100)}%**`);
   const stunned = b.members.filter(mem => mem.hp > 0 && isStunned(b, mem)).map(mem => mem.name);
   if (stunned.length) lines.push(`💫 기절: ${stunned.join(', ')} — 이번 턴 행동 불가`);
   const slowed = b.members.filter(mem => mem.hp > 0 && slowTurnsLeft(b, mem) > 0).map(mem => `${mem.name}(${slowTurnsLeft(b, mem)}턴)`);
-  if (slowed.length) lines.push(`🐌 둔화: ${slowed.join(', ')} — 주는 피해 -${Math.round((1 - SLOW_DAMAGE_RATE) * 100)}%`);
+  if (slowed.length) lines.push(`💧 점액: ${slowed.join(', ')} — 주는 피해 -${Math.round((1 - SLOW_DAMAGE_RATE) * 100)}%`);
   return lines;
 }
 
@@ -371,7 +371,7 @@ function buildHelpText() {
     '- 파티원 전원이 고르면 바로 턴이 진행됩니다.',
     '- 몬스터는 **다음 행동을 미리 예고**합니다. 💥 큰 공격 예고에는 🛡️**방어**(피해 70% 감소)!',
     '- HP가 절반 아래로 떨어지면 몬스터가 **분노**해 더 아프게 때립니다.',
-    `- 🐌**둔화**: 2턴 동안 주는 피해 -${Math.round((1 - SLOW_DAMAGE_RATE) * 100)}% (치유사 스킬로 해제) · 💫**기절**: 큰 공격을 방어하지 않으면 다음 턴 행동 불가`,
+    `- 💧**점액**: 2턴 동안 주는 피해 -${Math.round((1 - SLOW_DAMAGE_RATE) * 100)}% (치유사 스킬로 해제) · 💫**기절**: 큰 공격을 방어하지 않으면 다음 턴 행동 불가`,
     `- 🛡️몬스터가 **단단해지면** 다음 턴 받는 피해 -${Math.round((1 - SHIELD_DAMAGE_RATE) * 100)}% · 💚**재생**으로 HP를 회복하기도 합니다.`,
     '- 🍖**회복약**: HP +45 (전투당 2개) · ✨**스킬**: 역할마다 다름, 쓰면 몇 턴 쿨타임',
     '',

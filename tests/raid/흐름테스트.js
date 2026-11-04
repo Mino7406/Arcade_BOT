@@ -240,7 +240,7 @@ let ok4;
     assert(!st.autoSpawn && st.nextSpawnAt === null, '중지하면 일정 삭제');
   }
 
-  // 12) 몬스터 기술 효과: 둔화·보호막·기절·재생 (전투 엔진만, 몬스터 행동을 직접 지정)
+  // 12) 몬스터 기술 효과: 점액·보호막·기절·재생 (전투 엔진만, 몬스터 행동을 직접 지정)
   {
     const E = require(path.join(root, 'handlers/레이드전투.js'));
     const party = [{ userId: 'x', name: 'X', role: 'sword' }, { userId: 'y', name: 'Y', role: 'healer' }];
@@ -252,12 +252,12 @@ let ok4;
     };
     let b = E.createBattle(E.MONSTERS[0], party, fixed);
     turnWith(b, 'sweep');
-    assert(b.members.every(m => E.slowTurnsLeft(b, m) === 2), '점액 흩뿌리기 → 전원 둔화 2턴');
+    assert(b.members.every(m => E.slowTurnsLeft(b, m) === 2), '점액 흩뿌리기 → 전원 점액 2턴');
     const hp0 = b.hp; turnWith(b, 'attack', { x: 'attack' });
     const slowHit = b.lastTurn.acts.x.value;
-    assert(slowHit <= Math.round(110 * E.SLOW_DAMAGE_RATE) && hp0 > b.hp, '둔화 중 공격 피해 25% 감소');
+    assert(slowHit <= Math.round(110 * E.SLOW_DAMAGE_RATE) && hp0 > b.hp, '점액 중 공격 피해 25% 감소');
     turnWith(b, 'attack', { y: 'skill' });
-    assert(b.members.every(m => E.slowTurnsLeft(b, m) === 0), '치유사 스킬로 둔화 해제');
+    assert(b.members.every(m => E.slowTurnsLeft(b, m) === 0), '치유사 스킬로 점액 제거');
 
     b = E.createBattle(E.MONSTERS[0], party, fixed);
     turnWith(b, 'charge');
