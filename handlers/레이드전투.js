@@ -86,7 +86,7 @@ const MONSTERS = [
         '..aaaaaaaaaaaaaaaaaa..',
       ],
       poses: {
-        attack: [ // 말랑 박치기: 납작하게 눌렸다 튀어나가는 순간, > < 눈에 이를 악문 입
+        attack: [ // 몸통 박치기: 납작하게 눌렸다 튀어나가는 순간, > < 눈에 이를 악문 입
           '......................',
           '......................',
           '......................',
@@ -118,7 +118,7 @@ const MONSTERS = [
           'oaddbbbbbbbbbbbbbdddao',
           '..aaaaaaaaaaaaaaaaaa..',
         ],
-        charge: [ // 몸 불리기: 숨을 들이켜 위로 빵빵하게 부풀고 눈을 부릅뜬다
+        charge: [ // 단단해지기: 숨을 들이켜 위로 빵빵하게 부풀고 눈을 부릅뜬다
           '.......aaaaaaaa.......',
           '....aahhooooooodaa....',
           '..aahhooooooooooddaa..',
@@ -134,7 +134,7 @@ const MONSTERS = [
           '.addbbbbbbbbbbbbbddda.',
           '..aaaaaaaaaaaaaaaaaa..',
         ],
-        smash: [ // 거대 짓누르기: 떨어져 바닥에 철퍼덕 — 납작한 몸 위로 충격 별
+        smash: [ // 필살 짓누르기: 떨어져 바닥에 철퍼덕 — 납작한 몸 위로 충격 별
           '......................',
           '......................',
           '..s.......s.......s...',
@@ -156,10 +156,10 @@ const MONSTERS = [
     },
     baseHp: 8700,
     moves: {
-      attack: { name: '말랑 박치기',   telegraph: '몸을 납작하게 웅크린다', target: 'single', damage: [8, 10] },
+      attack: { name: '몸통 박치기',   telegraph: '몸을 납작하게 웅크린다', target: 'single', damage: [8, 10] },
       sweep:  { name: '점액 흩뿌리기', telegraph: '몸이 부르르 떨리기 시작한다', target: 'all', damage: [5, 7] },
-      charge: { name: '몸 불리기',     telegraph: '주변 점액을 빨아들여 부풀어 오른다…', target: 'none' },
-      smash:  { name: '거대 짓누르기', telegraph: '💥 하늘 높이 뛰어올랐다! 방어하세요!', target: 'all', damage: [15, 19] },
+      charge: { name: '단단해지기',     telegraph: '주변 점액을 빨아들여 부풀어 오른다…', target: 'none' },
+      smash:  { name: '필살 짓누르기', telegraph: '💥 하늘 높이 뛰어올랐다! 방어하세요!', target: 'all', damage: [15, 19] },
     },
   },
 ];
