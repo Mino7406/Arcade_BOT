@@ -196,6 +196,48 @@ function drawMonster(monster, cx, cy, maxH, { rage = false, gray = false, pose =
   drawPixels({ ...sp, rows }, cx, cy, Math.floor(maxH / rows.length), { dim: gray, colors: rage ? sp.rageColors : null });
 }
 
+// 몬스터 기술 연출(턴 결과 화면). 몬스터마다 그리지 않고 기술 종류(moves 키)로 공통 처리한다.
+// layer 'back'은 몬스터 뒤, 'front'는 앞에 그린다. color는 몬스터 겉면 색(점액·기운).
+function monsterFx(move, cx, cy, color, layer) {
+  if (!move) return;
+  if (move === 'attack' && layer === 'back') {
+    // 위에서 아래로 내리꽂는 속도선
+    for (const [dx, len] of [[-70, 30], [-40, 44], [40, 44], [70, 30]]) p.line(cx + dx, cy - 78, cx + dx, cy - 78 + len, 4, '#f4e6cf');
+  } else if (move === 'attack' && layer === 'front') {
+    // 몸 아래 충돌 섬광
+    // (아래 '다음 행동' 상자 y 276에 닿지 않게 cy+64까지만)
+    p.poly([cx - 30, cy + 52, cx, cy + 42, cx + 30, cy + 52, cx + 9, cy + 56, cx, cy + 64, cx - 9, cy + 56], '#ffd166');
+  } else if (move === 'sweep' && layer === 'front') {
+    // 사방으로 튀는 점액 방울
+    for (const [dx, dy, rr] of [[-120, -30, 9], [-150, 10, 7], [-105, 40, 6], [120, -30, 9], [150, 10, 7], [105, 40, 6], [-80, -62, 5], [80, -62, 5]]) {
+      p.circle(cx + dx, cy + dy, rr, color);
+    }
+  } else if (move === 'charge' && layer === 'back') {
+    // 빨아들이는 기운: 바깥에서 몸 쪽으로 모이는 선
+    for (const [dx, dy] of [[-130, -40], [-140, 20], [130, -40], [140, 20], [-90, -66], [90, -66]]) {
+      p.line(cx + dx, cy + dy, cx + dx * 0.72, cy + dy * 0.72, 4, color);
+    }
+  } else if (move === 'smash' && layer === 'front') {
+    // 바닥 충격파 + 흙먼지
+    for (const s of [-1, 1]) {
+      p.line(cx + s * 86, cy + 48, cx + s * 170, cy + 40, 5, '#ffd166');
+      p.line(cx + s * 92, cy + 58, cx + s * 200, cy + 60, 5, '#ffd166');
+      p.circle(cx + s * 120, cy + 64, 8, '#8a7a62');
+      p.circle(cx + s * 150, cy + 56, 6, '#8a7a62');
+    }
+  }
+}
+// 맞은 파티원 카드 아이콘 위 타격 표시: 박치기는 할퀸 자국, 흩뿌리기는 점액 얼룩, 짓누르기는 충격 별.
+function hitFx(move, cx, cy, color) {
+  if (move === 'attack') {
+    for (const d of [-14, 0, 14]) p.line(cx - 26 + d, cy - 26, cx + 14 + d, cy + 26, 5, '#ff4a3a');
+  } else if (move === 'sweep') {
+    p.circle(cx - 18, cy - 12, 10, color); p.circle(cx + 20, cy + 8, 8, color); p.circle(cx + 4, cy + 22, 6, color);
+  } else if (move === 'smash') {
+    p.poly([cx, cy - 34, cx + 9, cy - 9, cx + 34, cy, cx + 9, cy + 9, cx, cy + 34, cx - 9, cy + 9, cx - 34, cy, cx - 9, cy - 9], '#ffd166');
+  }
+}
+
 function frame() {
   p.clear(C.bg);
   p.strokeRoundRect(5, 5, W - 10, H - 10, 16, 2, C.frame);
@@ -329,8 +371,14 @@ function renderBattle(r) {
     // 몬스터 + 지난 턴 결과: 게임처럼 몬스터가 쓴 기술을 머리 왼쪽 위 말풍선으로 띄운다
     // (파티가 입힌 총피해 숫자는 일단 빼 둠 — 카드마다 행동 수치가 있어 중복이라)
     // 자세: 턴 결과 화면이면 방금 쓴 기술, 큰 한 방 직전 선택 화면이면 부푼 모습(charge), 아니면 평상시
-    const pose = r.showingResult ? last?.monsterMoveKey : (b.intent === 'smash' ? 'charge' : null);
-    drawMonster(m, W / 2, 196, 112, { rage: b.rage, pose });
+    const usedMove = r.showingResult ? last?.monsterMoveKey : null;
+    const pose = usedMove || (b.intent === 'smash' ? 'charge' : null);
+    const fxColor = (b.rage && m.sprite?.rageColors?.o) || m.sprite?.palette?.o || '#7fdc8c';
+    // 박치기·짓누르기는 파티 쪽(아래)으로 몸을 내밀어 그린다
+    const monsterY = 196 + (usedMove === 'attack' ? 10 : usedMove === 'smash' ? 6 : 0);
+    monsterFx(usedMove, W / 2, monsterY, fxColor, 'back');
+    drawMonster(m, W / 2, monsterY, 112, { rage: b.rage, pose });
+    monsterFx(usedMove, W / 2, monsterY, fxColor, 'front');
     if (last?.monsterMove) {
       const label = `${last.monsterMove}!`;
       const bw = Math.min(p.textWidth(B(), label, 22), 200) + 36;
@@ -380,6 +428,7 @@ function renderBattle(r) {
 
       roleIcon(roleKey, x + w / 2, y + 86, down);
       const hit = last?.hits[mem.userId];
+      if (hit && usedMove) hitFx(usedMove, x + w / 2, y + 86, fxColor);
       if (hit) text(`-${hit}`, x + w - 38, y + 78, 24, '#ff5a45');
 
       text(mem.name, x + w / 2, y + 138, NAME_SIZE, down ? C.dim : C.text, { maxWidth: w - 20 });
@@ -411,6 +460,7 @@ function renderBattle(r) {
       for (let k = 0; k < 2; k++) p.circle(gx + 80 + k * 18, y + 239, 6.5, k < mem.potions ? '#7ccf5a' : '#3a3328');
     }, (mem) => {
       const state = memberState(mem, r.showingResult);
+      if (usedMove && last?.hits[mem.userId]) return { color: '#ff4a3a', width: 4 }; // 이번 턴에 맞은 카드
       if (state === 'pending') return { color: '#ffb52e', width: 4 };
       if (state === 'ready') return { color: '#3ecf6e', width: 2.5 };
       return null;
