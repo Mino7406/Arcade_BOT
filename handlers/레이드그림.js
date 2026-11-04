@@ -498,8 +498,9 @@ function renderBattle(r) {
       if (hit) text(`-${hit}`, x + w - 38, y + 78, 24, '#ff5a45');
       // 상태 효과 아이콘(카드 왼쪽, 리본 아래): 점액(남은 턴) · 기절
       if (!down) statusBadges(b, mem, x + 32, y + 66);
-      // 점액는 아이콘 대신 카드 아이콘에 묻은 점액으로 보여준다(흩뿌리기를 맞은 결과 화면은 hitFx가 이미 그림)
-      if (!down && slowTurnsLeft(b, mem) > 0 && !(usedMove === 'sweep' && hit)) hitFx('sweep', x + w / 2, y + 86, fxColor);
+      // 점액 상태는 아이콘 대신 카드 아이콘에 묻은 점액으로 보여준다. 이번 턴 결과 화면에서 맞은 카드는
+      // 타격 표시(할퀸 자국·충격 별·흩뿌리기 얼룩)만 그려 겹치지 않게 하고, 다음 선택 화면부터 다시 점액을 보인다.
+      if (!down && slowTurnsLeft(b, mem) > 0 && !(usedMove && hit)) hitFx('sweep', x + w / 2, y + 86, fxColor);
 
       text(mem.name, x + w / 2, y + 138, NAME_SIZE, down ? C.dim : C.text, { maxWidth: w - 20 });
       // HP는 바 안에 숫자로(한 줄 절약)
