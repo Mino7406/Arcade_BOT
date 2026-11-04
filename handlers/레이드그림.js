@@ -423,7 +423,7 @@ const END_TITLE = {
 };
 const END_SUB = {
   clear: (m) => `${m.name} 토벌 성공!`,
-  wipe: () => '파티 전멸 — 몬스터가 도망쳤다',
+  wipe: (m) => `${m.name}${subjectJosa(m.name)} 도망쳤다...`,
   timeout: () => '시간 초과 — 몬스터가 도망쳤다',
   noshow: () => '아무도 오지 않아 몬스터가 떠났다',
   restart: () => '봇 점검으로 레이드가 중단됐다',
