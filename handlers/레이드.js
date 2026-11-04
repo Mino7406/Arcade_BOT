@@ -248,14 +248,14 @@ function byStatus(members, statusKey) {
 // 선택 화면 아래 상태 효과 안내(몬스터 보호막 · 기절류 · 점액류)
 function effectLines(b) {
   const lines = [];
-  if (isShielded(b)) lines.push(`🛡️ 방어력 증가: ${b.rage ? b.monster.rageName : b.monster.name} - 이번 턴 주는 피해 -${minusPct(b.shieldRate)}%`);
+  if (isShielded(b)) lines.push(`🛡️ 방어력 증가: ${b.rage ? b.monster.rageName : b.monster.name} - **이번 턴 주는 피해 -${minusPct(b.shieldRate)}%**`);
   const stunned = b.members.filter(mem => mem.hp > 0 && isStunned(b, mem));
-  for (const [label, mems] of byStatus(stunned, 'stunStatus')) lines.push(`${label}: ${mems.map(mem => mem.name).join(', ')} - 이번 턴 행동 불가`);
+  for (const [label, mems] of byStatus(stunned, 'stunStatus')) lines.push(`${label}: ${mems.map(mem => mem.name).join(', ')} - **이번 턴 행동 불가**`);
   const slowed = b.members.filter(mem => mem.hp > 0 && slowTurnsLeft(b, mem) > 0);
   for (const [label, mems] of byStatus(slowed, 'slowStatus')) {
     // 같은 이름이라도 세기는 기술마다 다를 수 있다(보통 하나라 숫자도 하나)
     const pcts = [...new Set(mems.map(mem => minusPct(mem.slowRate)))];
-    lines.push(`${label}: ${mems.map(mem => `${mem.name}(${slowTurnsLeft(b, mem)}턴)`).join(', ')} - 주는 피해 -${pcts.join('/')}%`);
+    lines.push(`${label}: ${mems.map(mem => `${mem.name}(${slowTurnsLeft(b, mem)}턴)`).join(', ')} - **주는 피해 -${pcts.join('/')}%**`);
   }
   return lines;
 }
