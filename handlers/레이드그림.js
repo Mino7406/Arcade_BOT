@@ -352,7 +352,7 @@ function renderRecruit(r) {
     const tw = p.textWidth(B(), title, 46);
     text(title, W / 2, 47, 46, C.gold);
     titleIcon(W / 2 - tw / 2 - 46, 47); titleIcon(W / 2 + tw / 2 + 46, 47);
-    text(`${r.monster.name}${subjectJosa(r.monster.name)} XP 시스템을 장악 중이에요!`, W / 2, 84, 21, '#ff8f7a', { maxWidth: W - 120 });
+    text(`${r.monster.name}${subjectJosa(r.monster.name)} XP 시스템을 망가뜨렸어요!`, W / 2, 84, 21, '#ff8f7a', { maxWidth: W - 120 });
     drawMonster(r.monster, W / 2, 206, 112);
     text(r.monster.name, W / 2, 298, 38, C.gold);
     cards(r.party, (x, y, w, h, roleKey, m) => {
