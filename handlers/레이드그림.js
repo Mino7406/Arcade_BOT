@@ -496,7 +496,8 @@ function renderBattle(r) {
       roleIcon(roleKey, x + w / 2, y + 86, down);
       const hit = last?.hits[mem.userId];
       if (hit && usedMove) hitFx(usedMove, x + w / 2, y + 86, fxColor);
-      if (hit) text(`-${hit}`, x + w - 38, y + 78, 24, '#ff5a45');
+      // 받은 피해 숫자도 그 턴의 결과 화면에서만(다음 턴 선택 화면에는 남기지 않는다)
+      if (hit && r.showingResult) text(`-${hit}`, x + w - 38, y + 78, 24, '#ff5a45');
       // 상태 효과 아이콘(카드 왼쪽, 리본 아래): 점액(남은 턴) · 기절
       if (!down) statusBadges(b, mem, x + 32, y + 66);
       // 점액 상태는 아이콘 대신 카드 아이콘에 묻은 점액으로 보여준다. 이번 턴 결과 화면에서 맞은 카드는
