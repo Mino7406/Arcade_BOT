@@ -183,7 +183,7 @@ const MONSTERS = [
       attack: { name: '몸통 박치기',   telegraph: '몸을 납작하게 웅크린다', target: 'single', damage: [8, 10] },
       sweep:  { name: '점액 흩뿌리기', telegraph: '몸이 부르르 떨리기 시작한다', target: 'all', damage: [5, 7], effect: 'slow' },
       charge: { name: '단단해지기',     telegraph: '주변 점액을 빨아들여 부풀어 오른다…', target: 'none', effect: 'shield' },
-      smash:  { name: '필살 짓누르기', telegraph: '💥 필살기를 준비하고 있다! 방어하세요!', target: 'all', damage: [15, 19], effect: 'stun' },
+      smash:  { name: '필살 짓누르기', telegraph: '💥 필살기를 준비 중입니다! 방어하세요!', target: 'all', damage: [15, 19], effect: 'stun' },
       heal:   { name: '재생',         telegraph: '몸에서 초록 거품이 보글거린다', target: 'self', healRate: 0.06 },
     },
     // 다음 행동 가중치(평상시/분노). 기술마다 따로 뽑는다(단단해지기와 필살기는 서로 묶이지 않음). heal은 HP가 많이 남았으면 attack으로 바꾼다.
