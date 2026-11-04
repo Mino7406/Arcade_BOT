@@ -740,7 +740,7 @@ function finishRaid(r, outcome) {
 
   // 복구 안내는 채널에 따로 한 줄 올린다 — 결과 화면은 위쪽 메시지라 묻혀 있을 수 있어서.
   if (r.freezesXp && r.message?.channel) {
-    r.message.channel.send({ content: '🔧 **XP 시스템이 다시 작동합니다!**', allowedMentions: { parse: [] } }).catch(() => {});
+    r.message.channel.send({ content: '🔧 **XP 시스템 복구 완료.**', allowedMentions: { parse: [] } }).catch(() => {});
   }
   r.rewards = rewards;
   requestRender(r, { image: true, immediate: true });
