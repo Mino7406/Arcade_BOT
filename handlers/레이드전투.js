@@ -20,7 +20,7 @@ const TAUNT_DAMAGE_RATE = 0.3;   // 도발 중인 수호자: 받는 피해 70% �
 //   stun: 방어하지 않은 사람은 다음 턴 행동 불가
 //   shield: 다음 턴 동안 몬스터가 받는 피해 × effectRate
 // 인원별 몬스터 피해 배율. 보통 플레이 승률이 인원과 상관없이 80~90%가 되게 맞춘 값(치유사·수호자가 다 있는 4인은 훨씬 버티므로 크게).
-const PARTY_DAMAGE_RATE = { 1: 1.35, 2: 1.07, 3: 1.25, 4: 2.0 };
+const PARTY_DAMAGE_RATE = { 1: 1.35, 2: 1.07, 3: 1.28, 4: 2.0 }; // 3인은 궁수 차지 샷을 올리면서 1.25 → 1.28
 const PARTY_BASE_SIZE = 4;       // 몬스터 baseHp가 기준으로 삼는 인원(역할 4종 한 명씩).
 // 인원수별 HP 보정. 목표는 2~4인 모두 약 24턴(실측 턴당 혼자 5~7초, 여럿이면 더 걸려 3~5분).
 // (몬스터 재생·보호막과 파티 점액·기절까지 넣은 상태로 맞춘 값 — tests/raid/밸런스시뮬.js)
@@ -35,13 +35,14 @@ const HP_MIN_PARTY = 2;
 // hpWeight: 몬스터 HP를 인원에 맞출 때 그 역할 한 명이 늘리는 몫(4종 합 4.0). 딜러가 빠지면 HP도 더 줄어든다.
 const ROLES = {
   sword: {
-    // 딜러 둘은 3턴 주기 기대 피해를 비슷하게(검사 약 475 · 궁수 약 455 + 치명타 한 방). HP 가중치도 같게 1.15.
+    // 딜러 둘은 3턴 주기 기대 피해를 같게(검사 약 475 · 궁수 약 475, 치명타 포함). HP 가중치도 같게 1.15.
+    // 궁수가 약 455로 조금 낮을 때는 기여도 MVP를 검사가 3배 더 자주 가져가서 차지 샷을 200~240 → 220~260으로 올림.
     name: '검사', emoji: '⚔️', attack: [90, 110], hpWeight: 1.15,
     skill: { name: '회전베기', cooldown: 3, damage: [250, 300], desc: '250~300 피해' },
   },
   archer: {
     name: '궁수', emoji: '🏹', attack: [80, 100], critChance: 0.25, critMultiplier: 1.5, hpWeight: 1.15,
-    skill: { name: '차지 샷', cooldown: 3, damage: [200, 240], critChance: 0.3, desc: '200~240 피해, 치명타 확률 30%' },
+    skill: { name: '차지 샷', cooldown: 3, damage: [220, 260], critChance: 0.3, desc: '220~260 피해, 치명타 확률 30%' },
   },
   tank: {
     name: '수호자', emoji: '🛡️', attack: [60, 80], hpWeight: 0.85,
@@ -226,7 +227,7 @@ function isShielded(battle) { return battle.shieldTurn === battle.turn; }
 // 기여도(MVP를 고르는 점수). 피해만 보면 딜러만 MVP가 돼서, 치유사의 회복·부활과 수호자가 도발로 대신 맞아 준
 // 피해를 피해와 같은 단위로 바꿔 더한다. 회복은 파티 인원으로, 막아 준 피해는 인원별 몬스터 피해 배율로 나눠서
 // 파티 구성이 바뀌어도 값이 흔들리지 않게 했다. 가중치는 시뮬레이션(보통 플레이)으로 맞춘 값 —
-// 4인에서 검사 25%·궁수 8%·수호자 29%·치유사 39%, 2·3인 구성에서도 모든 역할이 MVP가 될 수 있다.
+// 4인에서 검사 18%·궁수 20%·수호자 25%·치유사 37%, 2·3인 구성에서도 모든 역할이 MVP가 될 수 있다.
 const CONTRIB_HEAL = 21;     // (아군 회복 + 부활 × CONTRIB_REVIVE) ÷ 파티 인원에 곱함
 const CONTRIB_REVIVE = 25;   // 부활 1번을 회복 몇으로 칠지(부활로 채운 HP 25와 별도로 더함)
 const CONTRIB_PROTECT = 40;  // 막아 준 피해 ÷ 인원별 몬스터 피해 배율에 곱함
