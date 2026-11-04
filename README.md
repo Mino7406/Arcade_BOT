@@ -835,7 +835,7 @@ npm start
 
 - **비공개(ephemeral) 응답은 `flags: MessageFlags.Ephemeral`로 통일합니다.** discord.js v14에서 `ephemeral: true` 옵션은 deprecated이며 v15에서 제거되므로(실행 시 `Supplying "ephemeral" for interaction response options is deprecated` 경고), `reply`/`deferReply`/`followUp`에는 항상 `flags`를 씁니다. `MessageFlags`는 각 파일의 `require('discord.js')` 구조분해에 포함시킵니다.
 - 단, **`update`/`editReply`에는 Ephemeral flag를 넣지 않습니다** — 이미 비공개인 메시지를 고치는 것이라 불필요하고, 디스코드가 받지 않는 조합입니다. 그래서 `reply`와 `update`/`editReply` 양쪽에서 재사용되는 페이로드 빌더(`buildAdminMenuPayload`)는 flag를 담지 않고, 최초 노출하는 `reply` 호출부에서만 `{ ...payload, flags: MessageFlags.Ephemeral }`로 붙입니다.
-- 컴포넌트 v2 메시지의 `flags: MessageFlags.IsComponentsV2`(`handlers/공용.js`의 DM 등)와는 별개이며, 한 페이로드에서 두 flag가 겹치는 곳은 현재 없습니다.
+- 컴포넌트 v2 메시지의 `flags: MessageFlags.IsComponentsV2`(`handlers/공용.js`의 DM 등)와는 별개입니다. 두 flag를 함께 쓰는 곳은 레이드 ❔ 플레이 방법(`handlers/레이드.js`의 `buildHelpView`, 본인에게만 보이는 V2 컨테이너)뿐이며 `MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral`로 합칩니다.
 
 ---
 

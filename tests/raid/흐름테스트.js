@@ -312,6 +312,16 @@ let ok4;
     raidMod.setAutoSpawn(false);
   }
 
+  // 15) 플레이 방법(❔): 본인에게만 보이는 V2 컨테이너, 몬스터 전용 기술(점액·단단해지기·재생)은 넣지 않음
+  {
+    const it = { customId: 'raid:help', guildId: 'gNone', user: { id: '1' }, reply: async (p) => { it.p = p; } };
+    await raidMod.handleRaidButton(it);
+    const text = it.p.components.map(c => c.toJSON()).flatMap(c => (c.type === 17 ? c.components : [c])).filter(c => c.type === 10).map(c => c.content).join('\n');
+    const { MessageFlags } = require('discord.js');
+    assert((it.p.flags & MessageFlags.Ephemeral) && (it.p.flags & MessageFlags.IsComponentsV2), '도움말: 본인에게만 · V2 컨테이너');
+    assert(text.includes('레이드 플레이 방법') && text.includes('행동 불가') && !/점액|단단해|재생/.test(text), '도움말: 공통 규칙만(점액·단단해지기·재생 없음)');
+  }
+
   // 11) 자동 출현 스위치: 기본 중지
   {
     assert(raidMod.getRaidStatus('gMain').autoSpawn === false, '자동 출현 기본값은 중지');

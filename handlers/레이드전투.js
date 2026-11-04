@@ -419,6 +419,8 @@ function resolveTurn(battle, rng = Math.random) {
 module.exports = {
   PLAYER_MAX_HP,
   POTIONS_PER_BATTLE,
+  POTION_HEAL,
+  GUARD_DAMAGE_RATE,
   ROLES,
   ROLE_ORDER,
   ACTIONS,

@@ -28,7 +28,7 @@ const { logSystem, logError, userLabel } = require('./로그');
 const { writeJsonIfChanged } = require('./저장');
 const { displayNameFromInteraction } = require('./이름');
 const {
-  PLAYER_MAX_HP, ROLES, ROLE_ORDER, ACTIONS, MONSTERS,
+  PLAYER_MAX_HP, POTIONS_PER_BATTLE, POTION_HEAL, GUARD_DAMAGE_RATE, ROLES, ROLE_ORDER, ACTIONS, MONSTERS,
   createBattle, checkChoice, choose, allChosen, resolveTurn,
   isStunned, slowTurnsLeft, isShielded, minusPct, findMove,
 } = require('./레이드전투');
@@ -384,36 +384,44 @@ async function endView(r, outcome, rewards = []) {
   return assemble(outcome === 'clear' ? ACCENT.clear : ACCENT.end, image, sections);
 }
 
-// 도움말의 분노·점액·보호막·재생 수치는 지금 나와 있는 몬스터의 데이터를 따른다(그 기술이 없으면 줄을 뺀다).
-function buildHelpText(monster) {
-  const slow = findMove(monster, { effect: 'slow' });
-  const shield = findMove(monster, { effect: 'shield' });
-  const stun = findMove(monster, { effect: 'stun' });
-  const heal = findMove(monster, { target: 'self' });
+// ❔ 플레이 방법(본인에게만). 모든 몬스터에 공통인 규칙만 담는다 — 점액·단단해지기·재생처럼 몬스터마다
+// 다른 기술은 넣지 않는다(몬스터가 바뀌면 틀린 설명이 되므로). 수치는 전투 규칙·몬스터 데이터에서 읽는다.
+function buildHelpView(monster) {
   const rageAt = monster?.rage?.hpRatio === 0.5 ? '절반' : `${Math.round((monster?.rage?.hpRatio ?? 0.5) * 100)}%`;
-  const statusLine = [
-    slow && `${slow.status.emoji}**${slow.status.name}**: ${slow.effectTurns}턴 동안 주는 피해 -${minusPct(slow.effectRate)}% (치유사 스킬로 해제)`,
-    stun && `${stun.status.emoji}**${stun.status.name}**: 큰 공격을 방어하지 않으면 다음 턴 행동 불가`,
-  ].filter(Boolean).join(' · ');
-  const monsterLine = [
-    shield && `🛡️몬스터가 **단단해지면** 다음 턴 받는 피해 -${minusPct(shield.effectRate)}%`,
-    heal && '💚**재생**으로 HP를 회복하기도 합니다.',
-  ].filter(Boolean).join(' · ');
-  return [
-    '## ❔ 레이드 플레이 방법',
-    '- 매 턴 **60초 안에** 행동을 하나 고르세요. 못 고르면 자동으로 공격합니다.',
-    '- 턴이 넘어가기 전까지는 다시 눌러 선택을 바꿀 수 있어요.',
-    '- 파티원 전원이 고르면 바로 턴이 진행됩니다.',
-    '- 몬스터는 **다음 행동을 미리 예고**합니다. 💥 큰 공격 예고에는 🛡️**방어**(피해 70% 감소)!',
-    `- HP가 ${rageAt} 아래로 떨어지면 몬스터가 **분노**해 더 아프게 때립니다.`,
-    ...(statusLine ? [`- ${statusLine}`] : []),
-    ...(monsterLine ? [`- ${monsterLine}`] : []),
-    '- 🍖**회복약**: HP +45 (전투당 2개) · ✨**스킬**: 역할마다 다름, 쓰면 몇 턴 쿨타임',
-    '',
-    ...ROLE_ORDER.map(k => `${ROLES[k].emoji} **${ROLES[k].name}** — ✨${ROLES[k].skill.name}: ${ROLES[k].skill.desc}`),
-    '',
-    `-# 제한 시간 ${BATTLE_LIMIT_MS / 60000}분 안에 쓰러뜨리지 못하거나 전멸하면 몬스터가 도망칩니다(보상 없음).`,
-  ].join('\n');
+  const stun = findMove(monster, { effect: 'stun' });
+  const sections = [
+    { text: '## ❔ 레이드 플레이 방법\n-# 몬스터를 쓰러뜨리면 멈춘 XP 시스템이 다시 작동해요' },
+    { separator: true },
+    { text: [
+      '### ⏳ 턴 진행',
+      `- 매 턴 **${TURN_MS / 1000}초** 안에 행동을 하나 골라요 - 못 고르면 **자동 공격**`,
+      '- 턴이 넘어가기 전까지는 다시 눌러 **바꿀 수 있어요**',
+      '- 파티원 전원이 고르면 **바로 진행**돼요',
+    ].join('\n') },
+    { separator: true },
+    { text: [
+      '### 🎮 행동',
+      `${ACTIONS.attack.emoji} **${ACTIONS.attack.name}** - 역할별 기본 공격`,
+      `${ACTIONS.skill.emoji} **${ACTIONS.skill.name}** - 역할마다 다름, 쓰면 몇 턴 쿨타임`,
+      `${ACTIONS.guard.emoji} **${ACTIONS.guard.name}** - 이번 턴 받는 피해 **-${minusPct(GUARD_DAMAGE_RATE)}%**`,
+      `${ACTIONS.potion.emoji} **${ACTIONS.potion.name}** - HP **+${POTION_HEAL}** · 전투당 ${POTIONS_PER_BATTLE}개`,
+    ].join('\n') },
+    { separator: true },
+    { text: [
+      '### 👾 몬스터',
+      '- 다음 행동을 **미리 예고**해요',
+      `- 💥 큰 공격 예고에는 **방어**!${stun ? ' 방어하지 않으면 다음 턴 **행동 불가**' : ''}`,
+      `- HP가 ${rageAt} 아래로 떨어지면 **분노**해 더 아프게 때려요`,
+    ].join('\n') },
+    { separator: true },
+    { text: [
+      '### 🧑‍🤝‍🧑 역할',
+      ...ROLE_ORDER.map(k => `${ROLES[k].emoji} **${ROLES[k].name}** - ✨${ROLES[k].skill.name}: ${ROLES[k].skill.desc} · 쿨타임 ${ROLES[k].skill.cooldown}턴`),
+    ].join('\n') },
+    { text: `-# ⌛ 제한 시간 ${BATTLE_LIMIT_MS / 60000}분 · 시간 안에 쓰러뜨리지 못하거나 전멸하면 몬스터가 도망쳐요(보상 없음)` },
+  ];
+  // 그림 없는 컨테이너 — 비공개 응답이라 Ephemeral과 Components V2 플래그를 함께 단다.
+  return { ...assemble(ACCENT.battle, undefined, sections), flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral };
 }
 
 // ── 화면 대기열 ─────────────────────────────────────────────────
@@ -692,7 +700,7 @@ async function handleRaidButton(interaction) {
   const [, kind, arg] = interaction.customId.split(':');
 
   if (kind === 'help') {
-    await interaction.reply({ content: buildHelpText(raids.get(interaction.guildId)?.monster ?? MONSTERS[0]), flags: MessageFlags.Ephemeral });
+    await interaction.reply(buildHelpView(raids.get(interaction.guildId)?.monster ?? MONSTERS[0]));
     return;
   }
 
