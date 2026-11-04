@@ -182,6 +182,7 @@ function createBattle(monster, party, rng = Math.random) {
     intent: null,
     shieldTurn: 0,   // 이 턴 동안 몬스터 보호막(받는 피해 감소)
     shieldRate: 1,   // 보호막 중 몬스터가 받는 피해 배율(보호막 기술의 effectRate)
+    incoming: 0,     // 몬스터가 파티에게 날린 피해 합(방어·도발로 줄이기 전) — 기여도용
     log: [],
     members: party.map(p => ({
       userId: p.userId,
@@ -193,6 +194,9 @@ function createBattle(monster, party, rng = Math.random) {
       choice: null,
       damage: 0,
       healing: 0,
+      support: 0,    // 치유사 스킬로 아군을 회복한 양(회복약 자기 회복은 빼고) — 기여도용
+      revives: 0,    // 치유사 스킬로 일으킨 아군 수 — 기여도용
+      protected: 0,  // 수호자가 도발로 아군 대신 맞아 준 공격의 원래 피해 — 기여도용
       manualActions: 0,
       slowUntil: 0,  // 이 턴까지 점액
       slowRate: 1,   // 점액 중 주는 피해 배율(점액 기술의 effectRate)
@@ -218,6 +222,20 @@ function aliveMembers(battle) {
 function isStunned(battle, m) { return m.stunTurn === battle.turn; }
 function slowTurnsLeft(battle, m) { return Math.max(0, m.slowUntil - battle.turn + 1); }
 function isShielded(battle) { return battle.shieldTurn === battle.turn; }
+
+// 기여도(MVP를 고르는 점수). 피해만 보면 딜러만 MVP가 돼서, 치유사의 회복·부활과 수호자가 도발로 대신 맞아 준
+// 피해를 피해와 같은 단위로 바꿔 더한다. 회복은 파티 인원으로, 막아 준 피해는 인원별 몬스터 피해 배율로 나눠서
+// 파티 구성이 바뀌어도 값이 흔들리지 않게 했다. 가중치는 시뮬레이션(보통 플레이)으로 맞춘 값 —
+// 4인에서 검사 25%·궁수 8%·수호자 29%·치유사 39%, 2·3인 구성에서도 모든 역할이 MVP가 될 수 있다.
+const CONTRIB_HEAL = 21;     // (아군 회복 + 부활 × CONTRIB_REVIVE) ÷ 파티 인원에 곱함
+const CONTRIB_REVIVE = 25;   // 부활 1번을 회복 몇으로 칠지(부활로 채운 HP 25와 별도로 더함)
+const CONTRIB_PROTECT = 40;  // 막아 준 피해 ÷ 인원별 몬스터 피해 배율에 곱함
+function contribution(battle, m) {
+  const n = battle.members.length;
+  return m.damage
+    + CONTRIB_HEAL * (m.support + m.revives * CONTRIB_REVIVE) / n
+    + CONTRIB_PROTECT * m.protected / (PARTY_DAMAGE_RATE[n] ?? 1);
+}
 // 피해 배율 → 줄어드는 퍼센트(0.75 → 25). 화면 문구용.
 function minusPct(rate) { return Math.round((1 - rate) * 100); }
 // 몬스터가 가진 기술 중 이 효과(slow·shield·stun)나 대상(self)을 가진 첫 기술. 도움말 문구용.
@@ -332,6 +350,8 @@ function resolveTurn(battle, rng = Math.random) {
           if (slowTurnsLeft(battle, t) > 0) { t.slowUntil = 0; cleansed.add(t.slowStatus.name); } // 점액(slow)도 씻어낸다
         }
         m.healing += healed;
+        m.support += healed;
+        m.revives += revived.length;
         last.acts[m.userId] = { label: role.skill.name, value: healed, heal: true };
         log.push(`${role.emoji} **${m.name}** ✨${role.skill.name} → 아군 회복${cleansed.size ? ` · ${[...cleansed].join('·')} 제거` : ''}${revived.length ? ` · **${revived.join(', ')}** 부활!` : ''}`);
       }
@@ -359,6 +379,9 @@ function resolveTurn(battle, rng = Math.random) {
   const mult = (battle.rage ? battle.monster.rage.damageRate : 1) * (PARTY_DAMAGE_RATE[battle.members.length] ?? 1);
   const hit = (target) => {
     let dmg = randInt(move.damage, rng) * mult;
+    battle.incoming += Math.round(dmg);
+    // 도발로 아군 대신 맞은 한 명 공격은 줄이기 전 피해를 수호자의 기여(막아 준 피해)로 센다
+    if (target === taunter && move.target === 'single') target.protected += Math.round(dmg);
     if (target.guarding) dmg *= GUARD_DAMAGE_RATE;
     if (target === taunter) dmg *= TAUNT_DAMAGE_RATE;
     dmg = Math.max(1, Math.round(dmg));
@@ -437,5 +460,6 @@ module.exports = {
   isShielded,
   minusPct,
   findMove,
+  contribution,
   resolveTurn,
 };

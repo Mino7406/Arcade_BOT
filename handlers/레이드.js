@@ -30,7 +30,7 @@ const { displayNameFromInteraction } = require('./이름');
 const {
   PLAYER_MAX_HP, POTIONS_PER_BATTLE, POTION_HEAL, GUARD_DAMAGE_RATE, ROLES, ROLE_ORDER, ACTIONS, MONSTERS,
   createBattle, checkChoice, choose, allChosen, resolveTurn,
-  isStunned, slowTurnsLeft, isShielded, minusPct, findMove,
+  isStunned, slowTurnsLeft, isShielded, minusPct, findMove, contribution,
 } = require('./레이드전투');
 const { renderRecruit, renderBattle, renderEnd, warmUp } = require('./레이드그림');
 
@@ -44,7 +44,7 @@ const RESULT_MS = 3500;             // 턴 결과 화면을 보여주는 시간 
 const BATTLE_LIMIT_MS = 15 * 60 * 1000; // 전투 제한 시간 — 넘기면 몬스터 도주
 const PARTY_MAX = 4;
 const CLEAR_XP = 300;               // 토벌 성공 시 파티원 1인당
-const MVP_BONUS_XP = 100;           // 가장 많은 피해를 준 파티원 추가 보상
+const MVP_BONUS_XP = 100;           // 기여도 1위(피해 + 회복·부활 + 막아 준 피해, 레이드전투.js의 contribution) 추가 보상
 const SCHEDULER_TICK_MS = 60 * 1000;
 // 남은 시간 표시(00:52:30)를 글자만 고쳐 갱신하는 주기. 디스코드는 채널당 메시지 수정이 대략 5초에 5번까지라
 // 1초마다는 불가능하고 버튼 반응까지 밀린다 — 모집(최대 1시간)은 10초, 전투 턴(60초)은 5초마다.
@@ -520,18 +520,27 @@ async function sendRaidMessage(r, payload, { deleteOld }) {
 }
 
 // 전투 시작을 파티원에게 알린다(멘션은 이 메시지에서만 — 레이드 화면은 멘션을 막아 둔다). 보냈으면 true.
+// 채팅에 계속 남지 않게 1턴이 끝나면(advanceTurn) 지운다. 그 전에 1턴이 이미 끝났으면 바로 지운다.
 async function sendStartMention(r, ids) {
   if (!ids.length || !r.message?.channel) return false;
   try {
-    await r.message.channel.send({
+    r.startMentionMessage = await r.message.channel.send({
       content: `⚔️ **레이드 전투 시작!** ${ids.map(id => `<@${id}>`).join(' ')} - 아래 레이드 메시지에서 ${TURN_MS / 1000}초 안에 행동을 골라 주세요`,
       allowedMentions: { users: ids },
     });
+    if (r.phase !== 'battle' || r.battle.turn > 1) deleteStartMention(r);
     return true;
   } catch (err) {
     console.error('레이드 시작 멘션 전송 실패:', err);
     return false;
   }
+}
+
+function deleteStartMention(r) {
+  const msg = r.startMentionMessage;
+  if (!msg) return;
+  r.startMentionMessage = null;
+  Promise.resolve().then(() => msg.delete()).catch(err => console.error('레이드 시작 멘션 삭제 실패:', err));
 }
 
 function isBuried(r) {
@@ -674,6 +683,7 @@ function armTurnTimer(r) {
 // 그때부터 행동 선택 시간을 잰다. 같은 메시지에서 그림만 조금 바뀌면 턴이 넘어간 걸 알아채기 어려워서다.
 function advanceTurn(r) {
   clearTimer(r);
+  deleteStartMention(r); // 시작 멘션은 1턴이 끝나면 지운다
   const outcome = resolveTurn(r.battle);
   if (outcome) { finishRaid(r, outcome); return; }
   if (Date.now() >= r.battleEndsAt) { finishRaid(r, 'timeout'); return; }
@@ -700,6 +710,7 @@ function finishRaid(r, outcome) {
   r.endedAt = Date.now();
   if (isCurrent(r)) raids.delete(r.guildId);
   closeHelpReplies(r); // 전투 중에 연 가이드도 레이드가 끝나면 닫는다
+  deleteStartMention(r);
   // XP를 멈추는 레이드가 다른 서버에 아직 남아 있으면 정지를 유지한다.
   if (r.freezesXp) setRaidXpFrozen([...raids.values()].some(x => x.freezesXp));
   delete state.active[r.guildId];
@@ -709,7 +720,7 @@ function finishRaid(r, outcome) {
   if (outcome === 'clear' && r.battle) {
     // 한 번도 직접 행동하지 않은(전부 자동 공격) 파티원은 자리만 차지한 것으로 보고 보상하지 않는다.
     const eligible = r.battle.members.filter(mem => mem.manualActions > 0);
-    const mvp = eligible.reduce((best, mem) => (!best || mem.damage > best.damage ? mem : best), null);
+    const mvp = eligible.reduce((best, mem) => (!best || contribution(r.battle, mem) > contribution(r.battle, best) ? mem : best), null);
     for (const mem of eligible) {
       const xp = CLEAR_XP + (mem === mvp ? MVP_BONUS_XP : 0);
       rewards.push({ userId: mem.userId, xp, mvp: mem === mvp });

@@ -32,7 +32,7 @@ const sent = [];
 let current = null; // 레이드 메시지 최신 payload
 let lastEdit = null; const editTurns = [];
 const message = { id: 'msg1', channel: null, edit: async (p) => { current = p; lastEdit = p; if (p.files) images.push(p.files[0].attachment); const m = desc().match(/TURN (\d+)/); if (m) editTurns.push(+m[1]); return message; } };
-const channel = { id: 'ch1', guildId: 'gMain', name: '놀이터', send: async (p) => { sent.push(p); if (!message.channel || p.components) { message.channel = channel; current = p; if (p.files) images.push(p.files[0].attachment); return message; } return { id: 'x' }; } };
+const channel = { id: 'ch1', guildId: 'gMain', name: '놀이터', send: async (p) => { sent.push(p); if (!message.channel || p.components) { message.channel = channel; current = p; if (p.files) images.push(p.files[0].attachment); return message; } return { id: 'x', delete: async () => {} }; } };
 const client = { channels: { fetch: async () => channel }, guilds: { cache: new Map() } };
 const parts = () => current.components.map(c => c.toJSON()).flatMap(c => (c.type === 17 ? c.components : [c]));
 const desc = () => parts().filter(c => c.type === 10).map(c => c.content).join('\n');
@@ -340,6 +340,10 @@ let ok4;
     const iMention = ch.log.findIndex(x => x.startsWith('멘션'));
     assert(iMention > 0 && ch.log.slice(iMention + 1).some(x => x.startsWith('레이드')) && ch.lastMessageId.startsWith('men1') && ch.log.at(-1) !== `멘션 ${ch.lastMessageId}`, '시작 멘션: 멘션 다음에 레이드 메시지가 그 아래로 다시 올라감');
     assert(raidMod.getRaidStatus('gMain').phase === 'battle', '시작 멘션 뒤에도 전투 진행');
+    const mentionId = ch.log[iMention].split(' ')[1];
+    assert(!ch.log.includes(`삭제 ${mentionId}`), '시작 멘션: 1턴 동안은 남아 있음');
+    await runTimers(); // 1턴 타이머 → 턴 진행
+    assert(ch.log.includes(`삭제 ${mentionId}`), '시작 멘션: 1턴이 끝나면 자동으로 삭제');
     await origEnd('gMain'); await flushRender();
 
     // 모집 시간이 끝나 저절로 시작 → 전원
@@ -436,6 +440,20 @@ let ok4;
     b.hp = Math.round(b.maxHp * 0.5);
     turnWith(b, 'heal');
     assert(b.lastTurn.monsterHeal === Math.round(b.maxHp * E.MONSTERS[0].moves.heal.healRate), '재생으로 몬스터 HP 6% 회복');
+
+    // 기여도(MVP): 수호자가 도발로 대신 맞은 피해를 기록하고, 회복·막아 준 피해도 점수에 들어간다
+    const four = E.ROLE_ORDER.map((role, i) => ({ userId: 'c' + i, name: 'C' + i, role }));
+    b = E.createBattle(E.MONSTERS[0], four, fixed);
+    turnWith(b, 'attack', { c0: 'attack', c1: 'attack', c2: 'skill', c3: 'attack' });
+    const tankM = E.getMember(b, 'c2');
+    assert(tankM.protected > 0 && b.lastTurn.hits.c2 > 0 && Object.keys(b.lastTurn.hits).length === 1, '기여도: 도발한 수호자가 대신 맞은 피해를 막아 준 피해로 기록');
+    const [sw, , tk, hl] = b.members;
+    Object.assign(sw, { damage: 3000, support: 0, revives: 0, protected: 0 });
+    Object.assign(hl, { damage: 700, support: 460, revives: 0, protected: 0 });
+    Object.assign(tk, { damage: 900, support: 0, revives: 0, protected: 110 });
+    assert(E.contribution(b, hl) > E.contribution(b, sw) && E.contribution(b, tk) > E.contribution(b, sw), '기여도: 회복 많이 한 치유사·많이 막은 수호자가 피해 1위 검사보다 높을 수 있음');
+    hl.support = 200;
+    assert(E.contribution(b, sw) > E.contribution(b, hl), '기여도: 회복이 적으면 딜러가 높음');
 
     // 다른 몬스터: 상태이상 이름·세기·분노 조건을 데이터만으로 바꿀 수 있다
     const fire = JSON.parse(JSON.stringify(E.MONSTERS[0]));
