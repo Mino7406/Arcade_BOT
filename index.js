@@ -266,7 +266,7 @@ const { monitorEventLoopDelay } = require('perf_hooks');
 const loopDelay = monitorEventLoopDelay({ resolution: 20 });
 loopDelay.enable();
 const SLOW_INTERACTION_MS = 2500;  // 디스코드 응답 제한(3초)에 근접한 상호작용만 기록
-const MEMORY_WARN_RSS_MB = 200;    // 요금제 RAM 256MB 기준 경고선
+const MEMORY_WARN_RSS_MB = 230;   // 요금제 RAM 256MB 기준 경고선
 // 로그가 얼마나 자주 반복되는지 보이도록 각 줄 앞에 KST 시각을 붙인다.
 const { KST_OFFSET_MS } = require('./handlers/시간');
 function diagWarn(msg) {
