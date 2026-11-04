@@ -399,8 +399,19 @@ let ok4;
     assert(raidMod.getRaidStatus('gMain').autoSpawn === false, '자동 출현 기본값은 중지');
     let st = raidMod.setAutoSpawn(true);
     assert(st.autoSpawn && st.nextSpawnAt > Date.now() && st.nextSpawnAt < Date.now() + 4 * 86400_000, '가동하면 1~3일 뒤 첫 출현 일정');
+    const want = Date.now() + 5 * 3600_000;
+    assert(raidMod.setNextSpawnAt(want) === null && raidMod.getRaidStatus('gMain').nextSpawnAt === want, '출현 시각 수동 변경');
+    assert(raidMod.setNextSpawnAt(Date.now() - 1000) && raidMod.getRaidStatus('gMain').nextSpawnAt === want, '지난 시각은 거절(일정 그대로)');
+    assert(raidMod.setNextSpawnAt(Date.now() + 40 * 86400_000) && raidMod.getRaidStatus('gMain').nextSpawnAt === want, '30일 넘는 시각은 거절');
     st = raidMod.setAutoSpawn(false);
     assert(!st.autoSpawn && st.nextSpawnAt === null, '중지하면 일정 삭제');
+    assert(raidMod.setNextSpawnAt(want) && raidMod.getRaidStatus('gMain').nextSpawnAt === null, '중지 중엔 출현 시각을 못 정함');
+    const T = require(path.join(root, 'handlers/시간.js'));
+    const now = Date.UTC(2026, 10, 4, 15, 39); // KST 2026-11-05 00:39
+    assert(T.kstDateTimeString(T.parseKstDateTime('2026-11-07 12:58', now)) === '2026-11-07 12:58', '시각 입력: 전체 날짜');
+    assert(T.kstDateTimeString(T.parseKstDateTime('11/7 20시 30분', now)) === '2026-11-07 20:30', '시각 입력: 월/일 + 시분');
+    assert(T.kstDateTimeString(T.parseKstDateTime('00:10', now)) === '2026-11-06 00:10', '시각 입력: 시각만(지났으면 내일)');
+    assert(T.parseKstDateTime('2026-02-30 10:00', now) === null && T.parseKstDateTime('25:00', now) === null, '시각 입력: 없는 날짜·시각 거절');
   }
 
   // 12) 몬스터 기술 효과: 점액·보호막·기절·재생 (전투 엔진만, 몬스터 행동을 직접 지정)

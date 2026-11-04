@@ -27,7 +27,8 @@ const {
   setUserXpFrozen,
 } = require('../handlers/레벨링');
 const { logAction } = require('../handlers/로그');
-const { getRaidStatus, setAutoSpawn, forceSpawnRaid, forceEndRaid } = require('../handlers/레이드');
+const { getRaidStatus, setAutoSpawn, setNextSpawnAt, forceSpawnRaid, forceEndRaid } = require('../handlers/레이드');
+const { kstDateTimeString, parseKstDateTime } = require('../handlers/시간');
 const { displayNameFromMember } = require('../handlers/이름');
 
 // 한 번에 조정 가능한 XP 폭 / 레벨 상한. 오타로 터무니없는 값이 들어가는 것만 막는 안전장치.
@@ -149,6 +150,11 @@ function buildManageView(notice, guildId) {
           .setEmoji(raid.autoSpawn ? '⏸️' : '▶️')
           .setLabel(raid.autoSpawn ? '레이드 자동 출현 중지' : '레이드 자동 출현 가동')
           .setStyle(raid.autoSpawn ? ButtonStyle.Danger : ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('xp:mng:raidtime')
+          .setEmoji('🕒')
+          .setLabel('출현 시각 변경')
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(!raid.autoSpawn), // 중지 중엔 일정이 없으니 가동부터
         raidButton(raid),
       ),
     ],
@@ -327,6 +333,24 @@ async function handleXpButton(interaction) {
       const raid = setAutoSpawn(!getRaidStatus(interaction.guildId).autoSpawn);
       logAction(interaction, 'XP 관리', `레이드 자동 출현 ${raid.autoSpawn ? '가동' : '중지'}`);
       await interaction.update(buildManageView(raid.autoSpawn ? '▶️ **레이드 자동 출현을 가동했습니다.**' : '⏸️ **레이드 자동 출현을 중지했습니다.**', interaction.guildId));
+    } else if (targetId === 'raidtime') {
+      const raid = getRaidStatus(interaction.guildId);
+      if (!raid.autoSpawn) {
+        await interaction.update(buildManageView('⚠️ 자동 출현이 중지돼 있어요. 먼저 가동해 주세요.', interaction.guildId));
+        return;
+      }
+      const input = new TextInputBuilder()
+        .setCustomId('when')
+        .setLabel('다음 출현 시각 (한국 시간)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true)
+        .setMaxLength(30)
+        .setPlaceholder('예: 2026-11-07 20:00 · 11-07 20:00 · 20:00(오늘/내일)');
+      if (raid.nextSpawnAt) input.setValue(kstDateTimeString(raid.nextSpawnAt));
+      await interaction.showModal(new ModalBuilder()
+        .setCustomId('xp:raidTimeModal')
+        .setTitle('레이드 다음 출현 시각')
+        .addComponents(new ActionRowBuilder().addComponents(input)));
     } else if (targetId === 'farm' || targetId === 'game') {
       await interaction.update(buildConfirmView(targetId));
     } else if (targetId === 'raid') {
@@ -414,6 +438,21 @@ async function handleXpButton(interaction) {
 async function handleXpModal(interaction) {
   if (await denyGuard(interaction)) return;
   const [, kind, targetId] = interaction.customId.split(':');
+
+  if (kind === 'raidTimeModal') {
+    const raw = interaction.fields.getTextInputValue('when');
+    const ms = parseKstDateTime(raw);
+    const error = ms === null
+      ? '시각을 알아볼 수 없어요. `2026-11-07 20:00`처럼 적어 주세요.'
+      : setNextSpawnAt(ms);
+    if (error) {
+      await interaction.reply({ content: `⚠️ **${error}**`, flags: MessageFlags.Ephemeral });
+      return;
+    }
+    logAction(interaction, 'XP 관리', `레이드 다음 출현 시각 변경 → ${kstDateTimeString(ms)} (KST)`);
+    await interaction.update(buildManageView(`🕒 **다음 레이드 출현을 <t:${Math.floor(ms / 1000)}:f>로 바꿨습니다.**`, interaction.guildId));
+    return;
+  }
 
   if (kind === 'addModal' || kind === 'subModal') {
     const raw = interaction.fields.getTextInputValue('amount').trim().replace(/,/g, '');

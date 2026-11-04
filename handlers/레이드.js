@@ -38,6 +38,7 @@ const { renderRecruit, renderBattle, renderEnd, warmUp } = require('./레이드�
 const SPAWN_INTERVAL_DAYS = [1, 3]; // 출현 간격(일) 최소~최대. 매번 이 안에서 무작위로 뽑은 날 뒤, 아래 시간대 중 무작위 시각
 const SPAWN_WINDOW_START_HOUR = 12; // KST. 사람이 없는 새벽에 떠서 아무도 못 잡는 일이 없게 시간대를 둔다
 const SPAWN_WINDOW_END_HOUR = 23;
+const MAX_MANUAL_SPAWN_AHEAD_DAYS = 30; // 관리자가 출현 시각을 직접 정할 때 최대 며칠 뒤까지(오타로 몇 년 뒤가 되는 것만 막음)
 const RECRUIT_MS = 60 * 60 * 1000;  // 출현 후 모집 대기 시간 — 그동안 아무도 참가하지 않으면 몬스터 자동 도주
 const TURN_MS = 60 * 1000;          // 턴당 행동 선택 시간(못 고르면 자동 공격)
 const RESULT_MS = 3500;             // 턴 결과 화면을 보여주는 시간 — 그동안 버튼이 꺼지고, 끝나면 다음 턴 선택 화면으로
@@ -960,6 +961,17 @@ function setAutoSpawn(on) {
   return getRaidStatus(GUILD_ID);
 }
 
+// 다음 자동 출현 시각을 관리자가 직접 정한다(무작위로 잡힌 값을 덮어씀). 자동 출현이 가동 중일 때만.
+// 출현 뒤 그다음 일정은 평소처럼 1~3일 무작위로 다시 잡힌다. 실패하면 이유 문자열, 성공하면 null.
+function setNextSpawnAt(epochMs, now = Date.now()) {
+  if (!state.autoSpawn) return '자동 출현이 중지돼 있어요. 먼저 가동해 주세요.';
+  if (!Number.isFinite(epochMs) || epochMs <= now) return '지금보다 뒤의 시각을 적어 주세요.';
+  if (epochMs - now > MAX_MANUAL_SPAWN_AHEAD_DAYS * 86400_000) return `${MAX_MANUAL_SPAWN_AHEAD_DAYS}일 안쪽으로만 정할 수 있어요.`;
+  state.nextSpawnAt = epochMs;
+  saveState(state);
+  return null;
+}
+
 // 본서버에서는 놀이터에, 그 외(테스트 서버)에서는 버튼을 누른 채널에 띄운다.
 async function forceSpawnRaid(interaction) {
   const channel = interaction.guildId === GUILD_ID
@@ -982,6 +994,7 @@ module.exports = {
   isPlaygroundPaused,
   getRaidStatus,
   setAutoSpawn,
+  setNextSpawnAt,
   noteChannelMessage,
   forceSpawnRaid,
   forceEndRaid,
