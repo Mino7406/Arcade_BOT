@@ -628,7 +628,8 @@ async function handleRaidButton(interaction) {
   if (kind === 'solo') {
     const rr = raids.get(interaction.guildId);
     if (arg !== 'yes') {
-      await interaction.update({ content: '취소했어요. 동료를 더 기다려 볼게요!', components: [] });
+      await interaction.deferUpdate();
+      await interaction.deleteReply().catch(() => {});
       return;
     }
     if (!rr || rr.phase !== 'recruit') {
