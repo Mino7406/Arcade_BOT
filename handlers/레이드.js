@@ -672,12 +672,15 @@ async function handleRaidButton(interaction) {
         await interaction.reply({ content: `▶️ 바로 시작은 방장 **${r.party[0].name}**님과 관리자만 누를 수 있어요.`, flags: MessageFlags.Ephemeral });
         return;
       }
-      // 혼자면 실수로 누른 건 아닌지 본인에게만 한 번 더 묻는다.
+      // 혼자면 실수로 누른 건 아닌지 본인에게만 한 번 더 묻는다. 파티에 없는 관리자가 누르면 그 1명 기준으로 묻는다.
       if (r.party.length === 1) {
+        const self = r.party[0].userId === userId;
         await interaction.reply({
-          content: '🙋 **지금 파티에 혼자예요.**\n정말 혼자 시작할까요? 도와줄 동료 없이 혼자 싸워야 해요.',
+          content: self
+            ? '🙋 **지금 파티에 혼자예요.**\n정말 혼자 시작할까요? 도와줄 동료 없이 혼자 싸워야 해요.'
+            : `🙋 **지금 파티에 1명뿐이에요.**\n정말 이대로 시작할까요? **${r.party[0].name}**님이 동료 없이 혼자 싸워야 해요.`,
           components: [new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('raid:solo:yes').setEmoji('⚔️').setLabel('혼자 시작').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId('raid:solo:yes').setEmoji('⚔️').setLabel(self ? '혼자 시작' : '1명으로 시작').setStyle(ButtonStyle.Danger),
             new ButtonBuilder().setCustomId('raid:solo:no').setLabel('취소').setStyle(ButtonStyle.Secondary),
           )],
           flags: MessageFlags.Ephemeral,
