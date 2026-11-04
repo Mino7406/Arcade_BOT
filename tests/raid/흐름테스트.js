@@ -448,6 +448,7 @@ let ok4;
     const tankM = E.getMember(b, 'c2');
     assert(tankM.protected > 0 && b.lastTurn.hits.c2 > 0 && Object.keys(b.lastTurn.hits).length === 1, '기여도: 도발한 수호자가 대신 맞은 피해를 막아 준 피해로 기록');
     assert(tankM.blocked > 0 && E.getMember(b, 'c0').blocked === 0, '방어 칸: 도발로 줄인 피해 기록(맞지 않은 사람은 0)');
+    assert(tankM.blocked === tankM.protected && tankM.blocked > b.lastTurn.hits.c2, '방어 칸: 수호자는 도발로 대신 맞아 준 원래 피해 전부(실제로 받은 피해보다 큼)');
     turnWith(b, 'sweep', { c0: 'guard', c1: 'attack', c2: 'attack', c3: 'attack' });
     assert(E.getMember(b, 'c0').blocked > 0 && E.getMember(b, 'c1').blocked === 0, '방어 칸: 방어한 사람만 줄인 피해가 쌓임');
     const [sw, , tk, hl] = b.members;

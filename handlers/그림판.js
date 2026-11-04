@@ -329,9 +329,14 @@ class Painter {
     let w = font.getAdvanceWidth(str, size);
     if (maxWidth && w > maxWidth) { size = size * (maxWidth / w); w = maxWidth; }
     const k = this.s; // 배율
-    const left = Math.round((align === 'center' ? x - w / 2 : align === 'right' ? x - w : x) * k);
     const baseline = Math.round((y + size * 0.36) * k);
     const m = textMask(font, str, size * k);
+    // 가운데 정렬은 실제 글자 모양(마스크)의 좌우 끝 기준 — 글자 칸 폭(advance)은 마지막 글자 오른쪽 여백까지
+    // 들어가 있어 그걸로 가운데를 잡으면 글자가 2~3px 왼쪽으로 치우쳐 보였다(모집 제목·몬스터 이름).
+    // 마스크는 왼쪽 1칸·오른쪽 2칸 여유를 두고 만들어서 글자 모양의 가운데는 x0 + (w - 1) / 2.
+    const left = align === 'center'
+      ? Math.round(x * k - (m.x0 + (m.w - 1) / 2))
+      : Math.round((align === 'right' ? x - w : x) * k);
     const c = rgb(color);
     for (let my = 0; my < m.h; my++) {
       const py = baseline + m.y0 + my;

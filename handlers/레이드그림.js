@@ -630,7 +630,8 @@ function renderEnd(r, outcome, rewards = []) {
     // 오른쪽: 결과표(피해 많은 순, 실제 참가자만)
     text('파티 결과', RP.x + 26, RP.y + 34, 24, C.gold, { align: 'left' });
     // 방어: 방어·도발로 줄인 피해 — 피해·회복만으로는 안 보이는 수호자·방어의 몫을 보여준다
-    const COL = { dmg: RP.x + 280, heal: RP.x + 350, block: RP.x + 420, reward: RP.x + 490 }; // 칸 간격 70씩 같게
+    // 칸 간격 70씩 같게. 보상 알약(폭 68) 오른쪽 끝이 카드 테두리에서 14 떨어지게(왼쪽 역할 아이콘 여백과 비슷하게).
+    const COL = { dmg: RP.x + 268, heal: RP.x + 338, block: RP.x + 408, reward: RP.x + 478 };
     text('피해', COL.dmg, RP.y + 34, 17, C.muted);
     text('회복', COL.heal, RP.y + 34, 17, C.muted);
     text('방어', COL.block, RP.y + 34, 17, C.muted);
@@ -648,7 +649,7 @@ function renderEnd(r, outcome, rewards = []) {
       if (mvp) p.strokeRoundRect(RP.x + 14, y, RP.w - 28, 86, 12, 2, C.gold);
       drawPixels(ROLE_SPRITES[mem.role], RP.x + 52, y + 43, 2.7, { dim: mem.hp <= 0 && !clear });
       const nameX = RP.x + 86;
-      text(mem.name, nameX, y + 32, 26, C.text, { align: 'left', maxWidth: 140 });
+      text(mem.name, nameX, y + 32, 26, C.text, { align: 'left', maxWidth: 132 });
       // MVP 배지는 역할 줄 옆에(이름 줄에 두면 긴 이름일 때 피해 숫자와 겹친다)
       const roleName = ROLES[mem.role].name;
       text(roleName, nameX, y + 62, 18, C.orange, { align: 'left' });

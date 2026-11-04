@@ -198,7 +198,7 @@ function createBattle(monster, party, rng = Math.random) {
       support: 0,    // 치유사 스킬로 아군을 회복한 양(회복약 자기 회복은 빼고) — 기여도용
       revives: 0,    // 치유사 스킬로 일으킨 아군 수 — 기여도용
       protected: 0,  // 수호자가 도발로 아군 대신 맞아 준 공격의 원래 피해 — 기여도용
-      blocked: 0,    // 방어·도발로 줄인 피해(원래 피해 - 실제로 받은 피해) — 종료 화면 '방어' 칸
+      blocked: 0,    // 방어로 줄인 피해 + 도발로 대신 맞아 준 공격의 원래 피해 — 종료 화면 '방어' 칸
       manualActions: 0,
       slowUntil: 0,  // 이 턴까지 점액
       slowRate: 1,   // 점액 중 주는 피해 배율(점액 기술의 effectRate)
@@ -389,7 +389,8 @@ function resolveTurn(battle, rng = Math.random) {
     if (target.guarding) dmg *= GUARD_DAMAGE_RATE;
     if (target === taunter) dmg *= TAUNT_DAMAGE_RATE;
     dmg = Math.max(1, Math.round(dmg));
-    target.blocked += Math.max(0, rawDmg - dmg); // 방어·도발로 줄인 만큼
+    // 종료 화면 '방어' 칸: 도발로 대신 맞아 준 공격은 원래 피해 전부(아군이 맞을 걸 대신 받음), 방어는 줄인 만큼
+    target.blocked += target === taunter && move.target === 'single' ? rawDmg : Math.max(0, rawDmg - dmg);
     target.hp = Math.max(0, target.hp - dmg);
     return dmg;
   };
