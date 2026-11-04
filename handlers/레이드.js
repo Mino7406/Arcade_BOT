@@ -30,7 +30,7 @@ const { displayNameFromInteraction } = require('./이름');
 const {
   PLAYER_MAX_HP, ROLES, ROLE_ORDER, ACTIONS, MONSTERS,
   createBattle, checkChoice, choose, allChosen, resolveTurn,
-  isStunned, slowTurnsLeft, isShielded, SLOW_DAMAGE_RATE, SHIELD_DAMAGE_RATE,
+  isStunned, slowTurnsLeft, isShielded, minusPct, findMove,
 } = require('./레이드전투');
 const { renderRecruit, renderBattle, renderEnd, warmUp } = require('./레이드그림');
 
@@ -232,17 +232,31 @@ async function recruitView(r, { redraw = true } = {}) {
 
 function memberStatus(b, mem) {
   if (mem.hp <= 0) return `💀 ${mem.name}`;
-  if (isStunned(b, mem)) return `💫 ${mem.name}`;
+  if (isStunned(b, mem)) return `${mem.stunStatus.emoji} ${mem.name}`;
   return `${mem.choice ? '✅' : '⏳'} ${mem.name}`;
 }
-// 선택 화면 아래 상태 효과 안내(몬스터 보호막 · 기절 · 점액)
+// 같은 상태이상(이모지+이름)끼리 묶는다. 상태이상 이름은 몬스터 파일이 정한다(💧점액·💫기절 등).
+function byStatus(members, statusKey) {
+  const groups = new Map();
+  for (const mem of members) {
+    const label = `${mem[statusKey].emoji} ${mem[statusKey].name}`;
+    if (!groups.has(label)) groups.set(label, []);
+    groups.get(label).push(mem);
+  }
+  return groups;
+}
+// 선택 화면 아래 상태 효과 안내(몬스터 보호막 · 기절류 · 점액류)
 function effectLines(b) {
   const lines = [];
-  if (isShielded(b)) lines.push(`🛡️ 방어력 증가: ${b.monster.name} — 이번 턴 주는 피해 -${Math.round((1 - SHIELD_DAMAGE_RATE) * 100)}%`);
-  const stunned = b.members.filter(mem => mem.hp > 0 && isStunned(b, mem)).map(mem => mem.name);
-  if (stunned.length) lines.push(`💫 기절: ${stunned.join(', ')} — 이번 턴 행동 불가`);
-  const slowed = b.members.filter(mem => mem.hp > 0 && slowTurnsLeft(b, mem) > 0).map(mem => `${mem.name}(${slowTurnsLeft(b, mem)}턴)`);
-  if (slowed.length) lines.push(`💧 점액: ${slowed.join(', ')} — 주는 피해 -${Math.round((1 - SLOW_DAMAGE_RATE) * 100)}%`);
+  if (isShielded(b)) lines.push(`🛡️ 방어력 증가: ${b.monster.name} — 이번 턴 주는 피해 -${minusPct(b.shieldRate)}%`);
+  const stunned = b.members.filter(mem => mem.hp > 0 && isStunned(b, mem));
+  for (const [label, mems] of byStatus(stunned, 'stunStatus')) lines.push(`${label}: ${mems.map(mem => mem.name).join(', ')} — 이번 턴 행동 불가`);
+  const slowed = b.members.filter(mem => mem.hp > 0 && slowTurnsLeft(b, mem) > 0);
+  for (const [label, mems] of byStatus(slowed, 'slowStatus')) {
+    // 같은 이름이라도 세기는 기술마다 다를 수 있다(보통 하나라 숫자도 하나)
+    const pcts = [...new Set(mems.map(mem => minusPct(mem.slowRate)))];
+    lines.push(`${label}: ${mems.map(mem => `${mem.name}(${slowTurnsLeft(b, mem)}턴)`).join(', ')} — 주는 피해 -${pcts.join('/')}%`);
+  }
   return lines;
 }
 
@@ -370,16 +384,30 @@ async function endView(r, outcome, rewards = []) {
   return assemble(outcome === 'clear' ? ACCENT.clear : ACCENT.end, image, sections);
 }
 
-function buildHelpText() {
+// 도움말의 분노·점액·보호막·재생 수치는 지금 나와 있는 몬스터의 데이터를 따른다(그 기술이 없으면 줄을 뺀다).
+function buildHelpText(monster) {
+  const slow = findMove(monster, { effect: 'slow' });
+  const shield = findMove(monster, { effect: 'shield' });
+  const stun = findMove(monster, { effect: 'stun' });
+  const heal = findMove(monster, { target: 'self' });
+  const rageAt = monster?.rage?.hpRatio === 0.5 ? '절반' : `${Math.round((monster?.rage?.hpRatio ?? 0.5) * 100)}%`;
+  const statusLine = [
+    slow && `${slow.status.emoji}**${slow.status.name}**: ${slow.effectTurns}턴 동안 주는 피해 -${minusPct(slow.effectRate)}% (치유사 스킬로 해제)`,
+    stun && `${stun.status.emoji}**${stun.status.name}**: 큰 공격을 방어하지 않으면 다음 턴 행동 불가`,
+  ].filter(Boolean).join(' · ');
+  const monsterLine = [
+    shield && `🛡️몬스터가 **단단해지면** 다음 턴 받는 피해 -${minusPct(shield.effectRate)}%`,
+    heal && '💚**재생**으로 HP를 회복하기도 합니다.',
+  ].filter(Boolean).join(' · ');
   return [
     '## ❔ 레이드 플레이 방법',
     '- 매 턴 **60초 안에** 행동을 하나 고르세요. 못 고르면 자동으로 공격합니다.',
     '- 턴이 넘어가기 전까지는 다시 눌러 선택을 바꿀 수 있어요.',
     '- 파티원 전원이 고르면 바로 턴이 진행됩니다.',
     '- 몬스터는 **다음 행동을 미리 예고**합니다. 💥 큰 공격 예고에는 🛡️**방어**(피해 70% 감소)!',
-    '- HP가 절반 아래로 떨어지면 몬스터가 **분노**해 더 아프게 때립니다.',
-    `- 💧**점액**: 2턴 동안 주는 피해 -${Math.round((1 - SLOW_DAMAGE_RATE) * 100)}% (치유사 스킬로 해제) · 💫**기절**: 큰 공격을 방어하지 않으면 다음 턴 행동 불가`,
-    `- 🛡️몬스터가 **단단해지면** 다음 턴 받는 피해 -${Math.round((1 - SHIELD_DAMAGE_RATE) * 100)}% · 💚**재생**으로 HP를 회복하기도 합니다.`,
+    `- HP가 ${rageAt} 아래로 떨어지면 몬스터가 **분노**해 더 아프게 때립니다.`,
+    ...(statusLine ? [`- ${statusLine}`] : []),
+    ...(monsterLine ? [`- ${monsterLine}`] : []),
     '- 🍖**회복약**: HP +45 (전투당 2개) · ✨**스킬**: 역할마다 다름, 쓰면 몇 턴 쿨타임',
     '',
     ...ROLE_ORDER.map(k => `${ROLES[k].emoji} **${ROLES[k].name}** — ✨${ROLES[k].skill.name}: ${ROLES[k].skill.desc}`),
@@ -646,7 +674,7 @@ async function handleRaidButton(interaction) {
   const [, kind, arg] = interaction.customId.split(':');
 
   if (kind === 'help') {
-    await interaction.reply({ content: buildHelpText(), flags: MessageFlags.Ephemeral });
+    await interaction.reply({ content: buildHelpText(raids.get(interaction.guildId)?.monster ?? MONSTERS[0]), flags: MessageFlags.Ephemeral });
     return;
   }
 

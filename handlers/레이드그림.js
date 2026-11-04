@@ -448,13 +448,13 @@ function renderBattle(r) {
       p.roundRect(nx - 56, ny - 17, 112, 34, 9, '#100c09');
       text(label, nx, ny, 28, color);
     });
-    // 몬스터 상자 오른쪽 위에 큰 방패 배지 + 문구(방어력 증가 · 받는 피해 -50%)
+    // 몬스터 상자 오른쪽 위에 큰 방패 배지 + 문구(방어력 증가 · 받는 피해 -N%, 보호막 기술의 effectRate)
     if (shielded) {
       p.roundRect(W - 216, 132, 180, 54, 12, '#1c2a38');
       p.strokeRoundRect(W - 216, 132, 180, 54, 12, 2, '#8fc4ff');
       drawPixels(STATUS_ICONS.shield, W - 186, 159, 3.4);
       text('방어력 증가', W - 108, 149, 19, '#cfe8ff');
-      text('피해 -50%', W - 108, 172, 15, '#8fc4ff');
+      text(`피해 -${Math.round((1 - (b.shieldRate ?? 0.5)) * 100)}%`, W - 108, 172, 15, '#8fc4ff');
     }
     // 몬스터 기술 말풍선은 그 기술을 쓴 턴의 결과 화면에서만(다음 턴 선택 화면에는 남기지 않는다)
     if (r.showingResult && last?.monsterMove) {
@@ -500,7 +500,7 @@ function renderBattle(r) {
       if (state !== 'result') {
         const ribbon = RIBBON[state];
         p.roundRect(x + 12, y + 12, w - 24, 30, 8, ribbon.fill);
-        text(state === 'pending' ? '행동 선택!' : state === 'ready' ? `준비 · ${choiceLabel(mem)}` : state === 'stunned' ? '기절 · 행동 불가' : '쓰러짐',
+        text(state === 'pending' ? '행동 선택!' : state === 'ready' ? `준비 · ${choiceLabel(mem)}` : state === 'stunned' ? `${mem.stunStatus?.name ?? '기절'} · 행동 불가` : '쓰러짐',
           x + w / 2, y + 27, 19, ribbon.color, { maxWidth: w - 36 });
       }
 

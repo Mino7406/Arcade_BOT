@@ -255,7 +255,7 @@ let ok4;
     assert(b.members.every(m => E.slowTurnsLeft(b, m) === 2), '점액 흩뿌리기 → 전원 점액 2턴');
     const hp0 = b.hp; turnWith(b, 'attack', { x: 'attack' });
     const slowHit = b.lastTurn.acts.x.value;
-    assert(slowHit <= Math.round(110 * E.SLOW_DAMAGE_RATE) && hp0 > b.hp, '점액 중 공격 피해 25% 감소');
+    assert(slowHit <= Math.round(110 * E.MONSTERS[0].moves.sweep.effectRate) && hp0 > b.hp, '점액 중 공격 피해 25% 감소');
     turnWith(b, 'attack', { y: 'skill' });
     assert(b.members.every(m => E.slowTurnsLeft(b, m) === 0), '치유사 스킬로 점액 제거');
 
@@ -277,6 +277,22 @@ let ok4;
     b.hp = Math.round(b.maxHp * 0.5);
     turnWith(b, 'heal');
     assert(b.lastTurn.monsterHeal === Math.round(b.maxHp * E.MONSTERS[0].moves.heal.healRate), '재생으로 몬스터 HP 6% 회복');
+
+    // 다른 몬스터: 상태이상 이름·세기·분노 조건을 데이터만으로 바꿀 수 있다
+    const fire = JSON.parse(JSON.stringify(E.MONSTERS[0]));
+    Object.assign(fire.moves.sweep, { effectRate: 0.5, effectTurns: 3, status: { name: '화상', emoji: '🔥' } });
+    Object.assign(fire.moves.smash, { status: { name: '빙결', emoji: '❄️' } });
+    fire.moves.charge.effectRate = 0.2;
+    fire.rage = { hpRatio: 0.9, damageRate: 2 };
+    b = E.createBattle(fire, party, fixed);
+    turnWith(b, 'sweep');
+    assert(b.members.every(m => E.slowTurnsLeft(b, m) === 3) && b.log.join().includes('🔥화상'), '다른 몬스터: 🔥화상 3턴(이름·지속 턴은 데이터대로)');
+    b.hp = Math.floor(b.maxHp * 0.9) + 10; // 이번 턴 공격(약 50)으로 90% 아래로 떨어지게
+    turnWith(b, 'charge', { x: 'attack' });
+    assert(b.lastTurn.acts.x.value <= Math.round(110 * 0.5), '다른 몬스터: 화상 중 주는 피해 -50%');
+    assert(b.rage, '다른 몬스터: HP 90% 이하에서 분노(분노 조건도 데이터대로)');
+    turnWith(b, 'smash', { x: 'attack', y: 'guard' });
+    assert(b.lastTurn.shielded && E.isStunned(b, E.getMember(b, 'x')) && E.checkChoice(b, 'x', 'attack')?.includes('빙결'), '다른 몬스터: 보호막 배율·❄️빙결 이름도 데이터대로');
   }
 
   // 13) 몬스터 파일(Monster 폴더): 슬라임.json을 읽고, 깨진 파일은 그 파일만 건너뛴다
