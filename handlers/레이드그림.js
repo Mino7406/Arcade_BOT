@@ -436,7 +436,10 @@ function renderBattle(r) {
     monsterFx(usedMove, W / 2, monsterY, fxColor, 'back');
     drawMonster(m, W / 2, monsterY, 112, { rage: b.rage, pose, outline: shielded ? '#cfe8ff' : null });
     monsterFx(usedMove, W / 2, monsterY, fxColor, 'front');
-    if (usedMove === 'heal' && last?.monsterHeal) text(`+${last.monsterHeal.toLocaleString()}`, W / 2 + 118, monsterY - 34, 30, '#7cff9a');
+    // 몬스터 오른쪽: 이번 턴 받은 피해(빨강) · 재생 회복량(초록, 피해 아래). 결과 화면에서만.
+    const dealtNow = r.showingResult ? last?.monsterDamage : 0;
+    if (dealtNow) text(`-${dealtNow.toLocaleString()}`, W / 2 + 165, monsterY - 30, 30, '#ff5a45');
+    if (usedMove === 'heal' && last?.monsterHeal) text(`+${last.monsterHeal.toLocaleString()}`, W / 2 + 165, monsterY + (dealtNow ? 8 : -30), 30, '#7cff9a');
     // 몬스터 상자 오른쪽 위에 큰 방패 배지 + 문구(방어력 증가 · 받는 피해 -50%)
     if (shielded) {
       p.roundRect(W - 216, 132, 180, 54, 12, '#1c2a38');
