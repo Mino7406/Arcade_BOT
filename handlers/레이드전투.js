@@ -17,7 +17,7 @@ const SLOW_DAMAGE_RATE = 0.75;   // 점액: 주는 피해 25% 감소
 const SLOW_TURNS = 2;            // 점액 지속 턴(맞은 다음 턴부터)
 const SHIELD_DAMAGE_RATE = 0.5;  // 보호막: 다음 턴 동안 몬스터가 받는 피해 50% 감소
 // 인원별 몬스터 피해 배율. 보통 플레이 승률이 인원과 상관없이 80~90%가 되게 맞춘 값(치유사·수호자가 다 있는 4인은 훨씬 버티므로 크게).
-const PARTY_DAMAGE_RATE = { 1: 1.2, 2: 1.05, 3: 1.12, 4: 1.7 };
+const PARTY_DAMAGE_RATE = { 1: 1.15, 2: 1.05, 3: 1.22, 4: 1.95 };
 const PARTY_BASE_SIZE = 4;       // 몬스터 baseHp가 기준으로 삼는 인원(역할 4종 한 명씩).
 // 인원수별 HP 보정. 목표는 2~4인 모두 약 24턴(실측 턴당 혼자 5~7초, 여럿이면 더 걸려 3~5분).
 // (몬스터 재생·보호막과 파티 점액·기절까지 넣은 상태로 맞춘 값 — tests/raid/밸런스시뮬.js)
@@ -61,7 +61,7 @@ const ACTIONS = {
 // ── 몬스터 ──────────────────────────────────────────────────────
 // 지금은 임시 몬스터 하나뿐. 새 몬스터는 같은 모양으로 배열에 추가하면 출현 시 무작위로 고른다.
 // moves의 키(attack/sweep/charge/smash)는 전투 규칙이 쓰는 행동 종류라 그대로 두고 이름·대사만 바꾼다.
-// - target: 'single'(한 명) | 'all'(전원) | 'none'(피해 없음, charge 전용 — 다음 턴 smash 예고)
+// - target: 'single'(한 명) | 'all'(전원) | 'none'(피해 없음, 효과만) | 'self'(자기 회복)
 // - sprite: 레이드 패널 그림(handlers/레이드그림.js)에 그릴 픽셀 아트. rows의 각 글자가 palette 색 한 칸('.'은 투명),
 //   glitchRows에 적은 줄은 옆으로 살짝 밀어 그린다. rageColors는 분노 시 바꿔 칠할 색.
 //   (그림 파일 몬스터는 아직 지원하지 않는다 — 넣을 때 handlers/그림판.js에 PNG 해석을 추가)
@@ -74,7 +74,7 @@ const MONSTERS = [
     lore: '말랑한 겉껍질 속에 단단한 속살을 품은 초록 점액 덩어리. 이 녀석이 서버를 뒤덮는 동안 XP가 쌓이지 않는다!',
     // 꼭대기가 살짝 솟은 둥근 물방울 몸. 왼쪽 위에서 빛을 받는 입체감: 하이라이트(h)·밝은 겉면(o) → 몸(b) → 그늘(d).
     // 송곳니(w) 하나로 적 느낌만 살짝. 분노는 같은 모양에 색만 바뀐다(rageColors).
-    // poses: 기술을 쓴 직후(턴 결과 화면) 모습, 키는 moves와 같다. charge는 큰 한 방 직전 선택 화면에도 쓴다.
+    // poses: 기술을 쓴 직후(턴 결과 화면) 모습, 키는 moves와 같다. charge(부푼 모습)는 큰 한 방(smash) 예고 중인 선택 화면에도 쓴다.
     // 칸 크기가 같게 모든 자세를 14줄로 맞춘다(줄 수가 적을수록 크게 그려진다).
     sprite: {
       rows: [
@@ -186,18 +186,18 @@ const MONSTERS = [
       smash:  { name: '필살 짓누르기', telegraph: '💥 하늘 높이 뛰어올랐다! 방어하세요!', target: 'all', damage: [15, 19], effect: 'stun' },
       heal:   { name: '재생',         telegraph: '몸에서 초록 거품이 보글거린다', target: 'self', healRate: 0.06 },
     },
-    // 다음 행동 가중치(평상시/분노). charge 다음 턴은 무조건 smash, heal은 HP가 많이 남았으면 attack으로 바꾼다.
+    // 다음 행동 가중치(평상시/분노). 기술마다 따로 뽑는다(단단해지기와 필살기는 서로 묶이지 않음). heal은 HP가 많이 남았으면 attack으로 바꾼다.
     intentWeights: {
-      normal: { attack: 5, sweep: 2, charge: 3, heal: 1 },
-      rage:   { attack: 4, sweep: 2, charge: 4, heal: 1.5 },
+      normal: { attack: 6, sweep: 2, charge: 2, smash: 1, heal: 1 },
+      rage:   { attack: 5, sweep: 2, charge: 2, smash: 1.5, heal: 1.5 },
     },
   },
 ];
 
-// 몬스터 데이터에 intentWeights가 없을 때 쓰는 기본 가중치. charge 다음 턴은 무조건 smash.
+// 몬스터 데이터에 intentWeights가 없을 때 쓰는 기본 가중치.
 const INTENT_WEIGHTS = {
-  normal: { attack: 5, sweep: 3, charge: 2 },
-  rage:   { attack: 4, sweep: 3, charge: 3 },
+  normal: { attack: 5, sweep: 3, charge: 2, smash: 2 },
+  rage:   { attack: 4, sweep: 3, charge: 2, smash: 3 },
 };
 
 function randInt([min, max], rng) {
@@ -214,15 +214,15 @@ function pickWeighted(weights, rng) {
 }
 
 const HEAL_MAX_HP_RATIO = 0.85; // 이보다 HP가 많으면 재생 대신 공격
-const CHARGE_PITY_TURNS = 5; // 이만큼 큰 한 방 준비(charge)가 없었으면 다음엔 반드시 준비 — 짧은 판에서도 필살기를 보게
+const SMASH_PITY_TURNS = 7; // 이만큼 큰 한 방(smash)이 없었으면 다음엔 반드시 예고 — 짧은 판에서도 필살기를 보게
 function pickNextIntent(battle, rng) {
-  if (battle.intent === 'charge') { battle.sinceCharge = 0; return 'smash'; }
-  battle.sinceCharge = (battle.sinceCharge || 0) + 1;
-  if (battle.sinceCharge >= CHARGE_PITY_TURNS && battle.monster.moves.charge) { battle.sinceCharge = 0; return 'charge'; }
+  battle.sinceSmash = (battle.sinceSmash || 0) + 1;
+  if (battle.sinceSmash >= SMASH_PITY_TURNS && battle.monster.moves.smash && battle.intent !== 'smash') { battle.sinceSmash = 0; return 'smash'; }
   const weights = battle.monster.intentWeights || INTENT_WEIGHTS;
   let next = pickWeighted(battle.rage ? weights.rage : weights.normal, rng);
   if (battle.monster.moves[next]?.target === 'self' && battle.hp > battle.maxHp * HEAL_MAX_HP_RATIO) next = 'attack';
-  if (next === 'charge') battle.sinceCharge = 0;
+  if (next === 'smash' && battle.intent === 'smash') next = 'attack'; // 필살기 두 번 연속은 없게
+  if (next === 'smash') battle.sinceSmash = 0;
   return next;
 }
 
@@ -422,7 +422,7 @@ function resolveTurn(battle, rng = Math.random) {
     last.monsterHeal = battle.hp - before;
     log.push(`${battle.monster.emoji} **${monsterName}**의 **${move.name}**! HP **+${last.monsterHeal.toLocaleString()}**`);
   } else if (move.target === 'none') {
-    log.push(`${battle.monster.emoji} **${monsterName}**의 **${move.name}**! 다음 턴에 큰 공격이 온다…`);
+    log.push(`${battle.monster.emoji} **${monsterName}**의 **${move.name}**!`);
   } else {
     const targets = move.target === 'all'
       ? aliveMembers(battle)
