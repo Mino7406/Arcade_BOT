@@ -87,7 +87,12 @@ function monsterProblems(m) {
   for (const key of MOVE_KEYS) if (!m.moves?.[key]?.name) problems.push(`moves.${key} 없음`);
   const rate = (v) => typeof v === 'number' && v > 0 && v <= 1; // 0 초과 1 이하 비율
   if (!rate(m.rage?.hpRatio) || !(m.rage?.damageRate > 0)) problems.push('rage.hpRatio(0~1)·rage.damageRate 필요');
+  const TARGETS = ['single', 'all', 'none', 'self'];
+  const range = (v) => Array.isArray(v) && v.length === 2 && v.every(Number.isFinite) && v[0] >= 0 && v[0] <= v[1];
   for (const [key, move] of Object.entries(m.moves ?? {})) {
+    if (!TARGETS.includes(move.target)) problems.push(`moves.${key}.target은 single/all/none/self 중 하나`);
+    if (typeof move.telegraph !== 'string' || !move.telegraph) problems.push(`moves.${key}.telegraph 없음`);
+    if ((move.target === 'single' || move.target === 'all') && !range(move.damage)) problems.push(`moves.${key}.damage는 [최소, 최대] 숫자`);
     if ((move.effect === 'slow' || move.effect === 'shield') && !rate(move.effectRate)) problems.push(`moves.${key}.effectRate(0~1) 필요`);
     if (move.effect === 'slow' && !(Number.isInteger(move.effectTurns) && move.effectTurns >= 1)) problems.push(`moves.${key}.effectTurns(1 이상 정수) 필요`);
     if ((move.effect === 'slow' || move.effect === 'stun') && !(move.status?.name && move.status?.emoji)) problems.push(`moves.${key}.status.name·emoji 필요`);
@@ -96,7 +101,10 @@ function monsterProblems(m) {
   for (const mode of ['normal', 'rage']) {
     const w = m.intentWeights?.[mode];
     if (!w || !Object.keys(w).length) problems.push(`intentWeights.${mode} 없음`);
-    else for (const key of Object.keys(w)) if (!MOVE_KEYS.includes(key)) problems.push(`intentWeights.${mode}에 모르는 기술: ${key}`);
+    else {
+      for (const key of Object.keys(w)) if (!MOVE_KEYS.includes(key)) problems.push(`intentWeights.${mode}에 모르는 기술: ${key}`);
+      if (!Object.values(w).every(v => Number.isFinite(v) && v >= 0) || !(Object.values(w).reduce((a, b) => a + b, 0) > 0)) problems.push(`intentWeights.${mode}는 0 이상 숫자, 합이 0보다 커야 함`);
+    }
   }
   return problems;
 }

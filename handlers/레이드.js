@@ -448,9 +448,11 @@ async function flush(r) {
       // 새 메시지에는 그림을 다시 첨부해야 하므로 그림도 새로 그린다. 끝난 레이드(결과 화면)는 그대로 둔다.
       const buried = r.phase !== 'ended' && isBuried(r);
       const payload = await currentView(r, redraw || (buried && r.hasImage));
-      const ok = buried ? await repostRaidMessage(r, payload) : await editRaidMessage(r, payload);
-      // 메시지가 지워졌으면 계속 돌릴 화면이 없으므로 도주 처리한다.
-      if (!ok && r.phase === 'battle') finishRaid(r, 'timeout');
+      const result = buried ? await repostRaidMessage(r, payload) : await editRaidMessage(r, payload);
+      // 채널이 없어졌거나 권한이 없으면 화면을 계속 보여줄 수 없으므로 레이드를 끝낸다(XP 정지가 남지 않게).
+      if (result === 'fatal' && r.phase !== 'ended') finishRaid(r, r.phase === 'battle' ? 'timeout' : 'noshow');
+      // 일시적인 오류면 다음 갱신(타이머 글자 갱신 등) 때 다시 보낸다. 새 그림을 못 올렸으면 그때 다시 그린다.
+      if (result === 'retry' && redraw) r.imageDirty = true;
     }
   } finally {
     r.flushing = false;
@@ -463,15 +465,41 @@ function currentView(r, redraw) {
   return endView(r, r.outcome, r.rewards);
 }
 
+// 레이드 메시지를 보내거나 고친 결과: 'ok' 성공 · 'retry' 일시적인 실패(다음 갱신 때 다시) · 'fatal' 계속할 수 없음.
+// 디스코드 오류 코드: 10008 메시지 없음(누가 지움) · 10003 채널 없음 · 50001 접근 불가 · 50013 권한 없음.
+const UNKNOWN_MESSAGE = 10008;
+const FATAL_CODES = new Set([10003, 50001, 50013]);
+const failKind = (err) => (FATAL_CODES.has(err?.code) ? 'fatal' : 'retry');
+
 async function editRaidMessage(r, payload) {
   try {
     const message = await r.message.edit(payload);
     if (payload.files || payload.attachments) rememberImageUrl(r, message);
-    return true;
+    return 'ok';
   } catch (err) {
     console.error('레이드 메시지 수정 실패:', err);
-    return false;
+    // 누가 레이드 메시지를 지웠으면 새로 올려서 이어 간다(지금 화면 그대로).
+    if (err?.code === UNKNOWN_MESSAGE) return sendRaidMessage(r, payload, { deleteOld: false });
+    return failKind(err);
   }
+}
+
+// 레이드 메시지를 채널 맨 아래에 새로 올리고, 예전 메시지의 버튼은 "옮겨졌어요" 안내로 돌린다.
+async function sendRaidMessage(r, payload, { deleteOld }) {
+  const old = r.message;
+  let message;
+  try {
+    message = await old.channel.send(payload);
+  } catch (err) {
+    console.error('레이드 메시지 새로 올리기 실패:', err);
+    return failKind(err);
+  }
+  r.message = message;
+  rememberImageUrl(r, message);
+  r.movedFrom.add(old.id);
+  saveActive(r);
+  if (deleteOld) old.delete().catch(err => console.error('예전 레이드 메시지 삭제 실패:', err));
+  return 'ok';
 }
 
 function isBuried(r) {
@@ -479,21 +507,10 @@ function isBuried(r) {
   return !!lastId && lastId !== r.message.id;
 }
 
+// 묻힌 메시지를 맨 아래로 다시 올린다. 새로 올리지 못하면(권한 등) 제자리 수정으로 대신한다.
 async function repostRaidMessage(r, payload) {
-  const old = r.message;
-  let message;
-  try {
-    message = await old.channel.send(payload);
-  } catch (err) {
-    console.error('레이드 메시지 다시 올리기 실패(제자리 수정으로 대신):', err);
-    return editRaidMessage(r, payload);
-  }
-  r.message = message;
-  rememberImageUrl(r, message);
-  r.movedFrom.add(old.id);
-  saveActive(r);
-  old.delete().catch(err => console.error('예전 레이드 메시지 삭제 실패:', err));
-  return true;
+  const result = await sendRaidMessage(r, payload, { deleteOld: true });
+  return result === 'ok' ? 'ok' : editRaidMessage(r, payload);
 }
 
 // 놀이터에 다른 메시지가 올라오면 잠깐(BUMP_DELAY_MS) 모았다가 레이드 메시지를 맨 아래로 다시 올린다.
@@ -636,7 +653,8 @@ function finishRaid(r, outcome) {
   r.outcome = outcome;
   r.endedAt = Date.now();
   if (isCurrent(r)) raids.delete(r.guildId);
-  if (r.freezesXp) setRaidXpFrozen(false);
+  // XP를 멈추는 레이드가 다른 서버에 아직 남아 있으면 정지를 유지한다.
+  if (r.freezesXp) setRaidXpFrozen([...raids.values()].some(x => x.freezesXp));
   delete state.active[r.guildId];
   saveState(state);
 
@@ -843,7 +861,10 @@ function startRaidScheduler(client) {
   } else if (!state.nextSpawnAt) scheduleNextSpawn();
   else if (Date.now() - state.nextSpawnAt > 60 * 60_000) rescheduleOverdue();
   setInterval(() => {
-    if (!state.autoSpawn || raids.has(GUILD_ID) || !state.nextSpawnAt || Date.now() < state.nextSpawnAt) return;
+    if (!state.autoSpawn || !state.nextSpawnAt || Date.now() < state.nextSpawnAt) return;
+    // 출현 시각에 이미 레이드가 떠 있으면(관리자 소환 등) 이번 출현은 건너뛰고 다음 일정을 잡는다
+    // — 그대로 두면 그 레이드가 끝나자마자 1분 안에 또 떠 버린다.
+    if (raids.has(GUILD_ID)) { scheduleNextSpawn(); return; }
     spawnScheduled(client).catch(err => console.error('레이드 자동 출현 실패:', err));
   }, SCHEDULER_TICK_MS);
 }

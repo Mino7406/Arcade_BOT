@@ -7,7 +7,8 @@ const timers = [];
 global.setTimeout = (fn, ms) => { const t = { fn, ms, cancelled: false, unref() { return t; } }; timers.push(t); return t; };
 global.clearTimeout = (t) => { if (t) t.cancelled = true; };
 const realSetInterval = setInterval;
-global.setInterval = () => ({ unref() {} }); // 스케줄러/로그 주기 작업은 테스트에서 끄기
+const intervals = []; // 스케줄러 같은 주기 작업은 실행하지 않고 모아 두기만 한다(테스트에서 직접 부름)
+global.setInterval = (fn, ms) => { intervals.push({ fn, ms }); return { unref() {} }; };
 // 화면 대기열 타이머(짧음)와 게임 타이머(모집 마감·턴, 김)를 구분해 실행한다.
 async function flushRender() {
   for (let guard = 0; guard < 50; guard++) {
@@ -231,6 +232,86 @@ let ok4;
     assert(!lv.isRaidXpFrozen() && !raidMod.isPlaygroundPaused('gMain'), '본서버 레이드 끝나면 XP 정지 해제');
   }
 
+  // 14) 변수 상황: 메시지 수정 실패 종류별 처리 · 레이드 두 개의 XP 정지 · 레이드 중 자동 출현 시각
+  {
+    // 수정할 때 던질 오류를 바꿀 수 있는 가짜 채널
+    const mkFlaky = (g, id) => {
+      const ch = { id, guildId: g, name: id, lastMessageId: null, sent: 0, failWith: null };
+      ch.send = async (p) => {
+        ch.sent++;
+        const m = { id: `${id}-m${ch.sent}`, channel: ch, delete: async () => {} };
+        m.edit = async () => { if (ch.failWith) throw ch.failWith; return m; };
+        ch.lastMessageId = m.id;
+        return m;
+      };
+      return ch;
+    };
+    const err = (code) => Object.assign(new Error('discord ' + code), { code });
+    const start = async (ch) => {
+      await origSpawn({ guildId: 'other', channel: ch, client });
+      await flushRender();
+      const it = Object.assign(fakeInteraction('a1', 'raid:role:sword'), { guildId: ch.guildId, message: { id: ch.lastMessageId } });
+      await raidMod.handleRaidButton(it);
+      const st = Object.assign(fakeInteraction('a1', 'raid:start'), { guildId: ch.guildId, message: { id: ch.lastMessageId } });
+      await raidMod.handleRaidButton(st);
+      const yes = Object.assign(fakeInteraction('a1', 'raid:solo:yes'), { guildId: ch.guildId, deleteReply: async () => {} });
+      await raidMod.handleRaidButton(yes);
+      await flushRender();
+    };
+    const quiet = async (fn) => { const e = console.error; console.error = () => {}; try { await fn(); } finally { console.error = e; } };
+
+    // 일시적인 오류(네트워크·디스코드 5xx 등)로 수정이 한 번 실패해도 전투를 끝내지 않는다
+    const c1 = mkFlaky('gMain', 'flaky1');
+    await start(c1);
+    assert(raidMod.getRaidStatus('gMain').phase === 'battle', '[변수] 전투 시작');
+    c1.failWith = new Error('ECONNRESET');
+    await quiet(async () => { await raidMod.handleRaidButton(Object.assign(fakeInteraction('a1', 'raid:act:guard'), { guildId: 'gMain', message: { id: c1.lastMessageId } })); await flushRender(); });
+    assert(raidMod.getRaidStatus('gMain').phase === 'battle', '[변수] 일시적인 수정 실패로는 전투가 끝나지 않음');
+    // 누가 레이드 메시지를 지우면(Unknown Message) 새 메시지로 다시 올려 이어 간다
+    c1.failWith = err(10008);
+    const sentBefore = c1.sent;
+    await quiet(async () => { await runTimers(); });
+    c1.failWith = null;
+    assert(raidMod.getRaidStatus('gMain').active && c1.sent > sentBefore, '[변수] 레이드 메시지가 지워지면 새로 올려서 계속');
+    await origEnd('gMain'); await flushRender();
+
+    // 채널이 사라지거나 권한이 없으면(모집 중이라도) 바로 끝내 XP 정지가 1시간씩 남지 않게
+    const c2 = mkFlaky('gMain', 'flaky2');
+    await origSpawn({ guildId: 'other', channel: c2, client }); await flushRender();
+    c2.failWith = err(10003);
+    await quiet(async () => {
+      const it = Object.assign(fakeInteraction('a1', 'raid:role:sword'), { guildId: 'gMain', message: { id: c2.lastMessageId } });
+      await raidMod.handleRaidButton(it); await flushRender();
+    });
+    assert(!raidMod.getRaidStatus('gMain').active && !lv.isRaidXpFrozen(), '[변수] 채널이 없어지면 모집 중이어도 레이드 종료 + XP 정지 해제');
+
+    // XP를 멈추는 레이드가 두 서버에서 동시에 돌 때, 하나가 끝나도 다른 하나가 남아 있으면 XP 정지 유지
+    const cA = mkFlaky('gMain', 'xpA'), cB = mkFlaky('gOther', 'xpB');
+    await origSpawn({ guildId: 'other', channel: cA, client });
+    await origSpawn({ guildId: 'other', channel: cB, client });
+    await origEnd('gOther'); await flushRender();
+    assert(lv.isRaidXpFrozen(), '[변수] XP 멈춘 레이드가 하나라도 남아 있으면 XP 정지 유지');
+    await origEnd('gMain'); await flushRender();
+    assert(!lv.isRaidXpFrozen(), '[변수] 전부 끝나면 XP 정지 해제');
+
+    // 자동 출현 시각이 레이드(수동 소환) 진행 중에 지나가면 건너뛰고 다음 일정으로 — 끝나자마자 또 뜨지 않게
+    intervals.length = 0;
+    raidMod.startRaidScheduler(client);
+    const tick = intervals.find(x => x.ms === 60_000)?.fn;
+    raidMod.setAutoSpawn(true);
+    const { GUILD_ID } = require(path.join(root, 'config.js'));
+    const due = raidMod.getRaidStatus(GUILD_ID).nextSpawnAt;
+    const cS = mkFlaky(GUILD_ID, 'sched'); // 자동 출현은 본서버(GUILD_ID) 기준
+    await origSpawn({ guildId: 'other', channel: cS, client });
+    const realNow = Date.now;
+    Date.now = () => due + 60_000;
+    try { tick(); } finally { Date.now = realNow; }
+    const next = raidMod.getRaidStatus(GUILD_ID).nextSpawnAt;
+    assert(tick && raidMod.getRaidStatus(GUILD_ID).active && next > due + 60_000, '[변수] 레이드 중 지나간 자동 출현 시각은 다음 일정으로 미룸');
+    await origEnd(GUILD_ID); await flushRender();
+    raidMod.setAutoSpawn(false);
+  }
+
   // 11) 자동 출현 스위치: 기본 중지
   {
     assert(raidMod.getRaidStatus('gMain').autoSpawn === false, '자동 출현 기본값은 중지');
@@ -306,10 +387,13 @@ let ok4;
     const bad = JSON.parse(slime); bad.id = 'bad'; bad.sprite.rows[0] = 'zz' + bad.sprite.rows[0]; delete bad.moves.heal;
     fs.writeFileSync(path.join(dir, '다.json'), JSON.stringify(bad));
     fs.writeFileSync(path.join(dir, '라.json'), slime); // id 중복
+    const noDmg = JSON.parse(slime); noDmg.id = 'nodmg'; delete noDmg.moves.attack.damage; noDmg.intentWeights.rage = { attack: 0 };
+    fs.writeFileSync(path.join(dir, '마.json'), JSON.stringify(noDmg)); // 피해 없음 + 가중치 합 0
     const origError = console.error; const errors = []; console.error = (...a) => errors.push(a.join(' '));
     const list = E.loadMonsters(dir);
     console.error = origError;
     assert(list.length === 1 && list[0].id === 'slime', '깨진 JSON · 칸 빠진 파일 · id 중복 파일은 건너뜀');
+    assert(errors.some(e => e.includes('moves.attack.damage')) && errors.some(e => e.includes('합이 0보다')), '피해 수치 없음 · 가중치 합 0인 파일도 건너뜀(HP가 NaN이 되는 것 방지)');
     assert(errors.some(e => e.includes('palette에 없는 글자: z')) && errors.some(e => e.includes('moves.heal 없음')) && errors.some(e => e.includes('겹침')), '건너뛴 사유를 콘솔에 남김');
     fs.rmSync(dir, { recursive: true, force: true });
   }
