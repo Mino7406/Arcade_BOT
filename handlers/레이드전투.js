@@ -17,7 +17,7 @@ const SLOW_DAMAGE_RATE = 0.75;   // 점액: 주는 피해 25% 감소
 const SLOW_TURNS = 2;            // 점액 지속 턴(맞은 다음 턴부터)
 const SHIELD_DAMAGE_RATE = 0.5;  // 보호막: 다음 턴 동안 몬스터가 받는 피해 50% 감소
 // 인원별 몬스터 피해 배율. 보통 플레이 승률이 인원과 상관없이 80~90%가 되게 맞춘 값(치유사·수호자가 다 있는 4인은 훨씬 버티므로 크게).
-const PARTY_DAMAGE_RATE = { 1: 1.15, 2: 1.0, 3: 1.15, 4: 1.85 };
+const PARTY_DAMAGE_RATE = { 1: 1.25, 2: 1.1, 3: 1.25, 4: 2.0 };
 const PARTY_BASE_SIZE = 4;       // 몬스터 baseHp가 기준으로 삼는 인원(역할 4종 한 명씩).
 // 인원수별 HP 보정. 목표는 2~4인 모두 약 24턴(실측 턴당 혼자 5~7초, 여럿이면 더 걸려 3~5분).
 // (몬스터 재생·보호막과 파티 점액·기절까지 넣은 상태로 맞춘 값 — tests/raid/밸런스시뮬.js)
@@ -178,7 +178,7 @@ const MONSTERS = [
       palette: { a: '#123d1c', o: '#7fdc8c', b: '#3fbf55', d: '#278a3b', h: '#e6ffd9', c: '#ff5c8a', w: '#ffffff', k: '#111111', m: '#0b2611', s: '#fff1a8' },
       rageColors: { a: '#4a1010', o: '#f07a6e', b: '#e5383b', d: '#a3242a', h: '#ffd6cf', m: '#1a1033' },
     },
-    baseHp: 7000,
+    baseHp: 6400,
     moves: {
       attack: { name: '몸통 박치기',   telegraph: '몸을 납작하게 웅크린다...', target: 'single', damage: [8, 10] },
       sweep:  { name: '점액 흩뿌리기', telegraph: '몸이 부르르 떨리기 시작한다...', target: 'all', damage: [5, 7], effect: 'slow' },
@@ -188,8 +188,8 @@ const MONSTERS = [
     },
     // 다음 행동 가중치(평상시/분노). 기술마다 따로 뽑는다(단단해지기와 필살기는 서로 묶이지 않음). heal은 HP가 많이 남았으면 attack으로 바꾼다.
     intentWeights: {
-      normal: { attack: 4, sweep: 2, charge: 2, smash: 1, heal: 1 },
-      rage:   { attack: 3.5, sweep: 2, charge: 2, smash: 1.5, heal: 1.5 },
+      normal: { attack: 4, sweep: 2, charge: 2, smash: 1, heal: 2 },
+      rage:   { attack: 3.5, sweep: 2, charge: 2, smash: 1.5, heal: 2.5 },
     },
   },
 ];

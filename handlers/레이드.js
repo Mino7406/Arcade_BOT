@@ -331,7 +331,7 @@ function endSummary(r, outcome, rewards) {
     if (others.length) lines.push(`> 🎁 **보상** : ${others.join(', ')} · (+${CLEAR_XP} XP)`);
     if (!rewards.length) lines.push('> 직접 행동한 파티원이 없어 보상이 없어요');
   } else if (outcome === 'wipe' || outcome === 'timeout' || outcome === 'noshow') {
-    lines.push(`> 💨 ${r.monster.name}${subjectJosa(r.monster.name)} 도망쳤다...`);
+    lines.push(`> 💨 ${outcome === 'wipe' ? '파티가 전멸하여 ' : ''}${r.monster.name}${subjectJosa(r.monster.name)} 도망쳤다...`);
   } else if (outcome === 'admin') {
     lines.push('> 관리자가 레이드를 종료했어요');
   }

@@ -550,7 +550,7 @@ const END_TITLE = {
 };
 const END_SUB = {
   clear: (m) => `${m.name} 토벌 성공!`,
-  wipe: (m) => `${m.name}${subjectJosa(m.name)} 도망쳤다...`,
+  wipe: (m) => `파티가 전멸하여 ${m.name}${subjectJosa(m.name)} 도망쳤다...`,
   timeout: (m) => `${m.name}${subjectJosa(m.name)} 도망쳤다...`,
   noshow: (m) => `${m.name}${subjectJosa(m.name)} 도망쳤다...`,
   restart: () => '봇 점검으로 레이드가 중단됐다',
