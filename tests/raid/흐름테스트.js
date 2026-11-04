@@ -235,7 +235,7 @@ let ok4;
   {
     assert(raidMod.getRaidStatus('gMain').autoSpawn === false, '자동 출현 기본값은 중지');
     let st = raidMod.setAutoSpawn(true);
-    assert(st.autoSpawn && st.nextSpawnAt > Date.now() + 2 * 86400_000, '가동하면 약 3일 뒤 첫 출현 일정');
+    assert(st.autoSpawn && st.nextSpawnAt > Date.now() && st.nextSpawnAt < Date.now() + 4 * 86400_000, '가동하면 1~3일 뒤 첫 출현 일정');
     st = raidMod.setAutoSpawn(false);
     assert(!st.autoSpawn && st.nextSpawnAt === null, '중지하면 일정 삭제');
   }

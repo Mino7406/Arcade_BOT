@@ -1,4 +1,4 @@
-// 레이드.js — 레이드: 약 3일마다 놀이터에 몬스터가 출현해 XP 시스템을 멈춰 세우고,
+// 레이드.js — 레이드: 하루~사흘마다(무작위) 놀이터에 몬스터가 출현해 XP 시스템을 멈춰 세우고,
 // 4인 선착순 파티가 턴제로 토벌하면 다시 풀린다. 전투 규칙·몬스터 데이터는 레이드전투.js, 패널 그림은
 // 레이드그림.js에 있고, 이 파일은 출현 스케줄·화면 조립·버튼·타이머·XP 정지/보상을 맡는다.
 //
@@ -35,7 +35,7 @@ const {
 const { renderRecruit, renderBattle, renderEnd, warmUp } = require('./레이드그림');
 
 // ── 설정 ────────────────────────────────────────────────────────
-const SPAWN_INTERVAL_DAYS = 3;     // 출현 주기(일). 출현한 날로부터 이만큼 뒤의 날, 아래 시간대 중 무작위 시각
+const SPAWN_INTERVAL_DAYS = [1, 3]; // 출현 간격(일) 최소~최대. 매번 이 안에서 무작위로 뽑은 날 뒤, 아래 시간대 중 무작위 시각
 const SPAWN_WINDOW_START_HOUR = 12; // KST. 사람이 없는 새벽에 떠서 아무도 못 잡는 일이 없게 시간대를 둔다
 const SPAWN_WINDOW_END_HOUR = 23;
 const RECRUIT_MS = 60 * 60 * 1000;  // 출현 후 모집 대기 시간 — 그동안 아무도 참가하지 않으면 몬스터 자동 도주
@@ -95,7 +95,9 @@ function randomTimeInWindow(dayStartUtc) {
   return start + Math.floor(Math.random() * (end - start));
 }
 function scheduleNextSpawn(fromMs = Date.now()) {
-  state.nextSpawnAt = randomTimeInWindow(kstDayStartUtc(fromMs, SPAWN_INTERVAL_DAYS));
+  const [minDays, maxDays] = SPAWN_INTERVAL_DAYS;
+  const days = minDays + Math.floor(Math.random() * (maxDays - minDays + 1));
+  state.nextSpawnAt = randomTimeInWindow(kstDayStartUtc(fromMs, days));
   saveState(state);
 }
 // 봇이 꺼져 있던 사이 출현 시각을 한참 넘겼으면(새벽에 켜지는 등) 그 자리에서 바로 띄우지 않고
@@ -830,7 +832,7 @@ function getRaidStatus(guildId) {
   };
 }
 
-// 본서버 자동 출현 가동/중지. 켜면 오늘부터 SPAWN_INTERVAL_DAYS일 뒤 시간대에 첫 출현을 잡고, 끄면 일정을 지운다.
+// 본서버 자동 출현 가동/중지. 켜면 오늘부터 1~3일(무작위) 뒤 시간대에 첫 출현을 잡고, 끄면 일정을 지운다.
 function setAutoSpawn(on) {
   state.autoSpawn = !!on;
   if (on) scheduleNextSpawn();
