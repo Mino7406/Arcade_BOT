@@ -305,7 +305,7 @@ const OUTCOME_TEXT = {
 
 // 종료 화면 그림 아래 요약 카드: 큰 제목 · 인용 블록(핵심 결과) · 작은 글씨(기록·복구·다음 출현).
 const END_HEADING = {
-  clear: '🏆 RAID CLEAR!', wipe: '☠️ RAID FAILED', timeout: '⌛ RAID FAILED',
+  clear: '🎉 RAID CLEAR!', wipe: '☠️ RAID FAILED', timeout: '⌛ RAID FAILED',
   noshow: '💨 RAID FAILED', restart: '💨 봇 점검으로 중단', admin: '🛑 레이드 종료',
 };
 function formatDuration(ms) {
