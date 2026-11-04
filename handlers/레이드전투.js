@@ -257,6 +257,7 @@ function createBattle(monster, party, rng = Math.random) {
     })),
   };
   battle.intent = pickNextIntent(battle, rng);
+  if (battle.intent === 'smash') battle.intent = 'attack'; // 첫 턴부터 필살기는 없게(시작하자마자 전원 기절 방지)
   return battle;
 }
 
