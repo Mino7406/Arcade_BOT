@@ -13,9 +13,10 @@ const TAUNT_DAMAGE_RATE = 0.4;   // 도발 중인 수호자: 받는 피해 60% �
 const RAGE_HP_RATIO = 0.5;
 const RAGE_DAMAGE_MULTIPLIER = 1.5;
 const PARTY_BASE_SIZE = 4;       // 몬스터 baseHp가 기준으로 삼는 인원(역할 4종 한 명씩).
-// 인원이 적으면 서로 지켜줄 수단(도발·회복)도 빠져 같은 HP 비율로는 훨씬 어렵다(시뮬레이션 기준
-// 혼자면 승률 20% 안팎). 그래서 인원수별로 HP를 한 번 더 깎는다.
-const SMALL_PARTY_HP_RATE = { 1: 0.75, 2: 0.9, 3: 0.95 };
+// 인원수별 HP 보정. 목표는 2~4인 모두 약 24턴(실측 턴당 혼자 5~7초, 여럿이면 더 걸려 3~5분).
+// 수호자·치유사는 피해가 적어 인원이 줄어도 턴 수가 크게 안 줄기 때문에 2·3인은 HP를 오히려 늘린다.
+// 1인은 HP 조절 테스트용(HP_MIN_PARTY가 1일 때만 쓰임)이라 짧게 둔다.
+const SMALL_PARTY_HP_RATE = { 1: 0.75, 2: 1.45, 3: 1.15 };
 // HP를 맞출 때 기준으로 삼는 최소 인원. 지금은 HP 조절 테스트용으로 1(혼자면 1인 기준 HP).
 // 정식 오픈 때 2로 올리면 1인 구간이 없어진다 — 혼자 시작해도 2인 기준 HP(빈 자리는 평균 가중치 1.0으로 채움).
 const HP_MIN_PARTY = 1;
@@ -84,12 +85,12 @@ const MONSTERS = [
       rageColors: { a: '#4a1010', b: '#e5383b', g: '#ffb703' },
       glitchRows: [3, 9],
     },
-    baseHp: 6200,
+    baseHp: 8700,
     moves: {
-      attack: { name: '몸통 박치기', telegraph: '몸을 잔뜩 웅크린다', target: 'single', damage: [14, 19] },
-      sweep:  { name: '오류 파동',   telegraph: '몸이 지직거리기 시작한다', target: 'all', damage: [9, 12] },
+      attack: { name: '몸통 박치기', telegraph: '몸을 잔뜩 웅크린다', target: 'single', damage: [8, 10] },
+      sweep:  { name: '오류 파동',   telegraph: '몸이 지직거리기 시작한다', target: 'all', damage: [5, 7] },
       charge: { name: '데이터 압축', telegraph: '주변 데이터를 빨아들인다…', target: 'none' },
-      smash:  { name: '메모리 폭발', telegraph: '💥 폭발 직전! 방어하세요!', target: 'all', damage: [28, 34] },
+      smash:  { name: '메모리 폭발', telegraph: '💥 폭발 직전! 방어하세요!', target: 'all', damage: [15, 19] },
     },
   },
 ];
