@@ -377,7 +377,7 @@ function formatXpResultLine(game) {
   }
 
   if (result.type === 'frozen') {
-    return result.raid ? `\n-# 👾 몬스터 때문에 XP 시스템이 고장 나 미니게임 XP가 정산되지 않았습니다. 놀이터의 레이드를 확인하세요!` : `\n-# ⚙️ 관리자가 미니게임 XP 정산을 일시 중지했습니다.`;
+    return result.raid ? `\n-# 👾 몬스터 때문에 XP 시스템이 고장 나 XP를 받을 수 없습니다.` : `\n-# ⚙️ 관리자가 미니게임 XP 정산을 일시 중지했습니다.`;
   }
 
   if (result.type === 'user_frozen') {

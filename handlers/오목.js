@@ -540,7 +540,7 @@ function buildEmbed(game) {
         const cooldownMin = Math.ceil((game.xpResult.cooldownMs ?? BOT_SETTLE_COOLDOWN_MS) / 60000);
         desc += `\n⏳ 연속 대결 쿨다운 중이라\n 이번 판은 XP 정산이 생략됐습니다.\n-# (직전 정산 후 ${cooldownMin}분 이내)`;
       } else if (game.xpResult?.type === 'frozen') {
-        desc += game.xpResult.raid ? `\n-# 👾 몬스터 때문에 XP 시스템이 고장 나 미니게임 XP가 정산되지 않았습니다. 놀이터의 레이드를 확인하세요!` : `\n-# ⚙️ 관리자가 미니게임 XP 정산을 일시 중지했습니다.`;
+        desc += game.xpResult.raid ? `\n-# 👾 몬스터 때문에 XP 시스템이 고장 나 XP를 받을 수 없습니다.` : `\n-# ⚙️ 관리자가 미니게임 XP 정산을 일시 중지했습니다.`;
       } else if (game.xpResult?.type === 'user_frozen') {
         desc += `\n-# 🚫 승자가 XP 지급 정지 상태라 이번 판은 XP 정산이 생략됐습니다.`;
       }

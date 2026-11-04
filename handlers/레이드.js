@@ -130,9 +130,6 @@ function bar(value, max, length) {
   const filled = Math.max(0, Math.min(length, Math.round((value / max) * length)));
   return '▰'.repeat(filled) + '▱'.repeat(length - filled);
 }
-function freezeNotice(r) {
-  return r.freezesXp ? '\n> 🔧 **XP 시스템 고장!** 놀이터 미니게임 · 통화방 · 채팅 XP가 멈췄습니다.' : '';
-}
 
 // 컨테이너(임베드 창) 하나 안에 그림 → 글자 → 버튼을 담는다. sections: [{ text } | { separator } | { row }]
 // image: { png } 새 그림 첨부 / { url } 지난번 올린 그림 재사용 / null 그림 없음.
@@ -241,7 +238,7 @@ function memberStatus(b, mem) {
 // 선택 화면 아래 상태 효과 안내(몬스터 보호막 · 기절 · 점액)
 function effectLines(b) {
   const lines = [];
-  if (isShielded(b)) lines.push(`🛡️ **${b.monster.name}**${subjectJosa(b.monster.name)} 단단해졌어요 — 이번 턴 주는 피해 **-${Math.round((1 - SHIELD_DAMAGE_RATE) * 100)}%**`);
+  if (isShielded(b)) lines.push(`🛡️ 방어력 증가: ${b.monster.name} — 이번 턴 주는 피해 -${Math.round((1 - SHIELD_DAMAGE_RATE) * 100)}%`);
   const stunned = b.members.filter(mem => mem.hp > 0 && isStunned(b, mem)).map(mem => mem.name);
   if (stunned.length) lines.push(`💫 기절: ${stunned.join(', ')} — 이번 턴 행동 불가`);
   const slowed = b.members.filter(mem => mem.hp > 0 && slowTurnsLeft(b, mem) > 0).map(mem => `${mem.name}(${slowTurnsLeft(b, mem)}턴)`);
