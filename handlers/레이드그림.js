@@ -445,7 +445,8 @@ function renderBattle(r) {
       text('방어력 증가', W - 108, 149, 19, '#cfe8ff');
       text('피해 -50%', W - 108, 172, 15, '#8fc4ff');
     }
-    if (last?.monsterMove) {
+    // 몬스터 기술 말풍선은 그 기술을 쓴 턴의 결과 화면에서만(다음 턴 선택 화면에는 남기지 않는다)
+    if (r.showingResult && last?.monsterMove) {
       const label = `${last.monsterMove}!`;
       const bw = Math.min(p.textWidth(B(), label, 22), 200) + 36;
       const bx = W / 2 - 92 - bw, by = 132;
