@@ -50,6 +50,7 @@ const SCHEDULER_TICK_MS = 60 * 1000;
 // 1초마다는 불가능하고 버튼 반응까지 밀린다 — 모집(최대 1시간)은 10초, 전투 턴(60초)은 5초마다.
 const COUNTDOWN_TICK_MS = { recruit: 10 * 1000, battle: 5 * 1000 };
 const IMAGE_NAME = 'raid.png';
+const HELP_DELETABLE_MS = 15 * 60 * 1000; // 디스코드가 비공개 응답을 지우게 해 주는 시간(응답 토큰 유효 15분)
 
 const STATE_PATH = path.join(__dirname, '..', 'DB', 'raid.json');
 
@@ -582,6 +583,7 @@ async function spawnRaid(client, channel, { forced = false } = {}) {
     // 레벨 시스템이 없는 서버(테스트 서버)에서 띄운 레이드는 본서버 XP를 멈추지 않는다.
     freezesXp: !isExcludedGuild(channel.guildId),
     movedFrom: new Set(), // 아래로 다시 올리면서 지운 예전 메시지 id(그 버튼을 누르면 안내)
+    helpReplies: [], // 열려 있는 ❔ 플레이 방법 응답 { interaction, at } — 전투 시작·레이드 종료 때 닫는다
   };
   raids.set(r.guildId, r);
   try {
@@ -608,8 +610,17 @@ async function onRecruitEnd(r) {
   else startBattle(r);
 }
 
+// 열어 둔 ❔ 플레이 방법(본인에게만 보이는 메시지)을 닫는다. 디스코드는 응답 후 15분까지만 지울 수 있게 해서
+// 그보다 오래된 건 지우지 못한다(실패는 조용히 넘긴다).
+function closeHelpReplies(r) {
+  const list = r.helpReplies ?? [];
+  r.helpReplies = [];
+  for (const { interaction } of list) interaction.deleteReply().catch(() => {});
+}
+
 function startBattle(r) {
   clearTimer(r);
+  closeHelpReplies(r); // 모집 중에 열어 둔 가이드는 전투가 시작되면 닫는다
   r.phase = 'battle';
   r.party.sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role)); // 화면에 역할 순서대로
   r.battle = createBattle(r.monster, r.party);
@@ -661,6 +672,7 @@ function finishRaid(r, outcome) {
   r.outcome = outcome;
   r.endedAt = Date.now();
   if (isCurrent(r)) raids.delete(r.guildId);
+  closeHelpReplies(r); // 전투 중에 연 가이드도 레이드가 끝나면 닫는다
   // XP를 멈추는 레이드가 다른 서버에 아직 남아 있으면 정지를 유지한다.
   if (r.freezesXp) setRaidXpFrozen([...raids.values()].some(x => x.freezesXp));
   delete state.active[r.guildId];
@@ -700,7 +712,14 @@ async function handleRaidButton(interaction) {
   const [, kind, arg] = interaction.customId.split(':');
 
   if (kind === 'help') {
-    await interaction.reply(buildHelpView(raids.get(interaction.guildId)?.monster ?? MONSTERS[0]));
+    const rr = raids.get(interaction.guildId);
+    await interaction.reply(buildHelpView(rr?.monster ?? MONSTERS[0]));
+    // 레이드가 진행 중이면 기억해 뒀다가 전투 시작·레이드 종료 때 닫는다. 15분 지난 건(못 지움) 목록에서 뺀다.
+    if (rr && rr.phase !== 'ended') {
+      const now = Date.now();
+      rr.helpReplies = rr.helpReplies.filter(h => now - h.at < HELP_DELETABLE_MS);
+      rr.helpReplies.push({ interaction, at: now });
+    }
     return;
   }
 

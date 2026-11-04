@@ -320,6 +320,26 @@ let ok4;
     const { MessageFlags } = require('discord.js');
     assert((it.p.flags & MessageFlags.Ephemeral) && (it.p.flags & MessageFlags.IsComponentsV2), '도움말: 본인에게만 · V2 컨테이너');
     assert(text.includes('레이드 플레이 방법') && text.includes('행동 불가') && !/점액|단단해|재생/.test(text), '도움말: 공통 규칙만(점액·단단해지기·재생 없음)');
+
+    // 모집 중에 연 가이드는 전투가 시작되면, 전투 중에 연 가이드는 레이드가 끝나면 자동으로 닫힌다
+    const ch = { id: 'helpch', guildId: 'gMain', name: 'h', lastMessageId: null };
+    ch.send = async () => { const m = { id: 'helpm', channel: ch, edit: async () => m, delete: async () => {} }; ch.lastMessageId = m.id; return m; };
+    await origSpawn({ guildId: 'other', channel: ch, client }); await flushRender();
+    const openHelp = async () => {
+      const h = { customId: 'raid:help', guildId: 'gMain', user: { id: '1' }, closed: false, reply: async () => {}, deleteReply: async () => { h.closed = true; } };
+      await raidMod.handleRaidButton(h);
+      return h;
+    };
+    const h1 = await openHelp(), h2 = await openHelp();
+    await raidMod.handleRaidButton(Object.assign(fakeInteraction('1', 'raid:role:sword'), { message: { id: 'helpm' } }));
+    await raidMod.handleRaidButton(Object.assign(fakeInteraction('2', 'raid:role:archer'), { message: { id: 'helpm' } }));
+    assert(!h1.closed && !h2.closed, '가이드: 모집 중에는 그대로');
+    await raidMod.handleRaidButton(Object.assign(fakeInteraction('1', 'raid:start'), { message: { id: 'helpm' } }));
+    await flushRender();
+    assert(raidMod.getRaidStatus('gMain').phase === 'battle' && h1.closed && h2.closed, '가이드: 전투가 시작되면 자동으로 닫힘');
+    const h3 = await openHelp();
+    await origEnd('gMain'); await flushRender();
+    assert(h3.closed, '가이드: 전투 중에 연 것은 레이드가 끝나면 닫힘');
   }
 
   // 11) 자동 출현 스위치: 기본 중지
