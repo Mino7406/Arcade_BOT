@@ -119,7 +119,7 @@ let ok4;
   assert(buttons().length === 0, '전투 종료 후 버튼 제거');
   assert(!lv.isRaidXpFrozen(), '종료 후 XP 정지 해제');
   assert(sent.some(p => p.content?.includes('XP 시스템이 다시 작동')), '복구 안내 메시지 전송');
-  if (end.includes('토벌 성공')) {
+  if (end.includes('RAID CLEAR')) {
     assert(lv.getXp('gMain', '1') >= 300 && lv.getXp('gMain', '2') >= 300, '토벌 보상 XP 지급');
   }
   const status = raidMod.getRaidStatus('gMain');

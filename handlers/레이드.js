@@ -291,7 +291,7 @@ const OUTCOME_TEXT = {
 
 // 종료 화면 그림 아래 요약 카드: 큰 제목 · 인용 블록(핵심 결과) · 작은 글씨(기록·복구·다음 출현).
 const END_HEADING = {
-  clear: '🏆 토벌 성공!', wipe: '☠️ 파티 전멸', timeout: '⌛ 시간 초과',
+  clear: '🏆 RAID CLEAR!', wipe: '☠️ 파티 전멸', timeout: '⌛ 시간 초과',
   noshow: '💨 아무도 오지 않았다', restart: '💨 봇 점검으로 중단', admin: '🛑 레이드 종료',
 };
 function formatDuration(ms) {
