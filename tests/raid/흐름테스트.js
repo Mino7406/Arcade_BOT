@@ -151,11 +151,11 @@ let ok4;
     let t2 = fakeInteraction('7', 'raid:start'); await raidMod.handleRaidButton(t2);
     assert(t2.replied?.content.includes('혼자예요') && !desc().includes('TURN 1'), '혼자인 방장이 바로 시작 → 본인에게만 확인 메시지');
     const ephem = { id: 'ephemeral-1' };
-    const mk = (id) => { const x = fakeInteraction(ADMIN_IDS[0], id); x.message = ephem; x.update = async (pl) => { x.updated = pl; }; return x; };
+    const mk = (id) => { const x = fakeInteraction(ADMIN_IDS[0], id); x.message = ephem; x.update = async (pl) => { x.updated = pl; }; x.deleteReply = async () => { x.deleted = true; }; return x; };
     t = mk('raid:solo:no'); await raidMod.handleRaidButton(t);
     assert(t.updated?.content.includes('취소') && !desc().includes('TURN 1'), '확인 메시지에서 취소하면 모집 계속');
     t = mk('raid:solo:yes'); await raidMod.handleRaidButton(t);
-    assert(t.updated?.content.includes('시작했어요') && desc().includes('TURN 1'), '확인 메시지에서 혼자 시작하면 전투 시작(관리자도 가능)');
+    assert(t.deleted && !t.updated && desc().includes('TURN 1'), '확인 메시지에서 혼자 시작하면 전투 시작 + 확인 메시지 삭제(관리자도 가능)');
     await raidMod.forceEndRaid();
   }
 

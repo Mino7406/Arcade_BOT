@@ -642,7 +642,9 @@ async function handleRaidButton(interaction) {
     }
     logSystem({ 유형: '레이드', 유저: userLabel(uid), 내용: `바로 시작(혼자 확인) — ${rr.party.length}명으로 출발` });
     startBattle(rr);
-    await interaction.update({ content: '⚔️ 레이드를 시작했어요!', components: [] });
+    // 시작했다는 안내는 따로 띄우지 않고, 혼자 시작 확인 메시지만 지운다(전투 화면이 바로 바뀌므로).
+    await interaction.deferUpdate();
+    await interaction.deleteReply().catch(() => {});
     return;
   }
 
