@@ -9,7 +9,7 @@ const PLAYER_MAX_HP = 100;
 const POTIONS_PER_BATTLE = 2;
 const POTION_HEAL = 45;
 const GUARD_DAMAGE_RATE = 0.3;   // 방어: 받는 피해 70% 감소
-const TAUNT_DAMAGE_RATE = 0.4;   // 도발 중인 수호자: 받는 피해 60% 감소
+const TAUNT_DAMAGE_RATE = 0.3;   // 도발 중인 수호자: 받는 피해 70% 감소
 const RAGE_HP_RATIO = 0.5;
 const RAGE_DAMAGE_MULTIPLIER = 1.5;
 // 몬스터 기술 효과(moves의 effect). 효과 종류는 공통 규칙이고, 어느 기술에 붙일지는 몬스터 데이터가 정한다.
@@ -17,7 +17,7 @@ const SLOW_DAMAGE_RATE = 0.75;   // 점액: 주는 피해 25% 감소
 const SLOW_TURNS = 2;            // 점액 지속 턴(맞은 다음 턴부터)
 const SHIELD_DAMAGE_RATE = 0.5;  // 보호막: 다음 턴 동안 몬스터가 받는 피해 50% 감소
 // 인원별 몬스터 피해 배율. 보통 플레이 승률이 인원과 상관없이 80~90%가 되게 맞춘 값(치유사·수호자가 다 있는 4인은 훨씬 버티므로 크게).
-const PARTY_DAMAGE_RATE = { 1: 1.25, 2: 1.1, 3: 1.25, 4: 2.0 };
+const PARTY_DAMAGE_RATE = { 1: 1.35, 2: 1.07, 3: 1.25, 4: 2.0 };
 const PARTY_BASE_SIZE = 4;       // 몬스터 baseHp가 기준으로 삼는 인원(역할 4종 한 명씩).
 // 인원수별 HP 보정. 목표는 2~4인 모두 약 24턴(실측 턴당 혼자 5~7초, 여럿이면 더 걸려 3~5분).
 // (몬스터 재생·보호막과 파티 점액·기절까지 넣은 상태로 맞춘 값 — tests/raid/밸런스시뮬.js)
@@ -32,17 +32,17 @@ const HP_MIN_PARTY = 1;
 // hpWeight: 몬스터 HP를 인원에 맞출 때 그 역할 한 명이 늘리는 몫(4종 합 4.0). 딜러가 빠지면 HP도 더 줄어든다.
 const ROLES = {
   sword: {
-    // 딜러 둘은 3턴 주기 기대 피해를 비슷하게(검사 약 475 · 궁수 약 490). 궁수는 치명타 운에 따라 들쭉날쭉하지 않게 배율을 낮춤.
+    // 딜러 둘은 3턴 주기 기대 피해를 비슷하게(검사 약 475 · 궁수 약 455 + 치명타 한 방). HP 가중치도 같게 1.15.
     name: '검사', emoji: '⚔️', attack: [90, 110], hpWeight: 1.15,
     skill: { name: '회전베기', cooldown: 3, damage: [250, 300], desc: '250~300 피해' },
   },
   archer: {
-    name: '궁수', emoji: '🏹', attack: [80, 100], critChance: 0.25, critMultiplier: 1.5, hpWeight: 1.1,
-    skill: { name: '차지 샷', cooldown: 3, damage: [220, 260], critChance: 0.4, desc: '220~260 피해, 치명타 확률 40%' },
+    name: '궁수', emoji: '🏹', attack: [80, 100], critChance: 0.25, critMultiplier: 1.5, hpWeight: 1.15,
+    skill: { name: '차지 샷', cooldown: 3, damage: [200, 240], critChance: 0.3, desc: '200~240 피해, 치명타 확률 30%' },
   },
   tank: {
-    name: '수호자', emoji: '🛡️', attack: [50, 70], hpWeight: 0.85,
-    skill: { name: '도발', cooldown: 2, desc: '이번 턴 단일 공격을 대신 맞고, 받는 피해 60% 감소' },
+    name: '수호자', emoji: '🛡️', attack: [60, 80], hpWeight: 0.85,
+    skill: { name: '도발', cooldown: 2, desc: '이번 턴 단일 공격을 대신 맞고, 받는 피해 70% 감소' },
   },
   healer: {
     name: '치유사', emoji: '💚', attack: [40, 60], hpWeight: 0.9,
@@ -178,7 +178,7 @@ const MONSTERS = [
       palette: { a: '#123d1c', o: '#7fdc8c', b: '#3fbf55', d: '#278a3b', h: '#e6ffd9', c: '#ff5c8a', w: '#ffffff', k: '#111111', m: '#0b2611', s: '#fff1a8' },
       rageColors: { a: '#4a1010', o: '#f07a6e', b: '#e5383b', d: '#a3242a', h: '#ffd6cf', m: '#1a1033' },
     },
-    baseHp: 6400,
+    baseHp: 6100,
     moves: {
       attack: { name: '몸통 박치기',   telegraph: '몸을 납작하게 웅크린다...', target: 'single', damage: [8, 10] },
       sweep:  { name: '점액 흩뿌리기', telegraph: '몸이 부르르 떨리기 시작한다...', target: 'all', damage: [5, 7], effect: 'slow' },
