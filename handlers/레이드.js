@@ -453,9 +453,16 @@ async function flush(r) {
       r.dirty = false;
       const redraw = r.imageDirty;
       r.imageDirty = false;
+      // 전투 시작 멘션은 화면보다 먼저 보내고, 레이드 메시지를 그 멘션 바로 아래로 다시 올린다.
+      if (r.startMention) {
+        const ids = r.startMention;
+        r.startMention = null;
+        if (await sendStartMention(r, ids)) r.forceRepost = true;
+      }
       // 놀이터 채팅에 묻혔으면(채널의 마지막 메시지가 레이드 메시지가 아니면) 맨 아래로 다시 올린다.
       // 새 메시지에는 그림을 다시 첨부해야 하므로 그림도 새로 그린다. 끝난 레이드(결과 화면)는 그대로 둔다.
-      const buried = r.phase !== 'ended' && isBuried(r);
+      const buried = r.phase !== 'ended' && (r.forceRepost || isBuried(r));
+      r.forceRepost = false;
       const payload = await currentView(r, redraw || (buried && r.hasImage));
       const result = buried ? await repostRaidMessage(r, payload) : await editRaidMessage(r, payload);
       // 채널이 없어졌거나 권한이 없으면 화면을 계속 보여줄 수 없으므로 레이드를 끝낸다(XP 정지가 남지 않게).
@@ -505,10 +512,26 @@ async function sendRaidMessage(r, payload, { deleteOld }) {
   }
   r.message = message;
   rememberImageUrl(r, message);
-  r.movedFrom.add(old.id);
   saveActive(r);
+  if (old.id === message.id) return 'ok';
+  r.movedFrom.add(old.id);
   if (deleteOld) old.delete().catch(err => console.error('예전 레이드 메시지 삭제 실패:', err));
   return 'ok';
+}
+
+// 전투 시작을 파티원에게 알린다(멘션은 이 메시지에서만 — 레이드 화면은 멘션을 막아 둔다). 보냈으면 true.
+async function sendStartMention(r, ids) {
+  if (!ids.length || !r.message?.channel) return false;
+  try {
+    await r.message.channel.send({
+      content: `⚔️ **레이드 전투 시작!** ${ids.map(id => `<@${id}>`).join(' ')} - 아래 레이드 메시지에서 ${TURN_MS / 1000}초 안에 행동을 골라 주세요`,
+      allowedMentions: { users: ids },
+    });
+    return true;
+  } catch (err) {
+    console.error('레이드 시작 멘션 전송 실패:', err);
+    return false;
+  }
 }
 
 function isBuried(r) {
@@ -618,11 +641,15 @@ function closeHelpReplies(r) {
   for (const { interaction } of list) interaction.deleteReply().catch(() => {});
 }
 
-function startBattle(r) {
+// by: 시작을 누른 사람(바로 시작·4번째 참가). 그 사람은 이미 화면을 보고 있으니 멘션에서 뺀다.
+// 모집 시간이 끝나 저절로 시작하면 by가 없어 파티원 전원을 부른다.
+function startBattle(r, { by = null } = {}) {
   clearTimer(r);
   closeHelpReplies(r); // 모집 중에 열어 둔 가이드는 전투가 시작되면 닫는다
   r.phase = 'battle';
   r.party.sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role)); // 화면에 역할 순서대로
+  const mention = r.party.map(p => p.userId).filter(id => id !== by);
+  r.startMention = mention.length ? mention : null;
   r.battle = createBattle(r.monster, r.party);
   r.battleStartedAt = Date.now(); // 종료 화면의 '걸린 시간'용
   r.battleEndsAt = r.battleStartedAt + BATTLE_LIMIT_MS;
@@ -741,7 +768,7 @@ async function handleRaidButton(interaction) {
       return;
     }
     logSystem({ 유형: '레이드', 유저: userLabel(uid), 내용: `바로 시작(혼자 확인) — ${rr.party.length}명으로 출발` });
-    startBattle(rr);
+    startBattle(rr, { by: uid });
     // 시작했다는 안내는 따로 띄우지 않고, 혼자 시작 확인 메시지만 지운다(전투 화면이 바로 바뀌므로).
     await interaction.deferUpdate();
     await interaction.deleteReply().catch(() => {});
@@ -790,7 +817,7 @@ async function handleRaidButton(interaction) {
         return;
       }
       logSystem({ 유형: '레이드', 유저: userLabel(userId), 내용: `바로 시작 — ${r.party.length}명으로 출발` });
-      startBattle(r);
+      startBattle(r, { by: userId });
       await interaction.deferUpdate();
       return;
     }
@@ -820,7 +847,7 @@ async function handleRaidButton(interaction) {
       r.party.push({ userId, name: displayNameFromInteraction(interaction), role: arg });
     }
     // 4명이 차면 모집 시간이 남아 있어도 바로 출발한다.
-    if (r.party.length >= PARTY_MAX) startBattle(r);
+    if (r.party.length >= PARTY_MAX) startBattle(r, { by: userId });
     else requestRender(r, { image: true });
     await interaction.deferUpdate();
     return;

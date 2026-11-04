@@ -32,7 +32,7 @@ const sent = [];
 let current = null; // 레이드 메시지 최신 payload
 let lastEdit = null; const editTurns = [];
 const message = { id: 'msg1', channel: null, edit: async (p) => { current = p; lastEdit = p; if (p.files) images.push(p.files[0].attachment); const m = desc().match(/TURN (\d+)/); if (m) editTurns.push(+m[1]); return message; } };
-const channel = { id: 'ch1', guildId: 'gMain', name: '놀이터', send: async (p) => { sent.push(p); if (!message.channel) { message.channel = channel; current = p; if (p.files) images.push(p.files[0].attachment); return message; } return { id: 'x' }; } };
+const channel = { id: 'ch1', guildId: 'gMain', name: '놀이터', send: async (p) => { sent.push(p); if (!message.channel || p.components) { message.channel = channel; current = p; if (p.files) images.push(p.files[0].attachment); return message; } return { id: 'x' }; } };
 const client = { channels: { fetch: async () => channel }, guilds: { cache: new Map() } };
 const parts = () => current.components.map(c => c.toJSON()).flatMap(c => (c.type === 17 ? c.components : [c]));
 const desc = () => parts().filter(c => c.type === 10).map(c => c.content).join('\n');
@@ -310,6 +310,54 @@ let ok4;
     assert(tick && raidMod.getRaidStatus(GUILD_ID).active && next > due + 60_000, '[변수] 레이드 중 지나간 자동 출현 시각은 다음 일정으로 미룸');
     await origEnd(GUILD_ID); await flushRender();
     raidMod.setAutoSpawn(false);
+  }
+
+  // 16) 전투 시작 멘션: 시작을 누른 사람은 빼고 파티원을 한 번 부르고, 레이드 메시지는 그 아래로 다시 올라감
+  {
+    const mkCh = (id) => {
+      const ch = { id, guildId: 'gMain', name: id, lastMessageId: null, log: [] };
+      let n = 0;
+      ch.send = async (p) => {
+        const m = { id: `${id}-${++n}`, channel: ch, edit: async () => m, delete: async () => { ch.log.push(`삭제 ${m.id}`); } };
+        ch.log.push(p.components ? `레이드 ${m.id}` : `멘션 ${m.id}`);
+        if (!p.components) ch.mention = p;
+        ch.lastMessageId = m.id;
+        return m;
+      };
+      return ch;
+    };
+    const click = (ch, uid, id) => raidMod.handleRaidButton(Object.assign(fakeInteraction(uid, id), { message: { id: ch.lastMessageId }, deleteReply: async () => {} }));
+
+    // 방장이 바로 시작 → 방장은 빼고 나머지만
+    let ch = mkCh('men1');
+    await origSpawn({ guildId: 'other', channel: ch, client }); await flushRender();
+    await click(ch, 'p1', 'raid:role:sword'); await flushRender();
+    await click(ch, 'p2', 'raid:role:archer'); await flushRender();
+    await click(ch, 'p3', 'raid:role:tank'); await flushRender();
+    await click(ch, 'p1', 'raid:start'); await flushRender();
+    const m1 = ch.mention;
+    assert(m1 && m1.content.includes('<@p2>') && m1.content.includes('<@p3>') && !m1.content.includes('<@p1>') && m1.allowedMentions.users.join() === 'p2,p3', '시작 멘션: 바로 시작을 누른 방장은 빼고 파티원만 부름');
+    const iMention = ch.log.findIndex(x => x.startsWith('멘션'));
+    assert(iMention > 0 && ch.log.slice(iMention + 1).some(x => x.startsWith('레이드')) && ch.lastMessageId.startsWith('men1') && ch.log.at(-1) !== `멘션 ${ch.lastMessageId}`, '시작 멘션: 멘션 다음에 레이드 메시지가 그 아래로 다시 올라감');
+    assert(raidMod.getRaidStatus('gMain').phase === 'battle', '시작 멘션 뒤에도 전투 진행');
+    await origEnd('gMain'); await flushRender();
+
+    // 모집 시간이 끝나 저절로 시작 → 전원
+    ch = mkCh('men2');
+    await origSpawn({ guildId: 'other', channel: ch, client }); await flushRender();
+    await click(ch, 'q1', 'raid:role:sword'); await flushRender();
+    await click(ch, 'q2', 'raid:role:healer'); await flushRender();
+    await runTimers();
+    assert(ch.mention && ch.mention.content.includes('<@q1>') && ch.mention.content.includes('<@q2>'), '시작 멘션: 모집 마감으로 시작하면 파티원 전원');
+    await origEnd('gMain'); await flushRender();
+
+    // 혼자 시작 → 부를 사람이 없으니 멘션 없음
+    ch = mkCh('men3');
+    await origSpawn({ guildId: 'other', channel: ch, client }); await flushRender();
+    await click(ch, 's1', 'raid:role:sword'); await flushRender();
+    await click(ch, 's1', 'raid:solo:yes'); await flushRender();
+    assert(raidMod.getRaidStatus('gMain').phase === 'battle' && !ch.mention, '시작 멘션: 혼자 시작하면 멘션 없음');
+    await origEnd('gMain'); await flushRender();
   }
 
   // 15) 플레이 방법(❔): 본인에게만 보이는 V2 컨테이너, 몬스터 전용 기술(점액·단단해지기·재생)은 넣지 않음
