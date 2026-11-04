@@ -374,7 +374,7 @@ async function endView(r, outcome, rewards = []) {
           const reward = rewards.find(x => x.userId === mem.userId);
           const xp = reward ? ` · **+${reward.xp} XP**${reward.mvp ? ' 👑MVP' : ''}` : '';
           const idle = outcome === 'clear' && !reward ? ' · *(직접 행동하지 않아 보상 없음)*' : '';
-          return `${ROLES[mem.role].emoji} **${mem.name}** — 피해 ${mem.damage.toLocaleString()} · 회복 ${mem.healing}${xp}${idle}`;
+          return `${ROLES[mem.role].emoji} **${mem.name}** — 피해 ${mem.damage.toLocaleString()} · 회복 ${mem.healing} · 방어 ${mem.blocked ?? 0}${xp}${idle}`;
         }).join('\n');
     }
     if (r.freezesXp) body += '\n\n> 🔧 **XP 시스템이 복구되었습니다!**';

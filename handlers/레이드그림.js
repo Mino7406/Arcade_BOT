@@ -629,9 +629,11 @@ function renderEnd(r, outcome, rewards = []) {
 
     // 오른쪽: 결과표(피해 많은 순, 실제 참가자만)
     text('파티 결과', RP.x + 26, RP.y + 34, 24, C.gold, { align: 'left' });
-    const COL = { dmg: RP.x + 314, heal: RP.x + 396, reward: RP.x + 470 };
+    // 방어: 방어·도발로 줄인 피해 — 피해·회복만으로는 안 보이는 수호자·방어의 몫을 보여준다
+    const COL = { dmg: RP.x + 280, heal: RP.x + 350, block: RP.x + 420, reward: RP.x + 490 }; // 칸 간격 70씩 같게
     text('피해', COL.dmg, RP.y + 34, 17, C.muted);
     text('회복', COL.heal, RP.y + 34, 17, C.muted);
+    text('방어', COL.block, RP.y + 34, 17, C.muted);
     text('보상', COL.reward, RP.y + 34, 17, C.muted);
     const members = (b ? [...b.members] : []).sort((q1, q2) => q2.damage - q1.damage);
     if (!members.length) {
@@ -646,7 +648,7 @@ function renderEnd(r, outcome, rewards = []) {
       if (mvp) p.strokeRoundRect(RP.x + 14, y, RP.w - 28, 86, 12, 2, C.gold);
       drawPixels(ROLE_SPRITES[mem.role], RP.x + 52, y + 43, 2.7, { dim: mem.hp <= 0 && !clear });
       const nameX = RP.x + 86;
-      text(mem.name, nameX, y + 32, 26, C.text, { align: 'left', maxWidth: 170 });
+      text(mem.name, nameX, y + 32, 26, C.text, { align: 'left', maxWidth: 140 });
       // MVP 배지는 역할 줄 옆에(이름 줄에 두면 긴 이름일 때 피해 숫자와 겹친다)
       const roleName = ROLES[mem.role].name;
       text(roleName, nameX, y + 62, 18, C.orange, { align: 'left' });
@@ -655,9 +657,10 @@ function renderEnd(r, outcome, rewards = []) {
         p.roundRect(nameX + rw + 8, y + 51, 46, 22, 6, '#e2b14a');
         text('MVP', nameX + rw + 31, y + 62, 14, '#2a1a04');
       }
-      text(mem.damage.toLocaleString(), COL.dmg, y + 43, 24, C.text);
+      text(mem.damage.toLocaleString(), COL.dmg, y + 43, 22, C.text);
       text(mem.healing ? mem.healing.toLocaleString() : '-', COL.heal, y + 43, 22, mem.healing ? '#8fe0a8' : C.dim);
-      if (reward) pill(COL.reward - 40, y + 27, 80, 32, `+${reward.xp}`, 20, mvp ? '#6b4e12' : '#1f4a2c', mvp ? '#ffe39a' : '#bff0cf');
+      text(mem.blocked ? mem.blocked.toLocaleString() : '-', COL.block, y + 43, 22, mem.blocked ? '#9cc8ff' : C.dim);
+      if (reward) pill(COL.reward - 34, y + 27, 68, 32, `+${reward.xp}`, 20, mvp ? '#6b4e12' : '#1f4a2c', mvp ? '#ffe39a' : '#bff0cf');
       else text('-', COL.reward, y + 43, 22, C.dim);
     });
   });
@@ -695,7 +698,7 @@ function warmUpLabels(monsters) {
   }
   add('bold', '-', NAME_SIZE);
   for (const t of new Set(Object.values(END_TITLE))) add('bold', t, 58);
-  for (const v of ['파티 결과', '피해', '회복', '보상', '턴', '걸린 시간', '남은 HP', '도주']) add('bold', v, v === '파티 결과' ? 24 : 17);
+  for (const v of ['파티 결과', '피해', '회복', '방어', '보상', '턴', '걸린 시간', '남은 HP', '도주']) add('bold', v, v === '파티 결과' ? 24 : 17);
   add('bold', 'MVP', 14);
   for (const m of monsters) {
     add('bold', m.name, 38);
