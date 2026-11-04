@@ -438,8 +438,16 @@ function renderBattle(r) {
     monsterFx(usedMove, W / 2, monsterY, fxColor, 'front');
     // 몬스터 오른쪽: 이번 턴 받은 피해(빨강) · 재생 회복량(초록, 피해 아래). 결과 화면에서만.
     const dealtNow = r.showingResult ? last?.monsterDamage : 0;
-    if (dealtNow) text(`-${dealtNow.toLocaleString()}`, W / 2 + 165, monsterY - 30, 30, '#ff5a45');
-    if (usedMove === 'heal' && last?.monsterHeal) text(`+${last.monsterHeal.toLocaleString()}`, W / 2 + 165, monsterY + (dealtNow ? 8 : -30), 30, '#7cff9a');
+    // 점액 줄기(오른쪽 끝 약 W/2+190)와 오른쪽 위 '방어력 증가' 배지(y 186까지)를 피해 그 오른쪽 아래에,
+    // 어두운 바탕을 깔아 연출 위에서도 읽히게 한다.
+    const numbers = [];
+    if (dealtNow) numbers.push([`-${dealtNow.toLocaleString()}`, '#ff5a45']);
+    if (usedMove === 'heal' && last?.monsterHeal) numbers.push([`+${last.monsterHeal.toLocaleString()}`, '#7cff9a']);
+    numbers.forEach(([label, color], i) => {
+      const nx = W / 2 + 250, ny = 212 + i * 38;
+      p.roundRect(nx - 56, ny - 17, 112, 34, 9, '#100c09');
+      text(label, nx, ny, 28, color);
+    });
     // 몬스터 상자 오른쪽 위에 큰 방패 배지 + 문구(방어력 증가 · 받는 피해 -50%)
     if (shielded) {
       p.roundRect(W - 216, 132, 180, 54, 12, '#1c2a38');
@@ -488,7 +496,7 @@ function renderBattle(r) {
       }
       const state = memberState(b, mem, r.showingResult);
       const down = state === 'down';
-      // 리본: 결과 단계(턴 전환 2.5초)에는 띄우지 않는다 — 그림은 평소대로 두고 전환은 글자 제목이 알린다
+      // 리본: 결과 단계(턴 전환 3.5초)에는 띄우지 않는다 — 그림은 평소대로 두고 전환은 글자 제목이 알린다
       if (state !== 'result') {
         const ribbon = RIBBON[state];
         p.roundRect(x + 12, y + 12, w - 24, 30, 8, ribbon.fill);
