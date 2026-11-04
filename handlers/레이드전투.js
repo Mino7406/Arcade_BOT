@@ -64,18 +64,8 @@ const MONSTERS = [
     emoji: '👾',
     rageName: '폭주한 슬라임',
     lore: '말랑한 겉껍질 속에 단단한 속살을 품은 초록 점액 덩어리. 이 녀석이 서버를 뒤덮는 동안 XP가 쌓이지 않는다!',
-    // 꼭대기가 살짝 솟은 둥근 물방울 몸. 왼쪽 위에서 빛을 받는 입체감: 하이라이트(h)·밝은 겉면(o) → 속살(b) → 오른쪽 아래 그늘(d).
-    // 줄 수가 적을수록 칸이 커져 크게 그려진다(가로 칸 수는 크기에 영향 없음).
-    // 입체 슬라임: 왼쪽 위에서 빛을 받는 5단계 음영(h 하이라이트 · o 밝은 면 · b 몸 · d 그늘 · e 깊은 그늘) + 외곽선(a).
-    // 노란 눈(y)·톱니 이빨(w) 입으로 적답게. 분노는 같은 모양에 색만 바뀐다(rageColors).
-    // poses: 기술을 쓴 직후(턴 결과 화면) 모습, 키는 moves와 같다. charge는 큰 한 방 직전 선택 화면에도 쓴다.
-    // 칸 크기가 같게 모든 자세를 14줄로 맞춘다(줄 수가 적을수록 크게 그려진다).
     // 꼭대기가 살짝 솟은 둥근 물방울 몸. 왼쪽 위에서 빛을 받는 입체감: 하이라이트(h)·밝은 겉면(o) → 몸(b) → 그늘(d).
-    // 비스듬한 눈썹·송곳니 하나로 적 느낌만 살짝. 분노는 같은 모양에 색만 바뀐다(rageColors).
-    // poses: 기술을 쓴 직후(턴 결과 화면) 모습, 키는 moves와 같다. charge는 큰 한 방 직전 선택 화면에도 쓴다.
-    // 칸 크기가 같게 모든 자세를 14줄로 맞춘다(줄 수가 적을수록 크게 그려진다).
-    // 꼭대기가 살짝 솟은 둥근 물방울 몸. 왼쪽 위에서 빛을 받는 입체감: 하이라이트(h)·밝은 겉면(o) → 몸(b) → 그늘(d).
-    // 비스듬한 눈썹·송곳니 하나로 적 느낌만 살짝. 분노는 같은 모양에 색만 바뀐다(rageColors).
+    // 송곳니(w) 하나로 적 느낌만 살짝. 분노는 같은 모양에 색만 바뀐다(rageColors).
     // poses: 기술을 쓴 직후(턴 결과 화면) 모습, 키는 moves와 같다. charge는 큰 한 방 직전 선택 화면에도 쓴다.
     // 칸 크기가 같게 모든 자세를 14줄로 맞춘다(줄 수가 적을수록 크게 그려진다).
     sprite: {
@@ -84,8 +74,8 @@ const MONSTERS = [
         '.......aahhooaa.......',
         '.....aahhooooooaa.....',
         '...aahhooooooooodaa...',
-        '..ahhkbbbbbbbbbbkdda..',
-        '.ahobbkkbbbbbbkkbddda.',
+        '..ahhobbbbbbbbbbddda..',
+        '.ahobbbbbbbbbbbbbddda.',
         '.aobbbwwbbbbbbwwbbbda.',
         'aobbbbwkbbbbbbwkbbbbda',
         'aobbbbkkbbbbbbkkbbbbda',
@@ -134,8 +124,8 @@ const MONSTERS = [
           '..aahhooooooooooddaa..',
           '.ahhoooooooooooooddda.',
           'ahhobbbbbbbbbbbbbbddda',
-          'ahobbkbbbbbbbbbbkbddda',
-          'aobbbbkkbbbbbbkkbbbdda',
+          'ahobbbbbbbbbbbbbbbddda',
+          'aobbbbbbbbbbbbbbbbbdda',
           'aobbbbwkbbbbbbkwbbbbda',
           'aobbbbkkbbbbbbkkbbbbda',
           'aobcccbbbbmmbbbbcccbda',
