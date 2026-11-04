@@ -188,10 +188,12 @@ function roleIcon(role, cx, cy, dim = false) {
 
 // 몬스터: sprite(픽셀 아트). maxH 안에 맞춘다. gray: 결과 화면용 흑백.
 // (그림 파일 몬스터는 PNG 해석기가 필요해 아직 지원하지 않는다 — 넣을 때 그림판.js에 추가)
-function drawMonster(monster, cx, cy, maxH, { rage = false, gray = false } = {}) {
+// pose: 기술 키(sprite.poses) — 없으면 평상시 얼굴(분노면 sprite.rageRows).
+function drawMonster(monster, cx, cy, maxH, { rage = false, gray = false, pose = null } = {}) {
   const sp = monster.sprite;
   if (!sp) return;
-  drawPixels(sp, cx, cy, Math.floor(maxH / sp.rows.length), { dim: gray, colors: rage ? sp.rageColors : null });
+  const rows = (pose && sp.poses?.[pose]) || (rage && sp.rageRows) || sp.rows;
+  drawPixels({ ...sp, rows }, cx, cy, Math.floor(maxH / rows.length), { dim: gray, colors: rage ? sp.rageColors : null });
 }
 
 function frame() {
@@ -326,7 +328,9 @@ function renderBattle(r) {
 
     // 몬스터 + 지난 턴 결과: 게임처럼 몬스터가 쓴 기술을 머리 왼쪽 위 말풍선으로 띄운다
     // (파티가 입힌 총피해 숫자는 일단 빼 둠 — 카드마다 행동 수치가 있어 중복이라)
-    drawMonster(m, W / 2, 196, 112, { rage: b.rage });
+    // 자세: 턴 결과 화면이면 방금 쓴 기술, 큰 한 방 직전 선택 화면이면 부푼 모습(charge), 아니면 평상시
+    const pose = r.showingResult ? last?.monsterMoveKey : (b.intent === 'smash' ? 'charge' : null);
+    drawMonster(m, W / 2, 196, 112, { rage: b.rage, pose });
     if (last?.monsterMove) {
       const label = `${last.monsterMove}!`;
       const bw = Math.min(p.textWidth(B(), label, 22), 200) + 36;
