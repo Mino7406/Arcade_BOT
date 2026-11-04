@@ -192,12 +192,17 @@ async function recruitView(r, { redraw = true } = {}) {
         }).join('\n'),
     });
   }
-  // 큰 타이머 → 파티 인원과 할 일, 한 줄에 하나씩
+  // XP 시스템이 고장 나 멈췄다는 걸 그림 바로 아래 큰 제목으로 강조해 참가 동기를 준다
+  // (레벨 시스템이 없는 테스트 서버에서도 문구는 보여줌)
+  sections.push({
+    text: '## 🚫 XP 시스템 고장!\n' +
+      `${m.name}${subjectJosa(m.name)} XP 시스템을 망가뜨려 **채팅 · 통화방 · 미니게임 XP 지급이 정지**되었습니다.\n` +
+      '-# 몬스터를 토벌하면 XP 시스템이 다시 작동해요',
+  });
+  // 큰 타이머 → 파티 인원과 할 일
   sections.push({
     text: `## ⏳ ${clock(r.recruitEndsAt, true)}\n` +
-      `**파티 ${r.party.length} / ${PARTY_MAX}** · 역할 버튼을 눌러 참가하세요\n` +
-      // 몬스터 때문에 XP가 멈췄다는 걸 알려 참가 동기를 준다(레벨 시스템이 없는 테스트 서버에서도 문구는 보여줌)
-      '> ⚠️ 몬스터가 XP 시스템을 장악해 **채팅 · 통화방 · 미니게임 XP 지급이 멈췄어요!**',
+      `**파티 ${r.party.length} / ${PARTY_MAX}** · 역할 버튼을 눌러 참가하세요`,
   });
   sections.push({
     row: new ActionRowBuilder().addComponents(
@@ -324,6 +329,9 @@ function endSummary(r, outcome, rewards) {
   const b = r.battle;
   const lines = [`## ${END_HEADING[outcome]}`];
   if (outcome === 'clear') {
+    // 제목 바로 아래 한 줄. XP를 멈추지 않는 레이드(테스트 서버 등)는 복구 문구 없이 토벌만 알린다.
+    const name = `${r.monster.name}${subjectJosa(r.monster.name)}`;
+    lines.push(r.freezesXp ? `${name} 토벌되어 XP 시스템이 복구되었습니다.` : `${name} 토벌되었습니다.`);
     const mvp = rewards.find(x => x.mvp);
     const mvpName = mvp && b?.members.find(mem => mem.userId === mvp.userId)?.name;
     if (mvpName) lines.push(`> 👑 **MVP** : ${mvpName} · (+${mvp.xp} XP)`);
@@ -337,7 +345,7 @@ function endSummary(r, outcome, rewards) {
   }
   const meta = [];
   if (b) meta.push(`⏱️ ${b.turn}턴${r.battleStartedAt ? ` · ${formatDuration((r.endedAt || Date.now()) - r.battleStartedAt)}` : ''}`);
-  if (r.freezesXp) meta.push('🔧 XP 시스템 복구됨');
+  if (r.freezesXp && outcome !== 'clear') meta.push('🔧 XP 시스템 복구됨'); // 클리어는 위 문장에 이미 들어 있다
   if (meta.length) lines.push(`-# ${meta.join(' · ')}`);
   return lines.join('\n');
 }
