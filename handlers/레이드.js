@@ -329,9 +329,9 @@ function endSummary(r, outcome, rewards) {
   const b = r.battle;
   const lines = [`## ${END_HEADING[outcome]}`];
   if (outcome === 'clear') {
-    // 제목 바로 아래 한 줄. XP를 멈추지 않는 레이드(테스트 서버 등)는 복구 문구 없이 토벌만 알린다.
+    // 제목 바로 아래 한 줄. 출현 안내('XP 시스템 고장!')처럼 테스트 서버에서도 같은 문구를 보여준다.
     const name = `${r.monster.name}${subjectJosa(r.monster.name)}`;
-    lines.push(r.freezesXp ? `${name} 토벌되어 XP 시스템이 복구되었습니다.` : `${name} 토벌되었습니다.`);
+    lines.push(`${name} 토벌되어 XP 시스템이 복구되었습니다.`);
     const mvp = rewards.find(x => x.mvp);
     const mvpName = mvp && b?.members.find(mem => mem.userId === mvp.userId)?.name;
     if (mvpName) lines.push(`> 👑 **MVP** : ${mvpName} · (+${mvp.xp} XP)`);
