@@ -128,7 +128,7 @@ let ok4;
   // 7) 무참가 → 도주
   await raidMod.forceSpawnRaid({ guildId: 'other', channel: { ...channel, send: async (p) => { current = p; return message; } }, client });
   await runTimers();
-  assert(desc().includes('아무도 오지 않았다') && !lv.isRaidXpFrozen(), '무참가 시 도주 + XP 해제');
+  assert(desc().includes('RAID FAILED') && desc().includes('도망쳤다') && !lv.isRaidXpFrozen(), '무참가 시 도주(RAID FAILED) + XP 해제');
 
   // 7.5) 바로 시작: 파티장·관리자만
   {
@@ -238,6 +238,45 @@ let ok4;
     assert(st.autoSpawn && st.nextSpawnAt > Date.now() + 2 * 86400_000, '가동하면 약 3일 뒤 첫 출현 일정');
     st = raidMod.setAutoSpawn(false);
     assert(!st.autoSpawn && st.nextSpawnAt === null, '중지하면 일정 삭제');
+  }
+
+  // 12) 몬스터 기술 효과: 둔화·보호막·기절·재생 (전투 엔진만, 몬스터 행동을 직접 지정)
+  {
+    const E = require(path.join(root, 'handlers/레이드전투.js'));
+    const party = [{ userId: 'x', name: 'X', role: 'sword' }, { userId: 'y', name: 'Y', role: 'healer' }];
+    const fixed = () => 0.5;
+    const turnWith = (b, intent, choices = {}) => {
+      b.intent = intent;
+      for (const [u, a] of Object.entries(choices)) E.choose(b, u, a);
+      return E.resolveTurn(b, fixed);
+    };
+    let b = E.createBattle(E.MONSTERS[0], party, fixed);
+    turnWith(b, 'sweep');
+    assert(b.members.every(m => E.slowTurnsLeft(b, m) === 2), '점액 흩뿌리기 → 전원 둔화 2턴');
+    const hp0 = b.hp; turnWith(b, 'attack', { x: 'attack' });
+    const slowHit = b.lastTurn.acts.x.value;
+    assert(slowHit <= Math.round(110 * E.SLOW_DAMAGE_RATE) && hp0 > b.hp, '둔화 중 공격 피해 25% 감소');
+    turnWith(b, 'attack', { y: 'skill' });
+    assert(b.members.every(m => E.slowTurnsLeft(b, m) === 0), '치유사 스킬로 둔화 해제');
+
+    b = E.createBattle(E.MONSTERS[0], party, fixed);
+    turnWith(b, 'charge');
+    assert(E.isShielded(b), '단단해지기 → 다음 턴 보호막');
+    turnWith(b, 'smash', { x: 'attack', y: 'guard' });
+    assert(b.lastTurn.shielded && b.lastTurn.acts.x.value <= 55, '보호막 턴엔 받는 피해 절반');
+    assert(!E.isShielded(b), '보호막은 한 턴만');
+    const sx = E.getMember(b, 'x'), sy = E.getMember(b, 'y');
+    assert(E.isStunned(b, sx) && !E.isStunned(b, sy), '필살 짓누르기: 방어 안 한 사람만 기절');
+    assert(E.checkChoice(b, 'x', 'attack')?.includes('기절') && !E.allChosen(b), '기절하면 행동 선택 불가, 나머지는 골라야 진행');
+    E.choose(b, 'y', 'attack');
+    assert(E.allChosen(b), '기절한 사람은 빼고 전원 고르면 진행');
+    E.resolveTurn(b, fixed);
+    assert(b.lastTurn.acts.x.label === '기절' && !E.isStunned(b, sx), '기절 턴엔 행동 없이 넘어가고 다음 턴 풀림');
+
+    b = E.createBattle(E.MONSTERS[0], party, fixed);
+    b.hp = Math.round(b.maxHp * 0.5);
+    turnWith(b, 'heal');
+    assert(b.lastTurn.monsterHeal === Math.round(b.maxHp * E.MONSTERS[0].moves.heal.healRate), '재생으로 몬스터 HP 6% 회복');
   }
   console.log('그림 업로드 횟수:', images.length, '· RSS', Math.round(process.memoryUsage().rss/1048576), 'MB');
 })().catch(e => { console.error('테스트 실패', e); process.exitCode = 1; });

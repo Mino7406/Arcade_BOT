@@ -12,11 +12,16 @@ const GUARD_DAMAGE_RATE = 0.3;   // 방어: 받는 피해 70% 감소
 const TAUNT_DAMAGE_RATE = 0.4;   // 도발 중인 수호자: 받는 피해 60% 감소
 const RAGE_HP_RATIO = 0.5;
 const RAGE_DAMAGE_MULTIPLIER = 1.5;
+// 몬스터 기술 효과(moves의 effect). 효과 종류는 공통 규칙이고, 어느 기술에 붙일지는 몬스터 데이터가 정한다.
+const SLOW_DAMAGE_RATE = 0.75;   // 둔화: 주는 피해 25% 감소
+const SLOW_TURNS = 2;            // 둔화 지속 턴(맞은 다음 턴부터)
+const SHIELD_DAMAGE_RATE = 0.5;  // 보호막: 다음 턴 동안 몬스터가 받는 피해 50% 감소
 const PARTY_BASE_SIZE = 4;       // 몬스터 baseHp가 기준으로 삼는 인원(역할 4종 한 명씩).
 // 인원수별 HP 보정. 목표는 2~4인 모두 약 24턴(실측 턴당 혼자 5~7초, 여럿이면 더 걸려 3~5분).
+// (몬스터 재생·보호막과 파티 둔화·기절까지 넣은 상태로 맞춘 값 — tests/raid/밸런스시뮬.js)
 // 수호자·치유사는 피해가 적어 인원이 줄어도 턴 수가 크게 안 줄기 때문에 2·3인은 HP를 오히려 늘린다.
 // 1인은 HP 조절 테스트용(HP_MIN_PARTY가 1일 때만 쓰임)이라 짧게 둔다.
-const SMALL_PARTY_HP_RATE = { 1: 0.75, 2: 1.45, 3: 1.15 };
+const SMALL_PARTY_HP_RATE = { 1: 0.75, 2: 1.25, 3: 1.1 };
 // HP를 맞출 때 기준으로 삼는 최소 인원. 지금은 HP 조절 테스트용으로 1(혼자면 1인 기준 HP).
 // 정식 오픈 때 2로 올리면 1인 구간이 없어진다 — 혼자 시작해도 2인 기준 HP(빈 자리는 평균 가중치 1.0으로 채움).
 const HP_MIN_PARTY = 1;
@@ -25,12 +30,13 @@ const HP_MIN_PARTY = 1;
 // hpWeight: 몬스터 HP를 인원에 맞출 때 그 역할 한 명이 늘리는 몫(4종 합 4.0). 딜러가 빠지면 HP도 더 줄어든다.
 const ROLES = {
   sword: {
+    // 딜러 둘은 3턴 주기 기대 피해를 비슷하게(검사 약 475 · 궁수 약 490). 궁수는 치명타 운에 따라 들쭉날쭉하지 않게 배율을 낮춤.
     name: '검사', emoji: '⚔️', attack: [90, 110], hpWeight: 1.15,
-    skill: { name: '회전베기', cooldown: 3, desc: '250~300 피해' },
+    skill: { name: '회전베기', cooldown: 3, damage: [250, 300], desc: '250~300 피해' },
   },
   archer: {
-    name: '궁수', emoji: '🏹', attack: [80, 100], critChance: 0.25, critMultiplier: 1.8, hpWeight: 1.1,
-    skill: { name: '차지 샷', cooldown: 3, desc: '230~270 피해, 치명타 확률 2배' },
+    name: '궁수', emoji: '🏹', attack: [80, 100], critChance: 0.25, critMultiplier: 1.5, hpWeight: 1.1,
+    skill: { name: '차지 샷', cooldown: 3, damage: [220, 260], critChance: 0.4, desc: '220~260 피해, 치명타 확률 40%' },
   },
   tank: {
     name: '수호자', emoji: '🛡️', attack: [50, 70], hpWeight: 0.85,
@@ -150,21 +156,43 @@ const MONSTERS = [
           'adddbbbbbbbbbbbbbbddda',
           'aaaaaaaaaaaaaaaaaaaaaa',
         ],
+        heal: [ // 재생: 눈을 감고 상처를 메운다(둘레 초록 십자는 그림 쪽 연출)
+          '.........aaaa.........',
+          '.......aahhooaa.......',
+          '.....aahhooooooaa.....',
+          '...aahhooooooooodaa...',
+          '..ahhobbbbbbbbbbddda..',
+          '.ahobbbbbbbbbbbbbddda.',
+          '.aobbbbbbbbbbbbbbbbda.',
+          'aobbbkkkbbbbbbkkkbbbda',
+          'aobbbbbbbbbbbbbbbbbbda',
+          'aobbccbbbmmmmbbbccbbda',
+          'aobbbbbbbbwbbbbbbbbdda',
+          'aobbbbbbbbbbbbbbbbddda',
+          '.addbbbbbbbbbbbbbddda.',
+          '..aaaaaaaaaaaaaaaaaa..',
+        ],
       },
       palette: { a: '#123d1c', o: '#7fdc8c', b: '#3fbf55', d: '#278a3b', h: '#e6ffd9', c: '#ff5c8a', w: '#ffffff', k: '#111111', m: '#0b2611', s: '#fff1a8' },
       rageColors: { a: '#4a1010', o: '#f07a6e', b: '#e5383b', d: '#a3242a', h: '#ffd6cf', m: '#1a1033' },
     },
-    baseHp: 8700,
+    baseHp: 7000,
     moves: {
       attack: { name: '몸통 박치기',   telegraph: '몸을 납작하게 웅크린다', target: 'single', damage: [8, 10] },
-      sweep:  { name: '점액 흩뿌리기', telegraph: '몸이 부르르 떨리기 시작한다', target: 'all', damage: [5, 7] },
-      charge: { name: '단단해지기',     telegraph: '주변 점액을 빨아들여 부풀어 오른다…', target: 'none' },
-      smash:  { name: '필살 짓누르기', telegraph: '💥 하늘 높이 뛰어올랐다! 방어하세요!', target: 'all', damage: [15, 19] },
+      sweep:  { name: '점액 흩뿌리기', telegraph: '몸이 부르르 떨리기 시작한다', target: 'all', damage: [5, 7], effect: 'slow' },
+      charge: { name: '단단해지기',     telegraph: '주변 점액을 빨아들여 부풀어 오른다…', target: 'none', effect: 'shield' },
+      smash:  { name: '필살 짓누르기', telegraph: '💥 하늘 높이 뛰어올랐다! 방어하세요!', target: 'all', damage: [15, 19], effect: 'stun' },
+      heal:   { name: '재생',         telegraph: '몸에서 초록 거품이 보글거린다', target: 'self', healRate: 0.06 },
+    },
+    // 다음 행동 가중치(평상시/분노). charge 다음 턴은 무조건 smash, heal은 HP가 많이 남았으면 attack으로 바꾼다.
+    intentWeights: {
+      normal: { attack: 5, sweep: 3, charge: 2, heal: 1 },
+      rage:   { attack: 4, sweep: 3, charge: 3, heal: 1.5 },
     },
   },
 ];
 
-// 평상시/분노 시 다음 행동 가중치. charge 다음 턴은 무조건 smash.
+// 몬스터 데이터에 intentWeights가 없을 때 쓰는 기본 가중치. charge 다음 턴은 무조건 smash.
 const INTENT_WEIGHTS = {
   normal: { attack: 5, sweep: 3, charge: 2 },
   rage:   { attack: 4, sweep: 3, charge: 3 },
@@ -183,9 +211,13 @@ function pickWeighted(weights, rng) {
   return Object.keys(weights)[0];
 }
 
+const HEAL_MAX_HP_RATIO = 0.85; // 이보다 HP가 많으면 재생 대신 공격
 function pickNextIntent(battle, rng) {
   if (battle.intent === 'charge') return 'smash';
-  return pickWeighted(battle.rage ? INTENT_WEIGHTS.rage : INTENT_WEIGHTS.normal, rng);
+  const weights = battle.monster.intentWeights || INTENT_WEIGHTS;
+  const next = pickWeighted(battle.rage ? weights.rage : weights.normal, rng);
+  if (battle.monster.moves[next]?.target === 'self' && battle.hp > battle.maxHp * HEAL_MAX_HP_RATIO) return 'attack';
+  return next;
 }
 
 // party: [{ userId, name, role }]
@@ -201,6 +233,7 @@ function createBattle(monster, party, rng = Math.random) {
     rage: false,
     turn: 1,
     intent: null,
+    shieldTurn: 0,   // 이 턴 동안 몬스터 보호막(받는 피해 감소)
     log: [],
     members: party.map(p => ({
       userId: p.userId,
@@ -213,9 +246,11 @@ function createBattle(monster, party, rng = Math.random) {
       damage: 0,
       healing: 0,
       manualActions: 0,
+      slowUntil: 0,  // 이 턴까지 둔화
+      stunTurn: 0,   // 이 턴에 기절(행동 불가)
     })),
   };
-  battle.intent = pickWeighted(INTENT_WEIGHTS.normal, rng);
+  battle.intent = pickNextIntent(battle, rng);
   return battle;
 }
 
@@ -227,11 +262,17 @@ function aliveMembers(battle) {
   return battle.members.filter(m => m.hp > 0);
 }
 
+// 지금 턴 기준 상태 효과. 둔화 남은 턴은 이번 턴 포함.
+function isStunned(battle, m) { return m.stunTurn === battle.turn; }
+function slowTurnsLeft(battle, m) { return Math.max(0, m.slowUntil - battle.turn + 1); }
+function isShielded(battle) { return battle.shieldTurn === battle.turn; }
+
 // 이 행동을 지금 고를 수 있는지. 안 되면 사유 문구, 되면 null.
 function checkChoice(battle, userId, action) {
   const m = getMember(battle, userId);
   if (!m) return '이번 토벌 파티원만 행동할 수 있어요.';
   if (m.hp <= 0) return '쓰러진 상태라 행동할 수 없어요. 치유사의 부활을 기다리세요!';
+  if (isStunned(battle, m)) return '💫 기절해서 이번 턴엔 움직일 수 없어요.';
   if (!ACTIONS[action]) return '알 수 없는 행동이에요.';
   if (action === 'skill' && m.cooldown > 0) return `스킬은 ${m.cooldown}턴 뒤에 다시 쓸 수 있어요.`;
   if (action === 'potion' && m.potions <= 0) return '회복약을 다 썼어요.';
@@ -243,8 +284,9 @@ function choose(battle, userId, action) {
   getMember(battle, userId).choice = action;
 }
 
+// 기절한 사람은 고를 수 없으니 빼고 센다(모두 기절이면 바로 true).
 function allChosen(battle) {
-  return aliveMembers(battle).every(m => m.choice);
+  return aliveMembers(battle).every(m => m.choice || isStunned(battle, m));
 }
 
 function heal(member, amount) {
@@ -256,18 +298,33 @@ function heal(member, amount) {
 // 한 턴을 처리한다. battle.log를 이번 턴 기록으로 바꾸고 결과를 돌려준다:
 // 'clear'(토벌) | 'wipe'(전멸) | null(계속).
 // battle.lastTurn에는 같은 내용을 그림용 데이터로 남긴다(카드 위 행동 말풍선·받은 피해 숫자 등):
-//   { turn, acts: { userId: { label, value, crit, heal, auto } }, hits: { userId: 피해 }, monsterDamage, monsterMove }
+//   { turn, acts: { userId: { label, value, crit, heal, auto } }, hits: { userId: 피해 }, effects: { userId: 'slow'|'stun' },
+//     monsterDamage, monsterMove, monsterMoveKey, shielded(이번 턴 보호막으로 피해가 줄었는지) }
 function resolveTurn(battle, rng = Math.random) {
   const log = [];
-  const last = { turn: battle.turn, acts: {}, hits: {}, monsterDamage: 0, monsterMove: null };
+  const last = { turn: battle.turn, acts: {}, hits: {}, effects: {}, monsterDamage: 0, monsterMove: null, shielded: isShielded(battle) };
   battle.lastTurn = last;
   const ordered = ROLE_ORDER.map(r => battle.members.find(m => m.role === r)).filter(Boolean);
   const acting = ordered.filter(m => m.hp > 0);
+  // 파티가 몬스터에게 주는 피해: 둔화(본인)·보호막(몬스터) 보정
+  const dealt = (m, dmg) => {
+    if (slowTurnsLeft(battle, m) > 0) dmg *= SLOW_DAMAGE_RATE;
+    if (last.shielded) dmg *= SHIELD_DAMAGE_RATE;
+    return Math.max(1, Math.round(dmg));
+  };
+  if (last.shielded) log.push(`🛡️ **${battle.monster.name}**의 몸이 단단해 피해가 절반만 들어간다!`);
 
   // 1) 아군 행동
   let taunter = null;
   for (const m of acting) {
     const role = ROLES[m.role];
+    if (isStunned(battle, m)) {
+      m.choice = null;
+      m.guarding = false;
+      last.acts[m.userId] = { label: '기절' };
+      log.push(`${role.emoji} **${m.name}** 💫기절해 움직이지 못했다`);
+      continue;
+    }
     const auto = !m.choice;
     const action = m.choice || 'attack';
     if (!auto) m.manualActions++;
@@ -277,7 +334,8 @@ function resolveTurn(battle, rng = Math.random) {
     if (action === 'attack') {
       let dmg = randInt(role.attack, rng);
       const crit = role.critChance && rng() < role.critChance;
-      if (crit) dmg = Math.round(dmg * role.critMultiplier);
+      if (crit) dmg *= role.critMultiplier;
+      dmg = dealt(m, dmg);
       battle.hp -= dmg;
       m.damage += dmg;
       last.acts[m.userId] = { label: '공격', value: dmg, crit, auto };
@@ -286,16 +344,17 @@ function resolveTurn(battle, rng = Math.random) {
     } else if (action === 'skill') {
       m.cooldown = role.skill.cooldown;
       if (m.role === 'sword') {
-        const dmg = randInt([250, 300], rng);
+        const dmg = dealt(m, randInt(role.skill.damage, rng));
         battle.hp -= dmg;
         m.damage += dmg;
         last.acts[m.userId] = { label: role.skill.name, value: dmg };
         last.monsterDamage += dmg;
         log.push(`${role.emoji} **${m.name}** ✨${role.skill.name} → **${dmg}**`);
       } else if (m.role === 'archer') {
-        let dmg = randInt([230, 270], rng);
-        const crit = rng() < role.critChance * 2;
-        if (crit) dmg = Math.round(dmg * role.critMultiplier);
+        let dmg = randInt(role.skill.damage, rng);
+        const crit = rng() < role.skill.critChance;
+        if (crit) dmg *= role.critMultiplier;
+        dmg = dealt(m, dmg);
         battle.hp -= dmg;
         m.damage += dmg;
         last.acts[m.userId] = { label: role.skill.name, value: dmg, crit };
@@ -308,13 +367,15 @@ function resolveTurn(battle, rng = Math.random) {
       } else if (m.role === 'healer') {
         let healed = 0;
         const revived = [];
+        let cleansed = false;
         for (const t of battle.members) {
           if (t.hp > 0) healed += heal(t, 30);
           else { t.hp = 25; healed += 25; revived.push(t.name); }
+          if (slowTurnsLeft(battle, t) > 0) { t.slowUntil = 0; cleansed = true; } // 둔화도 씻어낸다
         }
         m.healing += healed;
         last.acts[m.userId] = { label: role.skill.name, value: healed, heal: true };
-        log.push(`${role.emoji} **${m.name}** ✨${role.skill.name} → 아군 회복${revived.length ? ` · **${revived.join(', ')}** 부활!` : ''}`);
+        log.push(`${role.emoji} **${m.name}** ✨${role.skill.name} → 아군 회복${cleansed ? ' · 둔화 해제' : ''}${revived.length ? ` · **${revived.join(', ')}** 부활!` : ''}`);
       }
     } else if (action === 'guard') {
       last.acts[m.userId] = { label: '방어' };
@@ -349,7 +410,12 @@ function resolveTurn(battle, rng = Math.random) {
   const monsterName = battle.rage ? battle.monster.rageName : battle.monster.name;
   last.monsterMove = move.name;
   last.monsterMoveKey = battle.intent; // 그림이 기술별 자세(sprite.poses)를 고를 때 쓴다
-  if (move.target === 'none') {
+  if (move.target === 'self') {
+    const before = battle.hp;
+    battle.hp = Math.min(battle.maxHp, battle.hp + Math.round(battle.maxHp * (move.healRate || 0)));
+    last.monsterHeal = battle.hp - before;
+    log.push(`${battle.monster.emoji} **${monsterName}**의 **${move.name}**! HP **+${last.monsterHeal.toLocaleString()}**`);
+  } else if (move.target === 'none') {
     log.push(`${battle.monster.emoji} **${monsterName}**의 **${move.name}**! 다음 턴에 큰 공격이 온다…`);
   } else {
     const targets = move.target === 'all'
@@ -358,9 +424,17 @@ function resolveTurn(battle, rng = Math.random) {
     const parts = targets.map(t => {
       const dmg = hit(t);
       last.hits[t.userId] = dmg;
-      return `${t.name} -${dmg}${t.hp <= 0 ? ' 💀' : ''}`;
+      let tag = '';
+      // 기술 효과: 둔화는 맞은 사람 전원, 기절은 방어하지 않은 사람만(쓰러진 사람 제외)
+      if (t.hp > 0 && move.effect === 'slow') { t.slowUntil = battle.turn + SLOW_TURNS; last.effects[t.userId] = 'slow'; tag = ' 🐌둔화'; }
+      if (t.hp > 0 && move.effect === 'stun' && !t.guarding) { t.stunTurn = battle.turn + 1; last.effects[t.userId] = 'stun'; tag = ' 💫기절'; }
+      return `${t.name} -${dmg}${t.hp <= 0 ? ' 💀' : tag}`;
     });
     log.push(`${battle.monster.emoji} **${monsterName}**의 **${move.name}**! → ${parts.join(' · ')}`);
+  }
+  if (move.effect === 'shield') {
+    battle.shieldTurn = battle.turn + 1;
+    log.push(`🛡️ **${monsterName}**의 몸이 단단해졌다! 다음 턴 받는 피해 **-${Math.round((1 - SHIELD_DAMAGE_RATE) * 100)}%**`);
   }
 
   for (const m of battle.members) { m.choice = null; m.guarding = false; }
@@ -396,5 +470,10 @@ module.exports = {
   checkChoice,
   choose,
   allChosen,
+  isStunned,
+  slowTurnsLeft,
+  isShielded,
+  SLOW_DAMAGE_RATE,
+  SHIELD_DAMAGE_RATE,
   resolveTurn,
 };

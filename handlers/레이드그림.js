@@ -10,7 +10,7 @@
 
 const path = require('path');
 const { Painter, loadFont } = require('./그림판');
-const { ROLES, ROLE_ORDER, PLAYER_MAX_HP, ACTIONS, createBattle, choose, resolveTurn } = require('./레이드전투');
+const { ROLES, ROLE_ORDER, PLAYER_MAX_HP, ACTIONS, createBattle, choose, resolveTurn, isStunned, slowTurnsLeft, isShielded } = require('./레이드전투');
 
 const W = 900; // 설계 크기(좌표는 전부 이 기준)
 const H = 640;
@@ -189,13 +189,50 @@ function roleIcon(role, cx, cy, dim = false) {
 // 몬스터: sprite(픽셀 아트). maxH 안에 맞춘다. gray: 결과 화면용 흑백.
 // (그림 파일 몬스터는 PNG 해석기가 필요해 아직 지원하지 않는다 — 넣을 때 그림판.js에 추가)
 // pose: 기술 키(sprite.poses) — 없으면 평상시 얼굴(분노면 sprite.rageRows).
-function drawMonster(monster, cx, cy, maxH, { rage = false, gray = false, pose = null } = {}) {
+// outline: 외곽선(a) 색을 바꿔 칠한다(보호막으로 단단해진 몸).
+function drawMonster(monster, cx, cy, maxH, { rage = false, gray = false, pose = null, outline = null } = {}) {
   const sp = monster.sprite;
   if (!sp) return;
   const rows = (pose && sp.poses?.[pose]) || (rage && sp.rageRows) || sp.rows;
-  drawPixels({ ...sp, rows }, cx, cy, Math.floor(maxH / rows.length), { dim: gray, colors: rage ? sp.rageColors : null });
+  const colors = rage || outline ? { ...(rage ? sp.rageColors : {}), ...(outline ? { a: outline } : {}) } : null;
+  drawPixels({ ...sp, rows }, cx, cy, Math.floor(maxH / rows.length), { dim: gray, colors });
 }
 
+// 상태 효과 아이콘(12×12 픽셀, 오리지널). 납작한 단색 배지 + 화살표로 효과를 알아보게 한다.
+const STATUS_ICONS = {
+  // 보호막(몬스터): 푸른 방패에 초록 위 화살표(받는 피해 감소)
+  shield: {
+    rows: [
+      '.dddddddddd.', 'dbbbbbbbbbbd', 'dbbbbggbbbbd', 'dbbbggggbbbd', 'dbbggggggbbd', 'dbbbbggbbbbd',
+      'dbbbbggbbbbd', 'dbbbbggbbbbd', '.dbbbbbbbbd.', '..dbbbbbbd..', '...dbbbbd...', '....dddd....',
+    ],
+    palette: { d: '#1c2a38', b: '#6f8fae', g: '#7ccf5a' },
+  },
+};
+// 카드 왼쪽 위 상태 아이콘: 기절(별). 둔화는 아이콘 없이 점액 얼룩으로 표시한다.
+function statusBadges(b, mem, x, y) {
+  if (isStunned(b, mem)) stunStars(x, y);
+}
+// 기절: 납작한 노란 별 두 개(작은 별 왼쪽 위 · 큰 별 오른쪽 아래). 픽셀 대신 다각형이라 가장자리가 깔끔하다.
+function star(cx, cy, R, color) {
+  const pts = [];
+  for (let k = 0; k < 10; k++) {
+    const a = -Math.PI / 2 + (k * Math.PI) / 5;
+    const rr = k % 2 ? R * 0.45 : R;
+    pts.push(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+  }
+  p.poly(pts, color);
+}
+function stunStars(x, y) {
+  star(x - 7, y - 9, 10, '#ffd23f');
+  star(x + 8, y + 8, 15, '#ffd23f');
+}
+
+// 점액 흩뿌리기 줄기 방향(단위벡터 x·y, 뻗는 거리, 끝 방울 반지름). 아래쪽은 '다음 행동' 상자(y 276)에 닿지 않게 짧게.
+const SPRAY = [
+  [-1, -0.15, 175, 12], [-0.85, 0.5, 150, 10], [-0.75, -0.75, 125, 9], [-0.4, 1, 115, 8],
+  [1, -0.15, 175, 12], [0.85, 0.5, 150, 10], [0.75, -0.75, 125, 9], [0.4, 1, 115, 8],
+];
 // 몬스터 기술 연출(턴 결과 화면). 몬스터마다 그리지 않고 기술 종류(moves 키)로 공통 처리한다.
 // layer 'back'은 몬스터 뒤, 'front'는 앞에 그린다. color는 몬스터 겉면 색(점액·기운).
 function monsterFx(move, cx, cy, color, layer) {
@@ -203,19 +240,29 @@ function monsterFx(move, cx, cy, color, layer) {
   if (move === 'attack' && layer === 'back') {
     // 위에서 아래로 내리꽂는 속도선
     for (const [dx, len] of [[-70, 30], [-40, 44], [40, 44], [70, 30]]) p.line(cx + dx, cy - 78, cx + dx, cy - 78 + len, 4, '#f4e6cf');
-  } else if (move === 'attack' && layer === 'front') {
-    // 몸 아래 충돌 섬광
-    // (아래 '다음 행동' 상자 y 276에 닿지 않게 cy+64까지만)
-    p.poly([cx - 30, cy + 52, cx, cy + 42, cx + 30, cy + 52, cx + 9, cy + 56, cx, cy + 64, cx - 9, cy + 56], '#ffd166');
   } else if (move === 'sweep' && layer === 'front') {
-    // 사방으로 튀는 점액 방울
-    for (const [dx, dy, rr] of [[-120, -30, 9], [-150, 10, 7], [-105, 40, 6], [120, -30, 9], [150, 10, 7], [105, 40, 6], [-80, -62, 5], [80, -62, 5]]) {
-      p.circle(cx + dx, cy + dy, rr, color);
+    // 몸에서 바깥으로 튀어 나가는 점액 — 몬스터와 같은 칸(8px) 격자에 맞춘 도트:
+    // 몸 쪽에 작은 점 두 개(궤적) → 끝에 십자 모양 큰 방울(왼쪽 위 칸은 밝은 반사광)
+    const G = 8;
+    const cell = (x, y, c) => p.rect(cx + Math.round((x - cx) / G) * G - G / 2, cy + Math.round((y - cy) / G) * G - G / 2, G, G, c);
+    for (const [ux, uy, dist] of SPRAY) {
+      const at = (d) => [cx + ux * d, cy + uy * d * 0.62];
+      cell(...at(dist * 0.55), color);
+      cell(...at(dist * 0.75), color);
+      const [ex, ey] = at(dist);
+      for (const [i, j] of [[0, -1], [-1, 0], [0, 0], [1, 0], [0, 1]]) cell(ex + i * G, ey + j * G, color);
+      cell(ex - G, ey - G, '#eaffdf');
     }
   } else if (move === 'charge' && layer === 'back') {
     // 빨아들이는 기운: 바깥에서 몸 쪽으로 모이는 선
     for (const [dx, dy] of [[-130, -40], [-140, 20], [130, -40], [140, 20], [-90, -66], [90, -66]]) {
       p.line(cx + dx, cy + dy, cx + dx * 0.72, cy + dy * 0.72, 4, color);
+    }
+  } else if (move === 'heal' && layer === 'front') {
+    // 재생: 몸 주위로 피어오르는 초록 십자
+    for (const [dx, dy, s] of [[-110, -20, 9], [-80, -60, 7], [104, -10, 9], [76, -58, 7], [-130, 26, 6], [128, 30, 6]]) {
+      p.rect(cx + dx - s, cy + dy - s / 3, s * 2, (s * 2) / 3, '#7cff9a');
+      p.rect(cx + dx - s / 3, cy + dy - s, (s * 2) / 3, s * 2, '#7cff9a');
     }
   } else if (move === 'smash' && layer === 'front') {
     // 바닥 충격파 + 흙먼지
@@ -327,10 +374,12 @@ const RIBBON = {
   pending: { fill: '#c4630f', color: '#ffffff' },
   ready:   { fill: '#1e6b3c', color: '#d9ffe6' },
   down:    { fill: '#3a3530', color: '#b0a89a' },
+  stunned: { fill: '#6b5a14', color: '#fff3b0' },
 };
-function memberState(mem, showingResult) {
+function memberState(b, mem, showingResult) {
   if (mem.hp <= 0) return 'down';
   if (showingResult) return 'result';
+  if (isStunned(b, mem)) return 'stunned';
   return mem.choice ? 'ready' : 'pending';
 }
 function choiceLabel(mem) {
@@ -376,9 +425,26 @@ function renderBattle(r) {
     const fxColor = (b.rage && m.sprite?.rageColors?.o) || m.sprite?.palette?.o || '#7fdc8c';
     // 박치기·짓누르기는 파티 쪽(아래)으로 몸을 내밀어 그린다
     const monsterY = 196 + (usedMove === 'attack' ? 10 : usedMove === 'smash' ? 6 : 0);
+    // 보호막(단단해지기 다음 턴): 외곽선을 금속빛으로 바꾸고 둘레에 반짝임 + HP 바 왼쪽에 방패 배지
+    const shielded = isShielded(b);
+    if (shielded) {
+      for (const [dx, dy] of [[-88, -40], [92, -30], [-96, 26], [100, 34], [0, -66]]) {
+        p.line(W / 2 + dx - 7, monsterY + dy, W / 2 + dx + 7, monsterY + dy, 3, '#cfe8ff');
+        p.line(W / 2 + dx, monsterY + dy - 7, W / 2 + dx, monsterY + dy + 7, 3, '#cfe8ff');
+      }
+    }
     monsterFx(usedMove, W / 2, monsterY, fxColor, 'back');
-    drawMonster(m, W / 2, monsterY, 112, { rage: b.rage, pose });
+    drawMonster(m, W / 2, monsterY, 112, { rage: b.rage, pose, outline: shielded ? '#cfe8ff' : null });
     monsterFx(usedMove, W / 2, monsterY, fxColor, 'front');
+    if (usedMove === 'heal' && last?.monsterHeal) text(`+${last.monsterHeal.toLocaleString()}`, W / 2 + 118, monsterY - 34, 30, '#7cff9a');
+    // 몬스터 상자 오른쪽 위에 큰 방패 배지 + 문구(방어력 증가 · 받는 피해 -50%)
+    if (shielded) {
+      p.roundRect(W - 216, 132, 180, 54, 12, '#1c2a38');
+      p.strokeRoundRect(W - 216, 132, 180, 54, 12, 2, '#8fc4ff');
+      drawPixels(STATUS_ICONS.shield, W - 186, 159, 3.4);
+      text('방어력 증가', W - 108, 149, 19, '#cfe8ff');
+      text('피해 -50%', W - 108, 172, 15, '#8fc4ff');
+    }
     if (last?.monsterMove) {
       const label = `${last.monsterMove}!`;
       const bw = Math.min(p.textWidth(B(), label, 22), 200) + 36;
@@ -416,13 +482,13 @@ function renderBattle(r) {
         text(role.name, x + w / 2, y + 172, 20, '#8a6a3a');
         return;
       }
-      const state = memberState(mem, r.showingResult);
+      const state = memberState(b, mem, r.showingResult);
       const down = state === 'down';
       // 리본: 결과 단계(턴 전환 2.5초)에는 띄우지 않는다 — 그림은 평소대로 두고 전환은 글자 제목이 알린다
       if (state !== 'result') {
         const ribbon = RIBBON[state];
         p.roundRect(x + 12, y + 12, w - 24, 30, 8, ribbon.fill);
-        text(state === 'pending' ? '행동 선택!' : state === 'ready' ? `준비 · ${choiceLabel(mem)}` : '쓰러짐',
+        text(state === 'pending' ? '행동 선택!' : state === 'ready' ? `준비 · ${choiceLabel(mem)}` : state === 'stunned' ? '기절 · 행동 불가' : '쓰러짐',
           x + w / 2, y + 27, 19, ribbon.color, { maxWidth: w - 36 });
       }
 
@@ -430,6 +496,10 @@ function renderBattle(r) {
       const hit = last?.hits[mem.userId];
       if (hit && usedMove) hitFx(usedMove, x + w / 2, y + 86, fxColor);
       if (hit) text(`-${hit}`, x + w - 38, y + 78, 24, '#ff5a45');
+      // 상태 효과 아이콘(카드 왼쪽, 리본 아래): 둔화(남은 턴) · 기절
+      if (!down) statusBadges(b, mem, x + 32, y + 66);
+      // 둔화는 아이콘 대신 카드 아이콘에 묻은 점액으로 보여준다(흩뿌리기를 맞은 결과 화면은 hitFx가 이미 그림)
+      if (!down && slowTurnsLeft(b, mem) > 0 && !(usedMove === 'sweep' && hit)) hitFx('sweep', x + w / 2, y + 86, fxColor);
 
       text(mem.name, x + w / 2, y + 138, NAME_SIZE, down ? C.dim : C.text, { maxWidth: w - 20 });
       // HP는 바 안에 숫자로(한 줄 절약)
@@ -459,10 +529,11 @@ function renderBattle(r) {
       text(ready ? '스킬' : `${mem.cooldown}턴`, gx + 30, y + 239, 15, ready ? '#bff4ea' : C.muted);
       for (let k = 0; k < 2; k++) p.circle(gx + 80 + k * 18, y + 239, 6.5, k < mem.potions ? '#7ccf5a' : '#3a3328');
     }, (mem) => {
-      const state = memberState(mem, r.showingResult);
+      const state = memberState(b, mem, r.showingResult);
       if (usedMove && last?.hits[mem.userId]) return { color: '#ff4a3a', width: 4 }; // 이번 턴에 맞은 카드
       if (state === 'pending') return { color: '#ffb52e', width: 4 };
       if (state === 'ready') return { color: '#3ecf6e', width: 2.5 };
+      if (state === 'stunned') return { color: '#ffd23f', width: 2.5 };
       return null;
     });
   });
@@ -473,17 +544,17 @@ function renderBattle(r) {
 // (예전엔 전투 화면 틀을 재활용해 카드 4장을 그렸는데, 참가자가 적으면 '빈자리'만 가득했다)
 // outcome: 'clear' | 'wipe' | 'timeout' | 'noshow' | 'restart' | 'admin'
 const END_TITLE = {
-  clear: 'RAID CLEAR', wipe: 'RAID FAILED', timeout: 'RAID FAILED', noshow: '몬스터가 사라졌다', restart: '레이드 중단', admin: '레이드 종료',
+  clear: 'RAID CLEAR', wipe: 'RAID FAILED', timeout: 'RAID FAILED', noshow: 'RAID FAILED', restart: '레이드 중단', admin: '레이드 종료',
 };
 const END_SUB = {
   clear: (m) => `${m.name} 토벌 성공!`,
   wipe: (m) => `${m.name}${subjectJosa(m.name)} 도망쳤다...`,
   timeout: (m) => `${m.name}${subjectJosa(m.name)} 도망쳤다...`,
-  noshow: () => '아무도 오지 않아 몬스터가 떠났다',
+  noshow: (m) => `${m.name}${subjectJosa(m.name)} 도망쳤다...`,
   restart: () => '봇 점검으로 레이드가 중단됐다',
   admin: () => '관리자가 레이드를 종료했다',
 };
-const END_TITLE_COLOR = { clear: '#ffcf5a', wipe: '#ff6b5b', timeout: '#ff6b5b' };
+const END_TITLE_COLOR = { clear: '#ffcf5a', wipe: '#ff6b5b', timeout: '#ff6b5b', noshow: '#ff6b5b' };
 const LP = { x: 20, y: 150, w: 300, h: 470 };   // 왼쪽 패널(몬스터·기록)
 const RP = { x: 340, y: 150, w: 540, h: 470 };  // 오른쪽 패널(결과표)
 

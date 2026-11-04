@@ -30,6 +30,7 @@ const { displayNameFromInteraction } = require('./이름');
 const {
   PLAYER_MAX_HP, ROLES, ROLE_ORDER, ACTIONS, MONSTERS,
   createBattle, checkChoice, choose, allChosen, resolveTurn,
+  isStunned, slowTurnsLeft, isShielded, SLOW_DAMAGE_RATE, SHIELD_DAMAGE_RATE,
 } = require('./레이드전투');
 const { renderRecruit, renderBattle, renderEnd, warmUp } = require('./레이드그림');
 
@@ -225,9 +226,20 @@ async function recruitView(r, { redraw = true } = {}) {
   return assemble(ACCENT.recruit, image, sections);
 }
 
-function memberStatus(mem) {
+function memberStatus(b, mem) {
   if (mem.hp <= 0) return `💀 ${mem.name}`;
+  if (isStunned(b, mem)) return `💫 ${mem.name}`;
   return `${mem.choice ? '✅' : '⏳'} ${mem.name}`;
+}
+// 선택 화면 아래 상태 효과 안내(몬스터 보호막 · 기절 · 둔화)
+function effectLines(b) {
+  const lines = [];
+  if (isShielded(b)) lines.push(`🛡️ **${b.monster.name}**${subjectJosa(b.monster.name)} 단단해졌어요 — 이번 턴 주는 피해 **-${Math.round((1 - SHIELD_DAMAGE_RATE) * 100)}%**`);
+  const stunned = b.members.filter(mem => mem.hp > 0 && isStunned(b, mem)).map(mem => mem.name);
+  if (stunned.length) lines.push(`💫 기절: ${stunned.join(', ')} — 이번 턴 행동 불가`);
+  const slowed = b.members.filter(mem => mem.hp > 0 && slowTurnsLeft(b, mem) > 0).map(mem => `${mem.name}(${slowTurnsLeft(b, mem)}턴)`);
+  if (slowed.length) lines.push(`🐌 둔화: ${slowed.join(', ')} — 주는 피해 -${Math.round((1 - SLOW_DAMAGE_RATE) * 100)}%`);
+  return lines;
 }
 
 async function battleView(r, { redraw = true } = {}) {
@@ -249,16 +261,18 @@ async function battleView(r, { redraw = true } = {}) {
   if (r.showingResult) {
     sections.push({ text: `## 📜 TURN ${b.lastTurn?.turn ?? b.turn - 1} 종료\n-# 잠시 후 TURN ${b.turn}이 시작돼요` });
   } else {
-    const pending = b.members.filter(mem => mem.hp > 0 && !mem.choice).map(mem => mem.name);
+    const pending = b.members.filter(mem => mem.hp > 0 && !mem.choice && !isStunned(b, mem)).map(mem => mem.name);
+    const effects = effectLines(b);
     sections.push({
       text: `## ⚔️ TURN ${b.turn} · 행동을 고르세요\n` +
         `⏳ **${clock(r.turnEndsAt)}** 남음\n` +
+        (effects.length ? effects.join('\n') + '\n' : '') +
         (pending.length ? `-# 아직 고르지 않음: ${pending.join(', ')}` : '-# 모두 골랐어요 — 곧 턴이 진행돼요'),
     });
   }
   if (!image) {
     // 그림이 없을 때만 지난 턴 기록을 글자로 보여준다(그림에는 말풍선·피해 숫자로 들어가 있다).
-    sections.push({ text: b.members.map(memberStatus).join('　') });
+    sections.push({ text: b.members.map(mem => memberStatus(b, mem)).join('　') });
     if (b.log.length) sections.push({ text: `**📜 지난 턴**\n${b.log.join('\n')}` });
   }
   sections.push({ separator: true });
@@ -292,7 +306,7 @@ const OUTCOME_TEXT = {
 // 종료 화면 그림 아래 요약 카드: 큰 제목 · 인용 블록(핵심 결과) · 작은 글씨(기록·복구·다음 출현).
 const END_HEADING = {
   clear: '🏆 RAID CLEAR!', wipe: '☠️ RAID FAILED', timeout: '⌛ RAID FAILED',
-  noshow: '💨 아무도 오지 않았다', restart: '💨 봇 점검으로 중단', admin: '🛑 레이드 종료',
+  noshow: '💨 RAID FAILED', restart: '💨 봇 점검으로 중단', admin: '🛑 레이드 종료',
 };
 function formatDuration(ms) {
   const sec = Math.max(0, Math.round(ms / 1000));
@@ -357,6 +371,8 @@ function buildHelpText() {
     '- 파티원 전원이 고르면 바로 턴이 진행됩니다.',
     '- 몬스터는 **다음 행동을 미리 예고**합니다. 💥 큰 공격 예고에는 🛡️**방어**(피해 70% 감소)!',
     '- HP가 절반 아래로 떨어지면 몬스터가 **분노**해 더 아프게 때립니다.',
+    `- 🐌**둔화**: 2턴 동안 주는 피해 -${Math.round((1 - SLOW_DAMAGE_RATE) * 100)}% (치유사 스킬로 해제) · 💫**기절**: 큰 공격을 방어하지 않으면 다음 턴 행동 불가`,
+    `- 🛡️몬스터가 **단단해지면** 다음 턴 받는 피해 -${Math.round((1 - SHIELD_DAMAGE_RATE) * 100)}% · 💚**재생**으로 HP를 회복하기도 합니다.`,
     '- 🍖**회복약**: HP +45 (전투당 2개) · ✨**스킬**: 역할마다 다름, 쓰면 몇 턴 쿨타임',
     '',
     ...ROLE_ORDER.map(k => `${ROLES[k].emoji} **${ROLES[k].name}** — ✨${ROLES[k].skill.name}: ${ROLES[k].skill.desc}`),
@@ -568,6 +584,8 @@ function advanceTurn(r) {
   r.timer = setTimeout(() => {
     if (!isCurrent(r) || r.phase !== 'battle' || r.battle.turn !== turn) return;
     r.showingResult = false;
+    // 살아 있는 파티원이 전부 기절이면 고를 사람이 없으니 기다리지 않고 바로 이 턴을 진행한다.
+    if (allChosen(r.battle)) { advanceTurn(r); return; }
     armTurnTimer(r);
     requestRender(r, { image: true, immediate: true });
   }, RESULT_MS);
