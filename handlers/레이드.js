@@ -285,7 +285,7 @@ async function battleView(r, { redraw = true } = {}) {
       text: `## ⚔️ TURN ${b.turn} · 행동을 고르세요\n` +
         `⏳ **${clock(r.turnEndsAt)}** 남음\n` +
         (effects.length ? effects.join('\n') + '\n' : '') +
-        (pending.length ? `-# 아직 고르지 않음: ${pending.join(', ')}` : '-# 모두 골랐어요 — 곧 턴이 진행돼요'),
+        (pending.length ? `-# 아직 고르지 않음: ${pending.join(', ')}` : '-# 모두 골랐어요 - 곧 턴이 진행돼요'),
     });
   }
   if (!image) {
