@@ -1,0 +1,266 @@
+{
+  "_메모": [
+    "세 번째 레이드 몬스터. 칸 설명은 슬라임.json의 _메모와 같고, 여기에는 얼음 큐브만의 것을 적는다.",
+    "palette: a 외곽선 · h 모서리 빛·반짝이 · t 윗면 · f 윗면 서리 결 · o 앞면 위쪽(연출 색) · l 얼음 속 비치는 빛 · b 앞면 · e 앞면 아래 그늘 · d 옆면 · n 옆면 아래 그늘 · i 옆면 결 · w 흰자 · k 눈 · c 볼 · m 입 · s 서리 알갱이·가시·파편.",
+    "poses: attack 성난 눈(> <) · frost 입 벌리고 서리 · armor 다부진 눈썹 + 모서리 얼음 가시 · ready 필살기 예고(하얀 금, 휘둥그레 눈) · smash 질끈 감은 눈 + 튀는 파편. 26칸 × 19줄.",
+    "chill(냉기, 이 블록이 있는 몬스터만): 행동하는 즉시 방어 +guardStacks · 공격·스킬 -melt(0 밑으로 안 감) · 치유사 스킬은 전원 0 · 회복약은 본인 0. 아군 행동 뒤와 몬스터 기술 뒤 freezeAt 이상이면 freezeStatus(🧊빙결 — 다음 턴 행동 불가, 냉기 0).",
+    "effect chill: 맞은 사람 냉기 +stacks(분노 중 rageStacks), 방어해도 걸린다. shield 기술의 chillOnHit: 그 보호막 턴에 몬스터를 때린 사람은 녹는 대신 냉기 +chillOnHit.",
+    "status.fx \"ice\": 이 상태로 행동 불가면 카드에 기절 별 대신 얼음 덮개를 그린다.",
+    "baseHp는 4인 기준 HP. 바꾸면 node tests/raid/밸런스시뮬.js icecube 로 승률·턴을 다시 확인한다."
+  ],
+  "id": "icecube",
+  "name": "아이스 큐브",
+  "emoji": "🧊",
+  "rageName": "폭주한 아이스 큐브",
+  "lore": "반투명한 얼음 속에 말랑한 얼굴을 품은 네모난 덩어리. 이 녀석이 지나간 자리마다 XP가 꽁꽁 얼어붙는다!",
+  "baseHp": 7400,
+  "rage": {
+    "hpRatio": 0.5,
+    "damageRate": 1.5
+  },
+  "chill": {
+    "freezeAt": 3,
+    "guardStacks": 1,
+    "melt": 1,
+    "status": {
+      "name": "냉기",
+      "emoji": "❄️"
+    },
+    "freezeStatus": {
+      "name": "빙결",
+      "emoji": "🧊",
+      "fx": "ice"
+    }
+  },
+  "sprite": {
+    "rows": [
+      "......aaaaaaaaaaaaaaaaaaaa",
+      ".....athttttfftttttttfftha",
+      "....attthfftttttttffttthda",
+      "...attffthtttttffttttthdda",
+      "..affttttthtffttttttthddia",
+      ".atttttttffhttttttffhddida",
+      "ahhhhhhhhhhhhhhhhhhhddidda",
+      "aoooooooooooooooooohdiddda",
+      "aollllloooooooohloohidddda",
+      "ablllllbbbbbbbbbhbbhddddda",
+      "ablllllbbbbbbbbbbbbhddddda",
+      "ablbwkkbbbbbwkkbbbbhddddia",
+      "ablbkkkbbbbbkkkbbbbhdddida",
+      "abbbkkkbbbbbkkkbbbbhddida.",
+      "abbbbbbbbbbbbbbbbbbhnina..",
+      "aecceeeemeemeeeeccehina...",
+      "aeeeeeeeemmeeeeeeeehna....",
+      "aeeeeeeeeeeeeeeeeeeha.....",
+      "aaaaaaaaaaaaaaaaaaaa......"
+    ],
+    "poses": {
+      "attack": [
+        "......aaaaaaaaaaaaaaaaaaaa",
+        ".....athttttfftttttttfftha",
+        "....attthfftttttttffttthda",
+        "...attffthtttttffttttthdda",
+        "..affttttthtffttttttthddia",
+        ".atttttttffhttttttffhddida",
+        "ahhhhhhhhhhhhhhhhhhhddidda",
+        "aoooooooooooooooooohdiddda",
+        "aollllloooooooohloohidddda",
+        "ablllllbbbbbbbbbhbbhddddda",
+        "ablllllbbbbbbbbbbbbhddddda",
+        "ablbkbbbbbbbbbbkbbbhddddia",
+        "ablbbkkbbbbbbkkbbbbhdddida",
+        "abbbkbbbbbbbbbbkbbbhddida.",
+        "abbbbbbbbbbbbbbbbbbhnina..",
+        "aecceeeemmmmeeeeccehina...",
+        "aeeeeeeeemmeeeeeeeehna....",
+        "aeeeeeeeeeeeeeeeeeeha.....",
+        "aaaaaaaaaaaaaaaaaaaa......"
+      ],
+      "frost": [
+        "...s..aaaaaaaaaaaaaaaaaaaa",
+        ".s...athttttfftttttttfftha",
+        "s...attthfftttttttffttthda",
+        ".s.attffthtttttffttttthdda",
+        "..affttttthtffttttttthddia",
+        ".atttttttffhttttttffhddida",
+        "ahhhhhhhhhhhhhhhhhhhddidda",
+        "aoooooooooooooooooohdiddda",
+        "aollllloooooooohloohidddda",
+        "ablllllbbbbbbbbbhbbhddddda",
+        "ablllllbbbbbbbbbbbbhddddda",
+        "ablbkwkbbbbbkwkbbbbhddddia",
+        "ablbkkkbbbbbkkkbbbbhdddida",
+        "abbbkkkbbbbbkkkbbbbhddida.",
+        "abbbbbbbbbbbbbbbbbbhnina..",
+        "aecceeeebmmbeeeeccehina...",
+        "aeeeeeeemmmmeeeeeeehna..s.",
+        "aeeeeeeemmmmeeeeeeeha....s",
+        "aaaaaaaaaaaaaaaaaaaa...s.."
+      ],
+      "armor": [
+        "..s...aaaaaaaaaaaaaaaaaaaa",
+        "...h.athttttfftttttttfftha",
+        ".s..attthfftttttttffttthda",
+        "..hattffthtttttffttttthdda",
+        "s.affttttthtffttttttthddia",
+        ".atttttttffhttttttffhddida",
+        "ahhhhhhhhhhhhhhhhhhhddidda",
+        "aoooooooooooooooooohdiddda",
+        "aollllloooooooohloohidddda",
+        "ablllllbbbbbbbbbhbbhddddda",
+        "ablkkkkkbbbbkkkkkbbhddddda",
+        "ablbwkkbbbbbwkkbbbbhddddia",
+        "ablbkkkbbbbbkkkbbbbhdddida",
+        "abbbkkkbbbbbkkkbbbbhddida.",
+        "abbbbbbbbbbbbbbbbbbhnina..",
+        "aecceeeeeeeeeeeeccehina..h",
+        "aeeeeeeemmmmeeeeeeehna...s",
+        "aeeeeeeeeeeeeeeeeeeha...h.",
+        "aaaaaaaaaaaaaaaaaaaa..s..."
+      ],
+      "ready": [
+        "......aaaaaaaaaaaaaaaaaaaa",
+        ".....athttttfftttttttfftha",
+        "....attthfftttttttffttthda",
+        "...attffthtttttffttttthdda",
+        "..affttttthtffttttttthddia",
+        ".atttttttffhttttttffhddida",
+        "ahhhhhhhhhhhhhhhhhhhddidda",
+        "aooooooohoooooooooohdiddda",
+        "aollllloohooooohloohidddda",
+        "ablllllbbhhbbbbbhbbhddddda",
+        "abllwwwbbbbhwwwbbbbhddddda",
+        "ablbwkwbbbbbwkwbbbbhddddia",
+        "ablbwwwbbbbbwwwbbbbhdddida",
+        "abbbbbbbbbbbbbbbbbbhddida.",
+        "abbbbbbhbbbbbbbbbbbhnina..",
+        "aecceeheemmeeeeeccehina...",
+        "aeeeeeheemmeeeheeeehna....",
+        "aeeeeheeeeeeeeeheeeha.....",
+        "aaaaaaaaaaaaaaahaaaa......"
+      ],
+      "smash": [
+        "s.....aaaaaaaaaaaaaaaaaaaa",
+        ".s...athttttfftttttttfftha",
+        "..s.attthfftttttttffttthda",
+        "s..attffthtttttffttttthdda",
+        "..affttttthtffttttttthddia",
+        ".atttttttffhttttttffhddida",
+        "ahhhhhhhhhhhhhhhhhhhddidda",
+        "aoooooooooooooooooohdiddda",
+        "aollllloooooooohloohidddda",
+        "ablllllbbbbbbbbbhbbhddddda",
+        "ablllllbbbbbbbbbbbbhddddda",
+        "ablbkbbbbbbbbbkbbbbhddddia",
+        "ablbkkkbbbbbkkkbbbbhdddida",
+        "abbbbbbbbbbbbbbbbbbhddida.",
+        "abbbbbbbbbbbbbbbbbbhnina..",
+        "aecceeeemmmmeeeeccehina...",
+        "aeeeeeeeeeeeeeeeeeehna...s",
+        "aeeeeeeeeeeeeeeeeeeha....s",
+        "aaaaaaaaaaaaaaaaaaaa....s."
+      ]
+    },
+    "palette": {
+      "a": "#163452",
+      "h": "#ffffff",
+      "t": "#e4f8ff",
+      "f": "#bfeaff",
+      "o": "#c6efff",
+      "l": "#eefcff",
+      "b": "#93d6f5",
+      "e": "#6fbfe6",
+      "d": "#5aa3d0",
+      "n": "#3f86b8",
+      "i": "#a9dcf4",
+      "w": "#ffffff",
+      "k": "#13202c",
+      "c": "#ff8fb0",
+      "m": "#0e2a3d",
+      "s": "#dff7ff"
+    },
+    "scale": 1.2,
+    "rageColors": {
+      "a": "#4a1010",
+      "t": "#ffe0d9",
+      "f": "#ffb3a6",
+      "o": "#ff9a8a",
+      "l": "#ffd9d2",
+      "b": "#e5483b",
+      "e": "#c8352c",
+      "d": "#a3242a",
+      "n": "#7a1a20",
+      "i": "#f07a6e",
+      "s": "#ffd6cf",
+      "m": "#1a1033"
+    }
+  },
+  "moves": {
+    "attack": {
+      "name": "얼음 박치기",
+      "telegraph": "몸을 데굴 굴릴 준비를 한다...",
+      "target": "single",
+      "damage": [
+        8,
+        10
+      ]
+    },
+    "frost": {
+      "name": "서리 숨결",
+      "telegraph": "입김이 하얗게 서리기 시작한다...",
+      "target": "all",
+      "damage": [
+        3,
+        5
+      ],
+      "fx": "frost",
+      "effect": "chill",
+      "stacks": 1,
+      "rageStacks": 2,
+      "status": {
+        "name": "냉기",
+        "emoji": "❄️"
+      }
+    },
+    "armor": {
+      "name": "가시 얼음 갑옷",
+      "telegraph": "몸 모서리에 얼음 가시가 돋는다...",
+      "target": "none",
+      "fx": "charge",
+      "effect": "shield",
+      "effectRate": 0.65,
+      "chillOnHit": 1
+    },
+    "smash": {
+      "name": "필살 빙하 낙하",
+      "telegraph": "💥 필살기를 준비 중입니다! 방어하세요!",
+      "target": "all",
+      "damage": [
+        12,
+        15
+      ],
+      "fx": "icefall",
+      "effect": "stun",
+      "status": {
+        "name": "빙결",
+        "emoji": "🧊",
+        "fx": "ice"
+      },
+      "readyPose": "ready"
+    }
+  },
+  "intentWeights": {
+    "normal": {
+      "attack": 4,
+      "frost": 3,
+      "armor": 2,
+      "smash": 1
+    },
+    "rage": {
+      "attack": 3.5,
+      "frost": 3,
+      "armor": 2,
+      "smash": 1.5
+    }
+  }
+}
