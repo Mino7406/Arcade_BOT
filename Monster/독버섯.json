@@ -15,7 +15,7 @@
   "emoji": "🍄",
   "rageName": "폭주한 독버섯",
   "lore": "보랏빛 갓에 연두 반점이 박힌 통통 버섯. 걸음마다 독 포자를 흘려 서버의 XP를 시들게 만든다!",
-  "baseHp": 7500,
+  "baseHp": 7800,
   "rage": { "hpRatio": 0.5, "damageRate": 1.5, "afterPoison": "absorb" },
   "sprite": {
     "rows": [

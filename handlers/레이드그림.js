@@ -658,7 +658,7 @@ function renderBattle(r) {
     // 어두운 바탕을 깔아 연출 위에서도 읽히게 한다.
     const numbers = [];
     if (dealtNow) numbers.push([`-${dealtNow.toLocaleString()}`, '#ff5a45']);
-    if (usedMove && last?.monsterHeal) numbers.push([`+${last.monsterHeal.toLocaleString()}`, '#7cff9a']);
+    if (usedMove && (last?.monsterHeal || last?.fizzled)) numbers.push([`+${(last.monsterHeal || 0).toLocaleString()}`, last.fizzled ? '#9a9a9a' : '#7cff9a']); // 독기 흡수 실패는 회색 +0
     numbers.forEach(([label, color], i) => {
       const nx = W / 2 + 250, ny = 212 + i * 38;
       p.roundRect(nx - 56, ny - 17, 112, 34, 9, '#100c09');

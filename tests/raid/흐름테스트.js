@@ -554,7 +554,8 @@ let ok4;
 
     // 독기 흡수 → 공격력 증가: 다음 피해 기술 1회만 피해 × buffRate, 쓰면 사라짐(피해 없는 기술엔 남아 있음)
     b = E.createBattle(mush, party, rng);
-    b.hp = Math.round(b.maxHp * 0.5);
+    b.hp = Math.round(b.maxHp * 0.6 /* 분노(50%) 전 */);
+    turnWith(b, 'spore', { x: 'guard', y: 'guard' });
     turnWith(b, 'absorb', { x: 'guard', y: 'guard' });
     assert(E.isPowered(b) && b.powerRate === mush.moves.absorb.buffRate && b.log.join().includes('공격력이 올랐다'), '독기 흡수 → 공격력 증가(다음 공격 피해 배율)');
     turnWith(b, 'absorb', { x: 'guard', y: 'guard' });
@@ -562,6 +563,27 @@ let ok4;
     turnWith(b, 'attack', { x: 'attack', y: 'attack' });
     const pw = b.lastTurn.powered, hitAmt = Object.values(b.lastTurn.hits)[0];
     assert(pw === mush.moves.absorb.buffRate && !E.isPowered(b) && hitAmt === Math.round(9 * 1.07 * pw), '공격력 증가: 다음 피해 기술 1회 피해 × buffRate 후 사라짐');
+
+    // 회복 기술은 두 턴 연속 없음(슬라임 재생 3연속 방지)
+    {
+      const sl = all.find(m => m.id === 'slime');
+      let healTwice = 0;
+      for (let i = 0; i < 300; i++) {
+        const bb = E.createBattle(sl, party, Math.random);
+        bb.hp = Math.round(bb.maxHp * 0.3); bb.rage = true; bb.intent = 'heal';
+        E.resolveTurn(bb, Math.random);
+        if (sl.moves[bb.intent]?.target === 'self') healTwice++;
+      }
+      assert(healTwice === 0, '재생 다음 턴엔 회복 기술을 다시 고르지 않음');
+    }
+
+    // 독기 흡수 예고 뒤 치유사가 독을 다 지우면 실패: 회복 +0, 공격력 증가 없음
+    b = E.createBattle(mush, party, rng);
+    b.hp = Math.round(b.maxHp * 0.5);
+    turnWith(b, 'spore', { x: 'guard', y: 'guard' });
+    const hpBefore = b.hp;
+    turnWith(b, 'absorb', { x: 'guard', y: 'skill' });
+    assert(b.lastTurn.fizzled && b.lastTurn.monsterHeal === 0 && b.hp === hpBefore - (b.lastTurn.monsterDamage || 0) && !E.isPowered(b) && b.log.join().includes('빨아들일 독기가 없다'), '독을 다 지우면 독기 흡수 실패(회복 +0, 공격력 증가 없음)');
 
     // 독기 흡수는 파티에 독이 없으면 예고하지 않음 / 분노 중 독을 걸면 다음은 반드시 독기 흡수
     b = E.createBattle(mush, party, Math.random);

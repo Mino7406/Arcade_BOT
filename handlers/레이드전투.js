@@ -201,6 +201,11 @@ function pickNextIntent(battle, rng) {
     const withoutAbsorb = Object.fromEntries(Object.entries(pool).filter(([key]) => !battle.monster.moves[key]?.healPerStack));
     if (Object.values(withoutAbsorb).some(w => w > 0)) pool = withoutAbsorb;
   }
+  // 회복 기술(target self — 재생·독기 흡수)은 두 턴 연속 쓰지 않는다(슬라임이 재생을 3연속 쓴 일이 있어 사용자 결정)
+  if (battle.monster.moves[battle.intent]?.target === 'self') {
+    const withoutHeal = Object.fromEntries(Object.entries(pool).filter(([key]) => battle.monster.moves[key]?.target !== 'self'));
+    if (Object.values(withoutHeal).some(w => w > 0)) pool = withoutHeal;
+  }
   let next = pickWeighted(pool, rng);
   // 재생은 HP가 useBelowHp 이하일 때만, 그보다 많으면 대신 공격
   const nextMove = battle.monster.moves[next];
@@ -498,10 +503,15 @@ function resolveTurn(battle, rng = Math.random) {
   last.monsterFx = moveFx(battle.intent, move); // 그림이 연출(monsterFx·hitFx)을 고를 때 쓴다
   if (move.target === 'self') {
     const before = battle.hp;
-    const rate = (move.healRate || 0) + (move.healPerStack || 0) * partyPoisonStacks(battle);
+    const stacks = partyPoisonStacks(battle);
+    // 독기 흡수(healPerStack): 예고 뒤 파티가 독을 다 지웠으면 빨아들일 독기가 없어 실패 — 회복 0, 공격력 증가도 없음
+    last.fizzled = !!move.healPerStack && stacks === 0;
+    const rate = last.fizzled ? 0 : (move.healRate || 0) + (move.healPerStack || 0) * stacks;
     battle.hp = Math.min(battle.maxHp, battle.hp + Math.round(battle.maxHp * rate));
     last.monsterHeal = battle.hp - before;
-    log.push(`${battle.monster.emoji} **${monsterName}**의 **${move.name}**! HP **+${last.monsterHeal.toLocaleString()}**`);
+    log.push(last.fizzled
+      ? `${battle.monster.emoji} **${monsterName}**의 **${move.name}**! 빨아들일 독기가 없다… HP **+0**`
+      : `${battle.monster.emoji} **${monsterName}**의 **${move.name}**! HP **+${last.monsterHeal.toLocaleString()}**`);
   } else if (move.target === 'none') {
     log.push(`${battle.monster.emoji} **${monsterName}**의 **${move.name}**!`);
   } else {
@@ -530,7 +540,7 @@ function resolveTurn(battle, rng = Math.random) {
     log.push(`${battle.monster.emoji} **${monsterName}**의 **${move.name}**!${powered ? ` ⚔️피해 +${Math.round((powered - 1) * 100)}%` : ''} → ${parts.join(' · ')}`);
     if (powered) { last.powered = powered; battle.powerRate = 0; }
   }
-  if (move.buffRate > 1) {
+  if (move.buffRate > 1 && !last.fizzled) {
     battle.powerRate = move.buffRate;
     log.push(`⚔️ **${monsterName}**의 공격력이 올랐다! 다음 공격 피해 **+${Math.round((move.buffRate - 1) * 100)}%**`);
   }
