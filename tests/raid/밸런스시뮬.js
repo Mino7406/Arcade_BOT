@@ -9,10 +9,18 @@ const MONSTER = E.MONSTERS.find(m => m.id === pick || m.name === pick);
 if (!MONSTER) throw new Error(`몬스터 없음: ${pick} (있는 것: ${E.MONSTERS.map(m => m.id).join(', ')})`);
 console.log(`몬스터: ${MONSTER.name}`);
 const TURN_CAP = 60; // 15분 제한 넉넉히
+const aliveCount = (b) => E.aliveMembers(b).length;
 function smart(b, m) {
   const mv = b.intent;
   const low = E.aliveMembers(b).some(x => x.hp < 50) || b.members.some(x => x.hp <= 0) || E.partyPoisonStacks(b) >= 4;
   if (m.role === 'healer' && low && !E.checkChoice(b, m.userId, 'skill')) return 'skill';
+  // 냉기 몬스터(얼음 큐브)만: 치유사가 냉기가 많이 쌓이면 씻어 내고, 필살기 앞에서 방어하면 빙결될 사람은 회복약으로 녹인다.
+  // (빙결 직전에 방어를 아예 포기하게 해 봤더니 더 많이 맞아 승률이 오히려 10%p 넘게 떨어졌다 — 빙결 1턴보다 피해가 크다)
+  const chill = b.monster.chill;
+  if (chill) {
+    if (m.role === 'healer' && E.partyChillStacks(b) >= 2 * aliveCount(b) && !E.checkChoice(b, m.userId, 'skill')) return 'skill';
+    if (mv === 'smash' && E.chillStacks(b, m) >= chill.freezeAt - chill.guardStacks && !E.checkChoice(b, m.userId, 'potion')) return 'potion';
+  }
   if (mv === 'smash') return 'guard';
   if (E.poisonStacks(b, m) >= 2 && m.hp < 75 && !E.checkChoice(b, m.userId, 'potion')) return 'potion'; // 독이 쌓이면 회복약으로 해독
   if (m.hp < 35 && !E.checkChoice(b, m.userId, 'potion')) return 'potion';
