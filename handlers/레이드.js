@@ -31,7 +31,7 @@ const { displayNameFromInteraction } = require('./이름');
 const {
   PLAYER_MAX_HP, POTIONS_PER_BATTLE, POTION_HEAL, GUARD_DAMAGE_RATE, ROLES, ROLE_ORDER, ACTIONS, MONSTERS,
   createBattle, checkChoice, choose, allChosen, resolveTurn,
-  isStunned, slowTurnsLeft, isShielded, poisonTurnsLeft, poisonStacks, poisonDamage, isConfused, minusPct, contribution,
+  isStunned, slowTurnsLeft, isShielded, isPowered, poisonTurnsLeft, poisonStacks, poisonDamage, isConfused, minusPct, contribution,
 } = require('./레이드전투');
 const { renderRecruit, renderBattle, renderEnd, warmUp } = require('./레이드그림');
 
@@ -253,10 +253,12 @@ function byStatus(members, statusKey) {
   }
   return groups;
 }
-// 선택 화면 아래 상태 효과 안내(몬스터 보호막 · 기절류 · 점액류 · 독류 · 환각류)
+// 선택 화면 아래 상태 효과 안내(몬스터 보호막 · 공격력 증가 · 기절류 · 점액류 · 독류 · 환각류)
 function effectLines(b) {
   const lines = [];
-  if (isShielded(b)) lines.push(`🛡️ 방어력 증가: ${b.rage ? b.monster.rageName : b.monster.name} - **이번 턴 주는 피해 -${minusPct(b.shieldRate)}%**`);
+  const monsterName = b.rage ? b.monster.rageName : b.monster.name;
+  if (isShielded(b)) lines.push(`🛡️ 방어력 증가: ${monsterName} - **이번 턴 받는 피해 -${minusPct(b.shieldRate)}%**`);
+  if (isPowered(b)) lines.push(`⚔️ 공격력 증가: ${monsterName} - **다음 공격 피해 +${Math.round((b.powerRate - 1) * 100)}%**`);
   const stunned = b.members.filter(mem => mem.hp > 0 && isStunned(b, mem));
   for (const [label, mems] of byStatus(stunned, 'stunStatus')) lines.push(`${label}: ${mems.map(mem => mem.name).join(', ')} - **이번 턴 행동 불가**`);
   const slowed = b.members.filter(mem => mem.hp > 0 && slowTurnsLeft(b, mem) > 0);

@@ -26,6 +26,7 @@ const TAUNT_DAMAGE_RATE = 0.3;   // 도발 중인 수호자: 받는 피해 70% �
 //           치유사 스킬로 해제.
 //   guardBlocks: true면 방어한 사람에게는 그 기술의 상태이상이 걸리지 않는다(stun은 원래 그렇다).
 //   healPerStack(재생 기술): 파티에 쌓인 독 중첩 하나당 최대 HP × healPerStack을 더 회복한다.
+//   buffRate: 이 기술을 쓰면 공격력 증가 — 다음 피해 기술 1회의 피해 × buffRate(쓰면 사라짐, 화면에 '공격력 증가' 배지).
 // 인원별 몬스터 피해 배율. 보통 플레이 승률이 인원과 상관없이 80~90%가 되게 맞춘 값(치유사·수호자가 다 있는 4인은 훨씬 버티므로 크게).
 const PARTY_DAMAGE_RATE = { 1: 1.35, 2: 1.07, 3: 1.28, 4: 2.0 }; // 3인은 궁수 차지 샷을 올리면서 1.25 → 1.28
 const PARTY_BASE_SIZE = 4;       // 몬스터 baseHp가 기준으로 삼는 인원(역할 4종 한 명씩).
@@ -127,6 +128,7 @@ function monsterProblems(m) {
     }
     if (move.target === 'self' && (!rate(move.healRate) || !rate(move.useBelowHp))) problems.push(`moves.${key}.healRate·useBelowHp(0~1) 필요`);
     if (move.healPerStack !== undefined && !rate(move.healPerStack)) problems.push(`moves.${key}.healPerStack(0~1) 필요`);
+    if (move.buffRate !== undefined && !(move.buffRate > 1 && move.buffRate <= 3)) problems.push(`moves.${key}.buffRate는 1 초과 3 이하(다음 공격 피해 배율)`);
   }
   for (const mode of ['normal', 'rage']) {
     const w = m.intentWeights?.[mode];
@@ -213,6 +215,7 @@ function createBattle(monster, party, rng = Math.random, { minParty = HP_MIN_PAR
     intent: null,
     shieldTurn: 0,   // 이 턴 동안 몬스터 보호막(받는 피해 감소)
     shieldRate: 1,   // 보호막 중 몬스터가 받는 피해 배율(보호막 기술의 effectRate)
+    powerRate: 0,    // 공격력 증가(buffRate 기술): 다음 피해 기술 1회의 피해 배율(0이면 없음)
     incoming: 0,     // 몬스터가 파티에게 날린 피해 합(방어·도발로 줄이기 전) — 기여도용
     log: [],
     members: party.map(p => ({
@@ -261,6 +264,7 @@ function aliveMembers(battle) {
 function isStunned(battle, m) { return m.stunTurn === battle.turn; }
 function slowTurnsLeft(battle, m) { return Math.max(0, m.slowUntil - battle.turn + 1); }
 function isShielded(battle) { return battle.shieldTurn === battle.turn; }
+function isPowered(battle) { return battle.powerRate > 1; }
 // 독: 남은 턴(이번 턴 포함)이 있을 때만 중첩을 센다. 재시작 전 기록엔 칸이 없을 수 있어 0으로 본다.
 function poisonTurnsLeft(battle, m) { return m.poisonStacks > 0 ? Math.max(0, (m.poisonUntil || 0) - battle.turn + 1) : 0; }
 function poisonStacks(battle, m) { return poisonTurnsLeft(battle, m) > 0 ? m.poisonStacks : 0; }
@@ -460,7 +464,9 @@ function resolveTurn(battle, rng = Math.random) {
 
   // 2) 몬스터 행동 (지난 턴에 예고한 것)
   const move = battle.monster.moves[battle.intent];
-  const mult = (battle.rage ? battle.monster.rage.damageRate : 1) * (PARTY_DAMAGE_RATE[battle.members.length] ?? 1);
+  // 공격력 증가(buffRate 기술을 쓴 뒤 첫 피해 기술 1회): 이번 공격 피해 × powerRate, 쓰고 나면 사라진다
+  const powered = (move.target === 'single' || move.target === 'all') && battle.powerRate > 1 ? battle.powerRate : 0;
+  const mult = (battle.rage ? battle.monster.rage.damageRate : 1) * (PARTY_DAMAGE_RATE[battle.members.length] ?? 1) * (powered || 1);
   const hit = (target) => {
     let dmg = randInt(move.damage, rng) * mult;
     battle.incoming += Math.round(dmg);
@@ -510,7 +516,12 @@ function resolveTurn(battle, rng = Math.random) {
       if (t.hp > 0 && move.effect === 'stun' && !t.guarding) { t.stunTurn = battle.turn + 1; t.stunStatus = move.status; last.effects[t.userId] = 'stun'; tag = ` ${move.status.emoji}${move.status.name}`; }
       return `${t.name} -${dmg}${t.hp <= 0 ? ' 💀' : tag}`;
     });
-    log.push(`${battle.monster.emoji} **${monsterName}**의 **${move.name}**! → ${parts.join(' · ')}`);
+    log.push(`${battle.monster.emoji} **${monsterName}**의 **${move.name}**!${powered ? ` ⚔️피해 +${Math.round((powered - 1) * 100)}%` : ''} → ${parts.join(' · ')}`);
+    if (powered) { last.powered = powered; battle.powerRate = 0; }
+  }
+  if (move.buffRate > 1) {
+    battle.powerRate = move.buffRate;
+    log.push(`⚔️ **${monsterName}**의 공격력이 올랐다! 다음 공격 피해 **+${Math.round((move.buffRate - 1) * 100)}%**`);
   }
   if (move.effect === 'shield') {
     battle.shieldTurn = battle.turn + 1;
@@ -557,6 +568,7 @@ module.exports = {
   isStunned,
   slowTurnsLeft,
   isShielded,
+  isPowered,
   poisonTurnsLeft,
   poisonStacks,
   poisonDamage,

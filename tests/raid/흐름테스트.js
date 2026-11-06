@@ -543,6 +543,17 @@ let ok4;
     turnWith(b, 'attack', { y: 'skill' });
     assert(b.members.every(m => E.poisonStacks(b, m) === 0) && b.log.join().includes('독 제거') && !b.lastTurn.poison.x, '치유사 스킬로 독 제거(그 턴 독 피해도 없음)');
 
+    // 독기 흡수 → 공격력 증가: 다음 피해 기술 1회만 피해 × buffRate, 쓰면 사라짐(피해 없는 기술엔 남아 있음)
+    b = E.createBattle(mush, party, rng);
+    b.hp = Math.round(b.maxHp * 0.5);
+    turnWith(b, 'absorb', { x: 'guard', y: 'guard' });
+    assert(E.isPowered(b) && b.powerRate === mush.moves.absorb.buffRate && b.log.join().includes('공격력이 올랐다'), '독기 흡수 → 공격력 증가(다음 공격 피해 배율)');
+    turnWith(b, 'absorb', { x: 'guard', y: 'guard' });
+    assert(E.isPowered(b), '공격력 증가: 피해 없는 기술에는 쓰이지 않고 남음');
+    turnWith(b, 'attack', { x: 'attack', y: 'attack' });
+    const pw = b.lastTurn.powered, hitAmt = Object.values(b.lastTurn.hits)[0];
+    assert(pw === mush.moves.absorb.buffRate && !E.isPowered(b) && hitAmt === Math.round(9 * 1.07 * pw), '공격력 증가: 다음 피해 기술 1회 피해 × buffRate 후 사라짐');
+
     // 회복약: 본인 독 해독(그 턴 독 피해 없음), HP가 가득해도 독이면 마실 수 있음
     b = E.createBattle(mush, party, rng);
     turnWith(b, 'spore', { x: 'guard', y: 'guard' });

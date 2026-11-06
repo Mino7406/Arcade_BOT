@@ -10,7 +10,7 @@
 
 const path = require('path');
 const { Painter, loadFont } = require('./그림판');
-const { ROLES, ROLE_ORDER, PLAYER_MAX_HP, ACTIONS, createBattle, choose, resolveTurn, isStunned, slowTurnsLeft, isShielded, poisonStacks, isConfused, moveFx } = require('./레이드전투');
+const { ROLES, ROLE_ORDER, PLAYER_MAX_HP, ACTIONS, createBattle, choose, resolveTurn, isStunned, slowTurnsLeft, isShielded, isPowered, poisonStacks, isConfused, moveFx } = require('./레이드전투');
 
 const W = 900; // 설계 크기(좌표는 전부 이 기준)
 const H = 640;
@@ -70,6 +70,8 @@ function bar(x, y, w, h, ratio, color) {
   if (fw > 0) p.roundRect(x, y, Math.max(fw, h), h, h / 2, color);
 }
 const hpColor = (ratio) => (ratio > 0.5 ? '#3ecf6e' : ratio > 0.25 ? '#f0b232' : '#f04b3a');
+// 독에 걸린 카드: 밝은 보라(검은 숫자가 잘 읽히는 밝기). 위험(25% 이하)은 평소처럼 빨강으로 둬 놓치지 않게.
+const poisonHpColor = (ratio) => (ratio > 0.25 ? '#b98af2' : '#f04b3a');
 function pill(x, y, w, h, label, size, fill = C.teal, color = C.tealText) {
   p.roundRect(x, y, w, h, 7, fill);
   text(label, x + w / 2, y + h / 2, size, color, { maxWidth: w - 12 });
@@ -252,6 +254,14 @@ const STATUS_ICONS = {
     ],
     palette: { d: '#1c2a38', b: '#6f8fae', g: '#7ccf5a' },
   },
+  // 공격력 증가(몬스터): 붉은 문장에 흰 칼 + 초록 위 화살표(다음 공격 피해 증가) — 방패 배지와 같은 틀
+  power: {
+    rows: [
+      '.dddddddddd.', 'drrrwrrrrgrd', 'drrrwrrrgggd', 'drrrwrrgggggd'.slice(0, 12), 'drrrwrrrrgrd', 'drrrwrrrrgrd',
+      'dryyyyyrrgrd', 'drrrbrrrrrrd', '.drrbrrrrrd.', '..drrrrrrd..', '...drrrrd...', '....dddd....',
+    ],
+    palette: { d: '#2a1410', r: '#b8443a', w: '#f4f1e8', y: '#e8b34a', b: '#6b3a1c', g: '#7ccf5a' },
+  },
 };
 // 카드 왼쪽 위 상태 아이콘: 기절(별). 점액는 아이콘 없이 점액 얼룩으로 표시한다.
 // 카드 왼쪽 상태 배지: 기절(별) · 독(거품). 환각은 배지 대신 아이콘 위 소용돌이(카드 그리는 곳에서, 점액처럼).
@@ -394,8 +404,10 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
     return;
   }
   if (move === 'attack' && layer === 'back') {
-    // 위에서 아래로 내리꽂는 속도선
-    for (const [dx, len] of [[-70, 30], [-40, 44], [40, 44], [70, 30]]) p.line(cx + dx, cy - 78, cx + dx, cy - 78 + len, 4, '#f4e6cf');
+    // 위에서 아래로 내리꽂는 속도선(도트: 아래로 갈수록 크고 밝게)
+    for (const [dx, n] of [[-72, 3], [-42, 4], [42, 4], [72, 3]]) {
+      for (let i = 0; i < n; i++) dot(cx + dx, cy - 82 + i * 11, 4 + i * 1.5, i === n - 1 ? '#fff6e6' : '#c9b89a');
+    }
   } else if (move === 'sweep' && layer === 'front') {
     // 몸에서 바깥으로 튀어 나가는 점액 — 몬스터와 같은 칸(8px) 격자에 맞춘 도트:
     // 몸 쪽에 작은 점 두 개(궤적) → 끝에 십자 모양 큰 방울(왼쪽 위 칸은 밝은 반사광)
@@ -446,7 +458,13 @@ function hitFx(move, cx, cy, color, spore = color, accent = spore) {
     // 아이콘 네 귀퉁이로 터진 포자 구름(가운데 아이콘은 보이게)
     [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([i, j], k) => puff(cx + i * 30, cy + j * 26, 5, k % 2 ? accent : spore, '#f1cdfb'));
   } else if (move === 'attack') {
-    for (const d of [-14, 0, 14]) p.line(cx - 26 + d, cy - 26, cx + 14 + d, cy + 26, 5, '#ff4a3a');
+    // 일반 공격: 도트로 그린 할퀸 자국 세 줄(어두운 테두리 → 빨강 → 가운데 흰 심), 다른 연출처럼 네모 도트
+    for (const d of [-14, 0, 14]) {
+      const pts = Array.from({ length: 13 }, (_, t) => [cx - 22 + d + t * 3.4, cy - 26 + t * 4.4]);
+      for (const [x, y] of pts) dot(x, y, 9, '#3a0a08');
+      for (const [x, y] of pts) dot(x, y, 5, '#ff4a3a');
+      for (const [x, y] of pts.slice(4, 9)) dot(x, y, 2, '#fff1e8');
+    }
   } else if (move === 'sweep') {
     // 점액 얼룩: 아이콘 색과 섞여 안 보이지 않게 어두운 테두리를 먼저 깔고, 점액색 방울 + 흰 반사광
     const blobs = [[-18, -12, 11], [20, 8, 9], [2, 22, 7]];
@@ -636,6 +654,15 @@ function renderBattle(r) {
       text('방어력 증가', W - 108, 149, 19, '#cfe8ff');
       text(`피해 -${Math.round((1 - (b.shieldRate ?? 0.5)) * 100)}%`, W - 108, 172, 15, '#8fc4ff');
     }
+    // 공격력 증가 배지(같은 자리, 방어력 증가와 함께면 그 아래): 다음 공격 피해 +N%
+    if (isPowered(b)) {
+      const by = shielded ? 192 : 132;
+      p.roundRect(W - 216, by, 180, 54, 12, '#3a1712');
+      p.strokeRoundRect(W - 216, by, 180, 54, 12, 2, '#ff9a7a');
+      drawPixels(STATUS_ICONS.power, W - 186, by + 27, 3.4);
+      text('공격력 증가', W - 108, by + 17, 19, '#ffd8cc');
+      text(`피해 +${Math.round((b.powerRate - 1) * 100)}%`, W - 108, by + 40, 15, '#ff9a7a');
+    }
     // 몬스터 기술 말풍선은 그 기술을 쓴 턴의 결과 화면에서만(다음 턴 선택 화면에는 남기지 않는다)
     if (r.showingResult && last?.monsterMove) {
       const label = `${last.monsterMove}!`;
@@ -703,7 +730,7 @@ function renderBattle(r) {
       text(mem.name, x + w / 2, y + 138, NAME_SIZE, down ? C.dim : C.text, { maxWidth: w - 20 });
       // HP는 바 안에 숫자로(한 줄 절약)
       const ratio = mem.hp / PLAYER_MAX_HP;
-      bar(x + 16, y + 160, w - 32, 22, ratio, hpColor(ratio));
+      bar(x + 16, y + 160, w - 32, 22, ratio, poisonStacks(b, mem) ? poisonHpColor(ratio) : hpColor(ratio));
       // 숫자는 바 가운데 — 그 자리까지 색이 차 있으면 어두운 글씨, 비어 있으면 흰 글씨로 대비를 맞춘다
       text(String(mem.hp), x + w / 2, y + 171, 16, ratio > 0.55 ? '#14110d' : '#ffffff');
 
