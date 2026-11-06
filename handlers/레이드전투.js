@@ -354,8 +354,14 @@ function isWarnIntent(battle) {
 function telegraphText(battle) {
   if (isIntentHidden(battle)) return '💨 연막 때문에 다음 행동이 보이지 않는다...';
   const move = battle.monster.moves[battle.intent];
-  const names = (battle.marks ?? []).map(id => getMember(battle, id)?.name).filter(Boolean).join(', ');
-  return move.telegraph.replace('{target}', names || '누군가');
+  const names = (battle.marks ?? []).map(id => getMember(battle, id)?.name).filter(Boolean).join(', ') || '누군가';
+  // '{target}을(를)'은 마지막 이름의 받침에 맞춰 을/를로(한글이 아니면 그대로 '을(를)')
+  return move.telegraph.replace('{target}을(를)', names + objectJosa(names)).replace('{target}', names);
+}
+function objectJosa(name) {
+  const code = String(name).trim().slice(-1).charCodeAt(0) - 0xAC00;
+  if (code < 0 || code > 11171) return '을(를)';
+  return code % 28 ? '을' : '를';
 }
 // 표식 기술(mark)을 예고하면 대상을 지금 정한다(분노 중 rageTargets명). 표식 기술이 아니면 비운다.
 function assignMarks(battle, rng = Math.random) {

@@ -31,7 +31,7 @@ const { displayNameFromInteraction } = require('./이름');
 const {
   PLAYER_MAX_HP, POTIONS_PER_BATTLE, POTION_HEAL, GUARD_DAMAGE_RATE, ROLES, ROLE_ORDER, ACTIONS, MONSTERS,
   createBattle, checkChoice, choose, allChosen, resolveTurn,
-  isStunned, slowTurnsLeft, isShielded, isPowered, poisonTurnsLeft, poisonStacks, poisonDamage, isConfused, chillStacks, minusPct, contribution,
+  isStunned, slowTurnsLeft, isShielded, isPowered, poisonTurnsLeft, poisonStacks, poisonDamage, isConfused, chillStacks, isFeared, isPhased, telegraphText, isWarnIntent, minusPct, contribution,
 } = require('./레이드전투');
 const { renderRecruit, renderBattle, renderEnd, warmUp } = require('./레이드그림');
 
@@ -285,6 +285,11 @@ function effectLines(b) {
     const pcts = [...new Set(mems.map(mem => Math.round(mem.confuseRate * 100)))];
     lines.push(`${label}: ${mems.map(mem => mem.name).join(', ')} - **행동 ${pcts.join('/')}% 확률로 빗나감(방어는 성공)**`);
   }
+  const feared = b.members.filter(mem => mem.hp > 0 && isFeared(b, mem));
+  for (const [label, mems] of byStatus(feared, 'fearStatus')) lines.push(`${label}: ${mems.map(mem => mem.name).join(', ')} - **이번 턴 스킬 사용 불가**`);
+  if (isPhased(b)) lines.push(`👻 투명화: ${monsterName} - **이번 턴 일반 공격은 빗나감(스킬은 맞음)**`);
+  // 점화(꼬마 폭탄): 불끄기 진행 — 이번 턴 포함 남은 턴
+  if (b.fuse) lines.push(`💣 도화선: **${b.fuse.dealt.toLocaleString()} / ${b.fuse.need.toLocaleString()}** 피해 · 남은 ${Math.max(1, b.fuse.until - b.turn + 1)}턴 - **채우면 불이 꺼져 기절, 못 채우면 대폭발**`);
   // 냉기: 몇 중첩인지가 중요해서 1중첩도 ×1로 붙인다
   const chilled = chill ? b.members.filter(mem => chillStacks(b, mem) > 0) : [];
   if (chilled.length) {
@@ -304,7 +309,7 @@ async function battleView(r, { redraw = true } = {}) {
     sections.push({
       text: `## ${b.rage ? `🔥 ${m.rageName}` : `${m.emoji} ${m.name}`}\n` +
         `\`${bar(b.hp, b.maxHp, 16)}\` **${b.hp.toLocaleString()}** / ${b.maxHp.toLocaleString()}\n` +
-        `⚠️ 다음 행동: **${intent.telegraph}**${b.intent === 'smash' ? ' — **방어 추천!**' : ''}\n\n` +
+        `⚠️ 다음 행동: **${telegraphText(b)}**${isWarnIntent(b) ? ' — **방어 추천!**' : ''}\n\n` +
         b.members.map(mem => `${ROLES[mem.role].emoji} **${mem.name}** \`${bar(mem.hp, PLAYER_MAX_HP, 8)}\` ${mem.hp}/${PLAYER_MAX_HP}` +
           ` · ✨${mem.cooldown > 0 ? `${mem.cooldown}턴` : '준비'} · 🍖×${mem.potions}`).join('\n'),
     });

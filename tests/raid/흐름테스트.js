@@ -768,6 +768,10 @@ let ok4;
 
       b = E.createBattle(ghost, party, rng);
       setIntent('mark'); b.marks = ['x'];
+      M('x').name = '철수'; const t1 = E.telegraphText(b);
+      M('x').name = '민혁'; const t2 = E.telegraphText(b);
+      M('x').name = 'X';
+      assert(t1.includes('철수를') && t2.includes('민혁을') && E.telegraphText(b).includes('X을(를)'), '표식 예고: 이름 받침에 맞춰 을/를');
       turnWith(null, { t: 'skill', x: 'attack', y: 'attack' });
       assert(Object.keys(b.lastTurn.hits).join() === 't' && M('x').hp === 100, '표식: 수호자가 도발하면 대신 맞음');
 

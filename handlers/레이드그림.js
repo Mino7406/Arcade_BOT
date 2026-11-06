@@ -10,7 +10,7 @@
 
 const path = require('path');
 const { Painter, loadFont } = require('./그림판');
-const { ROLES, ROLE_ORDER, PLAYER_MAX_HP, ACTIONS, createBattle, choose, resolveTurn, isStunned, slowTurnsLeft, isShielded, isPowered, poisonStacks, isConfused, chillStacks, moveFx } = require('./레이드전투');
+const { ROLES, ROLE_ORDER, PLAYER_MAX_HP, ACTIONS, createBattle, choose, resolveTurn, isStunned, slowTurnsLeft, isShielded, isPowered, poisonStacks, isConfused, chillStacks, isFeared, isPhased, isIntentHidden, isWarnIntent, telegraphText, moveFx } = require('./레이드전투');
 
 const W = 900; // 설계 크기(좌표는 전부 이 기준)
 const H = 640;
@@ -71,7 +71,8 @@ function bar(x, y, w, h, ratio, color) {
 }
 const hpColor = (ratio) => (ratio > 0.5 ? '#3ecf6e' : ratio > 0.25 ? '#f0b232' : '#f04b3a');
 // 독에 걸린 카드: 밝은 보라(검은 숫자가 잘 읽히는 밝기). 위험(25% 이하)은 평소처럼 빨강으로 둬 놓치지 않게.
-const poisonHpColor = (ratio) => (ratio > 0.25 ? '#b98af2' : '#f04b3a');
+// 독류 HP 바 색: 상태이상의 status.color(화상은 주황), 없으면 보라. 25% 이하는 빨강.
+const poisonHpColor = (ratio, color) => (ratio > 0.25 ? color || '#b98af2' : '#f04b3a');
 function pill(x, y, w, h, label, size, fill = C.teal, color = C.tealText) {
   p.roundRect(x, y, w, h, 7, fill);
   text(label, x + w / 2, y + h / 2, size, color, { maxWidth: w - 12 });
@@ -287,7 +288,8 @@ function statusBadges(b, mem, x, y) {
   let by = y;
   const stacks = poisonStacks(b, mem);
   // 독은 카드 왼쪽 위, 냉기는 그 아래
-  if (stacks) { poisonBadge(x, by, stacks); by += stacks > 1 ? 44 : 34; }
+  if (stacks) { poisonBadge(x, by, stacks, mem.poisonStatus?.color); by += stacks > 1 ? 44 : 34; }
+  if (isFeared(b, mem)) { fearBadge(x, by); by += 34; }
   // 점액(slow)도 독처럼 배지로(사용자 요청 — 예전엔 아이콘 위 점액 얼룩): 몬스터 겉면 색 방울 + 남은 턴
   const slowLeft = slowTurnsLeft(b, mem);
   if (slowLeft > 0) { slowBadge(x, by, slowLeft, b.monster.sprite?.palette?.o || '#7fdc8c'); by += 44; }
@@ -340,12 +342,28 @@ function confuseSwirl(cx, cy) {
   }
 }
 // 독: 보라 거품 세 개 + 아래에 중첩 수(2 이상일 때)
-function poisonBadge(cx, cy, stacks) {
-  p.circle(cx - 5, cy + 3, 9, '#9b3fc0');
-  p.circle(cx + 7, cy - 4, 7, '#b45fe0');
-  p.circle(cx + 4, cy + 9, 5, '#c98af0');
-  p.circle(cx - 8, cy, 3, '#f1cdfb');
-  if (stacks > 1) text(`×${stacks}`, cx, cy + 22, 15, '#e2b8ff');
+// 독류 배지: status.color가 있으면(화상 등) 그 색 불꽃 방울, 없으면 보라 거품
+function poisonBadge(cx, cy, stacks, color) {
+  const [c1, c2, c3, c4, label] = color ? ['#a8401a', color, '#ffc27a', '#fff1d6', '#ffd2a8'] : ['#9b3fc0', '#b45fe0', '#c98af0', '#f1cdfb', '#e2b8ff'];
+  p.circle(cx - 5, cy + 3, 9, c1);
+  p.circle(cx + 7, cy - 4, 7, c2);
+  p.circle(cx + 4, cy + 9, 5, c3);
+  p.circle(cx - 8, cy, 3, c4);
+  if (stacks > 1) text(`×${stacks}`, cx, cy + 22, 15, label);
+}
+// 공포: 보라 동그라미에 흰 느낌표(스킬 봉인)
+function fearBadge(cx, cy) {
+  p.circle(cx, cy, 13, '#2a1040');
+  p.circle(cx, cy, 11, '#8a4fd0');
+  p.rect(cx - 2, cy - 7, 4, 9, '#ffffff');
+  p.rect(cx - 2, cy + 4, 4, 3, '#ffffff');
+}
+// 표식(영혼 사냥 대상): 카드 오른쪽 위 빛나는 눈
+function markEye(cx, cy) {
+  p.poly([cx - 18, cy, cx - 8, cy - 9, cx + 8, cy - 9, cx + 18, cy, cx + 8, cy + 9, cx - 8, cy + 9], '#2a1f4a');
+  p.poly([cx - 14, cy, cx - 6, cy - 6, cx + 6, cy - 6, cx + 14, cy, cx + 6, cy + 6, cx - 6, cy + 6], '#7ef0e0');
+  p.circle(cx, cy, 5, '#1a1033');
+  p.circle(cx - 2, cy - 2, 1.6, '#ffffff');
 }
 // 기절: 납작한 노란 별 두 개(작은 별 왼쪽 위 · 큰 별 오른쪽 아래). 픽셀 대신 다각형이라 가장자리가 깔끔하다.
 function star(cx, cy, R, color) {
@@ -493,6 +511,75 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
     }
     return;
   }
+  // ── 유령 ──
+  if (move === 'curse' && layer === 'front') {
+    // 영혼 사냥: 눈에서 아래(파티 쪽)로 뻗는 청록 눈빛 두 줄기
+    for (const s of [-1, 1]) for (let i = 0; i < 7; i++) dot(cx + s * (18 + i * 16), cy + 30 + i * 12, 5 + i, i % 2 ? '#7ef0e0' : '#b9a6ff');
+    return;
+  }
+  if (move === 'wail' && layer === 'back') {
+    // 울부짖음: 양옆으로 퍼지는 음파(보라 도트 호 세 겹)
+    hypnoWaves(cx, cy, 1, '#b9a6ff');
+    return;
+  }
+  if (move === 'phase' && layer === 'back') {
+    // 투명화: 몸 둘레 흩어지는 반짝임
+    for (const [dx, dy, sz] of [[-120, -50, 5], [124, -40, 5], [-150, 20, 4], [150, 30, 4], [-70, 70, 4], [80, 66, 5], [0, -80, 4]]) sparkle(cx + dx, cy + dy, sz, '#e6dcff');
+    return;
+  }
+  if (move === 'storm' && layer === 'back') {
+    // 원혼 폭풍: 몸을 감싸고 도는 혼불 소용돌이 두 겹
+    for (let k = 0; k < 28; k++) {
+      const a = (k / 28) * Math.PI * 2;
+      dot(cx + Math.cos(a) * 140, cy + 4 + Math.sin(a) * 140 * 0.42, 8, k % 2 ? '#b9a6ff' : color);
+      dot(cx + Math.cos(a + 0.2) * 190, cy + 4 + Math.sin(a + 0.2) * 190 * 0.36, 5, '#7ef0e0');
+    }
+    return;
+  }
+  // ── 꼬마 폭탄 ──
+  if (move === 'ember' && layer === 'front') {
+    // 불똥 튀기기: 도화선 쪽에서 사방으로 튀는 주황·노랑 불똥
+    for (const [ux, uy, dist] of SPRAY) {
+      const at = (d) => [cx + ux * d, cy - 10 + uy * d * 0.62];
+      dot(...at(dist * 0.6), 6, '#ffe066');
+      dot(...at(dist * 0.85), 8, '#ff9a3c');
+      dot(...at(dist), 5, '#fff1d6');
+    }
+    return;
+  }
+  if (move === 'smoke' && layer === 'front') {
+    // 연막탄: 몸 아래·양옆으로 퍼지는 회색 연기 뭉치
+    for (const [dx, dy, r] of [[-150, 40, 26], [-110, 62, 20], [150, 40, 26], [112, 62, 20], [-60, 70, 18], [60, 72, 18], [0, 76, 16]]) {
+      p.circle(cx + dx, cy + dy, r + 3, '#3a3a44');
+      p.circle(cx + dx, cy + dy, r, '#9a9aa6');
+      p.circle(cx + dx - r * 0.3, cy + dy - r * 0.3, r * 0.35, '#c8c8d2');
+    }
+    return;
+  }
+  if (move === 'ignite' && layer === 'front') {
+    // 점화: 도화선 끝(머리 오른쪽 위)에서 터지는 불꽃 별
+    sparkle(cx + 40, cy - 70, 8, '#ffe066');
+    for (const [dx, dy] of [[-16, -12], [18, -16], [22, 10], [-14, 14], [0, -24]]) dot(cx + 40 + dx, cy - 70 + dy, 5, '#ff9a3c');
+    return;
+  }
+  if (move === 'boom' && layer === 'back') {
+    // 대폭발: 몸 둘레 큰 불꽃 고리(주황·노랑)
+    for (let k = 0; k < 32; k++) {
+      const a = (k / 32) * Math.PI * 2;
+      dot(cx + Math.cos(a) * 150, cy + 6 + Math.sin(a) * 150 * 0.45, 12, k % 2 ? '#ff9a3c' : '#ffe066');
+    }
+    return;
+  }
+  if (move === 'boom' && layer === 'front') {
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2 + Math.PI / 8;
+      const [px, py] = [cx + Math.cos(a) * 200, cy + 4 + Math.sin(a) * 200 * 0.4];
+      p.circle(px, py, 16, '#5a2a12');
+      p.circle(px, py, 12, '#9a9aa6');
+      dot(cx + Math.cos(a) * 160, cy + 4 + Math.sin(a) * 160 * 0.4, 8, '#ffe066');
+    }
+    return;
+  }
   if (move === 'burst' && layer === 'back') {
     // 포자 대폭발: 몸 둘레 충격 고리(도트, 보라·연두 번갈아)
     for (let k = 0; k < 30; k++) {
@@ -582,6 +669,19 @@ function hitFx(move, cx, cy, color, spore = color, accent = spore) {
     for (const [dx, dy, r] of blobs) p.circle(cx + dx, cy + dy, r + 3, '#0e2a14');
     for (const [dx, dy, r] of blobs) p.circle(cx + dx, cy + dy, r, color);
     for (const [dx, dy, r] of blobs) p.circle(cx + dx - r * 0.35, cy + dy - r * 0.35, Math.max(1.8, r * 0.28), '#f4fff0');
+  } else if (move === 'curse') {
+    // 영혼 사냥: 아이콘 위 청록·보라 혼불 고리
+    for (let k = 0; k < 12; k++) { const a = (k / 12) * Math.PI * 2; dot(cx + Math.cos(a) * 32, cy + Math.sin(a) * 30, 7, k % 2 ? '#7ef0e0' : '#8a4fd0'); }
+  } else if (move === 'wail') {
+    hypnoWaves(cx, cy, 0.27, '#b9a6ff', 2);
+  } else if (move === 'storm') {
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([i, j], k) => puff(cx + i * 30, cy + j * 26, 5, k % 2 ? '#b9a6ff' : '#7ef0e0', '#f4f0ff', '#2a1f4a'));
+  } else if (move === 'ember') {
+    // 불똥: 아이콘 둘레 작은 불꽃
+    for (const [dx, dy] of [[-26, -20], [24, -24], [28, 18], [-22, 24]]) { dot(cx + dx, cy + dy, 9, '#ff9a3c'); dot(cx + dx, cy + dy - 3, 5, '#ffe066'); }
+  } else if (move === 'boom') {
+    p.poly([cx, cy - 36, cx + 10, cy - 10, cx + 36, cy, cx + 10, cy + 10, cx, cy + 36, cx - 10, cy + 10, cx - 36, cy, cx - 10, cy - 10], '#ff9a3c');
+    p.poly([cx, cy - 22, cx + 6, cy - 6, cx + 22, cy, cx + 6, cy + 6, cx, cy + 22, cx - 6, cy + 6, cx - 22, cy, cx - 6, cy - 6], '#ffe066');
   } else if (move === 'frost') {
     // 서리: 아이콘 네 귀퉁이에 눈송이
     for (const [dx, dy] of [[-26, -22], [26, 20], [24, -26], [-22, 26]]) flake(cx + dx, cy + dy, 8);
@@ -735,7 +835,13 @@ function renderBattle(r) {
     const usedMove = r.showingResult ? last?.monsterMoveKey : null;
     // 연출 종류(기술의 fx — 예전 저장 기록엔 없을 수 있어 기술 데이터에서 다시 구함)
     const usedFx = usedMove ? (last.monsterFx || moveFx(usedMove, m.moves[usedMove])) : null;
-    const pose = usedMove || (b.intent === 'smash' ? m.moves.smash?.readyPose : null);
+    // 자세: 턴 결과면 방금 쓴 기술(불이 꺼진 턴은 어지러운 dizzy), 선택 화면이면 예고한 기술의 readyPose(연막이면 숨김),
+    // 점화 카운트다운 중이면 lit, 아니면 평상시
+    const poses = m.sprite?.poses ?? {};
+    const pose = usedMove
+      || (r.showingResult && last?.defused && poses.dizzy ? 'dizzy' : null)
+      || (!isIntentHidden(b) ? m.moves[b.intent]?.readyPose : null)
+      || (b.fuse && poses.lit ? 'lit' : null);
     const fxColor = (b.rage && m.sprite?.rageColors?.o) || m.sprite?.palette?.o || '#7fdc8c';
     const sporeColor = (b.rage && m.sprite?.rageColors?.x) || m.sprite?.palette?.x || fxColor; // 포자 연출 색
     const accentColor = (b.rage && m.sprite?.rageColors?.p) || m.sprite?.palette?.p || sporeColor; // 반점 색(독기·파편)
@@ -750,9 +856,10 @@ function renderBattle(r) {
       }
     }
     if (b.rage) rageFx(m, W / 2, monsterY, 112, pose, 'aura');
-    const shaking = !usedMove && b.intent === 'smash'; // 필살기 예고 중(선택 화면)
+    const shaking = !usedMove && isWarnIntent(b); // 필살기·대폭발 예고 중(선택 화면)
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'back', sporeColor, accentColor);
-    drawMonster(m, W / 2, monsterY, 112, { rage: b.rage, pose, outline: shielded ? '#cfe8ff' : null });
+    // 투명화(유령): 다음 턴 동안 몸을 흐리게(회색)
+    drawMonster(m, W / 2, monsterY, 112, { rage: b.rage, pose, outline: shielded ? '#cfe8ff' : null, gray: isPhased(b) });
     if (shaking) shakeFx(m, W / 2, monsterY, 112, pose);
     if (b.rage) rageFx(m, W / 2, monsterY, 112, pose, 'mark');
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'front', sporeColor, accentColor);
@@ -777,8 +884,27 @@ function renderBattle(r) {
       text(`피해 -${Math.round((1 - (b.shieldRate ?? 0.5)) * 100)}%`, W - 108, 172, 15, '#8fc4ff');
     }
     // 공격력 증가 배지(같은 자리, 방어력 증가와 함께면 그 아래): 다음 공격 피해 +N%
+    // 오른쪽 위 배지 칸: 방어력 증가 → 투명화 → 불끄기 → 공격력 증가 순서로 아래로 쌓는다
+    let slotY = shielded ? 192 : 132;
+    if (isPhased(b)) {
+      p.roundRect(W - 216, slotY, 180, 54, 12, '#241c3a');
+      p.strokeRoundRect(W - 216, slotY, 180, 54, 12, 2, '#b9a6ff');
+      text('투명화', W - 126, slotY + 17, 19, '#e6dcff');
+      text('일반 공격 빗나감', W - 126, slotY + 40, 15, '#b9a6ff');
+      slotY += 60;
+    }
+    if (b.fuse) {
+      // 불끄기: 쌓인 피해 / 기준 막대 + 남은 턴(이번 턴 포함)
+      const left = Math.max(1, b.fuse.until - b.turn + 1);
+      p.roundRect(W - 226, slotY, 200, 66, 12, '#3a1712');
+      p.strokeRoundRect(W - 226, slotY, 200, 66, 12, 2, '#ff9a3c');
+      text(`불끄기 · 남은 ${left}턴`, W - 126, slotY + 17, 19, '#ffd8b0');
+      bar(W - 214, slotY + 32, 176, 24, Math.min(1, b.fuse.dealt / b.fuse.need), '#ff9a3c');
+      text(`${b.fuse.dealt.toLocaleString()} / ${b.fuse.need.toLocaleString()}`, W - 126, slotY + 44, 16, '#ffffff');
+      slotY += 72;
+    }
     if (isPowered(b)) {
-      const by = shielded ? 192 : 132;
+      const by = slotY;
       p.roundRect(W - 216, by, 180, 54, 12, '#3a1712');
       p.strokeRoundRect(W - 216, by, 180, 54, 12, 2, '#ff9a7a');
       drawPixels(STATUS_ICONS.power, W - 186, by + 27, 3.4);
@@ -786,8 +912,8 @@ function renderBattle(r) {
       text(`피해 +${Math.round((b.powerRate - 1) * 100)}%`, W - 108, by + 40, 15, '#ff9a7a');
     }
     // 몬스터 기술 말풍선은 그 기술을 쓴 턴의 결과 화면에서만(다음 턴 선택 화면에는 남기지 않는다)
-    if (r.showingResult && last?.monsterMove) {
-      const label = `${last.monsterMove}!`;
+    if (r.showingResult && (last?.monsterMove || last?.defused)) {
+      const label = last.defused ? '불이 꺼졌다!' : `${last.monsterMove}!`; // 불끄기 성공 턴은 기술 대신
       const bw = Math.min(p.textWidth(B(), label, 22), 200) + 36;
       const bx = W / 2 - 92 - bw, by = 132;
       p.roundRect(bx, by, bw, 44, 14, '#f4e6cf');
@@ -800,7 +926,8 @@ function renderBattle(r) {
     // 두 기술을 같이 쓴 것처럼 보였다(사용자 지적). 다음 행동은 이어지는 선택 화면에서 보인다.
     if (!r.showingResult) {
       const move = m.moves[b.intent];
-      const warn = b.intent === 'smash';
+      const warn = isWarnIntent(b);
+      const tele = telegraphText(b); // 표식 대상 이름·연막을 반영한 예고 문구
       const boxW = 540, boxH = 46, boxX = (W - boxW) / 2, boxY = 276;
       const midY = boxY + boxH / 2;
       p.roundRect(boxX, boxY, boxW, boxH, 11, warn ? '#4a1410' : '#201810');
@@ -809,13 +936,13 @@ function renderBattle(r) {
       text('다음 행동', boxX + 56, midY, 16, warn ? '#ffd0c4' : C.muted);
       const tx = boxX + 112 + (boxW - 120) / 2;
       if (warn) {
-        const tw = p.textWidth(B(), move.telegraph, 22);
+        const tw = p.textWidth(B(), tele, 22);
         const ix = tx - Math.min(tw, boxW - 170) / 2 - 20;
         p.poly([ix, midY - 10, ix + 11, midY + 9, ix - 11, midY + 9], '#ffb4a8');
         p.rect(ix - 1.5, midY - 4, 3, 7, '#4a1410');
         p.rect(ix - 1.5, midY + 4, 3, 3, '#4a1410');
       }
-      text(move.telegraph, tx, midY, 22, warn ? '#ffc4b8' : C.sub, { maxWidth: boxW - 170 });
+      text(tele, tx, midY, 22, warn ? '#ffc4b8' : C.sub, { maxWidth: boxW - 170 });
     }
 
     cards(b.members, (x, y, w, h, roleKey, mem) => {
@@ -837,6 +964,8 @@ function renderBattle(r) {
       }
 
       roleIcon(roleKey, x + w / 2, y + 86, down);
+      // 표식(영혼 사냥 예고 대상): 선택 화면에서 카드 오른쪽 위에 빛나는 눈
+      if (!down && !r.showingResult && b.marks?.includes(mem.userId)) markEye(x + w - 36, y + 66);
       if (!down && isIced(b, mem)) iceCover(x + w / 2, y + 86); // 빙결: 아이콘이 얼음에 갇힘
       // 점액: 왼쪽 배지와 함께 아이콘 위 점액 얼룩도 그대로(사용자 요청). 이번 턴 맞은 카드는 타격 표시만.
       if (!down && slowTurnsLeft(b, mem) > 0 && !(usedMove && last?.hits[mem.userId])) hitFx('sweep', x + w / 2, y + 86, fxColor);
@@ -860,7 +989,7 @@ function renderBattle(r) {
       text(mem.name, x + w / 2, y + 138, NAME_SIZE, down ? C.dim : C.text, { maxWidth: w - 20 });
       // HP는 바 안에 숫자로(한 줄 절약)
       const ratio = mem.hp / PLAYER_MAX_HP;
-      bar(x + 16, y + 160, w - 32, 22, ratio, poisonStacks(b, mem) ? poisonHpColor(ratio) : hpColor(ratio));
+      bar(x + 16, y + 160, w - 32, 22, ratio, poisonStacks(b, mem) ? poisonHpColor(ratio, mem.poisonStatus?.color) : hpColor(ratio));
       // 숫자는 바 가운데 — 그 자리까지 색이 차 있으면 어두운 글씨, 비어 있으면 흰 글씨로 대비를 맞춘다
       text(String(mem.hp), x + w / 2, y + 171, 16, ratio > 0.55 ? '#14110d' : '#ffffff');
 
@@ -1047,6 +1176,7 @@ function warmUpLabels(monsters) {
     add('bold', m.name, 38);
     add('bold', m.rageName, 38);
     for (const move of Object.values(m.moves)) { add('bold', move.telegraph, 22); add('bold', `${move.name}!`, 22); }
+    add('bold', '💨 연막 때문에 다음 행동이 보이지 않는다...', 22);
   }
   // 마지막으로 장면마다 한 장씩 실제로 그려 본다. 배경·글자 모양만 데워 두니 서버에서 첫 모집 그림이 여전히
   // 그리기 412ms + 압축 298ms(이벤트 루프 지연 826ms)였다 — 글자·픽셀 붙이기와 PNG 만들기 반복문이 처음 돌 때
