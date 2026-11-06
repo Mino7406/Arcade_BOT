@@ -200,7 +200,7 @@ function drawMonster(monster, cx, cy, maxH, { rage = false, gray = false, pose =
 }
 
 // 분노 연출(모든 몬스터 공통 — 얼굴은 바꾸지 않고 주변으로 위험한 느낌을 낸다):
-// 몬스터 상자를 어둡게 붉히고, 몸 둘레에 붉은 기운(실루엣을 사방으로 밀어 찍음), 바닥 불빛, 피어오르는 불씨, 머리 위 분노 마크.
+// 몸 둘레에 붉은 기운(실루엣을 사방으로 밀어 찍음), 바닥 불빛, 피어오르는 불씨, 머리 위 분노 마크.
 function monsterSilhouette(monster, cx, cy, maxH, pose, color, d) {
   const sp = monster.sprite;
   if (!sp) return;
@@ -214,8 +214,6 @@ function monsterSilhouette(monster, cx, cy, maxH, pose, color, d) {
 }
 function rageFx(monster, cx, cy, maxH, pose, layer) {
   if (layer === 'box') {
-    p.roundRect(21, 121, W - 42, 222, 14, '#6b0f0a', 0.45);
-    p.strokeRoundRect(20, 120, W - 40, 224, 14, 2.5, '#d6332a');
     // 바닥 불빛
     p.roundRect(cx - 130, cy + 54, 260, 16, 8, '#ff3b2f', 0.28);
     p.roundRect(cx - 90, cy + 57, 180, 10, 5, '#ff6a3d', 0.4);
@@ -513,7 +511,7 @@ function renderBattle(r) {
     const m = b.monster;
     const last = b.lastTurn;
     background('battle', 120, 224);
-    if (b.rage) rageFx(m, W / 2, 196, 112, null, 'box'); // 분노: 몬스터 상자를 붉히고 바닥 불빛·불씨
+    if (b.rage) rageFx(m, W / 2, 196, 112, null, 'box'); // 분노: 바닥 불빛·불씨
 
     // 상단: TURN 배지 · 몬스터 이름(분노) · HP 바
     p.roundRect(30, 20, 118, 42, 10, '#2a2119');
