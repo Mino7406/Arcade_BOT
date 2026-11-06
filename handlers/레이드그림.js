@@ -258,17 +258,20 @@ const STATUS_ICONS = {
 function statusBadges(b, mem, x, y) {
   if (isStunned(b, mem)) stunStars(x, y);
   const stacks = poisonStacks(b, mem);
-  if (stacks) poisonBadge(x, y + 34, stacks);
+  // 독은 기절 별과 같은 자리(카드 왼쪽 위). 기절과 함께 걸린 경우만 그 아래로 내린다.
+  if (stacks) poisonBadge(x, isStunned(b, mem) ? y + 34 : y, stacks);
 }
-// 환각(최면) 상태: 카드 아이콘 위에 겹쳐 그리는 청록 소용돌이(점액 얼룩처럼 아이콘에 묻은 느낌)
+// 환각(최면) 상태: 카드 아이콘 위에 겹쳐 그리는 청록 소용돌이(점액 얼룩처럼 아이콘에 묻은 느낌).
+// 아이콘 색과 섞여 안 보이지 않게 어두운 테두리를 먼저 굵게 깔고 그 위에 밝은 청록을 그린다.
 function confuseSwirl(cx, cy) {
-  const turns = 2.2, steps = 44, R = 26;
-  let px = cx + R, py = cy;
-  for (let i = 1; i <= steps; i++) {
+  const turns = 2.2, steps = 40, R = 21;
+  const pts = [];
+  for (let i = 0; i <= steps; i++) {
     const t = i / steps, a = t * turns * Math.PI * 2, rr = R * (1 - t * 0.85);
-    const nx = cx + Math.cos(a) * rr, ny = cy + Math.sin(a) * rr;
-    p.line(px, py, nx, ny, 4, '#7ef0e0');
-    px = nx; py = ny;
+    pts.push([cx + Math.cos(a) * rr, cy + Math.sin(a) * rr]);
+  }
+  for (const [width, color] of [[9, '#0b2b2e'], [5, '#8ffff0']]) {
+    for (let i = 1; i < pts.length; i++) p.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], width, color);
   }
 }
 // 독: 보라 거품 세 개 + 아래에 중첩 수(2 이상일 때)
@@ -685,7 +688,7 @@ function renderBattle(r) {
       // 상태 효과 아이콘(카드 왼쪽, 리본 아래): 점액(남은 턴) · 기절
       if (!down) statusBadges(b, mem, x + 32, y + 66);
       // 환각(최면) 상태는 점액처럼 카드 아이콘 위에 소용돌이로 보여 준다. 최면술에 막 맞은 결과 화면은 타격 표시(작은 최면 물결)만.
-      if (!down && isConfused(b, mem) && !(usedFx === 'hypno' && hit)) confuseSwirl(x + w / 2, y + 86);
+      if (!down && isConfused(b, mem) && !(usedFx === 'hypno' && hit)) confuseSwirl(x + w / 2 + 14, y + 98); // 아이콘 오른쪽 아래에 걸쳐 아이콘도 보이게
       // 점액 상태는 아이콘 대신 카드 아이콘에 묻은 점액으로 보여준다. 이번 턴 결과 화면에서 맞은 카드는
       // 타격 표시(할퀸 자국·충격 별·흩뿌리기 얼룩)만 그려 겹치지 않게 하고, 다음 선택 화면부터 다시 점액을 보인다.
       if (!down && slowTurnsLeft(b, mem) > 0 && !(usedMove && hit)) hitFx('sweep', x + w / 2, y + 86, fxColor);
