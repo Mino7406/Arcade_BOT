@@ -288,8 +288,19 @@ function statusBadges(b, mem, x, y) {
   const stacks = poisonStacks(b, mem);
   // 독은 카드 왼쪽 위, 냉기는 그 아래
   if (stacks) { poisonBadge(x, by, stacks); by += stacks > 1 ? 44 : 34; }
+  // 점액(slow)도 독처럼 배지로(사용자 요청 — 예전엔 아이콘 위 점액 얼룩): 몬스터 겉면 색 방울 + 남은 턴
+  const slowLeft = slowTurnsLeft(b, mem);
+  if (slowLeft > 0) { slowBadge(x, by, slowLeft, b.monster.sprite?.palette?.o || '#7fdc8c'); by += 44; }
   const chill = chillStacks(b, mem);
   if (chill) chillBadge(x, by, chill);
+}
+// 점액: 독 거품처럼 방울 세 개(어두운 테두리 → 점액색 → 흰 반사광) + 아래에 남은 턴
+function slowBadge(cx, cy, turns, color) {
+  const blobs = [[-5, 3, 9], [7, -4, 7], [4, 9, 5]];
+  for (const [dx, dy, r] of blobs) p.circle(cx + dx, cy + dy, r + 2.5, '#0e2a14');
+  for (const [dx, dy, r] of blobs) p.circle(cx + dx, cy + dy, r, color);
+  p.circle(cx - 8, cy, 2.5, '#f4fff0');
+  text(`${turns}턴`, cx, cy + 24, 15, color);
 }
 function isIced(b, mem) { return isStunned(b, mem) && mem.stunStatus?.fx === 'ice'; }
 // 눈송이: 세 갈래 선(어두운 테두리 → 하늘색) + 가운데 흰 점
@@ -818,7 +829,6 @@ function renderBattle(r) {
       if (!down && isStunned(b, mem) && !isIced(b, mem)) stunStars(x + w / 2 + 22, y + 104);
       // 점액 상태는 아이콘 대신 카드 아이콘에 묻은 점액으로 보여준다. 이번 턴 결과 화면에서 맞은 카드는
       // 타격 표시(할퀸 자국·충격 별·흩뿌리기 얼룩)만 그려 겹치지 않게 하고, 다음 선택 화면부터 다시 점액을 보인다.
-      if (!down && slowTurnsLeft(b, mem) > 0 && !(usedMove && hit)) hitFx('sweep', x + w / 2, y + 86, fxColor);
 
       text(mem.name, x + w / 2, y + 138, NAME_SIZE, down ? C.dim : C.text, { maxWidth: w - 20 });
       // HP는 바 안에 숫자로(한 줄 절약)
