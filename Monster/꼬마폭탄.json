@@ -1,0 +1,288 @@
+{
+  "_메모": [
+    "다섯 번째 레이드 몬스터. 칸 설명은 슬라임.json의 _메모와 같고, 여기에는 꼬마 폭탄만의 것을 적는다.",
+    "palette: a 외곽선 · h 하이라이트 · o 밝은 면 · b 몸 · d 그늘 · q 뚜껑 · f 도화선 · y·z 불꽃 · e 발 · w 흰자 · k 눈 · c 볼 · m 입.",
+    "poses: lit 도화선에 불 붙은 동안(카운트다운) · flash 대폭발 예고(몸이 하얗게 번쩍) · attack 성난 얼굴 · ember 불똥 · smoke 연막 · smash 점화 · boom 대폭발 · dizzy 불이 꺼져 어지러움.",
+    "smash.fuse(점화): 피해 없이 카운트다운 시작 — turns턴(분노 중 rageTurns) 안에 파티가 최대 HP × need 피해를 넣으면 불발(그 턴 폭탄 행동 없음). 못 넣으면 마지막 턴에 boom 기술(대폭발)을 쓴다. 카운트다운 중에는 점화를 다시 예고하지 않는다.",
+    "boom: intentWeights에 넣지 않는다(점화 뒤에만). guardRate는 방어한 사람이 받는 피해 배율(평소 방어는 0.3). warn: true면 경고(빨간 예고 상자).",
+    "화상은 독 규칙(poison)을 그대로 쓰고 status.color로 배지·HP 바 색만 바꾼다. smoke(연막): 다음 행동 예고를 가린다(대폭발은 가리지 않음).",
+    "baseHp는 4인 기준 HP. 바꾸면 node tests/raid/밸런스시뮬.js bomb 로 승률·턴을 다시 확인한다."
+  ],
+  "id": "bomb",
+  "name": "꼬마 폭탄",
+  "emoji": "💣",
+  "rageName": "폭주한 꼬마 폭탄",
+  "lore": "머리 위 도화선을 달고 아장아장 걷는 빨간 폭탄. 불이 붙기 전에 XP 시스템에서 쫓아내야 한다!",
+  "baseHp": 7000,
+  "rage": {
+    "hpRatio": 0.5,
+    "damageRate": 1.5
+  },
+  "sprite": {
+    "rows": [
+      ".............fz.......",
+      "............f.........",
+      "........aqqqqa........",
+      ".......aaqqqqaa.......",
+      ".....aahbbbbbbdaa.....",
+      "....ahhbbbbbbbbdda....",
+      "...ahobbbbbbbbbbdda...",
+      "...abbbwkbbbbwkbdda...",
+      "...abbbkkbbbbkkbdda...",
+      "...abccbbbbbbbbccda...",
+      "...abbbbbmbbmbbbdda...",
+      "....abbbbbmmbbbdda....",
+      ".....abbbbbbbbdda.....",
+      ".......abbbbdda.......",
+      ".....aeeaaaaaaeea.....",
+      ".....aeea....aeea....."
+    ],
+    "poses": {
+      "lit": [
+        "............zfyz......",
+        "............f..y......",
+        "........aqqqqa........",
+        ".......aaqqqqaa.......",
+        ".....aahbbbbbbdaa.....",
+        "....ahhbbbbbbbbdda....",
+        "...ahobbbbbbbbbbdda...",
+        "...abbbwwbbbbwwbdda...",
+        "...abbbwkbbbbkwbdda...",
+        "...abccbbbbbbbbccda...",
+        "...abbbbbbmmbbbbdda...",
+        "....abbbbbmmbbbdda....",
+        ".....abbbbbbbbdda.....",
+        ".......abbbbdda.......",
+        ".....aeeaaaaaaeea.....",
+        ".....aeea....aeea....."
+      ],
+      "flash": [
+        "............zfyz......",
+        "............f..y......",
+        "........aqqqqa........",
+        ".......aaqqqqaa.......",
+        ".....aahyyyyyyzaa.....",
+        "....ahhyyyyyyyyzza....",
+        "...ahhyyyyyyyyyyzza...",
+        "...ayyywwyyyywwyzza...",
+        "...ayyywkyyyykwyzza...",
+        "...ayccyyyyyyyyccza...",
+        "...ayyyyyymmyyyyzza...",
+        "....ayyyyymmyyyzza....",
+        ".....ayyyyyyyyzza.....",
+        ".......ayyyyzza.......",
+        ".....aeeaaaaaaeea.....",
+        ".....aeea....aeea....."
+      ],
+      "attack": [
+        ".............fz.......",
+        "............f.........",
+        "........aqqqqa........",
+        ".......aaqqqqaa.......",
+        ".....aahbbbbbbdaa.....",
+        "....ahhbbbbbbbbdda....",
+        "...ahobbbbbbbbbbdda...",
+        "...abbbkbbbbbbkbdda...",
+        "...abbbbkbbbbkbbdda...",
+        "...abccbbbbbbbbccda...",
+        "...abbbbbmmmmbbbdda...",
+        "....abbbbbbbbbbdda....",
+        ".....abbbbbbbbdda.....",
+        ".......abbbbdda.......",
+        ".....aeeaaaaaaeea.....",
+        ".....aeea....aeea....."
+      ],
+      "ember": [
+        "............zfyz......",
+        "............f..y......",
+        "........aqqqqa........",
+        "..z....aaqqqqaa.......",
+        ".....aahbbbbbbdaa.....",
+        "....ahhbbbbbbbbdda..y.",
+        "...ahobbbbbbbbbbdda...",
+        "...abbbkbbbbbbkbdda...",
+        "z..abbbbkbbbbkbbdda...",
+        "...abccbbbbbbbbccda...",
+        "...abbbbbmmmmbbbdda...",
+        "....abbbbbbbbbbdda...y",
+        ".y...abbbbbbbbdda.....",
+        ".......abbbbdda.......",
+        ".....aeeaaaaaaeea.....",
+        ".....aeea....aeea....."
+      ],
+      "smoke": [
+        ".............fz.......",
+        "............f.........",
+        "........aqqqqa........",
+        ".......aaqqqqaa.......",
+        ".....aahbbbbbbdaa.....",
+        "....ahhbbbbbbbbdda....",
+        "...ahobbbbbbbbbbdda...",
+        "...abbbwkbbbbwkbdda...",
+        "...abbbkkbbbbkkbdda...",
+        "...abccbbbbbbbbccda...",
+        "...abbbbbmbbmbbbdda...",
+        "....abbbbbmmbbbdda....",
+        "s....abbbbbbbbdda....s",
+        "..s....abbbbdda....s..",
+        ".s...aeeaaaaaaeea...s.",
+        ".....aeea....aeea....."
+      ],
+      "smash": [
+        "............zfyz......",
+        "............f..y......",
+        "........aqqqqa........",
+        ".......aaqqqqaa.......",
+        ".....aahbbbbbbdaa.....",
+        "....ahhbbbbbbbbdda....",
+        "...ahobbbbbbbbbbdda...",
+        "...abbbkbbbbbbkbdda...",
+        "...abbbbkbbbbkbbdda...",
+        "...abccbbbbbbbbccda...",
+        "...abbbbbmmmmbbbdda...",
+        "....abbbbbbbbbbdda....",
+        ".....abbbbbbbbdda.....",
+        ".......abbbbdda.......",
+        ".....aeeaaaaaaeea.....",
+        ".....aeea....aeea....."
+      ],
+      "boom": [
+        "............zfyz......",
+        ".y..........f..y....z.",
+        "........aqqqqa........",
+        ".......aaqqqqaa.......",
+        "z....aahyyyyyyzaa.....",
+        "....ahhyyyyyyyyzza....",
+        "...ahhyyyyyyyyyyzza..y",
+        "...ayyywwyyyywwyzza...",
+        "...ayyywkyyyykwyzza...",
+        "...ayccyyyyyyyyccza...",
+        "y..ayyyyyymmyyyyzza...",
+        "....ayyyyymmyyyzza....",
+        ".....ayyyyyyyyzza....z",
+        ".......ayyyyzza.......",
+        ".....aeeaaaaaaeea.....",
+        ".....aeea....aeea....."
+      ],
+      "dizzy": [
+        ".............f........",
+        "............f.........",
+        "........aqqqqa........",
+        ".......aaqqqqaa.......",
+        ".....aahbbbbbbdaa.....",
+        "....ahhbbbbbbbbdda....",
+        "...ahobbbbbbbbbbdda...",
+        "...abbbkkbbbbkkbdda...",
+        "...abbbkkbbbbkkbdda...",
+        "...abccbbbbbbbbccda...",
+        "...abbbbbbmbmbbbdda...",
+        "....abbbbmbmbbbdda....",
+        ".....abbbbbbbbdda.....",
+        ".......abbbbdda.......",
+        ".....aeeaaaaaaeea.....",
+        ".....aeea....aeea....."
+      ]
+    },
+    "palette": {
+      "a": "#3a0f0a",
+      "h": "#fff2e0",
+      "o": "#ff8a5c",
+      "b": "#e8452c",
+      "d": "#a82a1c",
+      "q": "#6b7280",
+      "f": "#e8d2a6",
+      "y": "#ffe066",
+      "z": "#ff9a3c",
+      "e": "#ffb347",
+      "w": "#ffffff",
+      "k": "#1a0a06",
+      "c": "#ffb3c7",
+      "m": "#3a0f0a",
+      "s": "#9a9aa6"
+    },
+    "rageColors": {
+      "b": "#c4161c",
+      "o": "#ff5a3c",
+      "d": "#7a0f12",
+      "h": "#ffd0c0"
+    }
+  },
+  "moves": {
+    "attack": {
+      "name": "데굴데굴 박치기",
+      "telegraph": "몸을 데굴데굴 굴리기 시작한다...",
+      "target": "single",
+      "damage": [
+        8,
+        10
+      ]
+    },
+    "ember": {
+      "name": "불똥 튀기기",
+      "telegraph": "도화선에서 불똥이 파박 튄다...",
+      "target": "all",
+      "damage": [
+        4,
+        6
+      ],
+      "fx": "ember",
+      "effect": "poison",
+      "effectTurns": 3,
+      "tickDamage": 2,
+      "stacks": 1,
+      "maxStacks": 3,
+      "status": {
+        "name": "화상",
+        "emoji": "🔥",
+        "color": "#ff9a3c"
+      }
+    },
+    "smoke": {
+      "name": "연막탄",
+      "telegraph": "몸에서 회색 연기가 피어오른다...",
+      "target": "none",
+      "fx": "smoke",
+      "effect": "smoke"
+    },
+    "smash": {
+      "name": "점화",
+      "telegraph": "🔥 도화선에 불을 붙이려 한다! 붙으면 빨리 꺼야 해요!",
+      "target": "none",
+      "fx": "ignite",
+      "warn": false,
+      "fuse": {
+        "turns": 3,
+        "rageTurns": 2,
+        "need": 0.2,
+        "boom": "boom"
+      }
+    },
+    "boom": {
+      "name": "대폭발",
+      "telegraph": "💣 곧 터진다! 방어해도 절반만 막아요!",
+      "target": "all",
+      "damage": [
+        22,
+        26
+      ],
+      "fx": "boom",
+      "readyPose": "flash",
+      "warn": true,
+      "guardRate": 0.5
+    }
+  },
+  "intentWeights": {
+    "normal": {
+      "attack": 4,
+      "ember": 3,
+      "smoke": 1.5,
+      "smash": 1
+    },
+    "rage": {
+      "attack": 3.5,
+      "ember": 3,
+      "smoke": 1.5,
+      "smash": 1.5
+    }
+  }
+}

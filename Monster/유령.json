@@ -1,0 +1,249 @@
+{
+  "_메모": [
+    "네 번째 레이드 몬스터. 칸 설명은 슬라임.json의 _메모와 같고, 여기에는 유령만의 것을 적는다.",
+    "palette: a 외곽선 · h 하이라이트 · o 밝은 면 · b 몸 · d 그늘 · w 눈 반사광 · k 눈 · g 빛나는 눈(예고·표식) · c 볼 · m 입 · x 혼불.",
+    "mark(표식): 예고할 때 대상을 정하고(분노 중 rageTargets명) telegraph의 {target}에 이름이 들어간다. 다음 턴 그 사람에게 damage. 수호자가 도발하면 한 명 몫을 대신 맞는다. 대상이 쓰러지면 다른 사람에게 옮긴다.",
+    "fear(공포): 맞은 사람(guardBlocks면 방어한 사람 제외)은 다음 턴 스킬을 못 쓴다. phase(투명화): 다음 턴 일반 공격이 빗나가고 스킬만 맞는다.",
+    "baseHp는 4인 기준 HP. 바꾸면 node tests/raid/밸런스시뮬.js ghost 로 승률·턴을 다시 확인한다."
+  ],
+  "id": "ghost",
+  "name": "유령",
+  "emoji": "👻",
+  "rageName": "폭주한 유령",
+  "lore": "밤마다 서버를 떠도는 하얀 유령. 한 사람을 골라 뚫어지게 노려보며 XP를 빨아 간다!",
+  "baseHp": 7000,
+  "rage": {
+    "hpRatio": 0.5,
+    "damageRate": 1.5
+  },
+  "sprite": {
+    "rows": [
+      ".......aaaaaaaa.......",
+      ".....aaohhbbbbdaa.....",
+      ".x..aohbbbbbbbbdda....",
+      "...aohbbbbbbbbbbdda...",
+      "...aoobbbbbbbbbbdda...",
+      "..aoobbbbbbbbbbbbddax.",
+      "..aoobbwkbbbbwkbbdda..",
+      "..abbbbkkbbbbkkbbdda..",
+      "..abbbbkkbbbbkkbbdda..",
+      "..abbccbbbbbbbbccdda..",
+      "..abbbbbbbmmbbbbbdda..",
+      "..abbbbbbbmmbbbbbdda..",
+      "..abbbbbbbbbbbbbbdda..",
+      "..abbbbbbbbbbbbbbdda..",
+      "..abbabbbbaabbbbadda..",
+      "..abb.abba..abba.bba.."
+    ],
+    "poses": {
+      "attack": [
+        ".......aaaaaaaa.......",
+        ".....aaohhbbbbdaa.....",
+        "....aohbbbbbbbbdda....",
+        "...aohbbbbbbbbbbdda...",
+        "...aoobbbbbbbbbbdda...",
+        "..aoobbbbbbbbbbbbdda..",
+        "..aoobbbbbbbbbbbbdda..",
+        "..abbbbkkbbbbkkbbdda..",
+        "..abbbbbbbbbbbbbbdda..",
+        "..abbccbbmmmmbbccdda..",
+        "..abbbbbbmmmmbbbbdda..",
+        "..abbbbbbmmmmbbbbdda..",
+        "..abbbbbbmmmmbbbbdda..",
+        "..abbbbbbbbbbbbbbdda..",
+        "..abbabbbbaabbbbadda..",
+        "..abb.abba..abba.bba.."
+      ],
+      "mark": [
+        ".......aaaaaaaa.......",
+        "..x..aaohhbbbbdaa.....",
+        "....aohbbbbbbbbdda....",
+        "...aohbbbbbbbbbbdda.x.",
+        "...aoobbbbbbbbbbdda...",
+        "..aoobbbbbbbggggbdda..",
+        "x.aoobbbbbbbgkkgbdda..",
+        "..abbbbkkbbbgkkgbdda..",
+        "..abbbbbbbbbggggbdda..",
+        "..abbbbbbbbbbbbbbdda..",
+        "..abbbbbbmmmmbbbbdda..",
+        "..abbbbbbbbbbbbbbdda..",
+        "..abbbbbbbbbbbbbbdda..",
+        "..abbbbbbbbbbbbbbdda..",
+        "..abbabbbbaabbbbadda..",
+        "..abb.abba..abba.bba.."
+      ],
+      "wail": [
+        ".......aaaaaaaa.......",
+        ".x...aaohhbbbbdaa...x.",
+        "....aohbbbbbbbbdda....",
+        "...aohbbbbbbbbbbdda...",
+        "x..aoobbbbbbbbbbdda..x",
+        "..aoobbbbbbbbbbbbdda..",
+        "..aoobbbbbbbbbbbbdda..",
+        "..abbbbkkbbbbkkbbdda.x",
+        "..abbbbbbbbbbbbbbdda..",
+        "..abbccbbmmmmbbccdda..",
+        "..abbbbbbmmmmbbbbdda..",
+        "..abbbbbbmmmmbbbbdda..",
+        "..abbbbbbmmmmbbbbdda..",
+        "..abbbbbbbbbbbbbbdda..",
+        "..abbabbbbaabbbbadda..",
+        "..abb.abba..abba.bba.."
+      ],
+      "phase": [
+        "..x....aaaaaaaa.......",
+        ".....aaohhbbbbdaa.....",
+        "....aohbbbbbbbbdda..x.",
+        "...aohbbbbbbbbbbdda...",
+        "...aoobbbbbbbbbbdda...",
+        "x.aoobbbbbbbbbbbbdda..",
+        "..aoobbwkbbbbwkbbdda..",
+        "..abbbbkkbbbbkkbbdda..",
+        "..abbbbkkbbbbkkbbdda.x",
+        "..abbccbbbbbbbbccdda..",
+        "..abbbbbbbmmbbbbbdda..",
+        "x.abbbbbbbmmbbbbbdda..",
+        "..abbbbbbbbbbbbbbdda..",
+        "..abbbbbbbbbbbbbbdda..",
+        "..abbabbbbaabbbbadda..",
+        "..abb.abba..abba.bba.."
+      ],
+      "ready": [
+        ".x.....aaaaaaaa.....x.",
+        ".....aaohhbbbbdaa.....",
+        "x...aohbbbbbbbbdda....",
+        "...aohbbbbbbbbbbdda..x",
+        "...aoobbbbbbbbbbdda...",
+        "..aoobbbbbbbbbbbbdda..",
+        "x.aoobbggbbbbggbbdda..",
+        "..abbbbggbbbbggbbdda.x",
+        "..abbbbggbbbbggbbdda..",
+        "..abbccbbbbbbbbccdda..",
+        "x.abbbbbbbmmbbbbbdda..",
+        "..abbbbbbbmmbbbbbdda..",
+        "..abbbbbbbbbbbbbbdda..",
+        "..abbbbbbbbbbbbbbdda..",
+        "..abbabbbbaabbbbadda..",
+        "..abb.abba..abba.bba.."
+      ],
+      "smash": [
+        "x..x...aaaaaaaa...x..x",
+        ".....aaohhbbbbdaa.....",
+        ".x..aohbbbbbbbbdda..x.",
+        "...aohbbbbbbbbbbdda...",
+        "...aoobbbbbbbbbbdda...",
+        "x.aoobbbbbbbbbbbbdda.x",
+        "..aoobbbbbbbbbbbbdda..",
+        "..abbbbkkbbbbkkbbdda..",
+        "..abbbbbbbbbbbbbbdda..",
+        "x.abbccbbmmmmbbccdda.x",
+        "..abbbbbbmmmmbbbbdda..",
+        "..abbbbbbmmmmbbbbdda..",
+        "..abbbbbbmmmmbbbbdda..",
+        "..abbbbbbbbbbbbbbdda..",
+        "..abbabbbbaabbbbadda..",
+        "..abb.abba..abba.bba.."
+      ]
+    },
+    "palette": {
+      "a": "#2a1f4a",
+      "h": "#ffffff",
+      "o": "#f4f0ff",
+      "b": "#d9d0f5",
+      "d": "#a99bd6",
+      "w": "#ffffff",
+      "k": "#1a1033",
+      "g": "#7ef0e0",
+      "c": "#ff9ec4",
+      "m": "#2a1f4a",
+      "x": "#b9a6ff"
+    },
+    "rageColors": {
+      "a": "#3a0d12",
+      "o": "#ffd6cf",
+      "b": "#f2a0a0",
+      "d": "#c05a5a",
+      "x": "#ff8a70",
+      "g": "#ffe066"
+    }
+  },
+  "moves": {
+    "attack": {
+      "name": "할퀴기",
+      "telegraph": "차가운 손을 쭉 뻗는다...",
+      "target": "single",
+      "damage": [
+        8,
+        10
+      ]
+    },
+    "mark": {
+      "name": "영혼 사냥",
+      "telegraph": "👁️ {target}을(를) 뚫어지게 노려본다...",
+      "target": "single",
+      "mark": true,
+      "rageTargets": 2,
+      "damage": [
+        22,
+        26
+      ],
+      "fx": "curse"
+    },
+    "wail": {
+      "name": "울부짖음",
+      "telegraph": "입을 크게 벌리고 숨을 들이켠다...",
+      "target": "all",
+      "damage": [
+        4,
+        6
+      ],
+      "fx": "wail",
+      "effect": "fear",
+      "guardBlocks": true,
+      "status": {
+        "name": "공포",
+        "emoji": "😱"
+      }
+    },
+    "phase": {
+      "name": "투명화",
+      "telegraph": "몸이 점점 흐려지기 시작한다...",
+      "target": "none",
+      "fx": "phase",
+      "effect": "phase"
+    },
+    "smash": {
+      "name": "필살 원혼 폭풍",
+      "telegraph": "💥 필살기를 준비 중입니다! 방어하세요!",
+      "target": "all",
+      "damage": [
+        15,
+        19
+      ],
+      "fx": "storm",
+      "readyPose": "ready",
+      "effect": "fear",
+      "guardBlocks": true,
+      "status": {
+        "name": "공포",
+        "emoji": "😱"
+      }
+    }
+  },
+  "intentWeights": {
+    "normal": {
+      "attack": 4,
+      "mark": 3,
+      "wail": 2,
+      "phase": 1.5,
+      "smash": 1
+    },
+    "rage": {
+      "attack": 3,
+      "mark": 3.5,
+      "wail": 2,
+      "phase": 1.5,
+      "smash": 1.5
+    }
+  }
+}

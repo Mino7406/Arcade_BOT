@@ -744,6 +744,116 @@ let ok4;
       assert(lines().includes(`이번 턴 받는 피해 -${E.minusPct(ice.moves.armor.effectRate)}%** · 때리면 ❄️냉기 +1`), '전투 화면: 갑옷 턴 반격 안내');
     }
   }
+  // 14-3) 유령(Monster-all): 표식(예고 때 대상 확정, 도발로 대신 맞기, 분노 2명) · 공포(스킬 봉인) · 투명화(일반 공격 무효)
+  {
+    const E = require(path.join(root, 'handlers/레이드전투.js'));
+    const all = E.loadMonsters(path.join(root, 'Monster-all'));
+    const ghost = all.find(m => m.id === 'ghost');
+    assert(ghost, '유령을 Monster 폴더에서 불러옴');
+    if (ghost) {
+      const party = [{ userId: 'x', name: 'X', role: 'sword' }, { userId: 't', name: 'T', role: 'tank' }, { userId: 'y', name: 'Y', role: 'healer' }];
+      let roll = 0.5; const rng = () => roll;
+      let b;
+      const M = (u) => E.getMember(b, u);
+      const setIntent = (intent) => { b.intent = intent; E.assignMarks(b, rng); };
+      const turnWith = (intent, choices = {}) => { if (intent) setIntent(intent); for (const [u, a] of Object.entries(choices)) E.choose(b, u, a); return E.resolveTurn(b, rng); };
+      b = E.createBattle(ghost, party, rng);
+      setIntent('mark');
+      const marked = b.marks.slice();
+      assert(marked.length === 1 && E.telegraphText(b).includes(M(marked[0]).name) && !E.telegraphText(b).includes('{target}'), '표식: 예고 때 대상 한 명이 정해지고 예고 문구에 이름');
+      const hpBefore = Object.fromEntries(b.members.map(m => [m.userId, m.hp]));
+      turnWith(null, { x: 'attack', t: 'attack', y: 'attack' });
+      const hitIds = Object.keys(b.lastTurn.hits);
+      assert(hitIds.length === 1 && hitIds[0] === marked[0] && M(marked[0]).hp < hpBefore[marked[0]], '영혼 사냥: 표식 대상만 맞음');
+
+      b = E.createBattle(ghost, party, rng);
+      setIntent('mark'); b.marks = ['x'];
+      turnWith(null, { t: 'skill', x: 'attack', y: 'attack' });
+      assert(Object.keys(b.lastTurn.hits).join() === 't' && M('x').hp === 100, '표식: 수호자가 도발하면 대신 맞음');
+
+      b = E.createBattle(ghost, party, rng); b.rage = true;
+      setIntent('mark');
+      assert(b.marks.length === 2 && new Set(b.marks).size === 2, '분노: 표식 두 명');
+      b.marks = ['x', 'y'];
+      turnWith(null, { t: 'skill', x: 'attack', y: 'attack' });
+      assert(Object.keys(b.lastTurn.hits).sort().join() === 't,y', '분노 2인 표식: 도발은 한 명 몫만 대신 맞음');
+
+      b = E.createBattle(ghost, party, rng);
+      setIntent('mark'); b.marks = ['x']; M('x').hp = 0;
+      turnWith(null, { t: 'attack', y: 'attack' });
+      assert(Object.keys(b.lastTurn.hits).length === 1 && !b.lastTurn.hits.x, '표식 대상이 쓰러지면 다른 사람에게 옮김');
+
+      b = E.createBattle(ghost, party, rng);
+      turnWith('wail', { x: 'guard', t: 'attack', y: 'attack' });
+      assert(!E.isFeared(b, M('x')) && E.isFeared(b, M('t')) && E.checkChoice(b, 't', 'skill') && E.checkChoice(b, 't', 'attack') === null && b.log.join().includes('😱'), '울부짖음: 방어 안 한 사람 😱공포 — 다음 턴 스킬 못 씀');
+      turnWith('attack', { x: 'attack', t: 'attack', y: 'attack' });
+      assert(!E.isFeared(b, M('t')), '공포는 한 턴만');
+
+      b = E.createBattle(ghost, party, rng);
+      turnWith('phase', { x: 'attack', t: 'attack', y: 'attack' });
+      const hp0 = b.hp;
+      turnWith('attack', { x: 'attack', t: 'attack', y: 'skill' });
+      assert(b.hp === hp0 && b.lastTurn.acts.x.label === '빗나감' && b.log.join().includes('빗나'), '투명화: 다음 턴 일반 공격은 빗나감');
+      b = E.createBattle(ghost, party, rng);
+      turnWith('phase', {});
+      const hp1 = b.hp;
+      turnWith('attack', { x: 'skill', t: 'attack', y: 'attack' });
+      assert(hp1 - b.hp === b.lastTurn.acts.x.value && b.lastTurn.acts.x.value > 0, '투명화: 스킬은 맞음');
+
+      b = E.createBattle(ghost, party, rng);
+      turnWith('smash', { x: 'guard', t: 'attack', y: 'attack' });
+      assert(!E.isFeared(b, M('x')) && E.isFeared(b, M('t')), '필살 원혼 폭풍: 방어 안 한 사람 공포');
+    }
+  }
+  // 14-4) 꼬마 폭탄(Monster-all): 점화 카운트다운(불끄기 성공 → 기절, 실패 → 대폭발) · 화상 · 연막
+  {
+    const E = require(path.join(root, 'handlers/레이드전투.js'));
+    const all = E.loadMonsters(path.join(root, 'Monster-all'));
+    const bomb = all.find(m => m.id === 'bomb');
+    assert(bomb, '꼬마 폭탄을 Monster 폴더에서 불러옴');
+    if (bomb) {
+      const party = [{ userId: 'x', name: 'X', role: 'sword' }, { userId: 'y', name: 'Y', role: 'healer' }];
+      const rng = () => 0.5;
+      let b;
+      const M = (u) => E.getMember(b, u);
+      const turnWith = (intent, choices = {}) => { if (intent) b.intent = intent; for (const [u, a] of Object.entries(choices)) E.choose(b, u, a); return E.resolveTurn(b, rng); };
+      const fuse = bomb.moves.smash.fuse;
+      b = E.createBattle(bomb, party, rng);
+      turnWith('smash', { x: 'attack', y: 'attack' });
+      assert(b.fuse && b.fuse.need === Math.round(b.maxHp * fuse.need) && b.fuse.dealt === 0 && !Object.keys(b.lastTurn.hits).length && b.log.join().includes('도화선'), '점화: 피해 없이 카운트다운 시작(기준 = 최대 HP × need)');
+      const lit = b.turn - 1;
+      let intents = [];
+      for (let i = 1; i < fuse.turns; i++) { intents.push(b.intent); turnWith(null, { x: 'attack', y: 'attack' }); }
+      assert(intents.every(k => k !== 'smash' && k !== fuse.boom) && b.intent === fuse.boom && E.isWarnIntent(b), `카운트다운 중엔 점화를 다시 안 쓰고, ${fuse.turns}턴째에 대폭발 예고(경고)`);
+      assert(b.fuse.dealt > 0 && b.fuse.dealt < b.fuse.need, '불끄기: 파티 피해가 쌓임');
+      const hpX = M('x').hp;
+      turnWith(null, { x: 'guard', y: 'attack' });
+      const boom = bomb.moves[fuse.boom];
+      const mid = Math.floor(0.5 * (boom.damage[1] - boom.damage[0] + 1)) + boom.damage[0]; // rng 0.5일 때 피해
+      assert(!b.fuse && b.lastTurn.monsterMoveKey === fuse.boom && b.lastTurn.hits.x === Math.max(1, Math.round(mid * 1.07 * boom.guardRate)) && hpX - M('x').hp === b.lastTurn.hits.x + (b.lastTurn.poison.x || 0) && M('y').hp < M('x').hp && b.turn - 1 === lit + fuse.turns, '대폭발: 방어해도 guardRate만큼만 막음, 카운트다운 끝');
+
+      b = E.createBattle(bomb, party, rng);
+      turnWith('smash', {});
+      b.fuse.need = 150;
+      b.intent = 'attack';
+      const hpY = M('y').hp, hpXX = M('x').hp;
+      turnWith(null, { x: 'skill', y: 'attack' });
+      assert(!b.fuse && b.lastTurn.defused && !Object.keys(b.lastTurn.hits).length && M('y').hp === hpY && M('x').hp === hpXX && b.log.join().includes('불이 꺼졌다'), '불끄기 성공: 그 턴 폭탄 행동 없음(기절)');
+
+      b = E.createBattle(bomb, party, rng);
+      turnWith('ember', { x: 'attack', y: 'attack' });
+      assert(E.poisonStacks(b, M('x')) === 1 && M('x').poisonStatus.name === '화상' && b.log.join().includes('🔥화상'), '불똥 튀기기: 🔥화상(독 규칙)');
+
+      b = E.createBattle(bomb, party, rng);
+      turnWith('smoke', { x: 'attack', y: 'attack' });
+      assert(E.isIntentHidden(b) && E.telegraphText(b).includes('연막') && !E.telegraphText(b).includes(bomb.moves[b.intent].telegraph), '연막탄: 다음 예고가 가려짐');
+      turnWith(null, { x: 'attack', y: 'attack' });
+      assert(!E.isIntentHidden(b), '연막은 한 턴만');
+      b = E.createBattle(bomb, party, rng);
+      turnWith('smoke', {}); b.intent = fuse.boom;
+      assert(!E.isIntentHidden(b), '대폭발 예고는 연막으로 가리지 않음');
+    }
+  }
   // 17) 재시작 후 이어가기: 저장된 모집·전투, 예전 기록, 기록 없는 메시지 / 전멸 벌칙
   {
     const E = require(path.join(root, 'handlers/레이드전투.js'));
