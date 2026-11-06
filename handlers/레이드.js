@@ -31,7 +31,7 @@ const { displayNameFromInteraction } = require('./이름');
 const {
   PLAYER_MAX_HP, POTIONS_PER_BATTLE, POTION_HEAL, GUARD_DAMAGE_RATE, ROLES, ROLE_ORDER, ACTIONS, MONSTERS,
   createBattle, checkChoice, choose, allChosen, resolveTurn,
-  isStunned, slowTurnsLeft, isShielded, isPowered, poisonTurnsLeft, poisonStacks, poisonDamage, isConfused, minusPct, contribution,
+  isStunned, slowTurnsLeft, isShielded, isPowered, poisonTurnsLeft, poisonStacks, poisonDamage, isConfused, chillStacks, minusPct, contribution,
 } = require('./레이드전투');
 const { renderRecruit, renderBattle, renderEnd, warmUp } = require('./레이드그림');
 
@@ -262,7 +262,10 @@ function byStatus(members, statusKey) {
 function effectLines(b) {
   const lines = [];
   const monsterName = b.rage ? b.monster.rageName : b.monster.name;
-  if (isShielded(b)) lines.push(`🛡️ 방어력 증가: ${monsterName} - **이번 턴 받는 피해 -${minusPct(b.shieldRate)}%**`);
+  const chill = b.monster.chill;
+  // 가시 얼음 갑옷(보호막 + chillOnHit): 때리면 냉기가 쌓인다는 것도 같은 줄에
+  const spikes = isShielded(b) && chill && b.shieldChill ? ` · 때리면 ${chill.status.emoji}${chill.status.name} +${b.shieldChill}` : '';
+  if (isShielded(b)) lines.push(`🛡️ 방어력 증가: ${monsterName} - **이번 턴 받는 피해 -${minusPct(b.shieldRate)}%**${spikes}`);
   if (isPowered(b)) lines.push(`⚔️ 공격력 증가: ${monsterName} - **다음 공격 피해 +${Math.round((b.powerRate - 1) * 100)}%**`);
   const stunned = b.members.filter(mem => mem.hp > 0 && isStunned(b, mem));
   for (const [label, mems] of byStatus(stunned, 'stunStatus')) lines.push(`${label}: ${mems.map(mem => mem.name).join(', ')} - **이번 턴 행동 불가**`);
@@ -281,6 +284,12 @@ function effectLines(b) {
   for (const [label, mems] of byStatus(confused, 'confuseStatus')) {
     const pcts = [...new Set(mems.map(mem => Math.round(mem.confuseRate * 100)))];
     lines.push(`${label}: ${mems.map(mem => mem.name).join(', ')} - **행동 ${pcts.join('/')}% 확률로 빗나감(방어는 성공)**`);
+  }
+  // 냉기: 몇 중첩인지가 중요해서 1중첩도 ×1로 붙인다
+  const chilled = chill ? b.members.filter(mem => chillStacks(b, mem) > 0) : [];
+  if (chilled.length) {
+    const fz = chill.freezeStatus;
+    lines.push(`${chill.status.emoji} ${chill.status.name}: ${chilled.map(mem => `${mem.name}(×${chillStacks(b, mem)})`).join(', ')} - **${chill.freezeAt}중첩이면 ${fz.emoji}${fz.name}(방어 +${chill.guardStacks} · 공격·스킬 -${chill.melt})**`);
   }
   return lines;
 }
@@ -1223,4 +1232,5 @@ module.exports = {
   noteChannelMessage,
   forceSpawnRaid,
   forceEndRaid,
+  effectLines, // 테스트용(전투 화면 상태 줄)
 };

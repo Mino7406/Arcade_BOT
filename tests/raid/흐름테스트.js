@@ -729,6 +729,19 @@ let ok4;
       const frozenNow = E.isStunned(b, x()) && E.chillStacks(b, x()) === 0;
       turnWith(b, 'attack', { y: 'guard' });
       assert(frozenNow && !E.isStunned(b, x()), '필살기와 빙결이 겹쳐도 한 턴만');
+
+      // 전투 화면 글자(effectLines)
+      const lines = () => raidMod.effectLines(b).join('\n');
+      fresh();
+      x().chillStacks = 2; y().chillStacks = 1;
+      assert(lines().includes('❄️ 냉기: X(×2), Y(×1) - **3중첩이면 🧊빙결(방어 +1 · 공격·스킬 -1)**'), '전투 화면: 냉기 중첩 줄');
+      fresh();
+      x().chillStacks = 2;
+      turnWith(b, 'attack', { x: 'guard', y: 'attack' });
+      assert(lines().includes('🧊 빙결: X - **이번 턴 행동 불가**') && !lines().includes('❄️ 냉기'), '전투 화면: 빙결 줄(냉기 0이면 냉기 줄 없음)');
+      fresh();
+      turnWith(b, 'armor', { x: 'attack', y: 'attack' });
+      assert(lines().includes('이번 턴 받는 피해 -40%** · 때리면 ❄️냉기 +1'), '전투 화면: 갑옷 턴 반격 안내');
     }
   }
   // 17) 재시작 후 이어가기: 저장된 모집·전투, 예전 기록, 기록 없는 메시지 / 전멸 벌칙
