@@ -254,32 +254,19 @@ const STATUS_ICONS = {
   },
 };
 // 카드 왼쪽 위 상태 아이콘: 기절(별). 점액는 아이콘 없이 점액 얼룩으로 표시한다.
+// 카드 왼쪽 상태 배지: 기절(별) · 독(거품). 환각은 배지 대신 아이콘 양옆 작은 최면 물결(카드 그리는 곳에서).
 function statusBadges(b, mem, x, y) {
   if (isStunned(b, mem)) stunStars(x, y);
-  else if (isConfused(b, mem)) spiral(x, y, 17, 4, '#7ef0e0');
   const stacks = poisonStacks(b, mem);
   if (stacks) poisonBadge(x, y + 34, stacks);
 }
-// 환각: 바깥에서 안으로 감기는 소용돌이(선분을 이어 그린다)
-function spiral(cx, cy, R, width, color, turns = 2.2, yScale = 1) {
-  const steps = Math.round(turns * 18);
-  let px = cx + R, py = cy;
-  for (let i = 1; i <= steps; i++) {
-    const t = i / steps;
-    const a = t * turns * Math.PI * 2;
-    const rr = R * (1 - t * 0.85);
-    const nx = cx + Math.cos(a) * rr, ny = cy + Math.sin(a) * rr * yScale;
-    p.line(px, py, nx, ny, width, color);
-    px = nx; py = ny;
-  }
-}
-// 독: 보라 거품 세 개 + 오른쪽에 중첩 수(2 이상일 때)
+// 독: 보라 거품 세 개 + 아래에 중첩 수(2 이상일 때)
 function poisonBadge(cx, cy, stacks) {
   p.circle(cx - 5, cy + 3, 9, '#9b3fc0');
   p.circle(cx + 7, cy - 4, 7, '#b45fe0');
   p.circle(cx + 4, cy + 9, 5, '#c98af0');
   p.circle(cx - 8, cy, 3, '#f1cdfb');
-  if (stacks > 1) text(`×${stacks}`, cx + 26, cy + 2, 17, '#e2b8ff');
+  if (stacks > 1) text(`×${stacks}`, cx, cy + 22, 15, '#e2b8ff');
 }
 // 기절: 납작한 노란 별 두 개(작은 별 왼쪽 위 · 큰 별 오른쪽 아래). 픽셀 대신 다각형이라 가장자리가 깔끔하다.
 function star(cx, cy, R, color) {
@@ -307,6 +294,21 @@ const SPRAY = [
 function dot(x, y, size, c) { p.rect(Math.round(x - size / 2), Math.round(y - size / 2), Math.round(size), Math.round(size), c); }
 // 반짝임: 가운데 + 상하좌우 네 칸
 function sparkle(x, y, size, c) { for (const [i, j] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) dot(x + i * size, y + j * size, size, c); }
+// 최면 물결: 양옆으로 도트 호 세 겹(청록·보라·청록, 바깥일수록 짧게). scale로 몬스터(1)·카드(작게, 두 겹 — 피해 숫자·독 표시와 안 겹치게)에 같이 쓴다.
+function hypnoWaves(cx, cy, scale, purple, rings = 3) {
+  [[112, '#7ef0e0'], [142, purple], [172, '#7ef0e0']].slice(0, rings).forEach(([r0, c], k) => {
+    const r = r0 * scale;
+    const size = Math.max(3, (k === 1 ? 7 : 6) * scale * 1.6);
+    for (const side of [-1, 1]) {
+      const span = 0.95 - k * 0.12;
+      const steps = Math.max(4, Math.round((r * span * 2) / (10 * Math.max(scale * 1.6, 0.5))));
+      for (let i = 0; i <= steps; i++) {
+        const a = -span + (i / steps) * span * 2;
+        dot(cx + side * Math.cos(a) * r, cy + Math.sin(a) * r * 0.58, size, c);
+      }
+    }
+  });
+}
 // 포자 알갱이: 모서리를 깎은 4×4 동그란 알 — 왼쪽 위는 밝은 반사광, 오른쪽 아래는 그늘(어두운 바탕에서도 둥글게 보이게)
 const SPORE_BALL = ['.cc.', 'clcc', 'cccd', '.dd.'];
 function puff(x, y, size, c, light, dark = '#3a1450') {
@@ -332,17 +334,7 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
   }
   if (move === 'hypno' && layer === 'back') {
     // 최면술: 몸 양옆으로 퍼져 나가는 최면 물결(도트 호 세 겹, 청록·보라 번갈아) + 반짝임
-    const rings = [[112, '#7ef0e0'], [142, color], [172, '#7ef0e0']];
-    rings.forEach(([r, c], k) => {
-      for (const side of [-1, 1]) {
-        const span = 0.95 - k * 0.12; // 바깥 물결일수록 짧게
-        const steps = Math.round((r * span * 2) / 10);
-        for (let i = 0; i <= steps; i++) {
-          const a = -span + (i / steps) * span * 2;
-          dot(cx + side * Math.cos(a) * r, cy - 4 + Math.sin(a) * r * 0.58, k === 1 ? 7 : 6, c);
-        }
-      }
-    });
+    hypnoWaves(cx, cy - 4, 1, color);
     for (const [dx, dy, sz] of [[-96, -70, 5], [100, -66, 4], [-200, -20, 4], [204, 10, 5], [-60, 74, 4], [70, 72, 4]]) sparkle(cx + dx, cy + dy, sz, '#e8fffb');
     return;
   }
@@ -429,10 +421,10 @@ function hitFx(move, cx, cy, color, spore = color, accent = spore) {
   if (move === 'spore') {
     p.circle(cx - 18, cy - 12, 9, spore); p.circle(cx + 20, cy + 6, 8, spore); p.circle(cx + 2, cy + 22, 6, color); p.circle(cx + 14, cy - 22, 5, color);
   } else if (move === 'hypno') {
-    // 아이콘을 가리지 않게 둘레에 도트 고리 두 겹(청록·보라)
-    [[36, '#7ef0e0', 16], [28, spore, 12]].forEach(([r, c, n]) => {
-      for (let k = 0; k < n; k++) { const a = (k / n) * Math.PI * 2; dot(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 5, c); }
-    });
+    // 몬스터 옆 최면 물결을 줄인 것 — 아이콘 양옆으로 퍼지는 도트 호 세 겹 + 반짝임
+    hypnoWaves(cx, cy, 0.27, color, 2);
+    sparkle(cx - 26, cy - 30, 3, '#e8fffb');
+    sparkle(cx + 26, cy + 30, 3, '#e8fffb');
   } else if (move === 'burst') {
     // 아이콘 네 귀퉁이로 터진 포자 구름(가운데 아이콘은 보이게)
     [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([i, j], k) => puff(cx + i * 30, cy + j * 26, 5, k % 2 ? accent : spore, '#f1cdfb'));
@@ -681,6 +673,8 @@ function renderBattle(r) {
       if (poisonHit) text(`-${poisonHit}`, x + w - 38, y + 108, 22, '#d7a3ff');
       // 상태 효과 아이콘(카드 왼쪽, 리본 아래): 점액(남은 턴) · 기절
       if (!down) statusBadges(b, mem, x + 32, y + 66);
+      // 환각(최면술): 아이콘 양옆 작은 최면 물결. 최면술에 막 맞은 결과 화면은 타격 표시가 같은 물결이라 겹쳐 그리지 않는다.
+      if (!down && isConfused(b, mem) && !(usedFx === 'hypno' && hit)) hypnoWaves(x + w / 2, y + 86, 0.27, fxColor, 2);
       // 점액 상태는 아이콘 대신 카드 아이콘에 묻은 점액으로 보여준다. 이번 턴 결과 화면에서 맞은 카드는
       // 타격 표시(할퀸 자국·충격 별·흩뿌리기 얼룩)만 그려 겹치지 않게 하고, 다음 선택 화면부터 다시 점액을 보인다.
       if (!down && slowTurnsLeft(b, mem) > 0 && !(usedMove && hit)) hitFx('sweep', x + w / 2, y + 86, fxColor);
