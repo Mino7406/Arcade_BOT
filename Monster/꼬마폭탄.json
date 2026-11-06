@@ -13,7 +13,7 @@
   "emoji": "💣",
   "rageName": "폭주한 꼬마 폭탄",
   "lore": "머리 위 도화선을 달고 아장아장 걷는 빨간 폭탄. 불이 붙기 전에 XP 시스템에서 쫓아내야 한다!",
-  "baseHp": 7000,
+  "baseHp": 8800,
   "rage": {
     "hpRatio": 0.5,
     "damageRate": 1.5
@@ -222,8 +222,8 @@
       "telegraph": "도화선에서 불똥이 파박 튄다...",
       "target": "all",
       "damage": [
-        4,
-        6
+        3,
+        5
       ],
       "fx": "ember",
       "effect": "poison",
@@ -262,8 +262,8 @@
       "telegraph": "💣 곧 터진다! 방어해도 절반만 막아요!",
       "target": "all",
       "damage": [
-        22,
-        26
+        16,
+        20
       ],
       "fx": "boom",
       "readyPose": "flash",
@@ -274,13 +274,13 @@
   "intentWeights": {
     "normal": {
       "attack": 4,
-      "ember": 3,
+      "ember": 2.5,
       "smoke": 1.5,
       "smash": 1
     },
     "rage": {
       "attack": 3.5,
-      "ember": 3,
+      "ember": 2.5,
       "smoke": 1.5,
       "smash": 1.5
     }

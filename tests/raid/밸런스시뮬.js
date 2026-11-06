@@ -21,7 +21,15 @@ function smart(b, m) {
     if (m.role === 'healer' && E.partyChillStacks(b) >= 2 * aliveCount(b) && !E.checkChoice(b, m.userId, 'skill')) return 'skill';
     if (mv === 'smash' && E.chillStacks(b, m) >= chill.freezeAt - chill.guardStacks && !E.checkChoice(b, m.userId, 'potion')) return 'potion';
   }
-  if (mv === 'smash') return 'guard';
+  if (E.isWarnIntent(b)) return 'guard'; // 필살기·대폭발 경고(꼬마 폭탄의 점화는 경고 아님)
+  // 표식(유령 영혼 사냥): 수호자는 도발로 대신 맞고, 표식 대상은 방어(수호자가 못 막을 때만 — 분노 2인이면 한 명은 직접)
+  const markMove = b.monster.moves[mv]?.mark;
+  if (markMove && m.role === 'tank' && !E.checkChoice(b, m.userId, 'skill')) return 'skill';
+  if (markMove && b.marks?.includes(m.userId)) {
+    const tank = b.members.find(x => x.role === 'tank' && x.hp > 0);
+    const tankCovers = tank && !E.checkChoice(b, tank.userId, 'skill') && b.marks[0] === m.userId;
+    if (!tankCovers) return 'guard';
+  }
   if (E.poisonStacks(b, m) >= 2 && m.hp < 75 && !E.checkChoice(b, m.userId, 'potion')) return 'potion'; // 독이 쌓이면 회복약으로 해독
   if (m.hp < 35 && !E.checkChoice(b, m.userId, 'potion')) return 'potion';
   if (m.role === 'tank' && mv === 'attack' && !E.checkChoice(b, m.userId, 'skill')) return 'skill';

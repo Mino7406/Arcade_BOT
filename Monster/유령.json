@@ -11,7 +11,7 @@
   "emoji": "👻",
   "rageName": "폭주한 유령",
   "lore": "밤마다 서버를 떠도는 하얀 유령. 한 사람을 골라 뚫어지게 노려보며 XP를 빨아 간다!",
-  "baseHp": 7000,
+  "baseHp": 7500,
   "rage": {
     "hpRatio": 0.5,
     "damageRate": 1.5
@@ -173,8 +173,8 @@
       "telegraph": "차가운 손을 쭉 뻗는다...",
       "target": "single",
       "damage": [
-        8,
-        10
+        7,
+        9
       ]
     },
     "mark": {
@@ -184,8 +184,8 @@
       "mark": true,
       "rageTargets": 2,
       "damage": [
-        22,
-        26
+        12,
+        15
       ],
       "fx": "curse"
     },
@@ -194,8 +194,8 @@
       "telegraph": "입을 크게 벌리고 숨을 들이켠다...",
       "target": "all",
       "damage": [
-        4,
-        6
+        3,
+        5
       ],
       "fx": "wail",
       "effect": "fear",
@@ -217,8 +217,8 @@
       "telegraph": "💥 필살기를 준비 중입니다! 방어하세요!",
       "target": "all",
       "damage": [
-        15,
-        19
+        13,
+        16
       ],
       "fx": "storm",
       "readyPose": "ready",
@@ -233,14 +233,14 @@
   "intentWeights": {
     "normal": {
       "attack": 4,
-      "mark": 3,
+      "mark": 2.5,
       "wail": 2,
       "phase": 1.5,
       "smash": 1
     },
     "rage": {
       "attack": 3,
-      "mark": 3.5,
+      "mark": 2.5,
       "wail": 2,
       "phase": 1.5,
       "smash": 1.5
