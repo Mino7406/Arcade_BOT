@@ -6,7 +6,7 @@
     "poses: attack 깡충 내려앉아 납작 · spore 포자가 새어 나옴 · hypno 갓 무늬·눈이 빙글빙글 · absorb 입 오므리고 빨아들임 · smash 사방으로 포자 · ready 필살기 예고(반점이 노랗게).",
     "독(poison): 맞을 때마다 stacks중첩(최대 maxStacks), 남은 턴은 effectTurns로 다시 맞춤. 다음 턴부터 아군 행동이 끝날 때 중첩 × tickDamage × 인원별 피해 배율. 치유사 스킬(전원)·회복약(본인)으로 제거.",
     "환각(confuse): 다음 턴 방어가 아닌 행동이 effectRate 확률로 헛손질. guardBlocks면 방어한 사람은 안 걸림.",
-    "독기 흡수: 최대 HP × (healRate + healPerStack × 파티 독 중첩 합) 회복 + 공격력 증가(buffRate — 다음 피해 기술 1회 피해 × buffRate).",
+    "독기 흡수: 최대 HP × (healRate + healPerStack × 파티 독 중첩 합 × 4 ÷ 인원) 회복(중첩은 4인 기준으로 환산, 이번 턴이 마지막인 독도 셈) + 공격력 증가(buffRate — 다음 피해 기술 1회 피해 × buffRate).",
     "rage.afterPoison: 분노 중 독을 건 턴의 다음 행동은 반드시 이 기술(독기 흡수 연계).",
     "baseHp는 4인 기준 HP. 바꾸면 node tests/raid/밸런스시뮬.js mushroom 으로 승률·턴을 다시 확인한다."
   ],
@@ -15,7 +15,7 @@
   "emoji": "🍄",
   "rageName": "폭주한 독버섯",
   "lore": "보랏빛 갓에 연두 반점이 박힌 통통 버섯. 걸음마다 독 포자를 흘려 서버의 XP를 시들게 만든다!",
-  "baseHp": 7800,
+  "baseHp": 7300,
   "rage": { "hpRatio": 0.5, "damageRate": 1.5, "afterPoison": "absorb" },
   "sprite": {
     "rows": [

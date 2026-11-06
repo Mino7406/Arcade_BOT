@@ -545,7 +545,7 @@ let ok4;
     assert(E.poisonStacks(b, x()) === 2 && E.poisonTurnsLeft(b, x()) === sporeTurns, '독 다시 맞으면 중첩 +1, 남은 턴 새로');
     const before = b.hp; turnWith(b, 'absorb', { x: 'guard', y: 'guard' });
     const ab = mush.moves.absorb;
-    assert(b.lastTurn.poison.x === Math.round(2 * mush.moves.spore.tickDamage * 1.07) && b.lastTurn.monsterHeal === Math.round(b.maxHp * (ab.healRate + ab.healPerStack * 4)) && b.hp === before + b.lastTurn.monsterHeal, '독기 흡수: 최대 HP × (healRate + healPerStack × 파티 독 중첩 4)');
+    assert(b.lastTurn.poison.x === Math.round(2 * mush.moves.spore.tickDamage * 1.07) && b.lastTurn.monsterHeal === Math.round(b.maxHp * (ab.healRate + ab.healPerStack * 4 * 4 / 2)) && b.hp === before + b.lastTurn.monsterHeal, '독기 흡수: 최대 HP × (healRate + healPerStack × 파티 독 중첩 4 × 4 ÷ 2인)');
     const yBefore = E.poisonStacks(b, y());
     turnWith(b, 'smash', { x: 'attack', y: 'guard' });
     assert(E.poisonStacks(b, x()) === Math.min(mush.moves.smash.maxStacks, mush.moves.smash.stacks) && E.poisonStacks(b, y()) <= yBefore, '필살 포자 대폭발: 방어 안 한 사람만 독 여러 중첩(방어하면 안 걸림)');
@@ -584,6 +584,16 @@ let ok4;
     const hpBefore = b.hp;
     turnWith(b, 'absorb', { x: 'guard', y: 'skill' });
     assert(b.lastTurn.fizzled && b.lastTurn.monsterHeal === 0 && b.hp === hpBefore - (b.lastTurn.monsterDamage || 0) && !E.isPowered(b) && b.log.join().includes('빨아들일 독기가 없다'), '독을 다 지우면 독기 흡수 실패(회복 +0, 공격력 증가 없음)');
+
+    // 독이 1턴 남았을 때 독기 흡수: 그 턴 독 피해 뒤 독이 끝나도, 끝나기 전 중첩으로 흡수한다(먼저 사라져 실패하던 버그)
+    b = E.createBattle(mush, party, rng);
+    b.hp = Math.round(b.maxHp * 0.6);
+    turnWith(b, 'spore', { x: 'guard', y: 'guard' });
+    for (let i = 1; i < sporeTurns; i++) turnWith(b, 'hypno', { x: 'guard', y: 'guard' });
+    assert(b.members.every(m => E.poisonTurnsLeft(b, m) === 1), '독 마지막 1턴 준비');
+    const hpLast = b.hp;
+    turnWith(b, 'absorb', { x: 'guard', y: 'guard' });
+    assert(!b.lastTurn.fizzled && b.lastTurn.poison.x > 0 && b.lastTurn.monsterHeal === Math.round(b.maxHp * (ab.healRate + ab.healPerStack * 2 * 4 / 2)) && b.hp === hpLast + b.lastTurn.monsterHeal && E.isPowered(b) && b.members.every(m => E.poisonStacks(b, m) === 0), '독 1턴 남았을 때 독기 흡수: 끝나기 전 중첩(2)으로 회복 + 공격력 증가, 그 뒤 독은 사라짐');
 
     // 독기 흡수는 파티에 독이 없으면 예고하지 않음 / 분노 중 독을 걸면 다음은 반드시 독기 흡수
     b = E.createBattle(mush, party, Math.random);

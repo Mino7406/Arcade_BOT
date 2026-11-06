@@ -25,7 +25,7 @@ const TAUNT_DAMAGE_RATE = 0.3;   // 도발 중인 수호자: 받는 피해 70% �
 //   confuse: 다음 턴 고른 행동이 effectRate 확률로 빗나간다(헛손질 — 회복약·쿨타임은 쓰지 않음). 방어는 빗나가지 않는다.
 //           치유사 스킬로 해제.
 //   guardBlocks: true면 방어한 사람에게는 그 기술의 상태이상이 걸리지 않는다(stun은 원래 그렇다).
-//   healPerStack(재생 기술): 파티에 쌓인 독 중첩 하나당 최대 HP × healPerStack을 더 회복한다.
+//   healPerStack(재생 기술): 파티에 쌓인 독 중첩 하나당 최대 HP × healPerStack을 더 회복한다(중첩 합 × 4 ÷ 인원으로 4인 기준 환산).
 //   buffRate: 이 기술을 쓰면 공격력 증가 — 다음 피해 기술 1회의 피해 × buffRate(쓰면 사라짐, 화면에 '공격력 증가' 배지).
 // 인원별 몬스터 피해 배율. 보통 플레이 승률이 인원과 상관없이 80~90%가 되게 맞춘 값(치유사·수호자가 다 있는 4인은 훨씬 버티므로 크게).
 const PARTY_DAMAGE_RATE = { 1: 1.35, 2: 1.07, 3: 1.28, 4: 2.0 }; // 3인은 궁수 차지 샷을 올리면서 1.25 → 1.28
@@ -459,6 +459,8 @@ function resolveTurn(battle, rng = Math.random) {
 
   // 1-2) 독: 아군 행동이 끝날 때 중첩만큼 피해(이번 턴 치유사가 씻어냈으면 없음). 마지막 턴이 지나면 사라진다.
   const poisonLog = [];
+  // 독기 흡수가 셀 중첩: 이번 턴이 마지막인 독도 몬스터 행동 전엔 아직 몸에 있으니 지우기 전에 센다(살아 있는 사람만)
+  let absorbStacks = 0;
   for (const m of ordered) {
     if (m.hp > 0) {
       const dmg = poisonDamage(battle, m);
@@ -467,6 +469,7 @@ function resolveTurn(battle, rng = Math.random) {
         last.poison[m.userId] = dmg;
         poisonLog.push(`${m.poisonStatus.emoji}${m.poisonStatus.name}: ${m.name} -${dmg}${m.hp <= 0 ? ' 💀' : ''}`);
       }
+      if (m.hp > 0) absorbStacks += poisonStacks(battle, m);
     }
     if (m.poisonStacks && (m.hp <= 0 || (m.poisonUntil || 0) <= battle.turn)) m.poisonStacks = 0;
   }
@@ -503,10 +506,11 @@ function resolveTurn(battle, rng = Math.random) {
   last.monsterFx = moveFx(battle.intent, move); // 그림이 연출(monsterFx·hitFx)을 고를 때 쓴다
   if (move.target === 'self') {
     const before = battle.hp;
-    const stacks = partyPoisonStacks(battle);
+    const stacks = absorbStacks;
     // 독기 흡수(healPerStack): 예고 뒤 파티가 독을 다 지웠으면 빨아들일 독기가 없어 실패 — 회복 0, 공격력 증가도 없음
     last.fizzled = !!move.healPerStack && stacks === 0;
-    const rate = last.fizzled ? 0 : (move.healRate || 0) + (move.healPerStack || 0) * stacks;
+    // 중첩은 4인 기준으로 환산(합 × 4 ÷ 인원) — 인원이 적으면 쌓일 독 자체가 적어 1~2인에서 회복이 너무 작았다
+    const rate = last.fizzled ? 0 : (move.healRate || 0) + (move.healPerStack || 0) * stacks * PARTY_BASE_SIZE / battle.members.length;
     battle.hp = Math.min(battle.maxHp, battle.hp + Math.round(battle.maxHp * rate));
     last.monsterHeal = battle.hp - before;
     log.push(last.fizzled
