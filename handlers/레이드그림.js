@@ -307,10 +307,13 @@ const SPRAY = [
 function dot(x, y, size, c) { p.rect(Math.round(x - size / 2), Math.round(y - size / 2), Math.round(size), Math.round(size), c); }
 // 반짝임: 가운데 + 상하좌우 네 칸
 function sparkle(x, y, size, c) { for (const [i, j] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) dot(x + i * size, y + j * size, size, c); }
-// 포자 구름 뭉치: 둥근 7칸 덩어리 + 왼쪽 위 밝은 칸
-function puff(x, y, size, c, light) {
-  for (const [i, j] of [[0, -1], [-1, 0], [0, 0], [1, 0], [-1, 1], [0, 1], [1, 1]]) dot(x + i * size, y + j * size, size, c);
-  dot(x - size, y - size * 0.5, size * 0.6, light);
+// 포자 알갱이: 모서리를 깎은 4×4 동그란 알 — 왼쪽 위는 밝은 반사광, 오른쪽 아래는 그늘(어두운 바탕에서도 둥글게 보이게)
+const SPORE_BALL = ['.cc.', 'clcc', 'cccd', '.dd.'];
+function puff(x, y, size, c, light, dark = '#3a1450') {
+  SPORE_BALL.forEach((line, j) => [...line].forEach((ch, i) => {
+    if (ch === '.') return;
+    dot(x + (i - 1.5) * size, y + (j - 1.5) * size, size, ch === 'l' ? light : ch === 'd' ? dark : c);
+  }));
 }
 function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
   if (!move) return;
@@ -375,7 +378,11 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
     // 사방으로 터져 나가는 큰 포자 구름 뭉치 + 그 바깥 파편 한 알씩
     for (let k = 0; k < 8; k++) {
       const a = (k / 8) * Math.PI * 2 + Math.PI / 8;
-      puff(cx + Math.cos(a) * 182, cy + 4 + Math.sin(a) * 182 * 0.4, 11, k % 2 ? spore : color, '#f1cdfb');
+      const [px, py] = [cx + Math.cos(a) * 182, cy + 4 + Math.sin(a) * 182 * 0.4];
+      // 날아가는 꼬리(몸 쪽으로 작아지는 가루 두 알) + 포자 알갱이
+      dot(cx + Math.cos(a) * 128, cy + 4 + Math.sin(a) * 128 * 0.4, 5, spore);
+      dot(cx + Math.cos(a) * 150, cy + 4 + Math.sin(a) * 150 * 0.4, 7, spore);
+      puff(px, py, 9, k % 2 ? spore : color, '#f1cdfb');
       dot(cx + Math.cos(a + 0.16) * 236, cy + 4 + Math.sin(a + 0.16) * 236 * 0.38, 7, accent);
     }
     return;
