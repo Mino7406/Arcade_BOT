@@ -27,7 +27,7 @@ const {
   setUserXpFrozen,
 } = require('../handlers/레벨링');
 const { logAction } = require('../handlers/로그');
-const { getRaidStatus, setAutoSpawn, setNextSpawnAt, forceSpawnRaid, forceEndRaid } = require('../handlers/레이드');
+const { getRaidStatus, setAutoSpawn, setNextSpawnAt, setNextMonster, forceSpawnRaid, forceEndRaid } = require('../handlers/레이드');
 const { MONSTERS } = require('../handlers/레이드전투');
 const { kstDateTimeString, parseKstDateTime } = require('../handlers/시간');
 const { displayNameFromMember } = require('../handlers/이름');
@@ -156,6 +156,11 @@ function buildManageView(notice, guildId) {
           .setLabel('출현 시각 변경')
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(!raid.autoSpawn), // 중지 중엔 일정이 없으니 가동부터
+        new ButtonBuilder().setCustomId('xp:mng:raidmon')
+          .setEmoji('🔄')
+          .setLabel('몬스터 변경')
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(!raid.autoSpawn),
         raidButton(raid),
       ),
     ],
@@ -165,7 +170,8 @@ function buildManageView(notice, guildId) {
 // 레이드 상태 두 줄(진행 여부 / 다음 자동 출현 시각) — XP 관리 패널과 테스트 서버 화면이 공유.
 function raidStatusText(raid) {
   const next = raid.nextSpawnAt ? Math.floor(raid.nextSpawnAt / 1000) : null;
-  return `**레이드** ${raid.active ? `👾 ${raid.monsterName} 진행 중 (${raid.phase === 'recruit' ? '모집' : '전투'})` : '⚪ 대기'}\n` +
+  const waiting = raid.nextMonster ? `⚪ 대기 · 다음 몬스터 ${raid.nextMonster.emoji} **${raid.nextMonster.name}**` : '⚪ 대기';
+  return `**레이드** ${raid.active ? `👾 ${raid.monsterName} 진행 중 (${raid.phase === 'recruit' ? '모집' : '전투'})` : waiting}\n` +
     `-# ${next ? `다음 자동 출현 <t:${next}:f> (<t:${next}:R>)` : raid.autoSpawn ? '다음 출현 일정 없음' : '자동 출현 중지 — 소환 버튼으로만 띄울 수 있어요'}`;
 }
 
@@ -188,6 +194,26 @@ function buildRaidPickView(guildId, notice) {
   for (let i = 0; i < buttons.length && rows.length < 4; i += 5) rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
   rows.push(new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('xp:mng:raidback').setEmoji('↩️').setLabel('돌아가기').setStyle(ButtonStyle.Secondary),
+  ));
+  return { content: '', embeds: [embed], components: rows };
+}
+
+// 🔄 몬스터 변경 → 다음 자동 출현 몬스터 고르기: 🎲 무작위(다시 뽑기) + 몬스터마다 버튼(지금 정해진 몬스터는 초록), 돌아가기.
+function buildNextMonsterView(guildId) {
+  const raid = getRaidStatus(guildId);
+  const next = raid.nextMonster;
+  const embed = new EmbedBuilder()
+    .setColor(0x5865F2)
+    .setDescription(`## 🔄 다음 출현 몬스터 변경\n지금 정해진 몬스터: ${next ? `${next.emoji} **${next.name}**` : '없음'}\n-# 🎲 무작위는 등록된 몬스터 중에서 다시 뽑아요. 출현한 뒤 그다음 몬스터는 다시 무작위로 정해져요.`);
+  const buttons = [
+    new ButtonBuilder().setCustomId('xp:nextmon:random').setEmoji('🎲').setLabel('무작위').setStyle(ButtonStyle.Primary),
+    ...MONSTERS.map(m => new ButtonBuilder().setCustomId(`xp:nextmon:${m.id}`).setEmoji(m.emoji).setLabel(m.name)
+      .setStyle(next?.id === m.id ? ButtonStyle.Success : ButtonStyle.Secondary)),
+  ];
+  const rows = [];
+  for (let i = 0; i < buttons.length && rows.length < 4; i += 5) rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
+  rows.push(new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('xp:menu:manage').setEmoji('↩️').setLabel('돌아가기').setStyle(ButtonStyle.Secondary),
   ));
   return { content: '', embeds: [embed], components: rows };
 }
@@ -353,6 +379,15 @@ async function handleXpButton(interaction) {
     return;
   }
 
+  // 다음 자동 출현 몬스터 바꾸기
+  if (action === 'nextmon') {
+    const error = setNextMonster(targetId);
+    const next = getRaidStatus(interaction.guildId).nextMonster;
+    if (!error) logAction(interaction, 'XP 관리', `레이드 다음 출현 몬스터 변경 — ${next?.name}${targetId === 'random' ? ' (무작위)' : ''}`);
+    await interaction.update(buildManageView(error ? `⚠️ ${error}` : `🔄 **다음 출현 몬스터를 ${next.emoji} ${next.name}(으)로 정했습니다.**${targetId === 'random' ? ' (무작위)' : ''}`, interaction.guildId));
+    return;
+  }
+
   // XP 관리 패널
   if (action === 'mng') {
     if (targetId === 'boost') {
@@ -390,6 +425,12 @@ async function handleXpButton(interaction) {
         return;
       }
       await interaction.update(buildRaidPickView(interaction.guildId));
+    } else if (targetId === 'raidmon') {
+      if (!getRaidStatus(interaction.guildId).autoSpawn) {
+        await interaction.update(buildManageView('⚠️ 자동 출현이 중지돼 있어요. 먼저 가동해 주세요.', interaction.guildId));
+        return;
+      }
+      await interaction.update(buildNextMonsterView(interaction.guildId));
     } else if (targetId === 'raidback') {
       await interaction.update(raidResultView(interaction));
     } else if (targetId === 'raidend') {

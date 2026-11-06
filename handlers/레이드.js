@@ -59,7 +59,8 @@ const HELP_DELETABLE_MS = 15 * 60 * 1000; // 디스코드가 비공개 응답을
 
 const STATE_PATH = path.join(__dirname, '..', 'DB', 'raid.json');
 
-// 디스크 상태: { autoSpawn, nextSpawnAt, active: { [guildId]: 진행 중인 레이드 } }
+// 디스크 상태: { autoSpawn, nextSpawnAt, nextMonsterId, active: { [guildId]: 진행 중인 레이드 } }
+// nextMonsterId: 다음 자동 출현 때 나올 몬스터(일정을 잡을 때 무작위로 미리 정하고, 관리자가 /xp에서 바꿀 수 있음).
 // autoSpawn: 본서버 자동 출현 가동 여부(/xp → XP 관리에서 켜고 끔). 값이 없으면 중지로 본다.
 // active[guildId] = { channelId, messageId, monsterId, phase, recruitEndsAt, party, battle?, battleStartedAt?, battleEndsAt? }
 // (battle은 몬스터 객체를 뺀 전투 상태). 켜질 때 남아 있으면 그 메시지에서 레이드를 이어간다(resumeRaid).
@@ -72,7 +73,7 @@ function loadState() {
   } catch (err) {
     console.error('raid.json 읽기 실패(새로 시작):', err);
   }
-  st = { autoSpawn: false, nextSpawnAt: null, active: {}, ...st };
+  st = { autoSpawn: false, nextSpawnAt: null, nextMonsterId: null, active: {}, ...st };
   // 예전 형식(레이드 하나: { guildId, channelId, messageId })이면 서버별 형식으로 옮긴다.
   if (!st.active) st.active = {};
   else if (st.active.guildId) st.active = { [st.active.guildId]: { channelId: st.active.channelId, messageId: st.active.messageId } };
@@ -102,10 +103,14 @@ function randomTimeInWindow(dayStartUtc) {
   const end = dayStartUtc + SPAWN_WINDOW_END_HOUR * 3600_000;
   return start + Math.floor(Math.random() * (end - start));
 }
+// 다음 자동 출현 몬스터는 일정을 잡을 때 등록된 몬스터 중 무작위로 미리 정한다(/xp에 '다음 몬스터'로 보이고 바꿀 수 있게).
+const randomMonsterId = () => (MONSTERS.length ? MONSTERS[Math.floor(Math.random() * MONSTERS.length)].id : null);
+const validMonsterId = (id) => (MONSTERS.some(m => m.id === id) ? id : null);
 function scheduleNextSpawn(fromMs = Date.now()) {
   const [minDays, maxDays] = SPAWN_INTERVAL_DAYS;
   const days = minDays + Math.floor(Math.random() * (maxDays - minDays + 1));
   state.nextSpawnAt = randomTimeInWindow(kstDayStartUtc(fromMs, days));
+  state.nextMonsterId = randomMonsterId();
   saveState(state);
 }
 // 봇이 꺼져 있던 사이 출현 시각을 한참 넘겼으면(새벽에 켜지는 등) 그 자리에서 바로 띄우지 않고
@@ -1109,12 +1114,13 @@ async function spawnScheduled(client) {
   if (raids.has(GUILD_ID)) return;
   const guild = client.guilds.cache.get(GUILD_ID);
   const channel = guild && await client.channels.fetch(PLAYGROUND_CHANNEL_ID).catch(() => null);
+  const monsterId = validMonsterId(state.nextMonsterId); // 미리 정해 둔 몬스터(없거나 지워진 몬스터면 무작위)
   scheduleNextSpawn(); // 성공 여부와 관계없이 다음 일정을 잡는다(실패한 출현을 1분마다 재시도하지 않게)
   if (!channel) {
     logError('레이드', '레이드 자동 출현 실패 — 놀이터 채널을 찾을 수 없음', null);
     return;
   }
-  await spawnRaid(client, channel);
+  await spawnRaid(client, channel, { monsterId });
 }
 
 function startRaidScheduler(client) {
@@ -1125,9 +1131,13 @@ function startRaidScheduler(client) {
     .catch(err => console.error('중단된 레이드 정리 실패:', err))
     .finally(() => { if (![...raids.values()].some(r => r.freezesXp)) setRaidXpFrozen(false); });
   if (!state.autoSpawn) {
-    if (state.nextSpawnAt) { state.nextSpawnAt = null; saveState(state); } // 중지 중엔 일정을 두지 않는다
+    if (state.nextSpawnAt || state.nextMonsterId) { state.nextSpawnAt = null; state.nextMonsterId = null; saveState(state); } // 중지 중엔 일정을 두지 않는다
   } else if (!state.nextSpawnAt) scheduleNextSpawn();
-  else if (Date.now() - state.nextSpawnAt > 60 * 60_000) rescheduleOverdue();
+  else {
+    if (Date.now() - state.nextSpawnAt > 60 * 60_000) rescheduleOverdue();
+    // 예전 기록(다음 몬스터 없음)이거나 그 몬스터 파일이 빠졌으면 무작위로 다시 정한다
+    if (!validMonsterId(state.nextMonsterId)) { state.nextMonsterId = randomMonsterId(); saveState(state); }
+  }
   setInterval(() => {
     if (!state.autoSpawn || !state.nextSpawnAt || Date.now() < state.nextSpawnAt) return;
     // 출현 시각에 이미 레이드가 떠 있으면(관리자 소환 등) 이번 출현은 건너뛰고 다음 일정을 잡는다
@@ -1152,6 +1162,7 @@ function getRaidStatus(guildId) {
     monsterName: r?.monster.name ?? null,
     autoSpawn: !!state.autoSpawn,
     nextSpawnAt: state.nextSpawnAt,
+    nextMonster: state.autoSpawn ? (MONSTERS.find(m => m.id === state.nextMonsterId) ?? null) : null, // 다음 자동 출현 몬스터
   };
 }
 
@@ -1159,7 +1170,7 @@ function getRaidStatus(guildId) {
 function setAutoSpawn(on) {
   state.autoSpawn = !!on;
   if (on) scheduleNextSpawn();
-  else { state.nextSpawnAt = null; saveState(state); }
+  else { state.nextSpawnAt = null; state.nextMonsterId = null; saveState(state); }
   return getRaidStatus(GUILD_ID);
 }
 
@@ -1170,6 +1181,17 @@ function setNextSpawnAt(epochMs, now = Date.now()) {
   if (!Number.isFinite(epochMs) || epochMs <= now) return '지금보다 뒤의 시각을 적어 주세요.';
   if (epochMs - now > MAX_MANUAL_SPAWN_AHEAD_DAYS * 86400_000) return `${MAX_MANUAL_SPAWN_AHEAD_DAYS}일 안쪽으로만 정할 수 있어요.`;
   state.nextSpawnAt = epochMs;
+  saveState(state);
+  return null;
+}
+
+// 다음 자동 출현 몬스터를 관리자가 바꾼다(monsterId 또는 'random' — 무작위로 다시 뽑기). 자동 출현이 가동 중일 때만.
+// 실패하면 이유 문자열, 성공하면 null. 출현 뒤 그다음 몬스터는 평소처럼 무작위로 다시 정해진다.
+function setNextMonster(monsterId) {
+  if (!state.autoSpawn) return '자동 출현이 중지돼 있어요. 먼저 가동해 주세요.';
+  const id = monsterId === 'random' ? randomMonsterId() : validMonsterId(monsterId);
+  if (!id) return '그 몬스터를 찾을 수 없어요. 다시 골라 주세요.';
+  state.nextMonsterId = id;
   saveState(state);
   return null;
 }
@@ -1197,6 +1219,7 @@ module.exports = {
   getRaidStatus,
   setAutoSpawn,
   setNextSpawnAt,
+  setNextMonster,
   noteChannelMessage,
   forceSpawnRaid,
   forceEndRaid,

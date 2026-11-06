@@ -413,8 +413,12 @@ let ok4;
     assert(raidMod.setNextSpawnAt(want) === null && raidMod.getRaidStatus('gMain').nextSpawnAt === want, '출현 시각 수동 변경');
     assert(raidMod.setNextSpawnAt(Date.now() - 1000) && raidMod.getRaidStatus('gMain').nextSpawnAt === want, '지난 시각은 거절(일정 그대로)');
     assert(raidMod.setNextSpawnAt(Date.now() + 40 * 86400_000) && raidMod.getRaidStatus('gMain').nextSpawnAt === want, '30일 넘는 시각은 거절');
+    assert(raidMod.getRaidStatus('gMain').nextMonster?.id === 'slime', '가동하면 다음 출현 몬스터도 미리 정해짐(대기 화면에 표시)');
+    assert(raidMod.setNextMonster('slime') === null && raidMod.setNextMonster('random') === null && raidMod.getRaidStatus('gMain').nextMonster, '다음 출현 몬스터 변경(고르기·무작위)');
+    assert(raidMod.setNextMonster('nope') && raidMod.getRaidStatus('gMain').nextMonster?.id === 'slime', '없는 몬스터로는 못 바꿈(그대로)');
     st = raidMod.setAutoSpawn(false);
-    assert(!st.autoSpawn && st.nextSpawnAt === null, '중지하면 일정 삭제');
+    assert(!st.autoSpawn && st.nextSpawnAt === null && st.nextMonster === null, '중지하면 일정·다음 몬스터 삭제');
+    assert(raidMod.setNextMonster('slime') && raidMod.getRaidStatus('gMain').nextMonster === null, '중지 중엔 다음 몬스터를 못 정함');
     assert(raidMod.setNextSpawnAt(want) && raidMod.getRaidStatus('gMain').nextSpawnAt === null, '중지 중엔 출현 시각을 못 정함');
     const T = require(path.join(root, 'handlers/시간.js'));
     const now = Date.UTC(2026, 10, 4, 15, 39); // KST 2026-11-05 00:39
