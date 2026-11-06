@@ -478,10 +478,24 @@ async function flush(r) {
       if (result === 'fatal' && r.phase !== 'ended') finishRaid(r, r.phase === 'battle' ? 'timeout' : 'noshow');
       // 일시적인 오류면 다음 갱신(타이머 글자 갱신 등) 때 다시 보낸다. 새 그림을 못 올렸으면 그때 다시 그린다.
       if (result === 'retry' && redraw) r.imageDirty = true;
+      // 결과 화면을 처음 올린 뒤 채널 안내(복구 완료·XP 손실)를 보낸다. 실패해도 안내는 빠뜨리지 않는다.
+      if (r.phase === 'ended' && r.endNotice) sendEndNotice(r);
     }
   } finally {
     r.flushing = false;
   }
+}
+
+// 레이드 종료 채널 안내를 결과 화면 바로 아래에 붙이지 않고 END_NOTICE_DELAY_MS 뒤에 보낸다.
+const END_NOTICE_DELAY_MS = 1000;
+function sendEndNotice(r) {
+  const content = r.endNotice;
+  const channel = r.message?.channel;
+  r.endNotice = null;
+  if (!content || !channel) return;
+  setTimeout(() => {
+    channel.send({ content, allowedMentions: { parse: [] } }).catch(() => {});
+  }, END_NOTICE_DELAY_MS);
 }
 
 function currentView(r, redraw) {
@@ -770,9 +784,9 @@ function finishRaid(r, outcome) {
 
   // 복구 안내는 채널에 따로 한 줄 올린다 — 결과 화면은 위쪽 메시지라 묻혀 있을 수 있어서.
   // 토벌 실패(벌칙)면 복구 안내 대신 XP를 잃었다는 안내를 올린다.
+  // 바로 보내면 결과 화면(그림 그리기·전송)보다 먼저 떠서, 결과 화면을 올린 뒤 조금 있다가 보낸다(flush).
   if (r.freezesXp && r.message?.channel) {
-    const content = penalty ? `**${PENALTY_TEXT}**` : '🔧 **XP 시스템 복구 완료.**';
-    r.message.channel.send({ content, allowedMentions: { parse: [] } }).catch(() => {});
+    r.endNotice = penalty ? `**${PENALTY_TEXT}**` : '🔧 **XP 시스템 복구 완료.**';
   }
   r.rewards = rewards;
   requestRender(r, { image: true, immediate: true });
