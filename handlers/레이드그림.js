@@ -282,12 +282,11 @@ const STATUS_ICONS = {
 // 카드 왼쪽 위 상태 아이콘: 기절(별). 점액는 아이콘 없이 점액 얼룩으로 표시한다.
 // 카드 왼쪽 상태 배지: 기절(별) · 독(거품). 환각은 배지 대신 아이콘 위 소용돌이(카드 그리는 곳에서, 점액처럼).
 // 냉기는 독 아래(같은 자리 규칙). 빙결(stunStatus.fx 'ice')은 별 대신 아이콘 위 얼음 덮개(iceCover)로 보인다.
+// 기절 별은 배지 대신 환각 소용돌이처럼 아이콘 오른쪽 아래에 걸쳐 그린다(카드 그리는 곳 — 사용자 요청).
 function statusBadges(b, mem, x, y) {
-  const stars = isStunned(b, mem) && !isIced(b, mem);
-  if (stars) stunStars(x, y);
-  let by = stars ? y + 34 : y;
+  let by = y;
   const stacks = poisonStacks(b, mem);
-  // 독은 기절 별과 같은 자리(카드 왼쪽 위). 기절과 함께 걸린 경우만 그 아래로 내린다.
+  // 독은 카드 왼쪽 위, 냉기는 그 아래
   if (stacks) { poisonBadge(x, by, stacks); by += stacks > 1 ? 44 : 34; }
   const chill = chillStacks(b, mem);
   if (chill) chillBadge(x, by, chill);
@@ -815,6 +814,8 @@ function renderBattle(r) {
       if (!down) statusBadges(b, mem, x + 32, y + 66);
       // 환각(최면) 상태는 점액처럼 카드 아이콘 위에 소용돌이로 보여 준다. 최면술에 막 맞은 결과 화면은 타격 표시(작은 최면 물결)만.
       if (!down && isConfused(b, mem) && !(usedFx === 'hypno' && hit)) confuseSwirl(x + w / 2 + 14, y + 98); // 아이콘 오른쪽 아래에 걸쳐 아이콘도 보이게
+      // 기절(별): 환각과 같은 자리(아이콘 오른쪽 아래). 빙결은 얼음 덮개라 그리지 않는다.
+      if (!down && isStunned(b, mem) && !isIced(b, mem)) stunStars(x + w / 2 + 22, y + 104);
       // 점액 상태는 아이콘 대신 카드 아이콘에 묻은 점액으로 보여준다. 이번 턴 결과 화면에서 맞은 카드는
       // 타격 표시(할퀸 자국·충격 별·흩뿌리기 얼룩)만 그려 겹치지 않게 하고, 다음 선택 화면부터 다시 점액을 보인다.
       if (!down && slowTurnsLeft(b, mem) > 0 && !(usedMove && hit)) hitFx('sweep', x + w / 2, y + 86, fxColor);
