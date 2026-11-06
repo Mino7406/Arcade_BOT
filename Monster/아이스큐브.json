@@ -260,7 +260,7 @@
       }
     },
     "armor": {
-      "name": "가시 얼음 갑옷",
+      "name": "얼음 갑옷",
       "telegraph": "몸 모서리에 얼음 가시가 돋는다...",
       "target": "none",
       "fx": "charge",

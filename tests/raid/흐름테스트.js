@@ -644,7 +644,7 @@ let ok4;
     const solo = [{ userId: 's', name: 'S', role: 'sword' }];
     assert(E.createBattle(mush, solo, rng, { minParty: 1 }).maxHp < E.createBattle(mush, solo, rng).maxHp, '테스트 서버(minParty 1)는 혼자일 때 1인 HP, 기본은 2인 HP');
   }
-  // 14-2) 얼음 큐브(Monster-all): 냉기(방어 +1 · 공격·스킬 -1 · 3중첩 빙결) · 서리 숨결 · 가시 얼음 갑옷
+  // 14-2) 얼음 큐브(Monster-all): 냉기(방어 +1 · 공격·스킬 -1 · 3중첩 빙결) · 서리 숨결 · 얼음 갑옷
   {
     const E = require(path.join(root, 'handlers/레이드전투.js'));
     const all = E.loadMonsters(path.join(root, 'Monster-all'));
@@ -700,7 +700,7 @@ let ok4;
       turnWith(b, 'armor', { x: 'attack', y: 'attack' });
       const armorLog = b.log.join();
       turnWith(b, 'attack', { x: 'attack', y: 'guard' });
-      assert(armorLog.includes('때리면 ❄️냉기 +1') && E.chillStacks(b, x()) === 1 && E.chillStacks(b, y()) === 1 && b.lastTurn.acts.x.value === Math.round(100 * ice.moves.armor.effectRate), '가시 얼음 갑옷: 다음 턴 때린 사람 냉기 +1(녹지 않음), 방어한 사람은 +1');
+      assert(armorLog.includes('때리면 ❄️냉기 +1') && E.chillStacks(b, x()) === 1 && E.chillStacks(b, y()) === 1 && b.lastTurn.acts.x.value === Math.round(100 * ice.moves.armor.effectRate), '얼음 갑옷: 다음 턴 때린 사람 냉기 +1(녹지 않음), 방어한 사람은 +1');
 
       fresh();
       turnWith(b, 'smash', { x: 'guard', y: 'attack' });

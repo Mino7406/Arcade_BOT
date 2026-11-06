@@ -31,7 +31,7 @@ const TAUNT_DAMAGE_RATE = 0.3;   // 도발 중인 수호자: 받는 피해 70% �
 //           행동하는 즉시 방어 +guardStacks · 공격·스킬 -melt(0 밑으로 안 감) · 치유사 스킬은 전원 0 · 회복약은 본인 0.
 //           아군 행동이 다 끝난 뒤와 몬스터 기술로 쌓인 뒤 freezeAt 이상이면 빙결(freezeStatus — 다음 턴 행동 불가, 기절 규칙), 냉기 0.
 //   chill(효과): 맞은 사람 냉기 +stacks(분노 중 rageStacks). 방어해도 걸린다.
-//   chillOnHit(보호막 기술): 그 보호막이 켜진 턴에 몬스터에게 피해를 준 사람은 녹는 대신 냉기 +chillOnHit(가시 얼음 갑옷).
+//   chillOnHit(보호막 기술): 그 보호막이 켜진 턴에 몬스터에게 피해를 준 사람은 녹는 대신 냉기 +chillOnHit(얼음 갑옷).
 // 인원별 몬스터 피해 배율. 보통 플레이 승률이 인원과 상관없이 80~90%가 되게 맞춘 값(치유사·수호자가 다 있는 4인은 훨씬 버티므로 크게).
 const PARTY_DAMAGE_RATE = { 1: 1.35, 2: 1.07, 3: 1.28, 4: 2.0 }; // 3인은 궁수 차지 샷을 올리면서 1.25 → 1.28
 const PARTY_BASE_SIZE = 4;       // 몬스터 baseHp가 기준으로 삼는 인원(역할 4종 한 명씩).
@@ -469,7 +469,7 @@ function resolveTurn(battle, rng = Math.random) {
   const chill = battle.monster.chill;
   const addChill = (m, n) => { if (chill) m.chillStacks = Math.max(0, (m.chillStacks || 0) + n); };
   const melt = -(chill?.melt ?? 0);
-  // 몬스터를 때린 행동: 보통은 녹고, 가시 얼음 갑옷(보호막 + chillOnHit) 턴이면 오히려 냉기가 쌓인다
+  // 몬스터를 때린 행동: 보통은 녹고, 얼음 갑옷(보호막 + chillOnHit) 턴이면 오히려 냉기가 쌓인다
   const hitChill = () => (last.shielded && battle.shieldChill ? battle.shieldChill : melt);
   const freezeCheck = () => {
     if (!chill) return;

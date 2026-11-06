@@ -263,7 +263,7 @@ function effectLines(b) {
   const lines = [];
   const monsterName = b.rage ? b.monster.rageName : b.monster.name;
   const chill = b.monster.chill;
-  // 가시 얼음 갑옷(보호막 + chillOnHit): 때리면 냉기가 쌓인다는 것도 같은 줄에
+  // 얼음 갑옷(보호막 + chillOnHit): 때리면 냉기가 쌓인다는 것도 같은 줄에
   const spikes = isShielded(b) && chill && b.shieldChill ? ` · 때리면 ${chill.status.emoji}${chill.status.name} +${b.shieldChill}` : '';
   if (isShielded(b)) lines.push(`🛡️ 방어력 증가: ${monsterName} - **이번 턴 받는 피해 -${minusPct(b.shieldRate)}%**${spikes}`);
   if (isPowered(b)) lines.push(`⚔️ 공격력 증가: ${monsterName} - **다음 공격 피해 +${Math.round((b.powerRate - 1) * 100)}%**`);
