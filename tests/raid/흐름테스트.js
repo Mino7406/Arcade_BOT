@@ -119,7 +119,8 @@ let ok4;
   fs.writeFileSync(path.join(root, 'out_end.png'), images[images.length - 1]);
   assert(buttons().length === 0, '전투 종료 후 버튼 제거');
   assert(!lv.isRaidXpFrozen(), '종료 후 XP 정지 해제');
-  assert(sent.some(p => p.content?.includes('XP 시스템 복구 완료')), '복구 안내 메시지 전송');
+  // 테스트 전투는 가끔 지므로(무작위) 지면 복구 안내 대신 XP 손실 안내를 확인한다
+  assert(end.includes('RAID CLEAR') ? sent.some(p => p.content?.includes('XP 시스템 복구 완료')) : sent.some(p => p.content?.includes('50XP를 잃어버렸습니다')), '종료 안내 메시지 전송(클리어면 복구 완료, 지면 XP 손실)');
   if (end.includes('RAID CLEAR')) {
     assert(lv.getXp('gMain', '1') >= 300 && lv.getXp('gMain', '2') >= 300, '토벌 보상 XP 지급');
   }
@@ -499,7 +500,7 @@ let ok4;
     const slime = fs.readFileSync(path.join(root, 'Monster', '슬라임.json'), 'utf8');
     fs.writeFileSync(path.join(dir, '가.json'), slime);
     fs.writeFileSync(path.join(dir, '나.json'), '{ 깨진 파일');
-    const bad = JSON.parse(slime); bad.id = 'bad'; bad.sprite.rows[0] = 'zz' + bad.sprite.rows[0]; delete bad.moves.heal;
+    const bad = JSON.parse(slime); bad.id = 'bad'; bad.sprite.rows[0] = 'zz' + bad.sprite.rows[0]; delete bad.moves.smash;
     fs.writeFileSync(path.join(dir, '다.json'), JSON.stringify(bad));
     fs.writeFileSync(path.join(dir, '라.json'), slime); // id 중복
     const noDmg = JSON.parse(slime); noDmg.id = 'nodmg'; delete noDmg.moves.attack.damage; noDmg.intentWeights.rage = { attack: 0 };
@@ -509,8 +510,64 @@ let ok4;
     console.error = origError;
     assert(list.length === 1 && list[0].id === 'slime', '깨진 JSON · 칸 빠진 파일 · id 중복 파일은 건너뜀');
     assert(errors.some(e => e.includes('moves.attack.damage')) && errors.some(e => e.includes('합이 0보다')), '피해 수치 없음 · 가중치 합 0인 파일도 건너뜀(HP가 NaN이 되는 것 방지)');
-    assert(errors.some(e => e.includes('palette에 없는 글자: z')) && errors.some(e => e.includes('moves.heal 없음')) && errors.some(e => e.includes('겹침')), '건너뛴 사유를 콘솔에 남김');
+    assert(errors.some(e => e.includes('palette에 없는 글자: z')) && errors.some(e => e.includes('moves.smash 없음')) && errors.some(e => e.includes('겹침')), '건너뛴 사유를 콘솔에 남김');
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+  // 14) 독버섯(Monster-all): 독 중첩·환각·독기 흡수 / 테스트 서버 1인 HP
+  {
+    const E = require(path.join(root, 'handlers/레이드전투.js'));
+    const origError = console.error; const errors = []; console.error = (...a) => errors.push(a.join(' '));
+    const all = E.loadMonsters(path.join(root, 'Monster-all'));
+    console.error = origError;
+    const mush = all.find(m => m.id === 'mushroom');
+    assert(mush && all.some(m => m.id === 'slime') && !errors.length, `Monster 폴더의 몬스터 전부 문제없이 불러옴(${all.map(m => m.name).join('·')})${errors.length ? ' — ' + errors.join(' / ') : ''}`);
+    const party = [{ userId: 'x', name: 'X', role: 'sword' }, { userId: 'y', name: 'Y', role: 'healer' }];
+    let roll = 0.5; const rng = () => roll;
+    const turnWith = (b, intent, choices = {}) => { b.intent = intent; for (const [u, a] of Object.entries(choices)) E.choose(b, u, a); return E.resolveTurn(b, rng); };
+    let b = E.createBattle(mush, party, rng);
+    const x = () => E.getMember(b, 'x'), y = () => E.getMember(b, 'y');
+    const sporeTurns = mush.moves.spore.effectTurns;
+    turnWith(b, 'spore');
+    assert(b.members.every(m => E.poisonStacks(b, m) === 1 && E.poisonTurnsLeft(b, m) === sporeTurns) && b.log.join().includes('☠️독'), `독 포자 → 전원 ☠️독 1중첩 ${sporeTurns}턴`);
+    let hp = x().hp; const tick = E.poisonDamage(b, x());
+    b.hp = Math.round(b.maxHp * 0.5);
+    turnWith(b, 'spore', { x: 'guard', y: 'guard' }); // 독이 아직 남은 동안 다시 맞기
+    assert(tick === Math.max(1, Math.round(mush.moves.spore.tickDamage * 1.07)) && b.lastTurn.poison.x === tick && x().hp < hp, '독: 다음 턴 아군 행동 뒤 중첩 × tickDamage × 인원 배율만큼 HP 감소');
+    assert(E.poisonStacks(b, x()) === 2 && E.poisonTurnsLeft(b, x()) === sporeTurns, '독 다시 맞으면 중첩 +1, 남은 턴 새로');
+    const before = b.hp; turnWith(b, 'absorb', { x: 'guard', y: 'guard' });
+    const ab = mush.moves.absorb;
+    assert(b.lastTurn.poison.x === Math.round(2 * mush.moves.spore.tickDamage * 1.07) && b.lastTurn.monsterHeal === Math.round(b.maxHp * (ab.healRate + ab.healPerStack * 4)) && b.hp === before + b.lastTurn.monsterHeal, '독기 흡수: 최대 HP × (healRate + healPerStack × 파티 독 중첩 4)');
+    turnWith(b, 'smash', { x: 'attack', y: 'guard' });
+    assert(E.poisonStacks(b, x()) === Math.min(mush.moves.smash.maxStacks, mush.moves.smash.stacks) && E.poisonStacks(b, y()) === 0, '필살 포자 대폭발: 방어 안 한 사람만 독 여러 중첩(방어하면 안 걸림)');
+    turnWith(b, 'attack', { y: 'skill' });
+    assert(b.members.every(m => E.poisonStacks(b, m) === 0) && b.log.join().includes('독 제거') && !b.lastTurn.poison.x, '치유사 스킬로 독 제거(그 턴 독 피해도 없음)');
+
+    // 환각: 방어하면 안 걸림, 걸리면 다음 턴 확률로 헛손질(회복약 안 씀), 방어는 성공
+    b = E.createBattle(mush, party, rng);
+    turnWith(b, 'hypno', { x: 'guard', y: 'guard' });
+    assert(!b.members.some(m => E.isConfused(b, m)), '환각 포자: 방어하면 안 걸림');
+    turnWith(b, 'hypno', { x: 'attack', y: 'skill' });
+    const cm = b.members.find(m => E.isConfused(b, m));
+    assert(cm && b.lastTurn.effects[cm.userId] === 'confuse' && b.log.join().includes('🌀환각'), '환각 포자: 맞은 사람 다음 턴 🌀환각');
+    cm.hp = 50; const pots = cm.potions; roll = 0.1;
+    turnWith(b, 'attack', { [cm.userId]: 'potion' });
+    assert(b.lastTurn.acts[cm.userId].label === '헛손질' && cm.potions === pots && b.log.join().includes('헛손질'), '환각: 확률에 걸리면 헛손질(회복약은 그대로)');
+    roll = 0.5; b.intent = 'hypno';
+    turnWith(b, 'hypno', { x: 'attack', y: 'attack' });
+    const cm2 = b.members.find(m => E.isConfused(b, m)); roll = 0.1;
+    turnWith(b, 'attack', { [cm2.userId]: 'guard' });
+    assert(b.lastTurn.acts[cm2.userId].label === '방어', '환각: 방어는 빗나가지 않음');
+    roll = 0.5;
+
+    // 독으로 전원 쓰러지면 몬스터 행동 전에 전멸
+    b = E.createBattle(mush, party, rng);
+    turnWith(b, 'spore');
+    for (const m of b.members) m.hp = 1;
+    assert(turnWith(b, 'attack', { x: 'guard', y: 'guard' }) === 'wipe' && !b.lastTurn.monsterMove, '독으로 전원 쓰러지면 바로 전멸');
+
+    // 테스트 서버: 혼자면 1인 HP(본서버는 2인 HP부터)
+    const solo = [{ userId: 's', name: 'S', role: 'sword' }];
+    assert(E.createBattle(mush, solo, rng, { minParty: 1 }).maxHp < E.createBattle(mush, solo, rng).maxHp, '테스트 서버(minParty 1)는 혼자일 때 1인 HP, 기본은 2인 HP');
   }
   // 17) 재시작 후 이어가기: 저장된 모집·전투, 예전 기록, 기록 없는 메시지 / 전멸 벌칙
   {

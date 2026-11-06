@@ -31,7 +31,7 @@ const { displayNameFromInteraction } = require('./이름');
 const {
   PLAYER_MAX_HP, POTIONS_PER_BATTLE, POTION_HEAL, GUARD_DAMAGE_RATE, ROLES, ROLE_ORDER, ACTIONS, MONSTERS,
   createBattle, checkChoice, choose, allChosen, resolveTurn,
-  isStunned, slowTurnsLeft, isShielded, minusPct, findMove, contribution,
+  isStunned, slowTurnsLeft, isShielded, poisonTurnsLeft, poisonStacks, poisonDamage, isConfused, minusPct, contribution,
 } = require('./레이드전투');
 const { renderRecruit, renderBattle, renderEnd, warmUp } = require('./레이드그림');
 
@@ -253,7 +253,7 @@ function byStatus(members, statusKey) {
   }
   return groups;
 }
-// 선택 화면 아래 상태 효과 안내(몬스터 보호막 · 기절류 · 점액류)
+// 선택 화면 아래 상태 효과 안내(몬스터 보호막 · 기절류 · 점액류 · 독류 · 환각류)
 function effectLines(b) {
   const lines = [];
   if (isShielded(b)) lines.push(`🛡️ 방어력 증가: ${b.rage ? b.monster.rageName : b.monster.name} - **이번 턴 주는 피해 -${minusPct(b.shieldRate)}%**`);
@@ -264,6 +264,16 @@ function effectLines(b) {
     // 같은 이름이라도 세기는 기술마다 다를 수 있다(보통 하나라 숫자도 하나)
     const pcts = [...new Set(mems.map(mem => minusPct(mem.slowRate)))];
     lines.push(`${label}: ${mems.map(mem => `${mem.name}(${slowTurnsLeft(b, mem)}턴)`).join(', ')} - **주는 피해 -${pcts.join('/')}%**`);
+  }
+  // 독류: 사람마다 중첩·남은 턴·이번 턴 피해가 달라 이름 옆에 붙인다
+  const poisoned = b.members.filter(mem => mem.hp > 0 && poisonStacks(b, mem) > 0);
+  for (const [label, mems] of byStatus(poisoned, 'poisonStatus')) {
+    lines.push(`${label}: ${mems.map(mem => `${mem.name}(${mem.poisonStacks > 1 ? `×${mem.poisonStacks} · ` : ''}${poisonTurnsLeft(b, mem)}턴 · -${poisonDamage(b, mem)})`).join(', ')} - **이번 턴 행동 뒤 HP 감소**`);
+  }
+  const confused = b.members.filter(mem => mem.hp > 0 && isConfused(b, mem));
+  for (const [label, mems] of byStatus(confused, 'confuseStatus')) {
+    const pcts = [...new Set(mems.map(mem => Math.round(mem.confuseRate * 100)))];
+    lines.push(`${label}: ${mems.map(mem => mem.name).join(', ')} - **행동 ${pcts.join('/')}% 확률로 빗나감(방어는 성공)**`);
   }
   return lines;
 }
@@ -397,7 +407,10 @@ async function endView(r, outcome, rewards = []) {
 // 다른 기술은 넣지 않는다(몬스터가 바뀌면 틀린 설명이 되므로). 수치는 전투 규칙·몬스터 데이터에서 읽는다.
 function buildHelpView(monster) {
   const rageAt = monster?.rage?.hpRatio === 0.5 ? '절반' : `${Math.round((monster?.rage?.hpRatio ?? 0.5) * 100)}%`;
-  const stun = findMove(monster, { effect: 'stun' });
+  const smash = monster?.moves?.smash;
+  // 필살기를 방어하지 않으면 생기는 일(필살기 데이터에서 읽음): 기절류는 행동 불가, 그 밖에 방어로 막는 상태이상은 이름으로
+  const smashPenalty = smash?.effect === 'stun' ? ' 방어하지 않으면 다음 턴 **행동 불가**'
+    : smash?.guardBlocks && smash.status ? ` 방어하지 않으면 **${smash.status.emoji}${smash.status.name}**` : '';
   const sections = [
     { text: '## ❔ 레이드 플레이 방법\n-# 몬스터를 쓰러뜨리면 멈춘 XP 시스템이 다시 작동해요' },
     { separator: true },
@@ -419,7 +432,7 @@ function buildHelpView(monster) {
     { text: [
       '### 👾 몬스터',
       '- 다음 행동을 **미리 예고**해요',
-      `- 💥 큰 공격 예고에는 **방어**!${stun ? ' 방어하지 않으면 다음 턴 **행동 불가**' : ''}`,
+      `- 💥 큰 공격 예고에는 **방어**!${smashPenalty}`,
       `- HP가 ${rageAt} 아래로 떨어지면 **분노**해 더 아프게 때려요`,
     ].join('\n') },
     { separator: true },
@@ -697,7 +710,8 @@ function startBattle(r, { by = null } = {}) {
   r.party.sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role)); // 화면에 역할 순서대로
   const mention = r.party.map(p => p.userId).filter(id => id !== by);
   r.startMention = mention.length ? mention : null;
-  r.battle = createBattle(r.monster, r.party);
+  // 본서버는 혼자여도 2인 HP(HP_MIN_PARTY), 테스트 서버는 혼자 끝까지 시험할 수 있게 1인 HP부터
+  r.battle = createBattle(r.monster, r.party, Math.random, { minParty: isExcludedGuild(r.guildId) ? 1 : undefined });
   r.battleStartedAt = Date.now(); // 종료 화면의 '걸린 시간'용
   r.battleEndsAt = r.battleStartedAt + BATTLE_LIMIT_MS;
   armTurnTimer(r);

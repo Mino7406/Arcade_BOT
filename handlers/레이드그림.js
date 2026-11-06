@@ -10,7 +10,7 @@
 
 const path = require('path');
 const { Painter, loadFont } = require('./그림판');
-const { ROLES, ROLE_ORDER, PLAYER_MAX_HP, ACTIONS, createBattle, choose, resolveTurn, isStunned, slowTurnsLeft, isShielded } = require('./레이드전투');
+const { ROLES, ROLE_ORDER, PLAYER_MAX_HP, ACTIONS, createBattle, choose, resolveTurn, isStunned, slowTurnsLeft, isShielded, poisonStacks, isConfused, moveFx } = require('./레이드전투');
 
 const W = 900; // 설계 크기(좌표는 전부 이 기준)
 const H = 640;
@@ -212,6 +212,30 @@ const STATUS_ICONS = {
 // 카드 왼쪽 위 상태 아이콘: 기절(별). 점액는 아이콘 없이 점액 얼룩으로 표시한다.
 function statusBadges(b, mem, x, y) {
   if (isStunned(b, mem)) stunStars(x, y);
+  else if (isConfused(b, mem)) spiral(x, y, 17, 4, '#7ef0e0');
+  const stacks = poisonStacks(b, mem);
+  if (stacks) poisonBadge(x, y + 34, stacks);
+}
+// 환각: 바깥에서 안으로 감기는 소용돌이(선분을 이어 그린다)
+function spiral(cx, cy, R, width, color, turns = 2.2, yScale = 1) {
+  const steps = Math.round(turns * 18);
+  let px = cx + R, py = cy;
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const a = t * turns * Math.PI * 2;
+    const rr = R * (1 - t * 0.85);
+    const nx = cx + Math.cos(a) * rr, ny = cy + Math.sin(a) * rr * yScale;
+    p.line(px, py, nx, ny, width, color);
+    px = nx; py = ny;
+  }
+}
+// 독: 보라 거품 세 개 + 오른쪽에 중첩 수(2 이상일 때)
+function poisonBadge(cx, cy, stacks) {
+  p.circle(cx - 5, cy + 3, 9, '#9b3fc0');
+  p.circle(cx + 7, cy - 4, 7, '#b45fe0');
+  p.circle(cx + 4, cy + 9, 5, '#c98af0');
+  p.circle(cx - 8, cy, 3, '#f1cdfb');
+  if (stacks > 1) text(`×${stacks}`, cx + 26, cy + 2, 17, '#e2b8ff');
 }
 // 기절: 납작한 노란 별 두 개(작은 별 왼쪽 위 · 큰 별 오른쪽 아래). 픽셀 대신 다각형이라 가장자리가 깔끔하다.
 function star(cx, cy, R, color) {
@@ -235,8 +259,46 @@ const SPRAY = [
 ];
 // 몬스터 기술 연출(턴 결과 화면). 몬스터마다 그리지 않고 기술 종류(moves 키)로 공통 처리한다.
 // layer 'back'은 몬스터 뒤, 'front'는 앞에 그린다. color는 몬스터 겉면 색(점액·기운).
-function monsterFx(move, cx, cy, color, layer) {
+function monsterFx(move, cx, cy, color, layer, spore = color) {
   if (!move) return;
+  const G = 8;
+  const cell = (x, y, c) => p.rect(cx + Math.round((x - cx) / G) * G - G / 2, cy + Math.round((y - cy) / G) * G - G / 2, G, G, c);
+  if (move === 'spore' && layer === 'front') {
+    // 갓 밑에서 사방으로 퍼지는 포자 가루: 몸 쪽 작은 도트 → 끝에 2×2 가루 뭉치
+    for (const [ux, uy, dist] of SPRAY) {
+      const at = (d) => [cx + ux * d, cy + uy * d * 0.62];
+      cell(...at(dist * 0.5), spore);
+      cell(...at(dist * 0.72), spore);
+      const [ex, ey] = at(dist);
+      for (const [i, j] of [[0, 0], [1, 0], [0, 1], [1, 1]]) cell(ex + i * G, ey + j * G, (i + j) % 2 ? color : spore);
+    }
+    return;
+  }
+  if (move === 'hypno' && layer === 'back') {
+    // 몸 뒤로 납작하게 도는 소용돌이(위 HP 바·아래 '다음 행동' 상자에 닿지 않게 세로를 줄임)
+    spiral(cx, cy - 6, 165, 5, '#7ef0e0', 2.6, 0.5);
+    return;
+  }
+  if (move === 'absorb' && layer === 'back') {
+    // 바깥에서 몸 쪽으로 빨려 드는 독기(보라 선 + 끝의 가루)
+    for (const [dx, dy] of [[-150, -50], [-160, 16], [-120, 60], [150, -50], [160, 16], [120, 60], [-80, -78], [80, -78]]) {
+      p.line(cx + dx, cy + dy, cx + dx * 0.68, cy + dy * 0.68, 4, spore);
+      cell(cx + dx * 1.08, cy + dy * 1.08, color);
+    }
+    return;
+  }
+  if (move === 'burst' && layer === 'front') {
+    // 바닥 충격파(보라) + 사방으로 터지는 포자
+    for (const sd of [-1, 1]) {
+      p.line(cx + sd * 86, cy + 48, cx + sd * 170, cy + 40, 5, spore);
+      p.line(cx + sd * 92, cy + 58, cx + sd * 200, cy + 60, 5, spore);
+    }
+    for (const [ux, uy, dist] of SPRAY) {
+      const [ex, ey] = [cx + ux * dist * 1.05, cy + uy * dist * 0.6];
+      cell(ex, ey, spore); cell(ex + G, ey - G, color); cell(ex - G, ey + G, color);
+    }
+    return;
+  }
   if (move === 'attack' && layer === 'back') {
     // 위에서 아래로 내리꽂는 속도선
     for (const [dx, len] of [[-70, 30], [-40, 44], [40, 44], [70, 30]]) p.line(cx + dx, cy - 78, cx + dx, cy - 78 + len, 4, '#f4e6cf');
@@ -275,8 +337,14 @@ function monsterFx(move, cx, cy, color, layer) {
   }
 }
 // 맞은 파티원 카드 아이콘 위 타격 표시: 박치기는 할퀸 자국, 흩뿌리기는 점액 얼룩, 짓누르기는 충격 별.
-function hitFx(move, cx, cy, color) {
-  if (move === 'attack') {
+function hitFx(move, cx, cy, color, spore = color) {
+  if (move === 'spore') {
+    p.circle(cx - 18, cy - 12, 9, spore); p.circle(cx + 20, cy + 6, 8, spore); p.circle(cx + 2, cy + 22, 6, color); p.circle(cx + 14, cy - 22, 5, color);
+  } else if (move === 'hypno') {
+    spiral(cx, cy, 30, 4, '#7ef0e0');
+  } else if (move === 'burst') {
+    p.poly([cx, cy - 34, cx + 9, cy - 9, cx + 34, cy, cx + 9, cy + 9, cx, cy + 34, cx - 9, cy + 9, cx - 34, cy, cx - 9, cy - 9], spore);
+  } else if (move === 'attack') {
     for (const d of [-14, 0, 14]) p.line(cx - 26 + d, cy - 26, cx + 14 + d, cy + 26, 5, '#ff4a3a');
   } else if (move === 'sweep') {
     p.circle(cx - 18, cy - 12, 10, color); p.circle(cx + 20, cy + 8, 8, color); p.circle(cx + 4, cy + 22, 6, color);
@@ -421,10 +489,13 @@ function renderBattle(r) {
     // (파티가 입힌 총피해 숫자는 일단 빼 둠 — 카드마다 행동 수치가 있어 중복이라)
     // 자세: 턴 결과 화면이면 방금 쓴 기술, 큰 한 방 직전 선택 화면이면 부푼 모습(charge), 아니면 평상시
     const usedMove = r.showingResult ? last?.monsterMoveKey : null;
-    const pose = usedMove || (b.intent === 'smash' ? 'charge' : null);
+    // 연출 종류(기술의 fx — 예전 저장 기록엔 없을 수 있어 기술 데이터에서 다시 구함)
+    const usedFx = usedMove ? (last.monsterFx || moveFx(usedMove, m.moves[usedMove])) : null;
+    const pose = usedMove || (b.intent === 'smash' ? m.moves.smash?.readyPose : null);
     const fxColor = (b.rage && m.sprite?.rageColors?.o) || m.sprite?.palette?.o || '#7fdc8c';
+    const sporeColor = (b.rage && m.sprite?.rageColors?.x) || m.sprite?.palette?.x || fxColor; // 포자 연출 색
     // 박치기·짓누르기는 파티 쪽(아래)으로 몸을 내밀어 그린다
-    const monsterY = 196 + (usedMove === 'attack' ? 10 : usedMove === 'smash' ? 6 : 0);
+    const monsterY = 196 + (usedFx === 'attack' ? 10 : usedFx === 'smash' || usedFx === 'burst' ? 6 : 0);
     // 보호막(단단해지기 다음 턴): 외곽선을 금속빛으로 바꾸고 둘레에 반짝임 + HP 바 왼쪽에 방패 배지
     const shielded = isShielded(b);
     if (shielded) {
@@ -433,16 +504,16 @@ function renderBattle(r) {
         p.line(W / 2 + dx, monsterY + dy - 7, W / 2 + dx, monsterY + dy + 7, 3, '#cfe8ff');
       }
     }
-    monsterFx(usedMove, W / 2, monsterY, fxColor, 'back');
+    monsterFx(usedFx, W / 2, monsterY, fxColor, 'back', sporeColor);
     drawMonster(m, W / 2, monsterY, 112, { rage: b.rage, pose, outline: shielded ? '#cfe8ff' : null });
-    monsterFx(usedMove, W / 2, monsterY, fxColor, 'front');
+    monsterFx(usedFx, W / 2, monsterY, fxColor, 'front', sporeColor);
     // 몬스터 오른쪽: 이번 턴 받은 피해(빨강) · 재생 회복량(초록, 피해 아래). 결과 화면에서만.
     const dealtNow = r.showingResult ? last?.monsterDamage : 0;
     // 점액 줄기(오른쪽 끝 약 W/2+190)와 오른쪽 위 '방어력 증가' 배지(y 186까지)를 피해 그 오른쪽 아래에,
     // 어두운 바탕을 깔아 연출 위에서도 읽히게 한다.
     const numbers = [];
     if (dealtNow) numbers.push([`-${dealtNow.toLocaleString()}`, '#ff5a45']);
-    if (usedMove === 'heal' && last?.monsterHeal) numbers.push([`+${last.monsterHeal.toLocaleString()}`, '#7cff9a']);
+    if (usedMove && last?.monsterHeal) numbers.push([`+${last.monsterHeal.toLocaleString()}`, '#7cff9a']);
     numbers.forEach(([label, color], i) => {
       const nx = W / 2 + 250, ny = 212 + i * 38;
       p.roundRect(nx - 56, ny - 17, 112, 34, 9, '#100c09');
@@ -506,9 +577,12 @@ function renderBattle(r) {
 
       roleIcon(roleKey, x + w / 2, y + 86, down);
       const hit = last?.hits[mem.userId];
-      if (hit && usedMove) hitFx(usedMove, x + w / 2, y + 86, fxColor);
+      if (hit && usedFx) hitFx(usedFx, x + w / 2, y + 86, fxColor, sporeColor);
       // 받은 피해 숫자도 그 턴의 결과 화면에서만(다음 턴 선택 화면에는 남기지 않는다)
       if (hit && r.showingResult) text(`-${hit}`, x + w - 38, y + 78, 24, '#ff5a45');
+      // 독 피해(아군 행동 뒤)는 보라 숫자로 그 아래에
+      const poisonHit = r.showingResult && last?.poison?.[mem.userId];
+      if (poisonHit) text(`-${poisonHit}`, x + w - 38, y + 108, 22, '#d7a3ff');
       // 상태 효과 아이콘(카드 왼쪽, 리본 아래): 점액(남은 턴) · 기절
       if (!down) statusBadges(b, mem, x + 32, y + 66);
       // 점액 상태는 아이콘 대신 카드 아이콘에 묻은 점액으로 보여준다. 이번 턴 결과 화면에서 맞은 카드는

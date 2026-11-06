@@ -1,9 +1,17 @@
-// 레이드 밸런스 시뮬레이션: 인원(1~4)·플레이 방식별 승률·평균 턴. node tests/raid/밸런스시뮬.js
-const E = require(process.argv[2] || require('path').join(__dirname, '..', '..', 'handlers', '레이드전투.js'));
+// 레이드 밸런스 시뮬레이션: 인원(1~4)·플레이 방식별 승률·평균 턴.
+//   node tests/raid/밸런스시뮬.js            → 슬라임
+//   node tests/raid/밸런스시뮬.js mushroom   → 몬스터 id(또는 이름)로 고르기
+// .js로 끝나는 인자는 다른 전투 엔진 파일(비교용)로 쓴다.
+const args = process.argv.slice(2);
+const E = require(args.find(a => a.endsWith('.js')) || require('path').join(__dirname, '..', '..', 'handlers', '레이드전투.js'));
+const pick = args.find(a => !a.endsWith('.js')) || 'slime';
+const MONSTER = E.MONSTERS.find(m => m.id === pick || m.name === pick);
+if (!MONSTER) throw new Error(`몬스터 없음: ${pick} (있는 것: ${E.MONSTERS.map(m => m.id).join(', ')})`);
+console.log(`몬스터: ${MONSTER.name}`);
 const TURN_CAP = 60; // 15분 제한 넉넉히
 function smart(b, m) {
   const mv = b.intent;
-  const low = E.aliveMembers(b).some(x => x.hp < 50) || b.members.some(x => x.hp <= 0);
+  const low = E.aliveMembers(b).some(x => x.hp < 50) || b.members.some(x => x.hp <= 0) || E.partyPoisonStacks(b) >= 4;
   if (m.role === 'healer' && low && !E.checkChoice(b, m.userId, 'skill')) return 'skill';
   if (mv === 'smash') return 'guard';
   if (m.hp < 35 && !E.checkChoice(b, m.userId, 'potion')) return 'potion';
@@ -18,7 +26,7 @@ function run(n, policy, trials = 4000) {
   let win = 0, wipe = 0, timeout = 0, turns = 0;
   for (let t = 0; t < trials; t++) {
     const party = E.ROLE_ORDER.slice(0, n).map((role, i) => ({ userId: 'u' + i, name: 'P' + i, role }));
-    const b = E.createBattle(E.MONSTERS[0], party);
+    const b = E.createBattle(MONSTER, party, Math.random, { minParty: n === 1 ? 1 : undefined });
     let out = null;
     while (!out && b.turn <= TURN_CAP) {
       for (const m of E.aliveMembers(b)) { const a = policy(b, m); if (a) E.choose(b, m.userId, a); }
