@@ -27,6 +27,11 @@ const TAUNT_DAMAGE_RATE = 0.3;   // 도발 중인 수호자: 받는 피해 70% �
 //   guardBlocks: true면 방어한 사람에게는 그 기술의 상태이상이 걸리지 않는다(stun은 원래 그렇다).
 //   healPerStack(재생 기술): 파티에 쌓인 독 중첩 하나당 최대 HP × healPerStack을 더 회복한다(중첩 합 × 4 ÷ 인원으로 4인 기준 환산).
 //   buffRate: 이 기술을 쓰면 공격력 증가 — 다음 피해 기술 1회의 피해 × buffRate(쓰면 사라짐, 화면에 '공격력 증가' 배지).
+//   냉기(몬스터 파일 최상위 chill 블록이 있을 때만 — 얼음 큐브): 파티원마다 냉기 중첩(chillStacks).
+//           행동하는 즉시 방어 +guardStacks · 공격·스킬 -melt(0 밑으로 안 감) · 치유사 스킬은 전원 0 · 회복약은 본인 0.
+//           아군 행동이 다 끝난 뒤와 몬스터 기술로 쌓인 뒤 freezeAt 이상이면 빙결(freezeStatus — 다음 턴 행동 불가, 기절 규칙), 냉기 0.
+//   chill(효과): 맞은 사람 냉기 +stacks(분노 중 rageStacks). 방어해도 걸린다.
+//   chillOnHit(보호막 기술): 그 보호막이 켜진 턴에 몬스터에게 피해를 준 사람은 녹는 대신 냉기 +chillOnHit(가시 얼음 갑옷).
 // 인원별 몬스터 피해 배율. 보통 플레이 승률이 인원과 상관없이 80~90%가 되게 맞춘 값(치유사·수호자가 다 있는 4인은 훨씬 버티므로 크게).
 const PARTY_DAMAGE_RATE = { 1: 1.35, 2: 1.07, 3: 1.28, 4: 2.0 }; // 3인은 궁수 차지 샷을 올리면서 1.25 → 1.28
 const PARTY_BASE_SIZE = 4;       // 몬스터 baseHp가 기준으로 삼는 인원(역할 4종 한 명씩).
@@ -84,8 +89,8 @@ const ACTIONS = {
 const MONSTER_DIR = path.join(__dirname, '..', 'Monster');
 const REQUIRED_MOVES = ['attack', 'smash'];
 // 그림(레이드그림.js)이 아는 연출 종류. 새 연출은 레이드그림.js의 monsterFx·hitFx에 그리고 여기에 이름을 더한다.
-const MOVE_FX = ['attack', 'sweep', 'charge', 'smash', 'heal', 'spore', 'hypno', 'absorb', 'burst'];
-const EFFECTS = ['slow', 'stun', 'shield', 'poison', 'confuse'];
+const MOVE_FX = ['attack', 'sweep', 'charge', 'smash', 'heal', 'spore', 'hypno', 'absorb', 'burst', 'frost', 'icefall'];
+const EFFECTS = ['slow', 'stun', 'shield', 'poison', 'confuse', 'chill'];
 const moveFx = (key, move) => move?.fx || key;
 
 // 고칠 때 자주 틀리는 것만 확인한다. 문제가 있으면 사유 목록, 없으면 빈 배열.
@@ -106,6 +111,14 @@ function monsterProblems(m) {
   const rate = (v) => typeof v === 'number' && v > 0 && v <= 1; // 0 초과 1 이하 비율
   if (!rate(m.rage?.hpRatio) || !(m.rage?.damageRate > 0)) problems.push('rage.hpRatio(0~1)·rage.damageRate 필요');
   if (m.rage?.afterPoison !== undefined && !m.moves?.[m.rage.afterPoison]) problems.push(`rage.afterPoison "${m.rage.afterPoison}"이 moves에 없음`);
+  const int = (v, min) => Number.isInteger(v) && v >= min;
+  const named = (st) => !!(st?.name && st?.emoji);
+  if (m.chill !== undefined) {
+    const c = m.chill;
+    if (!int(c?.freezeAt, 2)) problems.push('chill.freezeAt는 2 이상 정수');
+    for (const k of ['guardStacks', 'melt']) if (!int(c?.[k], 0)) problems.push(`chill.${k}는 0 이상 정수`);
+    if (!named(c?.status) || !named(c?.freezeStatus)) problems.push('chill.status·freezeStatus의 name·emoji 필요');
+  }
   const TARGETS = ['single', 'all', 'none', 'self'];
   const range = (v) => Array.isArray(v) && v.length === 2 && v.every(Number.isFinite) && v[0] >= 0 && v[0] <= v[1];
   for (const [key, move] of Object.entries(m.moves ?? {})) {
@@ -126,6 +139,15 @@ function monsterProblems(m) {
     if (move.effect === 'confuse' && !rate(move.effectRate)) problems.push(`moves.${key}.effectRate(빗나갈 확률 0~1) 필요`);
     if (move.effect === 'poison' || move.effect === 'confuse') {
       if (move.target !== 'single' && move.target !== 'all') problems.push(`moves.${key}: ${move.effect}는 target이 single/all인 기술에만`);
+    }
+    if (move.effect === 'chill') {
+      if (!m.chill) problems.push(`moves.${key}: chill 효과는 몬스터에 chill 블록이 있어야 함`);
+      if (move.target !== 'single' && move.target !== 'all') problems.push(`moves.${key}: chill은 target이 single/all인 기술에만`);
+      if (!int(move.stacks, 1)) problems.push(`moves.${key}.stacks는 1 이상 정수`);
+      if (move.rageStacks !== undefined && !int(move.rageStacks, 1)) problems.push(`moves.${key}.rageStacks는 1 이상 정수`);
+    }
+    if (move.chillOnHit !== undefined) {
+      if (move.effect !== 'shield' || !m.chill || !int(move.chillOnHit, 1)) problems.push(`moves.${key}.chillOnHit은 shield 기술에만, 1 이상 정수, chill 블록 필요`);
     }
     if (move.target === 'self' && (!rate(move.healRate) || !rate(move.useBelowHp))) problems.push(`moves.${key}.healRate·useBelowHp(0~1) 필요`);
     if (move.healPerStack !== undefined && !rate(move.healPerStack)) problems.push(`moves.${key}.healPerStack(0~1) 필요`);
@@ -232,6 +254,7 @@ function createBattle(monster, party, rng = Math.random, { minParty = HP_MIN_PAR
     shieldTurn: 0,   // 이 턴 동안 몬스터 보호막(받는 피해 감소)
     shieldRate: 1,   // 보호막 중 몬스터가 받는 피해 배율(보호막 기술의 effectRate)
     powerRate: 0,    // 공격력 증가(buffRate 기술): 다음 피해 기술 1회의 피해 배율(0이면 없음)
+    shieldChill: 0,  // 보호막 턴에 몬스터를 때린 사람에게 쌓을 냉기(chillOnHit, 0이면 없음)
     incoming: 0,     // 몬스터가 파티에게 날린 피해 합(방어·도발로 줄이기 전) — 기여도용
     log: [],
     members: party.map(p => ({
@@ -261,6 +284,7 @@ function createBattle(monster, party, rng = Math.random, { minParty = HP_MIN_PAR
       confuseTurn: 0,   // 이 턴에 환각(행동이 빗나갈 수 있음)
       confuseRate: 0,   // 빗나갈 확률
       confuseStatus: null, // 걸린 confuse 상태이상의 이름·이모지(예: 🌀환각)
+      chillStacks: 0,   // 냉기 중첩(chill 블록이 있는 몬스터만)
     })),
   };
   battle.intent = pickNextIntent(battle, rng);
@@ -292,6 +316,9 @@ function poisonDamage(battle, m) {
 function isConfused(battle, m) { return m.confuseTurn === battle.turn; }
 // 지금 파티에 쌓인 독 중첩 합(살아 있는 사람만). 독기 흡수(healPerStack) 회복량에 쓴다.
 function partyPoisonStacks(battle) { return aliveMembers(battle).reduce((sum, m) => sum + poisonStacks(battle, m), 0); }
+// 냉기 중첩(쓰러진 사람은 0). 재시작 전 기록엔 칸이 없을 수 있어 0으로 본다.
+function chillStacks(battle, m) { return m.hp > 0 ? m.chillStacks || 0 : 0; }
+function partyChillStacks(battle) { return aliveMembers(battle).reduce((sum, m) => sum + chillStacks(battle, m), 0); }
 
 // 기여도(MVP를 고르는 점수). 피해만 보면 딜러만 MVP가 돼서, 치유사의 회복·부활과 수호자가 도발로 대신 맞아 준
 // 피해를 피해와 같은 단위로 바꿔 더한다. 회복·막아 준 피해는 몬스터가 세게 때릴수록(인원별 몬스터 피해 배율)
@@ -324,7 +351,7 @@ function checkChoice(battle, userId, action) {
   if (action === 'skill' && m.cooldown > 0) return `스킬은 ${m.cooldown}턴 뒤에 다시 쓸 수 있어요.`;
   if (action === 'potion' && m.potions <= 0) return '회복약을 다 썼어요.';
   // HP가 가득해도 독에 걸렸으면 해독하려고 마실 수 있다
-  if (action === 'potion' && m.hp >= PLAYER_MAX_HP && !poisonStacks(battle, m)) return '이미 HP가 가득 차 있어요.';
+  if (action === 'potion' && m.hp >= PLAYER_MAX_HP && !poisonStacks(battle, m) && !chillStacks(battle, m)) return '이미 HP가 가득 차 있어요.';
   return null;
 }
 
@@ -354,6 +381,25 @@ function resolveTurn(battle, rng = Math.random) {
   battle.lastTurn = last;
   const ordered = ROLE_ORDER.map(r => battle.members.find(m => m.role === r)).filter(Boolean);
   const acting = ordered.filter(m => m.hp > 0);
+  // 냉기(chill 블록이 있는 몬스터만): 행동하는 즉시 늘거나 줄고, 빙결은 아군 행동 뒤·몬스터 기술 뒤에 판정한다
+  const chill = battle.monster.chill;
+  const addChill = (m, n) => { if (chill) m.chillStacks = Math.max(0, (m.chillStacks || 0) + n); };
+  const melt = -(chill?.melt ?? 0);
+  // 몬스터를 때린 행동: 보통은 녹고, 가시 얼음 갑옷(보호막 + chillOnHit) 턴이면 오히려 냉기가 쌓인다
+  const hitChill = () => (last.shielded && battle.shieldChill ? battle.shieldChill : melt);
+  const freezeCheck = () => {
+    if (!chill) return;
+    for (const m of ordered) {
+      if (m.hp <= 0) { m.chillStacks = 0; continue; }
+      if ((m.chillStacks || 0) < chill.freezeAt) continue;
+      m.chillStacks = 0;
+      if (m.stunTurn === battle.turn + 1) continue; // 이미 다음 턴 행동 불가(같은 턴 필살기 기절 등)
+      m.stunTurn = battle.turn + 1;
+      m.stunStatus = chill.freezeStatus;
+      last.effects[m.userId] = 'freeze';
+      log.push(`${chill.freezeStatus.emoji} **${m.name}** ${chill.freezeStatus.name}! 다음 턴 행동 불가`);
+    }
+  };
   // 파티가 몬스터에게 주는 피해: 점액(본인)·보호막(몬스터) 보정
   const dealt = (m, dmg) => {
     if (slowTurnsLeft(battle, m) > 0) dmg *= m.slowRate;
@@ -393,6 +439,7 @@ function resolveTurn(battle, rng = Math.random) {
       dmg = dealt(m, dmg);
       battle.hp -= dmg;
       m.damage += dmg;
+      addChill(m, hitChill());
       last.acts[m.userId] = { label: '공격', value: dmg, crit, auto };
       last.monsterDamage += dmg;
       log.push(`${role.emoji} **${m.name}** 공격${tag} → **${dmg}**${crit ? ' 💥치명타!' : ''}`);
@@ -402,6 +449,7 @@ function resolveTurn(battle, rng = Math.random) {
         const dmg = dealt(m, randInt(role.skill.damage, rng));
         battle.hp -= dmg;
         m.damage += dmg;
+        addChill(m, hitChill());
         last.acts[m.userId] = { label: role.skill.name, value: dmg };
         last.monsterDamage += dmg;
         log.push(`${role.emoji} **${m.name}** ✨${role.skill.name} → **${dmg}**`);
@@ -412,11 +460,13 @@ function resolveTurn(battle, rng = Math.random) {
         dmg = dealt(m, dmg);
         battle.hp -= dmg;
         m.damage += dmg;
+        addChill(m, hitChill());
         last.acts[m.userId] = { label: role.skill.name, value: dmg, crit };
         last.monsterDamage += dmg;
         log.push(`${role.emoji} **${m.name}** ✨${role.skill.name} → **${dmg}**${crit ? ' 💥치명타!' : ''}`);
       } else if (m.role === 'tank') {
         taunter = m;
+        addChill(m, melt);
         last.acts[m.userId] = { label: role.skill.name };
         log.push(`${role.emoji} **${m.name}** ✨${role.skill.name}! 몬스터의 시선을 끈다`);
       } else if (m.role === 'healer') {
@@ -428,6 +478,7 @@ function resolveTurn(battle, rng = Math.random) {
           else { t.hp = 25; healed += 25; revived.push(t.name); }
           if (slowTurnsLeft(battle, t) > 0) { t.slowUntil = 0; cleansed.add(t.slowStatus.name); } // 점액(slow)도 씻어낸다
           if (poisonStacks(battle, t) > 0) { t.poisonStacks = 0; t.poisonUntil = 0; cleansed.add(t.poisonStatus.name); } // 독도 씻어낸다
+          if (chill && (t.chillStacks || 0) > 0) { t.chillStacks = 0; cleansed.add(chill.status.name); } // 냉기도 녹인다
         }
         m.healing += healed;
         m.support += healed;
@@ -436,6 +487,7 @@ function resolveTurn(battle, rng = Math.random) {
         log.push(`${role.emoji} **${m.name}** ✨${role.skill.name} → 아군 회복${cleansed.size ? ` · ${[...cleansed].join('·')} 제거` : ''}${revived.length ? ` · **${revived.join(', ')}** 부활!` : ''}`);
       }
     } else if (action === 'guard') {
+      addChill(m, chill?.guardStacks ?? 0); // 웅크리면 얼어붙는다
       last.acts[m.userId] = { label: '방어' };
       log.push(`${role.emoji} **${m.name}** 방어 태세`);
     } else if (action === 'potion') {
@@ -445,8 +497,10 @@ function resolveTurn(battle, rng = Math.random) {
       // 회복약은 독도 푼다(이번 턴 독 피해 전에 마시므로 그 턴 독 피해도 없음)
       const cured = poisonStacks(battle, m) > 0 ? m.poisonStatus : null;
       if (cured) { m.poisonStacks = 0; m.poisonUntil = 0; }
+      const thawed = chill && (m.chillStacks || 0) > 0; // 회복약은 본인 냉기도 녹인다
+      if (thawed) m.chillStacks = 0;
       last.acts[m.userId] = { label: '회복약', value: healed, heal: true };
-      log.push(`${role.emoji} **${m.name}** 🍖회복약 → HP +${healed}${cured ? ` · ${cured.emoji}${cured.name} 해독` : ''}`);
+      log.push(`${role.emoji} **${m.name}** 🍖회복약 → HP +${healed}${cured ? ` · ${cured.emoji}${cured.name} 해독` : ''}${thawed ? ` · ${chill.status.emoji}${chill.status.name} 제거` : ''}`);
     }
 
     if (battle.hp <= 0) {
@@ -480,6 +534,8 @@ function resolveTurn(battle, rng = Math.random) {
     battle.log = log;
     return 'wipe';
   }
+
+  freezeCheck();
 
   // 2) 몬스터 행동 (지난 턴에 예고한 것)
   const move = battle.monster.moves[battle.intent];
@@ -538,6 +594,12 @@ function resolveTurn(battle, rng = Math.random) {
       }
       if (t.hp > 0 && move.effect === 'confuse' && !blocked) { t.confuseTurn = battle.turn + 1; t.confuseRate = move.effectRate; t.confuseStatus = move.status; last.effects[t.userId] = 'confuse'; tag = ` ${move.status.emoji}${move.status.name}`; }
       if (t.hp > 0 && move.effect === 'slow' && !blocked) { t.slowUntil = battle.turn + move.effectTurns; t.slowRate = move.effectRate; t.slowStatus = move.status; last.effects[t.userId] = 'slow'; tag = ` ${move.status.emoji}${move.status.name}`; }
+      if (t.hp > 0 && move.effect === 'chill') {
+        addChill(t, battle.rage ? (move.rageStacks ?? move.stacks) : move.stacks);
+        const st = move.status ?? chill.status;
+        last.effects[t.userId] = 'chill';
+        tag = ` ${st.emoji}${st.name}×${t.chillStacks}`;
+      }
       if (t.hp > 0 && move.effect === 'stun' && !t.guarding) { t.stunTurn = battle.turn + 1; t.stunStatus = move.status; last.effects[t.userId] = 'stun'; tag = ` ${move.status.emoji}${move.status.name}`; }
       return `${t.name} -${dmg}${t.hp <= 0 ? ' 💀' : tag}`;
     });
@@ -551,8 +613,11 @@ function resolveTurn(battle, rng = Math.random) {
   if (move.effect === 'shield') {
     battle.shieldTurn = battle.turn + 1;
     battle.shieldRate = move.effectRate;
-    log.push(`🛡️ **${monsterName}**의 몸이 단단해졌다! 다음 턴 받는 피해 **-${minusPct(move.effectRate)}%**`);
+    battle.shieldChill = move.chillOnHit ?? 0;
+    const spikes = battle.shieldChill ? ` · 때리면 ${chill.status.emoji}${chill.status.name} +${battle.shieldChill}` : '';
+    log.push(`🛡️ **${monsterName}**의 몸이 단단해졌다! 다음 턴 받는 피해 **-${minusPct(move.effectRate)}%**${spikes}`);
   }
+  freezeCheck();
 
   for (const m of battle.members) { m.choice = null; m.guarding = false; }
 
@@ -599,6 +664,8 @@ module.exports = {
   poisonDamage,
   isConfused,
   partyPoisonStacks,
+  chillStacks,
+  partyChillStacks,
   moveFx,
   MOVE_FX,
   minusPct,

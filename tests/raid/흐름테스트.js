@@ -644,6 +644,93 @@ let ok4;
     const solo = [{ userId: 's', name: 'S', role: 'sword' }];
     assert(E.createBattle(mush, solo, rng, { minParty: 1 }).maxHp < E.createBattle(mush, solo, rng).maxHp, '테스트 서버(minParty 1)는 혼자일 때 1인 HP, 기본은 2인 HP');
   }
+  // 14-2) 얼음 큐브(Monster-all): 냉기(방어 +1 · 공격·스킬 -1 · 3중첩 빙결) · 서리 숨결 · 가시 얼음 갑옷
+  {
+    const E = require(path.join(root, 'handlers/레이드전투.js'));
+    const all = E.loadMonsters(path.join(root, 'Monster-all'));
+    const ice = all.find(m => m.id === 'icecube');
+    const slime = all.find(m => m.id === 'slime');
+    assert(ice, '얼음 큐브를 Monster 폴더에서 불러옴');
+    if (ice) {
+      const party = [{ userId: 'x', name: 'X', role: 'sword' }, { userId: 'y', name: 'Y', role: 'healer' }];
+      const rng = () => 0.5;
+      const turnWith = (b, intent, choices = {}) => { b.intent = intent; for (const [u, a] of Object.entries(choices)) E.choose(b, u, a); return E.resolveTurn(b, rng); };
+      let b;
+      const x = () => E.getMember(b, 'x'), y = () => E.getMember(b, 'y');
+      const fresh = (p = party) => { b = E.createBattle(ice, p, rng); return b; };
+
+      fresh();
+      turnWith(b, 'attack', { x: 'guard', y: 'guard' });
+      assert(E.chillStacks(b, x()) === 1 && E.chillStacks(b, y()) === 1, '방어하면 냉기 +1');
+      x().chillStacks = 2;
+      turnWith(b, 'attack', { x: 'attack', y: 'attack' });
+      const afterOne = E.chillStacks(b, x());
+      turnWith(b, 'attack', { x: 'attack', y: 'attack' });
+      turnWith(b, 'attack', { x: 'attack', y: 'attack' });
+      assert(afterOne === 1 && E.chillStacks(b, x()) === 0 && E.chillStacks(b, y()) === 0, '공격·스킬하면 냉기 -1(0 아래로 안 감)');
+
+      fresh();
+      turnWith(b, 'frost', { x: 'guard' });
+      const frostX = E.chillStacks(b, x()), frostY = E.chillStacks(b, y());
+      b.rage = true; x().chillStacks = 0; y().chillStacks = 0;
+      turnWith(b, 'frost', { x: 'attack', y: 'attack' });
+      assert(frostX === 2 && frostY === 1 && E.chillStacks(b, x()) === 2 && E.chillStacks(b, y()) === 2 && b.lastTurn.effects.x === 'chill' && b.log.join().includes('❄️냉기'), '서리 숨결: 방어해도 전원 냉기 +1, 분노 중 +2');
+
+      fresh();
+      x().chillStacks = 2;
+      turnWith(b, 'attack', { x: 'guard', y: 'attack' });
+      assert(E.isStunned(b, x()) && x().stunStatus.name === '빙결' && E.chillStacks(b, x()) === 0 && b.lastTurn.effects.x === 'freeze' && b.log.join().includes('🧊') && E.checkChoice(b, 'x', 'attack'), '3중첩이면 빙결: 다음 턴 행동 불가, 냉기 0');
+      x().chillStacks = 1;
+      turnWith(b, 'attack', { y: 'attack' });
+      assert(E.chillStacks(b, x()) === 1 && b.lastTurn.acts.x.label === '빙결', '빙결 중엔 냉기 그대로');
+
+      fresh();
+      x().chillStacks = 2;
+      turnWith(b, 'attack', { x: 'guard', y: 'skill' });
+      assert(E.chillStacks(b, x()) === 0 && !E.isStunned(b, x()) && b.log.join().includes('냉기 제거'), '치유사 스킬이 빙결 전에 냉기를 지우면 빙결 없음');
+
+      fresh();
+      x().chillStacks = 1;
+      const pots = x().potions;
+      const potionOk = E.checkChoice(b, 'x', 'potion') === null;
+      turnWith(b, 'attack', { x: 'potion', y: 'attack' });
+      assert(potionOk && E.chillStacks(b, x()) === 0 && x().potions === pots - 1 && b.log.join().includes('❄️냉기 제거'), '회복약: 본인 냉기 0, HP 가득해도 마실 수 있음');
+
+      fresh();
+      turnWith(b, 'armor', { x: 'attack', y: 'attack' });
+      const armorLog = b.log.join();
+      turnWith(b, 'attack', { x: 'attack', y: 'guard' });
+      assert(armorLog.includes('때리면 ❄️냉기 +1') && E.chillStacks(b, x()) === 1 && E.chillStacks(b, y()) === 1 && b.lastTurn.acts.x.value === Math.round(100 * ice.moves.armor.effectRate), '가시 얼음 갑옷: 다음 턴 때린 사람 냉기 +1(녹지 않음), 방어한 사람은 +1');
+
+      fresh();
+      turnWith(b, 'smash', { x: 'guard', y: 'attack' });
+      assert(E.isStunned(b, y()) && y().stunStatus.name === '빙결' && !E.isStunned(b, x()), '필살 빙하 낙하: 방어 안 한 사람 🧊빙결');
+
+      // Review Focus
+      const bs = E.createBattle(slime, party, rng);
+      bs.intent = 'attack'; E.choose(bs, 'x', 'guard'); E.choose(bs, 'y', 'guard'); E.resolveTurn(bs, rng);
+      assert(bs.members.every(m => !m.chillStacks && E.chillStacks(bs, m) === 0), '슬라임은 방어해도 냉기 없음');
+
+      fresh();
+      delete x().chillStacks; delete y().chillStacks;
+      const oldZero = E.chillStacks(b, x()) === 0;
+      turnWith(b, 'attack', { x: 'attack', y: 'guard' });
+      assert(oldZero && E.chillStacks(b, x()) === 0 && E.chillStacks(b, y()) === 1, '냉기 칸 없는 예전 기록은 0');
+
+      fresh([...party, { userId: 'z', name: 'Z', role: 'tank' }]);
+      y().hp = 0; x().hp = 1; x().chillStacks = 2;
+      turnWith(b, 'frost', { x: 'attack', z: 'attack' });
+      assert(x().hp === 0 && !x().chillStacks && !y().chillStacks && E.chillStacks(b, x()) === 0, '쓰러진 사람은 냉기 없음');
+
+      fresh();
+      turnWith(b, 'armor', { x: 'attack', y: 'attack' });
+      x().chillStacks = 2;
+      turnWith(b, 'smash', { x: 'attack', y: 'guard' });
+      const frozenNow = E.isStunned(b, x()) && E.chillStacks(b, x()) === 0;
+      turnWith(b, 'attack', { y: 'guard' });
+      assert(frozenNow && !E.isStunned(b, x()), '필살기와 빙결이 겹쳐도 한 턴만');
+    }
+  }
   // 17) 재시작 후 이어가기: 저장된 모집·전투, 예전 기록, 기록 없는 메시지 / 전멸 벌칙
   {
     const E = require(path.join(root, 'handlers/레이드전투.js'));

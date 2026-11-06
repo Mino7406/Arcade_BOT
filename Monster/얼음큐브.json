@@ -1,0 +1,51 @@
+{
+  "_메모": [
+    "세 번째 레이드 몬스터. 칸 설명은 슬라임.json의 _메모와 같고, 여기에는 얼음 큐브만의 것을 적는다."
+  ],
+  "id": "icecube",
+  "name": "얼음 큐브",
+  "emoji": "🧊",
+  "rageName": "폭주한 얼음 큐브",
+  "lore": "반투명한 얼음 속에 말랑한 얼굴을 품은 네모난 덩어리. 이 녀석이 지나간 자리마다 XP가 꽁꽁 얼어붙는다!",
+  "baseHp": 6500,
+  "rage": { "hpRatio": 0.5, "damageRate": 1.5 },
+  "chill": {
+    "freezeAt": 3,
+    "guardStacks": 1,
+    "melt": 1,
+    "status": { "name": "냉기", "emoji": "❄️" },
+    "freezeStatus": { "name": "빙결", "emoji": "🧊", "fx": "ice" }
+  },
+  "sprite": {
+    "rows": [
+      "....aaaaaaaaaaaaaaaaaa",
+      "...ahhttttttttttttttaa",
+      "..ahttttiitttttttthada",
+      ".attttttttiittttttadda",
+      "ahhhhhhhhhhhhhhhhaddda",
+      "aoohoooooooooooobhddda",
+      "aohbbbbbbibbbbbbbhddda",
+      "aobbibbbbbbbbbibbhdida",
+      "aobbwwbbbbbbwwbbbhddda",
+      "aobbwkbbbbbbwkbbbhddda",
+      "aobbkkbbbbbbkkbbbhddda",
+      "aobccbbbmmmmbbccbhddda",
+      "aobbbbbbbwbbbbbbbhddda",
+      "aobibbbbbbbbbbibbhdda.",
+      "aobbbbbbbbbbbbbddhda..",
+      "aaaaaaaaaaaaaaaaaaa..."
+    ],
+    "palette": { "a": "#1b3a5c", "h": "#ffffff", "t": "#dff6ff", "o": "#bfeaff", "b": "#8fd3f4", "d": "#5aa8d6", "i": "#e8fbff", "w": "#ffffff", "k": "#111111", "c": "#ff8fb0", "m": "#0e2a3d", "s": "#e0f7ff" },
+    "rageColors": { "a": "#4a1010", "t": "#ffd6cf", "o": "#f07a6e", "b": "#e5383b", "d": "#a3242a", "i": "#ffc2b8", "s": "#ffd6cf", "m": "#1a1033" }
+  },
+  "moves": {
+    "attack": { "name": "얼음 박치기", "telegraph": "몸을 데굴 굴릴 준비를 한다...", "target": "single", "damage": [ 8, 10 ] },
+    "frost": { "name": "서리 숨결", "telegraph": "입김이 하얗게 서리기 시작한다...", "target": "all", "damage": [ 4, 6 ], "fx": "frost", "effect": "chill", "stacks": 1, "rageStacks": 2, "status": { "name": "냉기", "emoji": "❄️" } },
+    "armor": { "name": "가시 얼음 갑옷", "telegraph": "몸 모서리에 얼음 가시가 돋는다...", "target": "none", "fx": "charge", "effect": "shield", "effectRate": 0.6, "chillOnHit": 1 },
+    "smash": { "name": "필살 빙하 낙하", "telegraph": "💥 필살기를 준비 중입니다! 방어하세요!", "target": "all", "damage": [ 15, 19 ], "fx": "icefall", "effect": "stun", "status": { "name": "빙결", "emoji": "🧊", "fx": "ice" } }
+  },
+  "intentWeights": {
+    "normal": { "attack": 4, "frost": 3, "armor": 2, "smash": 1 },
+    "rage": { "attack": 3.5, "frost": 3, "armor": 2, "smash": 1.5 }
+  }
+}
