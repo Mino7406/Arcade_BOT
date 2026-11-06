@@ -814,6 +814,8 @@ function renderBattle(r) {
 
       roleIcon(roleKey, x + w / 2, y + 86, down);
       if (!down && isIced(b, mem)) iceCover(x + w / 2, y + 86); // 빙결: 아이콘이 얼음에 갇힘
+      // 점액: 왼쪽 배지와 함께 아이콘 위 점액 얼룩도 그대로(사용자 요청). 이번 턴 맞은 카드는 타격 표시만.
+      if (!down && slowTurnsLeft(b, mem) > 0 && !(usedMove && last?.hits[mem.userId])) hitFx('sweep', x + w / 2, y + 86, fxColor);
       const hit = last?.hits[mem.userId];
       if (hit && usedFx) hitFx(usedFx, x + w / 2, y + 86, fxColor, sporeColor, accentColor);
       // 받은 피해 숫자도 그 턴의 결과 화면에서만(다음 턴 선택 화면에는 남기지 않는다)
