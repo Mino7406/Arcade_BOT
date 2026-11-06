@@ -280,11 +280,13 @@ function writeXp(guildLevels, userId, oldXp, newXp, requestedDelta) {
 // 유저마다 로그를 남기면 수백 줄이 되므로 요약 한 줄만 남기고, 바로 저장한다. 실제로 깎인 유저 수를 돌려준다.
 function deductXpFromAll(guildId, amount, reason) {
   if (!loaded) return 0; // 레벨 데이터를 못 읽은 상태에서 깎으면 저장도 안 되고 의미가 없다
+  if (!Number.isFinite(amount) || amount <= 0) return 0;
   const guildLevels = getGuildLevels(guildId);
   let affected = 0, total = 0;
   for (const [userId, xp] of Object.entries(guildLevels)) {
+    // 0 이하이거나 숫자가 아닌 값(깨진 기록)은 건드리지 않는다 — 0으로 끌어올리거나 NaN으로 만들지 않게.
+    if (typeof xp !== 'number' || !Number.isFinite(xp) || xp <= 0) continue;
     const newXp = Math.max(0, xp - amount);
-    if (newXp === xp) continue;
     guildLevels[userId] = newXp;
     affected++;
     total += xp - newXp;
