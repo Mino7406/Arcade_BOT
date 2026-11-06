@@ -10,7 +10,7 @@
 
 const path = require('path');
 const { Painter, loadFont } = require('./그림판');
-const { ROLES, ROLE_ORDER, PLAYER_MAX_HP, ACTIONS, createBattle, choose, resolveTurn, isStunned, slowTurnsLeft, isShielded, isPowered, poisonStacks, isConfused, moveFx } = require('./레이드전투');
+const { ROLES, ROLE_ORDER, PLAYER_MAX_HP, ACTIONS, createBattle, choose, resolveTurn, isStunned, slowTurnsLeft, isShielded, isPowered, poisonStacks, isConfused, chillStacks, moveFx } = require('./레이드전투');
 
 const W = 900; // 설계 크기(좌표는 전부 이 기준)
 const H = 640;
@@ -281,11 +281,40 @@ const STATUS_ICONS = {
 };
 // 카드 왼쪽 위 상태 아이콘: 기절(별). 점액는 아이콘 없이 점액 얼룩으로 표시한다.
 // 카드 왼쪽 상태 배지: 기절(별) · 독(거품). 환각은 배지 대신 아이콘 위 소용돌이(카드 그리는 곳에서, 점액처럼).
+// 냉기는 독 아래(같은 자리 규칙). 빙결(stunStatus.fx 'ice')은 별 대신 아이콘 위 얼음 덮개(iceCover)로 보인다.
 function statusBadges(b, mem, x, y) {
-  if (isStunned(b, mem)) stunStars(x, y);
+  const stars = isStunned(b, mem) && !isIced(b, mem);
+  if (stars) stunStars(x, y);
+  let by = stars ? y + 34 : y;
   const stacks = poisonStacks(b, mem);
   // 독은 기절 별과 같은 자리(카드 왼쪽 위). 기절과 함께 걸린 경우만 그 아래로 내린다.
-  if (stacks) poisonBadge(x, isStunned(b, mem) ? y + 34 : y, stacks);
+  if (stacks) { poisonBadge(x, by, stacks); by += stacks > 1 ? 44 : 34; }
+  const chill = chillStacks(b, mem);
+  if (chill) chillBadge(x, by, chill);
+}
+function isIced(b, mem) { return isStunned(b, mem) && mem.stunStatus?.fx === 'ice'; }
+// 눈송이: 세 갈래 선(어두운 테두리 → 하늘색) + 가운데 흰 점
+function flake(cx, cy, r) {
+  for (const [w, c] of [[Math.max(4, r * 0.55), '#0e2a3d'], [Math.max(2, r * 0.25), '#bfeaff']]) {
+    for (let k = 0; k < 3; k++) {
+      const a = (k * Math.PI) / 3 + Math.PI / 2;
+      p.line(cx - Math.cos(a) * r, cy - Math.sin(a) * r, cx + Math.cos(a) * r, cy + Math.sin(a) * r, w, c);
+    }
+  }
+  p.circle(cx, cy, Math.max(1.5, r * 0.22), '#ffffff');
+}
+// 냉기: 눈송이 + 아래에 중첩 수(몇 개인지가 중요해서 1부터 표시)
+function chillBadge(cx, cy, stacks) {
+  flake(cx, cy, 12);
+  text(`×${stacks}`, cx, cy + 24, 15, '#bfeaff');
+}
+// 빙결: 역할 아이콘을 덮는 반투명 얼음 덩어리 + 흰 반사선
+function iceCover(cx, cy) {
+  p.roundRect(cx - 42, cy - 38, 84, 72, 8, '#bfeaff', 0.5); // 아래 이름 글자와 안 겹치게 높이 72
+  p.strokeRoundRect(cx - 42, cy - 38, 84, 72, 8, 2.5, '#e8fbff');
+  p.line(cx - 30, cy - 18, cx - 16, cy - 32, 4, '#ffffff');
+  p.line(cx - 30, cy - 4, cx - 4, cy - 30, 3, '#ffffff');
+  p.line(cx + 18, cy + 30, cx + 32, cy + 16, 3, '#ffffff');
 }
 // 환각(최면) 상태: 카드 아이콘 위에 겹쳐 그리는 청록 소용돌이(점액 얼룩처럼 아이콘에 묻은 느낌).
 // 아이콘 색과 섞여 안 보이지 않게 어두운 테두리를 먼저 굵게 깔고 그 위에 밝은 청록을 그린다.
@@ -398,6 +427,38 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
     });
     return;
   }
+  if (move === 'frost' && layer === 'front') {
+    // 서리 숨결: 입에서 아래·양옆으로 퍼지는 하얀 입김 도트(바깥으로 갈수록 크게) + 눈송이
+    for (const [ux, uy] of [[-1, 0.3], [-0.6, 0.8], [0, 1], [0.6, 0.8], [1, 0.3]]) {
+      for (let i = 1; i <= 5; i++) {
+        const d = 44 + i * 26;
+        dot(cx + ux * d, cy + 26 + uy * d * 0.5, 4 + i * 1.6, i % 2 ? '#ffffff' : color);
+      }
+    }
+    for (const [dx, dy, r] of [[-176, -30, 9], [180, -22, 9], [-126, 64, 7], [134, 66, 7]]) flake(cx + dx, cy + dy, r);
+    return;
+  }
+  if (move === 'icefall' && layer === 'back') {
+    // 빙하 낙하: 양옆 위에서 떨어지는 네모 얼음 덩어리(위로 속도선)
+    for (const [dx, dy, s] of [[-150, -46, 14], [152, -52, 12], [-206, 4, 10], [208, -6, 11]]) {
+      for (let i = 0; i < 3; i++) dot(cx + dx, cy + dy - s - 8 - i * 10, 4 - i, '#e8fbff');
+      p.rect(cx + dx - s, cy + dy - s, s * 2, s * 2, '#1b3a5c');
+      p.rect(cx + dx - s + 3, cy + dy - s + 3, s * 2 - 6, s * 2 - 6, color);
+      p.rect(cx + dx - s + 5, cy + dy - s + 5, Math.round(s * 0.6), Math.round(s * 0.6), '#ffffff');
+    }
+    return;
+  }
+  if (move === 'icefall' && layer === 'front') {
+    // 바닥에 꽂힌 얼음 가시(양옆 네 개씩)
+    for (const s of [-1, 1]) {
+      for (const [d, h] of [[100, 26], [132, 40], [166, 22], [200, 32]]) {
+        const x0 = cx + s * d, y0 = cy + 66;
+        p.poly([x0 - 10, y0, x0 + 10, y0, x0, y0 - h], '#1b3a5c');
+        p.poly([x0 - 6, y0 - 2, x0 + 6, y0 - 2, x0, y0 - h + 6], color);
+      }
+    }
+    return;
+  }
   if (move === 'burst' && layer === 'back') {
     // 포자 대폭발: 몸 둘레 충격 고리(도트, 보라·연두 번갈아)
     for (let k = 0; k < 30; k++) {
@@ -487,6 +548,15 @@ function hitFx(move, cx, cy, color, spore = color, accent = spore) {
     for (const [dx, dy, r] of blobs) p.circle(cx + dx, cy + dy, r + 3, '#0e2a14');
     for (const [dx, dy, r] of blobs) p.circle(cx + dx, cy + dy, r, color);
     for (const [dx, dy, r] of blobs) p.circle(cx + dx - r * 0.35, cy + dy - r * 0.35, Math.max(1.8, r * 0.28), '#f4fff0');
+  } else if (move === 'frost') {
+    // 서리: 아이콘 네 귀퉁이에 눈송이
+    for (const [dx, dy] of [[-26, -22], [26, 20], [24, -26], [-22, 26]]) flake(cx + dx, cy + dy, 8);
+  } else if (move === 'icefall') {
+    // 얼음 파편: 아이콘 둘레로 튀는 마름모 조각
+    for (const [dx, dy, s] of [[-30, -18, 9], [30, -24, 8], [-26, 26, 7], [32, 20, 9], [0, -36, 6]]) {
+      p.poly([cx + dx, cy + dy - s - 3, cx + dx + s + 3, cy + dy, cx + dx, cy + dy + s + 3, cx + dx - s - 3, cy + dy], '#1b3a5c');
+      p.poly([cx + dx, cy + dy - s, cx + dx + s, cy + dy, cx + dx, cy + dy + s, cx + dx - s, cy + dy], color);
+    }
   } else if (move === 'smash') {
     p.poly([cx, cy - 34, cx + 9, cy - 9, cx + 34, cy, cx + 9, cy + 9, cx, cy + 34, cx - 9, cy + 9, cx - 34, cy, cx - 9, cy - 9], '#ffd166');
   }
@@ -636,7 +706,7 @@ function renderBattle(r) {
     const sporeColor = (b.rage && m.sprite?.rageColors?.x) || m.sprite?.palette?.x || fxColor; // 포자 연출 색
     const accentColor = (b.rage && m.sprite?.rageColors?.p) || m.sprite?.palette?.p || sporeColor; // 반점 색(독기·파편)
     // 박치기·짓누르기는 파티 쪽(아래)으로 몸을 내밀어 그린다
-    const monsterY = 196 + (usedFx === 'attack' ? 10 : usedFx === 'smash' || usedFx === 'burst' ? 6 : 0);
+    const monsterY = 196 + (usedFx === 'attack' ? 10 : usedFx === 'smash' || usedFx === 'burst' || usedFx === 'icefall' ? 6 : 0);
     // 보호막(단단해지기 다음 턴): 외곽선을 금속빛으로 바꾸고 둘레에 반짝임 + HP 바 왼쪽에 방패 배지
     const shielded = isShielded(b);
     if (shielded) {
@@ -733,6 +803,7 @@ function renderBattle(r) {
       }
 
       roleIcon(roleKey, x + w / 2, y + 86, down);
+      if (!down && isIced(b, mem)) iceCover(x + w / 2, y + 86); // 빙결: 아이콘이 얼음에 갇힘
       const hit = last?.hits[mem.userId];
       if (hit && usedFx) hitFx(usedFx, x + w / 2, y + 86, fxColor, sporeColor, accentColor);
       // 받은 피해 숫자도 그 턴의 결과 화면에서만(다음 턴 선택 화면에는 남기지 않는다)

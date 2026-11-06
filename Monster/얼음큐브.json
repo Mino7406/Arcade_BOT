@@ -8,13 +8,23 @@
   "rageName": "폭주한 얼음 큐브",
   "lore": "반투명한 얼음 속에 말랑한 얼굴을 품은 네모난 덩어리. 이 녀석이 지나간 자리마다 XP가 꽁꽁 얼어붙는다!",
   "baseHp": 6500,
-  "rage": { "hpRatio": 0.5, "damageRate": 1.5 },
+  "rage": {
+    "hpRatio": 0.5,
+    "damageRate": 1.5
+  },
   "chill": {
     "freezeAt": 3,
     "guardStacks": 1,
     "melt": 1,
-    "status": { "name": "냉기", "emoji": "❄️" },
-    "freezeStatus": { "name": "빙결", "emoji": "🧊", "fx": "ice" }
+    "status": {
+      "name": "냉기",
+      "emoji": "❄️"
+    },
+    "freezeStatus": {
+      "name": "빙결",
+      "emoji": "🧊",
+      "fx": "ice"
+    }
   },
   "sprite": {
     "rows": [
@@ -35,17 +45,190 @@
       "aobbbbbbbbbbbbbddhda..",
       "aaaaaaaaaaaaaaaaaaa..."
     ],
-    "palette": { "a": "#1b3a5c", "h": "#ffffff", "t": "#dff6ff", "o": "#bfeaff", "b": "#8fd3f4", "d": "#5aa8d6", "i": "#e8fbff", "w": "#ffffff", "k": "#111111", "c": "#ff8fb0", "m": "#0e2a3d", "s": "#e0f7ff" },
-    "rageColors": { "a": "#4a1010", "t": "#ffd6cf", "o": "#f07a6e", "b": "#e5383b", "d": "#a3242a", "i": "#ffc2b8", "s": "#ffd6cf", "m": "#1a1033" }
+    "palette": {
+      "a": "#1b3a5c",
+      "h": "#ffffff",
+      "t": "#dff6ff",
+      "o": "#bfeaff",
+      "b": "#8fd3f4",
+      "d": "#5aa8d6",
+      "i": "#e8fbff",
+      "w": "#ffffff",
+      "k": "#111111",
+      "c": "#ff8fb0",
+      "m": "#0e2a3d",
+      "s": "#e0f7ff"
+    },
+    "scale": 1.15,
+    "rageColors": {
+      "a": "#4a1010",
+      "t": "#ffd6cf",
+      "o": "#f07a6e",
+      "b": "#e5383b",
+      "d": "#a3242a",
+      "i": "#ffc2b8",
+      "s": "#ffd6cf",
+      "m": "#1a1033"
+    },
+    "poses": {
+      "attack": [
+        "......................",
+        "......................",
+        "....aaaaaaaaaaaaaaaaaa",
+        "...ahhttttttttttttttaa",
+        "..ahttttiitttttttthada",
+        ".attttttttiittttttadda",
+        "ahhhhhhhhhhhhhhhhaddda",
+        "aohbbbbbbibbbbbbbhddda",
+        "aobbkbbbbbbbbkbbbhdida",
+        "aobbbkkbbbbkkbbbbhddda",
+        "aobbkbbbmmbbbkbbbhddda",
+        "aobccbbmmmmbbbccbhddda",
+        "aobbbbbbbbbbbbbbbhddda",
+        "aobibbbbbbbbbbibbhdda.",
+        "aobbbbbbbbbbbbbddhda..",
+        "aaaaaaaaaaaaaaaaaaa..."
+      ],
+      "frost": [
+        "s.s.aaaaaaaaaaaaaaaaaa",
+        ".s.ahhttttttttttttttaa",
+        "s.ahttttiitttttttthada",
+        ".attttttttiittttttadda",
+        "ahhhhhhhhhhhhhhhhaddda",
+        "aoohoooooooooooobhddda",
+        "aohbbbbbbibbbbbbbhddda",
+        "aobbibbbbbbbbbibbhdida",
+        "aobbwwbbbbbbwwbbbhddda",
+        "aobbwkbbbbbbwkbbbhddda",
+        "aobccbbbmmmmbbccbhddda",
+        "aobbbbbbmmmmbbbbbhddda",
+        "aobibbbbbmmbbbibbhddda",
+        "aobbbbbbbbbbbbbddhddas",
+        "aobbbbbbbbbbbbbddhda.s",
+        "aaaaaaaaaaaaaaaaaaa.s."
+      ],
+      "armor": [
+        ".s.saaaaaaaaaaaaaaaaaa",
+        ".h.ahhttttttttttttttaa",
+        "s.ahttttiitttttttthada",
+        ".attttttttiittttttadda",
+        "ahhhhhhhhhhhhhhhhaddda",
+        "aoohoooooooooooobhddda",
+        "aohbbbbbbibbbbbbbhddda",
+        "aobbkkbbbbbbkkbbbhdida",
+        "aobbwwbbbbbbwwbbbhddda",
+        "aobbwkbbbbbbwkbbbhddda",
+        "aobbkkbbbbbbkkbbbhddda",
+        "aobccbbbmmmmbbccbhddda",
+        "aobibbbbbbbbbbibbhddda",
+        "aobbbbbbbbbbbbbddhddas",
+        "aobbbbbbbbbbbbbddhdah.",
+        "aaaaaaaaaaaaaaaaaaas.s"
+      ],
+      "ready": [
+        "....aaaaaaaaaaaaaaaaaa",
+        "...ahhttttttttttttttaa",
+        "..ahttttiitttttttthada",
+        ".attttttttiittttttadda",
+        "ahhhhhhhhhhhhhhhhaddda",
+        "aoohoooooooooooobhddda",
+        "aohbbbbhbbibbbbbbhddda",
+        "aobbibbbhbbbbbibbhdida",
+        "aobbwwbbbhbbwwbbbhddda",
+        "aobbwwbbbbhbwwbbbhddda",
+        "aobbwkbbbbbbkwbbbhddda",
+        "aobccbbbbmmbbbccbhddda",
+        "aobbbbbbhbbbbbbbbhddda",
+        "aobibbbhbbhbbbibbhdda.",
+        "aobbbbbhbbbbbbbddhda..",
+        "aaaaaaaaaaaaaaaaaaa..."
+      ],
+      "smash": [
+        ".s....s....s....s...s.",
+        "...s.....s....s...s...",
+        "....aaaaaaaaaaaaaaaaaa",
+        "...ahhttttttttttttttaa",
+        "..ahttttiitttttttthada",
+        ".attttttttiittttttadda",
+        "ahhhhhhhhhhhhhhhhaddda",
+        "aohbbbbbbibbbbbbbhddda",
+        "aobbkbbbbbbbbkbbbhdida",
+        "aobbbkkbbbbkkbbbbhddda",
+        "aobbkbbbbbbbbkbbbhddda",
+        "aobccbbmmmmbbbccbhddda",
+        "aobbbbbbmmbbbbbbbhddda",
+        "aobibbbbbbbbbbibbhdda.",
+        "aobbbbbbbbbbbbbddhdas.",
+        "aaaaaaaaaaaaaaaaaaa..s"
+      ]
+    }
   },
   "moves": {
-    "attack": { "name": "얼음 박치기", "telegraph": "몸을 데굴 굴릴 준비를 한다...", "target": "single", "damage": [ 8, 10 ] },
-    "frost": { "name": "서리 숨결", "telegraph": "입김이 하얗게 서리기 시작한다...", "target": "all", "damage": [ 4, 6 ], "fx": "frost", "effect": "chill", "stacks": 1, "rageStacks": 2, "status": { "name": "냉기", "emoji": "❄️" } },
-    "armor": { "name": "가시 얼음 갑옷", "telegraph": "몸 모서리에 얼음 가시가 돋는다...", "target": "none", "fx": "charge", "effect": "shield", "effectRate": 0.6, "chillOnHit": 1 },
-    "smash": { "name": "필살 빙하 낙하", "telegraph": "💥 필살기를 준비 중입니다! 방어하세요!", "target": "all", "damage": [ 15, 19 ], "fx": "icefall", "effect": "stun", "status": { "name": "빙결", "emoji": "🧊", "fx": "ice" } }
+    "attack": {
+      "name": "얼음 박치기",
+      "telegraph": "몸을 데굴 굴릴 준비를 한다...",
+      "target": "single",
+      "damage": [
+        8,
+        10
+      ]
+    },
+    "frost": {
+      "name": "서리 숨결",
+      "telegraph": "입김이 하얗게 서리기 시작한다...",
+      "target": "all",
+      "damage": [
+        4,
+        6
+      ],
+      "fx": "frost",
+      "effect": "chill",
+      "stacks": 1,
+      "rageStacks": 2,
+      "status": {
+        "name": "냉기",
+        "emoji": "❄️"
+      }
+    },
+    "armor": {
+      "name": "가시 얼음 갑옷",
+      "telegraph": "몸 모서리에 얼음 가시가 돋는다...",
+      "target": "none",
+      "fx": "charge",
+      "effect": "shield",
+      "effectRate": 0.6,
+      "chillOnHit": 1
+    },
+    "smash": {
+      "name": "필살 빙하 낙하",
+      "telegraph": "💥 필살기를 준비 중입니다! 방어하세요!",
+      "target": "all",
+      "damage": [
+        15,
+        19
+      ],
+      "fx": "icefall",
+      "effect": "stun",
+      "status": {
+        "name": "빙결",
+        "emoji": "🧊",
+        "fx": "ice"
+      },
+      "readyPose": "ready"
+    }
   },
   "intentWeights": {
-    "normal": { "attack": 4, "frost": 3, "armor": 2, "smash": 1 },
-    "rage": { "attack": 3.5, "frost": 3, "armor": 2, "smash": 1.5 }
+    "normal": {
+      "attack": 4,
+      "frost": 3,
+      "armor": 2,
+      "smash": 1
+    },
+    "rage": {
+      "attack": 3.5,
+      "frost": 3,
+      "armor": 2,
+      "smash": 1.5
+    }
   }
 }
