@@ -214,19 +214,13 @@ function monsterSilhouette(monster, cx, cy, maxH, pose, color, d) {
   }
   return { w: rows[0].length * px, h: rows.length * px };
 }
-// 필살기 예고 중 부르르 떠는 연출(모든 몬스터 공통): 뒤에 좌우로 어긋난 잔상 두 개 + 몸 양옆 떨림 표시(짧은 도트 줄)
-function shakeFx(monster, cx, cy, maxH, pose, layer, rage) {
+// 필살기 예고 중 부르르 떠는 연출(모든 몬스터 공통): 몸 양옆 떨림 표시(짧은 도트 줄). 잔상(테두리처럼 보임)은 사용자가 빼 달라고 해서 뺌.
+function shakeFx(monster, cx, cy, maxH, pose) {
   const sp = monster.sprite;
   if (!sp) return;
   const rows = (pose && sp.poses?.[pose]) || sp.rows;
   const px = Math.floor((maxH * (sp.scale ?? 1)) / rows.length);
   const w = rows[0].length * px, h = rows.length * px;
-  if (layer === 'back') {
-    const ghost = (rage && sp.rageColors?.d) || sp.palette.d || sp.palette.a;
-    const solid = Object.fromEntries(Object.keys(sp.palette).map(k => [k, ghost]));
-    for (const dx of [-7, 7]) drawPixels({ ...sp, rows }, cx + dx, cy, px, { colors: solid });
-    return;
-  }
   // 떨림 표시: 몸 양옆에 바깥으로 갈수록 짧아지는 세로 도트 줄 두 개씩(위·아래 두 군데)
   for (const side of [-1, 1]) {
     for (const [gap, n] of [[16, 3], [30, 2]]) {
@@ -653,10 +647,9 @@ function renderBattle(r) {
     }
     if (b.rage) rageFx(m, W / 2, monsterY, 112, pose, 'aura');
     const shaking = !usedMove && b.intent === 'smash'; // 필살기 예고 중(선택 화면)
-    if (shaking) shakeFx(m, W / 2, monsterY, 112, pose, 'back', b.rage);
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'back', sporeColor, accentColor);
     drawMonster(m, W / 2, monsterY, 112, { rage: b.rage, pose, outline: shielded ? '#cfe8ff' : null });
-    if (shaking) shakeFx(m, W / 2, monsterY, 112, pose, 'front', b.rage);
+    if (shaking) shakeFx(m, W / 2, monsterY, 112, pose);
     if (b.rage) rageFx(m, W / 2, monsterY, 112, pose, 'mark');
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'front', sporeColor, accentColor);
     // 몬스터 오른쪽: 이번 턴 받은 피해(빨강) · 재생 회복량(초록, 피해 아래). 결과 화면에서만.
