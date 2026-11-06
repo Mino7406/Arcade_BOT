@@ -166,7 +166,7 @@
   "moves": {
     "attack": { "name": "깡충 짓밟기", "telegraph": "갓을 숨기며 몸을 웅크린다...", "target": "single", "damage": [ 8, 10 ] },
     "spore": { "name": "독 포자 흩뿌리기", "telegraph": "갓 밑에서 보라 가루가 새어 나온다...", "target": "all", "damage": [ 2, 4 ], "fx": "spore", "effect": "poison", "effectTurns": 2, "tickDamage": 1.5, "stacks": 1, "maxStacks": 3, "status": { "name": "독", "emoji": "☠️" } },
-    "hypno": { "name": "환각 포자", "telegraph": "갓 무늬가 빙글빙글 돌기 시작한다...", "target": "single", "damage": [ 4, 6 ], "fx": "hypno", "effect": "confuse", "effectRate": 0.5, "guardBlocks": true, "status": { "name": "환각", "emoji": "🌀" } },
+    "hypno": { "name": "최면술", "telegraph": "갓 무늬가 빙글빙글 돌기 시작한다...", "target": "single", "damage": [ 4, 6 ], "fx": "hypno", "effect": "confuse", "effectRate": 0.5, "guardBlocks": true, "status": { "name": "환각", "emoji": "🌀" } },
     "absorb": { "name": "독기 흡수", "telegraph": "주변의 독기를 빨아들이기 시작한다...", "target": "self", "fx": "absorb", "healRate": 0.02, "healPerStack": 0.012, "useBelowHp": 0.85 },
     "smash": { "name": "필살 포자 대폭발", "telegraph": "💥 필살기를 준비 중입니다! 방어하세요!", "target": "all", "damage": [ 14, 17 ], "fx": "burst", "readyPose": "ready", "effect": "poison", "effectTurns": 2, "tickDamage": 1.5, "stacks": 3, "maxStacks": 3, "guardBlocks": true, "status": { "name": "독", "emoji": "☠️" } }
   },

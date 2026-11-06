@@ -545,10 +545,10 @@ let ok4;
     // 환각: 방어하면 안 걸림, 걸리면 다음 턴 확률로 헛손질(회복약 안 씀), 방어는 성공
     b = E.createBattle(mush, party, rng);
     turnWith(b, 'hypno', { x: 'guard', y: 'guard' });
-    assert(!b.members.some(m => E.isConfused(b, m)), '환각 포자: 방어하면 안 걸림');
+    assert(!b.members.some(m => E.isConfused(b, m)), '최면술: 방어하면 안 걸림');
     turnWith(b, 'hypno', { x: 'attack', y: 'skill' });
     const cm = b.members.find(m => E.isConfused(b, m));
-    assert(cm && b.lastTurn.effects[cm.userId] === 'confuse' && b.log.join().includes('🌀환각'), '환각 포자: 맞은 사람 다음 턴 🌀환각');
+    assert(cm && b.lastTurn.effects[cm.userId] === 'confuse' && b.log.join().includes('🌀환각'), '최면술: 맞은 사람 다음 턴 🌀환각');
     cm.hp = 50; const pots = cm.potions; roll = 0.1;
     turnWith(b, 'attack', { [cm.userId]: 'potion' });
     assert(b.lastTurn.acts[cm.userId].label === '헛손질' && cm.potions === pots && b.log.join().includes('헛손질'), '환각: 확률에 걸리면 헛손질(회복약은 그대로)');
