@@ -364,9 +364,8 @@ function endSummary(r, outcome, rewards) {
   }
   const meta = [];
   if (b) meta.push(`⏱️ ${b.turn}턴${r.battleStartedAt ? ` · ${formatDuration((r.endedAt || Date.now()) - r.battleStartedAt)}` : ''}`);
-  // 클리어는 위 문장에 이미 들어 있다. 전멸·시간 초과·무참가는 복구 대신 XP를 잃었다고 알린다(테스트 서버도 같은 문구).
-  if (PENALTY_OUTCOMES.has(outcome)) meta.push(PENALTY_TEXT);
-  else if (r.freezesXp && outcome !== 'clear') meta.push('🔧 XP 시스템 복구됨');
+  // 클리어는 위 문장에 이미 들어 있다. 전멸·시간 초과·무참가는 XP를 잃었다는 안내가 채널에 따로 올라오므로 여기엔 넣지 않는다.
+  if (r.freezesXp && outcome !== 'clear' && !PENALTY_OUTCOMES.has(outcome)) meta.push('🔧 XP 시스템 복구됨');
   if (meta.length) lines.push(`-# ${meta.join(' · ')}`);
   return lines.join('\n');
 }
@@ -386,8 +385,7 @@ async function endView(r, outcome, rewards = []) {
           return `${ROLES[mem.role].emoji} **${mem.name}** — 피해 ${mem.damage.toLocaleString()} · 회복 ${mem.healing} · 방어 ${mem.blocked ?? 0}${xp}${idle}`;
         }).join('\n');
     }
-    if (PENALTY_OUTCOMES.has(outcome)) body += `\n\n> ${PENALTY_TEXT}`;
-    else if (r.freezesXp) body += '\n\n> 🔧 **XP 시스템이 복구되었습니다!**';
+    if (r.freezesXp && !PENALTY_OUTCOMES.has(outcome)) body += '\n\n> 🔧 **XP 시스템이 복구되었습니다!**';
     sections.push({ text: body });
   } else {
     sections.push({ text: endSummary(r, outcome, rewards) });

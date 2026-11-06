@@ -132,7 +132,8 @@ let ok4;
   await raidMod.forceSpawnRaid({ guildId: 'other', channel: { ...channel, send: async (p) => { current = p; return message; } }, client });
   await runTimers();
   assert(desc().includes('RAID FAILED') && desc().includes('도망쳤다') && !lv.isRaidXpFrozen(), '무참가 시 도주(RAID FAILED) + XP 해제');
-  assert(desc().includes('☠️ 모든 유저의 50XP를 잃어버렸습니다...') && lv.getXp('gMain', 'n1') === noshowBefore - 50, '무참가 도주도 모든 유저 -50 XP + 문구');
+  assert(lv.getXp('gMain', 'n1') === noshowBefore - 50 && sent.some(p => p.content?.includes('☠️ 모든 유저의 50XP를 잃어버렸습니다...')), '무참가 도주도 모든 유저 -50 XP + 채널 안내');
+  assert(!desc().includes('50XP를 잃어') && !desc().includes('XP 시스템 복구됨'), '종료 화면 작은 글씨엔 벌칙·복구 문구 없음');
 
   // 7.5) 바로 시작: 파티장·관리자만
   {
@@ -601,7 +602,9 @@ let ok4;
     assert(mod.isPlaygroundPaused('gMain') && textOf(mC).includes('TURN 1 · 행동을 고르세요'), '재시작 후 전투 이어가기(전투 시간이 지났어도 한 턴은 줌)');
     await press(mod, mC, '5', 'raid:act:attack');
     console.log('--- 전멸 결과 글자 ---\n' + textOf(mC));
-    assert(textOf(mC).includes('☠️ 모든 유저의 50XP를 잃어버렸습니다...') && !textOf(mC).includes('XP 시스템 복구됨'), '전멸 화면: 복구 문구 대신 XP 손실 문구');
+    const chNotes = [...chC.msgs.values()].map(m => m.last?.content).filter(Boolean);
+    assert(!textOf(mC).includes('50XP를 잃어') && !textOf(mC).includes('XP 시스템 복구됨'), '전멸 화면 작은 글씨엔 벌칙·복구 문구 없음');
+    assert(chNotes.some(c => c.includes('☠️ 모든 유저의 50XP를 잃어버렸습니다...')) && !chNotes.some(c => c.includes('복구 완료')), '전멸 시 채널 안내: 복구 완료 대신 XP 손실');
     assert(lv.getXp('gMain', 'p1') === before.p1 - 50 && lv.getXp('gMain', 'p2') === Math.max(0, before.p2 - 50), '전멸하면 서버 모든 유저 -50 XP(0 밑으로는 안 내려감)');
     assert(!lv.isRaidXpFrozen() && !mod.isPlaygroundPaused('gMain'), '전멸 후 XP 정지 해제');
   }
