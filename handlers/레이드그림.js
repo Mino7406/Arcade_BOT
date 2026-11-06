@@ -841,6 +841,7 @@ function renderBattle(r) {
     const pose = usedMove
       || (r.showingResult && last?.defused && poses.dizzy ? 'dizzy' : null)
       || (!isIntentHidden(b) ? m.moves[b.intent]?.readyPose : null)
+      || (isShielded(b) && poses.shielded ? 'shielded' : null) // 보호막(갑옷)이 남은 턴엔 그 모습
       || (b.fuse && poses.lit ? 'lit' : null);
     const fxColor = (b.rage && m.sprite?.rageColors?.o) || m.sprite?.palette?.o || '#7fdc8c';
     const sporeColor = (b.rage && m.sprite?.rageColors?.x) || m.sprite?.palette?.x || fxColor; // 포자 연출 색
