@@ -433,7 +433,10 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
 // 맞은 파티원 카드 아이콘 위 타격 표시: 박치기는 할퀸 자국, 흩뿌리기는 점액 얼룩, 짓누르기는 충격 별.
 function hitFx(move, cx, cy, color, spore = color, accent = spore) {
   if (move === 'spore') {
-    p.circle(cx - 18, cy - 12, 9, spore); p.circle(cx + 20, cy + 6, 8, spore); p.circle(cx + 2, cy + 22, 6, color); p.circle(cx + 14, cy - 22, 5, color);
+    // 포자 흩뿌리기: 점액 얼룩(동그라미)과 구분되게 — 대폭발과 같은 동그란 포자 알갱이 두 개 + 흩날리는 네모 가루
+    puff(cx - 22, cy - 16, 4, spore, '#f1cdfb');
+    puff(cx + 22, cy + 14, 4, color, '#f1cdfb');
+    for (const [dx, dy, sz, c] of [[6, -28, 5, accent], [-30, 12, 4, spore], [28, -12, 4, accent], [-6, 28, 5, spore], [-14, 0, 3, accent], [12, 2, 3, spore]]) dot(cx + dx, cy + dy, sz, c);
   } else if (move === 'hypno') {
     // 몬스터 옆 최면 물결을 줄인 것 — 아이콘 양옆으로 퍼지는 도트 호 세 겹 + 반짝임
     hypnoWaves(cx, cy, 0.27, color, 2);
