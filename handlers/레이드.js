@@ -646,11 +646,13 @@ function startCountdown(r) {
   r.countdownTimer = setTimeout(tick, COUNTDOWN_TICK_MS[r.phase] ?? COUNTDOWN_TICK_MS.recruit);
 }
 
-// 레이드를 띄운다. channel: 출현할 채널. 실패하면 사유 문구, 성공하면 null.
-async function spawnRaid(client, channel, { forced = false } = {}) {
+// 레이드를 띄운다. channel: 출현할 채널. monsterId: 관리자가 고른 몬스터(없으면 등록된 몬스터 중 무작위 —
+// 자동 출현은 늘 무작위). 실패하면 사유 문구, 성공하면 null.
+async function spawnRaid(client, channel, { forced = false, monsterId = null } = {}) {
   if (raids.has(channel.guildId)) return '이 서버에 이미 진행 중인 레이드가 있어요.';
   if (!MONSTERS.length) return '등록된 몬스터가 없어요. Monster 폴더의 JSON 파일과 콘솔 오류를 확인하세요.';
-  const monster = MONSTERS[Math.floor(Math.random() * MONSTERS.length)];
+  const monster = monsterId ? MONSTERS.find(m => m.id === monsterId) : MONSTERS[Math.floor(Math.random() * MONSTERS.length)];
+  if (!monster) return '그 몬스터를 찾을 수 없어요. 다시 골라 주세요.';
   const now = Date.now();
   const r = {
     client,
@@ -1165,13 +1167,13 @@ function setNextSpawnAt(epochMs, now = Date.now()) {
   return null;
 }
 
-// 본서버에서는 놀이터에, 그 외(테스트 서버)에서는 버튼을 누른 채널에 띄운다.
-async function forceSpawnRaid(interaction) {
+// 본서버에서는 놀이터에, 그 외(테스트 서버)에서는 버튼을 누른 채널에 띄운다. monsterId가 없으면 무작위.
+async function forceSpawnRaid(interaction, monsterId = null) {
   const channel = interaction.guildId === GUILD_ID
     ? await interaction.client.channels.fetch(PLAYGROUND_CHANNEL_ID).catch(() => null)
     : interaction.channel;
   if (!channel) return '놀이터 채널을 찾을 수 없어요.';
-  return spawnRaid(interaction.client, channel, { forced: true });
+  return spawnRaid(interaction.client, channel, { forced: true, monsterId });
 }
 
 async function forceEndRaid(guildId) {

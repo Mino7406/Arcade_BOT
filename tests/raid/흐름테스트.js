@@ -54,8 +54,11 @@ function fakeInteraction(userId, customId) {
 let ok4;
 (async () => {
   lv.loadLevels();
-  // 1) 출현 → XP 정지
-  const err = await raidMod.forceSpawnRaid({ guildId: 'other', channel, client });
+  // 0) /xp에서 몬스터를 골라 소환: 없는 몬스터는 거부(아무것도 안 뜸)
+  assert((await raidMod.forceSpawnRaid({ guildId: 'other', channel, client }, 'nope'))?.includes('찾을 수 없어요') && !raidMod.getRaidStatus(channel.guildId).active, '없는 몬스터 id로 소환하면 거부');
+  // 1) 출현 → XP 정지 (고른 몬스터로)
+  const err = await raidMod.forceSpawnRaid({ guildId: 'other', channel, client }, 'slime');
+  assert(raidMod.getRaidStatus(channel.guildId).monsterName === '슬라임', '고른 몬스터(슬라임)로 소환');
   assert(!err, '출현 성공');
   assert(lv.isRaidXpFrozen() && lv.isMinigameXpFrozen(), '출현 중 XP 정지(미니게임 포함)');
   assert(hasImage() && desc().includes('역할 버튼을 눌러 참가') && /## ⏳ \d\d:\d\d:\d\d/.test(desc()) && current.components[0].toJSON().type === 17, '모집 화면: 컨테이너 안에 그림 + 00:00:00 타이머');

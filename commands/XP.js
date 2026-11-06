@@ -28,6 +28,7 @@ const {
 } = require('../handlers/레벨링');
 const { logAction } = require('../handlers/로그');
 const { getRaidStatus, setAutoSpawn, setNextSpawnAt, forceSpawnRaid, forceEndRaid } = require('../handlers/레이드');
+const { MONSTERS } = require('../handlers/레이드전투');
 const { kstDateTimeString, parseKstDateTime } = require('../handlers/시간');
 const { displayNameFromMember } = require('../handlers/이름');
 
@@ -174,6 +175,23 @@ function raidButton(raid) {
     : new ButtonBuilder().setCustomId('xp:mng:raid').setEmoji('👾').setLabel('레이드 소환').setStyle(ButtonStyle.Danger);
 }
 
+// 👾 레이드 소환 → 몬스터 고르기: 🎲 무작위 + 등록된 몬스터마다 버튼 하나(한 줄에 5개씩), 맨 아래 돌아가기.
+function buildRaidPickView(guildId, notice) {
+  const embed = new EmbedBuilder()
+    .setColor(0xED4245)
+    .setDescription('## 👾 레이드 소환\n어떤 몬스터를 소환할까요?\n-# 🎲 무작위는 등록된 몬스터 중 하나를 골라요(자동 출현과 같음).' + (notice ? `\n\n${notice}` : ''));
+  const buttons = [
+    new ButtonBuilder().setCustomId('xp:summon:random').setEmoji('🎲').setLabel('무작위').setStyle(ButtonStyle.Primary),
+    ...MONSTERS.map(m => new ButtonBuilder().setCustomId(`xp:summon:${m.id}`).setEmoji(m.emoji).setLabel(m.name).setStyle(ButtonStyle.Danger)),
+  ];
+  const rows = [];
+  for (let i = 0; i < buttons.length && rows.length < 4; i += 5) rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
+  rows.push(new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('xp:mng:raidback').setEmoji('↩️').setLabel('돌아가기').setStyle(ButtonStyle.Secondary),
+  ));
+  return { content: '', embeds: [embed], components: rows };
+}
+
 // 소환/종료 후 다시 그릴 화면 — 테스트 서버면 테스트 화면, 아니면 XP 관리 패널.
 function raidResultView(interaction, notice) {
   return isExcludedGuild(interaction.guildId) ? buildRaidTestView(notice, interaction.guildId) : buildManageView(notice, interaction.guildId);
@@ -308,7 +326,7 @@ async function handleXpUserSelect(interaction) {
 // ── 버튼 라우팅: 메뉴 분기 / XP 관리 토글 / ➕➖🔄 모달 오픈 ────
 async function handleXpButton(interaction) {
   const [, action, targetId] = interaction.customId.split(':');
-  const isRaidAction = action === 'mng' && (targetId === 'raid' || targetId === 'raidend');
+  const isRaidAction = (action === 'mng' && ['raid', 'raidend', 'raidback'].includes(targetId)) || action === 'summon';
   if (await denyGuard(interaction, { allowExcludedGuild: isRaidAction })) return;
 
   // 첫 화면 분기
@@ -320,6 +338,18 @@ async function handleXpButton(interaction) {
     } else if (targetId === 'home') {
       await interaction.update(buildMenuView());
     }
+    return;
+  }
+
+  // 몬스터를 골라 레이드 소환: 본서버에서는 놀이터에, 테스트 서버에서는 이 채널에 띄운다(handlers/레이드.js의 forceSpawnRaid).
+  if (action === 'summon') {
+    // 출현 메시지 전송을 기다리는 동안 3초 응답 제한을 넘기지 않게 먼저 ack한다.
+    await interaction.deferUpdate();
+    const monsterId = targetId === 'random' ? null : targetId;
+    const error = await forceSpawnRaid(interaction, monsterId);
+    const name = getRaidStatus(interaction.guildId).monsterName;
+    if (!error) logAction(interaction, 'XP 관리', `레이드 수동 소환 — ${name}${monsterId ? '' : ' (무작위)'}`);
+    await interaction.editReply(raidResultView(interaction, error ? `⚠️ ${error}` : `👾 ${monsterId ? '' : '🎲 무작위로 '}**${name}**을(를) 소환했습니다.`));
     return;
   }
 
@@ -354,12 +384,14 @@ async function handleXpButton(interaction) {
     } else if (targetId === 'farm' || targetId === 'game') {
       await interaction.update(buildConfirmView(targetId));
     } else if (targetId === 'raid') {
-      // 본서버에서는 놀이터에, 테스트 서버에서는 이 채널에 띄운다(handlers/레이드.js의 forceSpawnRaid).
-      // 출현 메시지 전송을 기다리는 동안 3초 응답 제한을 넘기지 않게 먼저 ack한다.
-      await interaction.deferUpdate();
-      const error = await forceSpawnRaid(interaction);
-      if (!error) logAction(interaction, 'XP 관리', '레이드 수동 소환');
-      await interaction.editReply(raidResultView(interaction, error ? `⚠️ ${error}` : '👾 **레이드를 소환했습니다.**'));
+      // 몬스터 고르는 화면으로(이미 떠 있으면 그 사실만 알림)
+      if (getRaidStatus(interaction.guildId).active) {
+        await interaction.update(raidResultView(interaction, '⚠️ 이 서버에 이미 진행 중인 레이드가 있어요.'));
+        return;
+      }
+      await interaction.update(buildRaidPickView(interaction.guildId));
+    } else if (targetId === 'raidback') {
+      await interaction.update(raidResultView(interaction));
     } else if (targetId === 'raidend') {
       await interaction.deferUpdate();
       const ended = await forceEndRaid(interaction.guildId);
