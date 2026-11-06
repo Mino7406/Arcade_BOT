@@ -341,22 +341,42 @@ function confuseSwirl(cx, cy) {
     for (let i = 1; i < pts.length; i++) p.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], width, color);
   }
 }
-// 독: 보라 거품 세 개 + 아래에 중첩 수(2 이상일 때)
-// 독류 배지: status.color가 있으면(화상 등) 그 색 불꽃 방울, 없으면 보라 거품
+// 독: 보라 거품 세 개 + 아래에 중첩 수(2 이상일 때). 화상(status.color가 있는 독류)은 불꽃 배지로 따로 그린다.
 function poisonBadge(cx, cy, stacks, color) {
-  const [c1, c2, c3, c4, label] = color ? ['#a8401a', color, '#ffc27a', '#fff1d6', '#ffd2a8'] : ['#9b3fc0', '#b45fe0', '#c98af0', '#f1cdfb', '#e2b8ff'];
-  p.circle(cx - 5, cy + 3, 9, c1);
-  p.circle(cx + 7, cy - 4, 7, c2);
-  p.circle(cx + 4, cy + 9, 5, c3);
-  p.circle(cx - 8, cy, 3, c4);
-  if (stacks > 1) text(`×${stacks}`, cx, cy + 22, 15, label);
+  if (color) return burnBadge(cx, cy, stacks);
+  p.circle(cx - 5, cy + 3, 9, '#9b3fc0');
+  p.circle(cx + 7, cy - 4, 7, '#b45fe0');
+  p.circle(cx + 4, cy + 9, 5, '#c98af0');
+  p.circle(cx - 8, cy, 3, '#f1cdfb');
+  if (stacks > 1) text(`×${stacks}`, cx, cy + 22, 15, '#e2b8ff');
 }
-// 공포: 보라 동그라미에 흰 느낌표(스킬 봉인)
+// 불꽃 모양(겹겹이: 어두운 테두리 → 빨강 → 주황 → 노란 심). 화상 배지·혼불·피격 연출에 쓴다.
+function flame(cx, cy, s, layers = [['#4a1206', 1.25], ['#e8401c', 1], ['#ff9a3c', 0.72], ['#ffe066', 0.42]]) {
+  for (const [c, k] of layers) {
+    const h = 15 * s * k, w = 9 * s * k;
+    p.poly([cx, cy - h, cx + w * 0.55, cy - h * 0.35, cx + w, cy + h * 0.2, cx + w * 0.7, cy + h * 0.62, cx, cy + h * 0.8,
+      cx - w * 0.7, cy + h * 0.62, cx - w, cy + h * 0.2, cx - w * 0.35, cy - h * 0.1, cx - w * 0.2, cy - h * 0.55], c);
+  }
+}
+// 화상: 큰 불꽃 + 옆 작은 불꽃 + 아래에 중첩 수(독 거품과 다른 모양)
+function burnBadge(cx, cy, stacks) {
+  flame(cx, cy, 1);
+  flame(cx + 9, cy + 4, 0.5, [['#4a1206', 1.3], ['#ff9a3c', 1], ['#ffe066', 0.55]]);
+  if (stacks > 1) text(`×${stacks}`, cx, cy + 22, 15, '#ffc08a');
+}
+// 공포: 겁먹은 얼굴(보라 얼굴 · 커다란 흰 눈 · 떨리는 입) + 식은땀 방울 + 떨림 선
+const FEAR_FACE = {
+  rows: [
+    '...dddddd...', '..dppppppd..', '.dppppppppd.', '.dpwwppwwpd.', 'dppwkppwkppd', 'dppwwppwwppd',
+    'dppppppppppd', 'dpppmpmpmppd', 'dppmpmpmpppd', '.dppppppppd.', '..dppppppd..', '...dddddd...',
+  ],
+  palette: { d: '#24103a', p: '#b39aff', w: '#ffffff', k: '#1a0a2a', m: '#1a0a2a' },
+};
 function fearBadge(cx, cy) {
-  p.circle(cx, cy, 13, '#2a1040');
-  p.circle(cx, cy, 11, '#8a4fd0');
-  p.rect(cx - 2, cy - 7, 4, 9, '#ffffff');
-  p.rect(cx - 2, cy + 4, 4, 3, '#ffffff');
+  drawPixels(FEAR_FACE, cx, cy, 2.3);
+  p.circle(cx + 14, cy - 6, 3.6, '#0e2a3d'); p.poly([cx + 14, cy - 15, cx + 17.2, cy - 6, cx + 10.8, cy - 6], '#0e2a3d'); // 식은땀(테두리)
+  p.circle(cx + 14, cy - 6, 2.4, '#8fd3f4'); p.poly([cx + 14, cy - 12.5, cx + 16.2, cy - 6, cx + 11.8, cy - 6], '#8fd3f4');
+  for (const dy of [-6, 0, 6]) p.line(cx - 19, cy + dy, cx - 16, cy + dy - 2, 2, '#b39aff'); // 떨림
 }
 // 표식(영혼 사냥 대상): 카드 오른쪽 위 빛나는 눈
 function markEye(cx, cy) {
@@ -438,6 +458,22 @@ function puff(x, y, size, c, light, dark = '#3a1450') {
     dot(x + (i - 1.5) * size, y + (j - 1.5) * size, size, ch === 'l' ? light : ch === 'd' ? dark : c);
   }));
 }
+// 작은 유령(원혼 폭풍): 5×5 도트
+const MINI_GHOST = { rows: ['.www.', 'wwwww', 'wkwkw', 'wwwww', 'w.w.w'], palette: { w: '#f1ecff', k: '#2a1f4a' } };
+const MINI_GHOST_DARK = { rows: ['.www.', 'wwwww', 'wkwkw', 'wwwww', 'w.w.w'], palette: { w: '#9b7bff', k: '#1a0f33' } };
+// 들쭉날쭉한 호(울부짖음 음파): 중심에서 r, 각도 a0~a1, 바깥·안쪽을 번갈아
+function jaggedArc(cx, cy, r, a0, a1, squash, width, color, teeth = 9) {
+  let prev = null;
+  for (let i = 0; i <= teeth * 2; i++) {
+    const a = a0 + ((a1 - a0) * i) / (teeth * 2);
+    const rr = r + (i % 2 ? 9 : -5);
+    const pt = [cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * squash];
+    if (prev) p.line(prev[0], prev[1], pt[0], pt[1], width, color);
+    prev = pt;
+  }
+}
+// 반투명 동그라미(연기·먼지·섬광)
+function haze(x, y, r, color, alpha) { p.roundRect(x - r, y - r, r * 2, r * 2, r, color, alpha); }
 function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
   if (!move) return;
   const G = 8;
@@ -511,15 +547,33 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
     }
     return;
   }
-  // ── 유령 ──
+  // ── 고스트 ──
   if (move === 'curse' && layer === 'front') {
-    // 영혼 사냥: 눈에서 아래(파티 쪽)로 뻗는 청록 눈빛 두 줄기
-    for (const s of [-1, 1]) for (let i = 0; i < 7; i++) dot(cx + s * (18 + i * 16), cy + 30 + i * 12, 5 + i, i % 2 ? '#7ef0e0' : '#b9a6ff');
+    // 영혼 사냥: 몸 아래에서 파티 쪽으로 구불구불 뻗는 혼령 촉수 넷 + 끝의 혼불(청록 불꽃)
+    for (const [s, spread, drop] of [[-1, 210, 96], [-1, 120, 112], [1, 120, 112], [1, 210, 96]]) {
+      const pts = [];
+      for (let i = 0; i <= 14; i++) {
+        const t = i / 14;
+        pts.push([cx + s * (30 + t * spread) + Math.sin(t * 7 + spread) * 9, cy + 34 + t * drop * 0.7]);
+      }
+      pts.forEach(([x, y], i) => p.circle(x, y, 11 * (1 - i / 16) + 5, '#1a0a2a'));
+      pts.forEach(([x, y], i) => p.circle(x, y, 11 * (1 - i / 16) + 2, i % 3 ? '#6e4fc4' : '#9b7bff'));
+      const [ex, ey] = pts[pts.length - 1];
+      flame(ex, ey + 2, 0.75, [['#0b2b2e', 1.3], ['#3fd6c6', 1], ['#9ffff2', 0.6], ['#ffffff', 0.28]]);
+    }
     return;
   }
   if (move === 'wail' && layer === 'back') {
-    // 울부짖음: 양옆으로 퍼지는 음파(보라 도트 호 세 겹)
-    hypnoWaves(cx, cy, 1, '#b9a6ff');
+    // 울부짖음: 입에서 터져 나가는 들쭉날쭉한 음파 고리 세 겹(안쪽은 밝고 굵게, 바깥은 흐리게)
+    for (const [r, w, c] of [[96, 6, '#f4f0ff'], [132, 5, '#c3b4ff'], [168, 4, '#7c5fd6']]) {
+      jaggedArc(cx, cy + 18, r, -0.85, 0.85, 0.62, w, c);
+      jaggedArc(cx, cy + 18, r, Math.PI - 0.85, Math.PI + 0.85, 0.62, w, c);
+    }
+    return;
+  }
+  if (move === 'wail' && layer === 'front') {
+    // 공기가 떨리는 짧은 선(입 양옆)
+    for (const s of [-1, 1]) for (const [dx, dy] of [[70, -20], [78, 8], [70, 36]]) p.line(cx + s * dx, cy + dy, cx + s * (dx + 16), cy + dy - 6, 4, '#f4f0ff');
     return;
   }
   if (move === 'phase' && layer === 'back') {
@@ -528,64 +582,104 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
     return;
   }
   if (move === 'storm' && layer === 'back') {
-    // 원혼 폭풍: 몸을 감싸고 도는 혼불 소용돌이 두 겹
-    for (let k = 0; k < 28; k++) {
-      const a = (k / 28) * Math.PI * 2;
-      dot(cx + Math.cos(a) * 140, cy + 4 + Math.sin(a) * 140 * 0.42, 8, k % 2 ? '#b9a6ff' : color);
-      dot(cx + Math.cos(a + 0.2) * 190, cy + 4 + Math.sin(a + 0.2) * 190 * 0.36, 5, '#7ef0e0');
+    // 원혼 폭풍: 세 갈래 나선 팔(바깥은 진한 보라, 안쪽으로 갈수록 밝게)이 몸을 휘감는 회오리
+    for (let arm = 0; arm < 3; arm++) {
+      for (let i = 0; i < 26; i++) {
+        const t = i / 25, a = arm * (Math.PI * 2 / 3) + t * 4.2, r = 210 - t * 120;
+        dot(cx + Math.cos(a) * r, cy + 10 + Math.sin(a) * r * 0.38, 4 + t * 7, t < 0.35 ? '#4b2f8f' : t < 0.7 ? '#8a6ae0' : '#d9ceff');
+      }
+    }
+    return;
+  }
+  if (move === 'storm' && layer === 'front') {
+    // 회오리를 타고 도는 작은 유령들(앞쪽은 밝고 크게, 뒤쪽은 어둡고 작게)
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2 + 0.3, r = k % 2 ? 175 : 140;
+      const x = cx + Math.cos(a) * r, y = cy + 10 + Math.sin(a) * r * 0.38;
+      drawPixels(Math.sin(a) > 0 ? MINI_GHOST : MINI_GHOST_DARK, x, y, Math.sin(a) > 0 ? 5 : 4);
     }
     return;
   }
   // ── 꼬마 폭탄 ──
-  if (move === 'ember' && layer === 'front') {
-    // 불똥 튀기기: 도화선 쪽에서 사방으로 튀는 주황·노랑 불똥
-    for (const [ux, uy, dist] of SPRAY) {
-      const at = (d) => [cx + ux * d, cy - 10 + uy * d * 0.62];
-      dot(...at(dist * 0.6), 6, '#ffe066');
-      dot(...at(dist * 0.85), 8, '#ff9a3c');
-      dot(...at(dist), 5, '#fff1d6');
+  if (move === 'dust' && layer === 'back') {
+    // 분진 흩날리기: 몸 양옆으로 퍼지는 뿌연 화약 먼지
+    for (const [dx, dy, r] of [[-130, 30, 46], [-195, 46, 36], [130, 30, 46], [195, 46, 36], [-80, 62, 32], [80, 64, 32], [-160, 0, 30], [160, 0, 30]]) haze(cx + dx, cy + dy, r, '#8a7a66', 0.16); // 아주 옅게 겹쳐 뿌연 먼지처럼
+    return;
+  }
+  if (move === 'dust' && layer === 'front') {
+    // 화약 가루 알갱이(갈색·회색 네모, 바깥으로 갈수록 작고 듬성) + 사이사이 불티 — 매번 같은 모양(고정 난수)
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+    for (let i = 0; i < 70; i++) {
+      const side = i % 2 ? 1 : -1, t = rnd();
+      const x = cx + side * (60 + t * 170), y = cy + 6 + (rnd() - 0.3) * 90 * (0.4 + t);
+      const sz = 7 - t * 4;
+      p.rect(x, y, sz, sz, i % 7 === 0 ? '#ff9a3c' : i % 5 === 0 ? '#ffe066' : i % 2 ? '#5e4f40' : '#9c8a72');
     }
     return;
   }
   if (move === 'smoke' && layer === 'front') {
-    // 연막탄: 몸 아래·양옆으로 퍼지는 회색 연기 뭉치
-    for (const [dx, dy, r] of [[-150, 40, 26], [-110, 62, 20], [150, 40, 26], [112, 62, 20], [-60, 70, 18], [60, 72, 18], [0, 76, 16]]) {
-      p.circle(cx + dx, cy + dy, r + 3, '#3a3a44');
-      p.circle(cx + dx, cy + dy, r, '#9a9aa6');
-      p.circle(cx + dx - r * 0.3, cy + dy - r * 0.3, r * 0.35, '#c8c8d2');
+    // 연막탄: 반투명 연기 뭉치가 겹겹이 — 아래는 짙고 위로 갈수록 옅게 피어오름
+    for (const [dx, dy, r, a] of [
+      [-150, 60, 44, 0.55], [-90, 74, 40, 0.6], [-20, 80, 42, 0.6], [50, 78, 40, 0.6], [120, 70, 44, 0.55], [180, 56, 34, 0.5],
+      [-200, 40, 30, 0.45], [-130, 20, 34, 0.4], [140, 18, 34, 0.4], [210, 30, 28, 0.4],
+      [-110, -24, 26, 0.28], [100, -30, 28, 0.28], [-40, -60, 22, 0.2], [60, -64, 20, 0.2],
+    ]) {
+      // 옅게 여러 겹: 공처럼 보이지 않게 진하기를 낮추고 위쪽에 밝은 겹을 살짝
+      haze(cx + dx, cy + dy, r * 1.15, '#6a6a76', a * 0.32);
+      haze(cx + dx, cy + dy, r * 0.8, '#7e7e8a', a * 0.3);
+      haze(cx + dx - r * 0.2, cy + dy - r * 0.35, r * 0.55, '#c4c4ce', a * 0.25);
     }
     return;
   }
   if (move === 'ignite' && layer === 'back') {
-    // 점화: 몸 둘레로 퍼지는 주황 빛 고리 두 겹(몬스터 칸 안 — 예전 도화선 위 불꽃은 HP 바까지 넘어갔음)
-    for (let k = 0; k < 26; k++) {
-      const a = (k / 26) * Math.PI * 2;
-      dot(cx + Math.cos(a) * 112, cy + 8 + Math.sin(a) * 112 * 0.42, k % 2 ? 6 : 8, k % 2 ? '#ffe066' : '#ff9a3c');
-      if (k % 2 === 0) dot(cx + Math.cos(a + 0.12) * 148, cy + 8 + Math.sin(a + 0.12) * 148 * 0.36, 4, '#ff6a2c');
-    }
+    // 점화: 도화선 끝(머리 오른쪽 위)에 번지는 뜨거운 빛
+    haze(cx + 22, cy - 56, 40, '#ff9a3c', 0.28);
+    haze(cx + 22, cy - 56, 22, '#ffe066', 0.4);
     return;
   }
   if (move === 'ignite' && layer === 'front') {
-    // 양옆으로 튀는 불티(위로 살짝 휘며 작아짐)
-    for (const s of [-1, 1]) for (let i = 0; i < 4; i++) dot(cx + s * (150 + i * 16), cy - 6 - i * 9, 7 - i, i % 2 ? '#ffe066' : '#ff9a3c');
+    // 도화선 끝에서 터지는 불꽃 별(긴 빛줄기 8개) + 양옆으로 포물선을 그리며 떨어지는 불티
+    const fx = cx + 22, fy = cy - 56;
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2, len = k % 2 ? 16 : 30;
+      p.line(fx, fy, fx + Math.cos(a) * len, fy + Math.sin(a) * len * (Math.sin(a) < 0 ? 0.5 : 1), k % 2 ? 3 : 5, k % 2 ? '#ff9a3c' : '#ffe066');
+    }
+    p.circle(fx, fy, 6, '#ffffff');
+    for (const s of [-1, 1]) for (let i = 1; i <= 6; i++) {
+      const t = i / 6;
+      dot(fx + s * (20 + t * 120), fy + 4 + t * t * 120, 7 - t * 4, i % 2 ? '#ffe066' : '#ff6a2c');
+    }
     return;
   }
   if (move === 'boom' && layer === 'back') {
-    // 대폭발: 몸 둘레 큰 불꽃 고리(주황·노랑)
-    for (let k = 0; k < 32; k++) {
-      const a = (k / 32) * Math.PI * 2;
-      dot(cx + Math.cos(a) * 150, cy + 6 + Math.sin(a) * 150 * 0.45, 12, k % 2 ? '#ff9a3c' : '#ffe066');
-    }
+    // 대폭발: 몬스터 칸 전체가 붉게 물들고, 몸 뒤로 들쭉날쭉한 거대한 폭발 섬광(빨강 → 주황 → 노랑 → 흰 심)
+    p.roundRect(20, 120, W - 40, 224, 14, '#ff2a14', 0.22);
+    const spikes = (r1, r2, n, c, rot) => {
+      const pts = [];
+      for (let k = 0; k < n * 2; k++) {
+        const a = rot + (k / (n * 2)) * Math.PI * 2, r = k % 2 ? r2 : r1 * (0.85 + ((k * 37) % 10) / 40);
+        pts.push(cx + Math.cos(a) * r, cy + 10 + Math.sin(a) * r * 0.62);
+      }
+      p.poly(pts, c);
+    };
+    spikes(250, 150, 14, '#7a0f08', 0.1);
+    spikes(215, 125, 14, '#e8401c', 0.3);
+    spikes(170, 100, 12, '#ff9a3c', 0.05);
+    spikes(120, 75, 10, '#ffe066', 0.2);
+    haze(cx, cy + 10, 70, '#ffffff', 0.55);
     return;
   }
   if (move === 'boom' && layer === 'front') {
-    for (let k = 0; k < 8; k++) {
-      const a = (k / 8) * Math.PI * 2 + Math.PI / 8;
-      const [px, py] = [cx + Math.cos(a) * 200, cy + 4 + Math.sin(a) * 200 * 0.4];
-      p.circle(px, py, 16, '#5a2a12');
-      p.circle(px, py, 12, '#9a9aa6');
-      dot(cx + Math.cos(a) * 160, cy + 4 + Math.sin(a) * 160 * 0.4, 8, '#ffe066');
+    // 사방으로 날아가는 시커먼 파편(뒤로 불꼬리) + 바닥 충격선
+    for (let k = 0; k < 10; k++) {
+      const a = (k / 10) * Math.PI * 2 + 0.2, r = 205 + (k % 3) * 18;
+      const x = cx + Math.cos(a) * r, y = cy + 10 + Math.sin(a) * r * 0.5;
+      p.line(x - Math.cos(a) * 30, y - Math.sin(a) * 15, x - Math.cos(a) * 10, y - Math.sin(a) * 5, 4, '#ffb070');
+      p.poly([x - 9, y - 6, x + 3, y - 11, x + 10, y + 2, x - 2, y + 9], '#1a0d08');
+      p.poly([x - 5, y - 3, x + 2, y - 6, x + 6, y + 1, x - 1, y + 5], '#5a3a2a');
     }
+    for (const s of [-1, 1]) for (const [d, y] of [[110, 70], [160, 76], [220, 70]]) p.line(cx + s * d, cy + y, cx + s * (d + 40), cy + y + 4, 5, '#ffe066');
     return;
   }
   if (move === 'burst' && layer === 'back') {
@@ -678,18 +772,34 @@ function hitFx(move, cx, cy, color, spore = color, accent = spore) {
     for (const [dx, dy, r] of blobs) p.circle(cx + dx, cy + dy, r, color);
     for (const [dx, dy, r] of blobs) p.circle(cx + dx - r * 0.35, cy + dy - r * 0.35, Math.max(1.8, r * 0.28), '#f4fff0');
   } else if (move === 'curse') {
-    // 영혼 사냥: 아이콘 위 청록·보라 혼불 고리
-    for (let k = 0; k < 12; k++) { const a = (k / 12) * Math.PI * 2; dot(cx + Math.cos(a) * 32, cy + Math.sin(a) * 30, 7, k % 2 ? '#7ef0e0' : '#8a4fd0'); }
+    // 영혼 사냥: 아이콘을 긁고 지나간 혼령 손톱 세 줄(보라 → 청록 심) + 빠져나가는 혼불
+    for (const d of [-14, 0, 14]) {
+      const pts = Array.from({ length: 11 }, (_, t) => [cx - 24 + d + t * 4.6 + Math.sin(t / 2) * 3, cy - 24 + t * 4.4]);
+      for (const [x, y] of pts) dot(x, y, 9, '#1a0a2a');
+      for (const [x, y] of pts) dot(x, y, 5, '#9b7bff');
+      for (const [x, y] of pts.slice(3, 8)) dot(x, y, 2, '#9ffff2');
+    }
+    flame(cx + 26, cy - 30, 0.55, [['#0b2b2e', 1.3], ['#3fd6c6', 1], ['#ffffff', 0.4]]);
   } else if (move === 'wail') {
-    hypnoWaves(cx, cy, 0.27, '#b9a6ff', 2);
+    // 울부짖음: 아이콘을 감싸는 들쭉날쭉한 음파 두 겹(양옆)
+    for (const [r, c] of [[30, '#f4f0ff'], [42, '#9b7bff']]) {
+      jaggedArc(cx, cy, r, -0.9, 0.9, 1, 3, c, 5);
+      jaggedArc(cx, cy, r, Math.PI - 0.9, Math.PI + 0.9, 1, 3, c, 5);
+    }
   } else if (move === 'storm') {
-    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([i, j], k) => puff(cx + i * 30, cy + j * 26, 5, k % 2 ? '#b9a6ff' : '#7ef0e0', '#f4f0ff', '#2a1f4a'));
-  } else if (move === 'ember') {
-    // 불똥: 아이콘 둘레 작은 불꽃
-    for (const [dx, dy] of [[-26, -20], [24, -24], [28, 18], [-22, 24]]) { dot(cx + dx, cy + dy, 9, '#ff9a3c'); dot(cx + dx, cy + dy - 3, 5, '#ffe066'); }
+    // 원혼 폭풍: 아이콘 둘레를 도는 작은 유령 셋 + 나선 도트
+    for (let i = 0; i < 12; i++) { const a = i * 0.55, r = 42 - i * 1.4; dot(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.8, 4, i % 2 ? '#8a6ae0' : '#d9ceff'); }
+    for (const [dx, dy] of [[-30, -22], [30, -14], [-4, 32]]) drawPixels(MINI_GHOST, cx + dx, cy + dy, 3.4);
+  } else if (move === 'dust') {
+    // 분진: 아이콘에 들러붙는 뿌연 먼지 + 화약 알갱이 + 불티
+    haze(cx - 10, cy + 8, 26, '#7a6a58', 0.45);
+    haze(cx + 14, cy - 10, 20, '#9c8a72', 0.4);
+    for (const [dx, dy, c] of [[-28, -14, '#5e4f40'], [22, 20, '#5e4f40'], [-6, -30, '#9c8a72'], [30, -26, '#9c8a72'], [-30, 22, '#ff9a3c'], [8, 28, '#ffe066'], [26, 4, '#ff9a3c']]) p.rect(cx + dx, cy + dy, 6, 6, c);
   } else if (move === 'boom') {
-    p.poly([cx, cy - 36, cx + 10, cy - 10, cx + 36, cy, cx + 10, cy + 10, cx, cy + 36, cx - 10, cy + 10, cx - 36, cy, cx - 10, cy - 10], '#ff9a3c');
-    p.poly([cx, cy - 22, cx + 6, cy - 6, cx + 22, cy, cx + 6, cy + 6, cx, cy + 22, cx - 6, cy + 6, cx - 22, cy, cx - 6, cy - 6], '#ffe066');
+    // 대폭발: 아이콘 뒤 들쭉날쭉한 폭발(검은 테두리 → 빨강 → 주황 → 노랑) + 날아가는 파편
+    const burst = (r1, r2, c) => { const pts = []; for (let k = 0; k < 20; k++) { const a = (k / 20) * Math.PI * 2, r = k % 2 ? r2 : r1; pts.push(cx + Math.cos(a) * r, cy + Math.sin(a) * r); } p.poly(pts, c); };
+    burst(46, 26, '#1a0d08'); burst(42, 23, '#e8401c'); burst(32, 18, '#ff9a3c'); burst(20, 12, '#ffe066');
+    for (const [dx, dy] of [[-40, -30], [40, -26], [-36, 34], [42, 30]]) p.rect(cx + dx, cy + dy, 7, 7, '#1a0d08');
   } else if (move === 'frost') {
     // 서리: 아이콘 네 귀퉁이에 눈송이
     for (const [dx, dy] of [[-26, -22], [26, 20], [24, -26], [-22, 26]]) flake(cx + dx, cy + dy, 8);
@@ -984,7 +1094,7 @@ function renderBattle(r) {
       if (hit && r.showingResult) text(`-${hit}`, x + w - 38, y + 78, 24, '#ff5a45');
       // 독 피해(아군 행동 뒤)는 보라 숫자로 그 아래에
       const poisonHit = r.showingResult && last?.poison?.[mem.userId];
-      if (poisonHit) text(`-${poisonHit}`, x + w - 38, y + 108, 22, '#d7a3ff');
+      if (poisonHit) text(`-${poisonHit}`, x + w - 38, y + 108, 22, mem.poisonStatus?.color ? '#ffb070' : '#d7a3ff'); // 화상은 주황
       // 상태 효과 아이콘(카드 왼쪽, 리본 아래): 점액(남은 턴) · 기절
       if (!down) statusBadges(b, mem, x + 32, y + 66);
       // 환각(최면) 상태는 점액처럼 카드 아이콘 위에 소용돌이로 보여 준다. 최면술에 막 맞은 결과 화면은 타격 표시(작은 최면 물결)만.

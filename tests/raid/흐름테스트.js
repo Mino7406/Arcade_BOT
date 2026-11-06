@@ -851,7 +851,7 @@ let ok4;
 
       b = E.createBattle(bomb, party, rng);
       turnWith('ember', { x: 'attack', y: 'attack' });
-      assert(E.poisonStacks(b, M('x')) === 1 && M('x').poisonStatus.name === '화상' && b.log.join().includes('🔥화상'), '불똥 튀기기: 🔥화상(독 규칙)');
+      assert(E.poisonStacks(b, M('x')) === 1 && M('x').poisonStatus.name === '화상' && b.log.join().includes('🔥화상'), '분진 흩날리기: 🔥화상(독 규칙)');
 
       b = E.createBattle(bomb, party, rng);
       turnWith('smoke', { x: 'attack', y: 'attack' });
