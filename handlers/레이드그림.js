@@ -357,6 +357,18 @@ function star(cx, cy, R, color) {
   }
   p.poly(pts, color);
 }
+// 기절(카드): 아이콘 머리 위 타원 궤도를 도는 별 세 개 — 앞쪽(궤도 아래)일수록 크고 밝게, 뒤쪽은 작고 어둡게
+function stunOrbit(cx, cy) {
+  const rx = 36, ry = 8;
+  for (let k = 0; k < 24; k++) {
+    const a = (k / 24) * Math.PI * 2;
+    if (k % 2 === 0) dot(cx + Math.cos(a) * rx, cy + Math.sin(a) * ry, 3, '#e0b84a');
+  }
+  for (const a of [-2.6, -0.4, 1.4]) {
+    const front = (Math.sin(a) + 1) / 2; // 0 뒤 ~ 1 앞
+    star(cx + Math.cos(a) * rx, cy + Math.sin(a) * ry, 6 + front * 5, front > 0.5 ? '#ffd23f' : '#d9a520');
+  }
+}
 function stunStars(x, y) {
   star(x - 7, y - 9, 10, '#ffd23f');
   star(x + 8, y + 8, 15, '#ffd23f');
@@ -828,8 +840,8 @@ function renderBattle(r) {
       // 환각(최면) 상태는 점액처럼 카드 아이콘 위에 소용돌이로 보여 준다. 최면술에 막 맞은 결과 화면은 타격 표시(작은 최면 물결)만.
       if (!down && isConfused(b, mem) && !(usedFx === 'hypno' && hit)) confuseSwirl(x + w / 2 + 14, y + 98); // 아이콘 오른쪽 아래에 걸쳐 아이콘도 보이게
       // 기절(별): 환각과 같은 자리(아이콘 오른쪽 아래). 빙결은 얼음 덮개라 그리지 않는다.
-      // 점액 얼룩(오른쪽 방울이 아이콘 +32까지)과 겹치지 않게 그보다 오른쪽에
-      if (!down && isStunned(b, mem) && !isIced(b, mem)) stunStars(x + w / 2 + 46, y + 104);
+      // 기절: 아이콘 머리 위를 도는 별(사용자 요청 — 아이콘 옆 별은 점액 얼룩과 겹쳤음)
+      if (!down && isStunned(b, mem) && !isIced(b, mem)) stunOrbit(x + w / 2, y + 57);
       // 점액 상태는 아이콘 대신 카드 아이콘에 묻은 점액으로 보여준다. 이번 턴 결과 화면에서 맞은 카드는
       // 타격 표시(할퀸 자국·충격 별·흩뿌리기 얼룩)만 그려 겹치지 않게 하고, 다음 선택 화면부터 다시 점액을 보인다.
 
