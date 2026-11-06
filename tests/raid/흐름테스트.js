@@ -563,6 +563,18 @@ let ok4;
     const pw = b.lastTurn.powered, hitAmt = Object.values(b.lastTurn.hits)[0];
     assert(pw === mush.moves.absorb.buffRate && !E.isPowered(b) && hitAmt === Math.round(9 * 1.07 * pw), '공격력 증가: 다음 피해 기술 1회 피해 × buffRate 후 사라짐');
 
+    // 독기 흡수는 파티에 독이 없으면 예고하지 않음 / 분노 중 독을 걸면 다음은 반드시 독기 흡수
+    b = E.createBattle(mush, party, Math.random);
+    let absorbNoPoison = 0;
+    for (let i = 0; i < 300; i++) { b.intent = 'attack'; b.lastTurn = { effects: {} }; b.members.forEach(m => { m.poisonStacks = 0; }); b.hp = Math.round(b.maxHp * 0.3); b.rage = false; if (E.resolveTurn(b, Math.random)) break; if (b.intent === 'absorb' && E.partyPoisonStacks(b) === 0) absorbNoPoison++; }
+    assert(absorbNoPoison === 0, '파티에 독이 없으면 독기 흡수를 예고하지 않음');
+    b = E.createBattle(mush, party, rng);
+    b.hp = Math.round(b.maxHp * 0.4); b.rage = true; b.sinceSmash = 6;
+    turnWith(b, 'spore', { x: 'attack', y: 'attack' });
+    assert(b.intent === 'absorb', '분노 중 독을 걸면 다음 행동은 독기 흡수(필살기 보장보다 먼저)');
+    turnWith(b, 'hypno', { x: 'guard', y: 'guard' });
+    assert(b.intent !== 'absorb' || !Object.values(b.lastTurn.effects).includes('poison'), '독을 안 건 턴은 연계 없음');
+
     // 회복약: 본인 독 해독(그 턴 독 피해 없음), HP가 가득해도 독이면 마실 수 있음
     b = E.createBattle(mush, party, rng);
     turnWith(b, 'spore', { x: 'guard', y: 'guard' });

@@ -691,25 +691,28 @@ function renderBattle(r) {
       text(label, bx + bw / 2, by + 22, 22, '#3a1a12', { maxWidth: 200 });
     }
 
-    // 다음 행동 예고 상자 — 왼쪽에 '다음 행동' 칩, 큰 공격(방어해야 할 때)은 빨간 상자 + 경고 삼각형
-    const move = m.moves[b.intent];
-    const warn = b.intent === 'smash';
-    const boxW = 540, boxH = 46, boxX = (W - boxW) / 2, boxY = 276;
-    const midY = boxY + boxH / 2;
-    p.roundRect(boxX, boxY, boxW, boxH, 11, warn ? '#4a1410' : '#201810');
-    p.strokeRoundRect(boxX, boxY, boxW, boxH, 11, 1.5, warn ? C.red : C.frame);
-    p.roundRect(boxX + 9, boxY + 9, 94, 28, 7, warn ? '#7a1f16' : '#3a2f22');
-    text('다음 행동', boxX + 56, midY, 16, warn ? '#ffd0c4' : C.muted);
-    const tx = boxX + 112 + (boxW - 120) / 2;
-    if (warn) {
-      const tw = p.textWidth(B(), move.telegraph, 22);
-      const ix = tx - Math.min(tw, boxW - 170) / 2 - 20;
-      p.poly([ix, midY - 10, ix + 11, midY + 9, ix - 11, midY + 9], '#ffb4a8');
-      p.rect(ix - 1.5, midY - 4, 3, 7, '#4a1410');
-      p.rect(ix - 1.5, midY + 4, 3, 3, '#4a1410');
+    // 다음 행동 예고 상자 — 왼쪽에 '다음 행동' 칩, 큰 공격(방어해야 할 때)은 빨간 상자 + 경고 삼각형.
+    // 턴 결과 화면(3.5초)에서는 그리지 않는다 — 방금 쓴 기술(말풍선·연출)과 다음 예고(예: 필살기 경고)가 한 화면에 겹쳐
+    // 두 기술을 같이 쓴 것처럼 보였다(사용자 지적). 다음 행동은 이어지는 선택 화면에서 보인다.
+    if (!r.showingResult) {
+      const move = m.moves[b.intent];
+      const warn = b.intent === 'smash';
+      const boxW = 540, boxH = 46, boxX = (W - boxW) / 2, boxY = 276;
+      const midY = boxY + boxH / 2;
+      p.roundRect(boxX, boxY, boxW, boxH, 11, warn ? '#4a1410' : '#201810');
+      p.strokeRoundRect(boxX, boxY, boxW, boxH, 11, 1.5, warn ? C.red : C.frame);
+      p.roundRect(boxX + 9, boxY + 9, 94, 28, 7, warn ? '#7a1f16' : '#3a2f22');
+      text('다음 행동', boxX + 56, midY, 16, warn ? '#ffd0c4' : C.muted);
+      const tx = boxX + 112 + (boxW - 120) / 2;
+      if (warn) {
+        const tw = p.textWidth(B(), move.telegraph, 22);
+        const ix = tx - Math.min(tw, boxW - 170) / 2 - 20;
+        p.poly([ix, midY - 10, ix + 11, midY + 9, ix - 11, midY + 9], '#ffb4a8');
+        p.rect(ix - 1.5, midY - 4, 3, 7, '#4a1410');
+        p.rect(ix - 1.5, midY + 4, 3, 3, '#4a1410');
+      }
+      text(move.telegraph, tx, midY, 22, warn ? '#ffc4b8' : C.sub, { maxWidth: boxW - 170 });
     }
-    text(move.telegraph, tx, midY, 22, warn ? '#ffc4b8' : C.sub, { maxWidth: boxW - 170 });
-
 
     cards(b.members, (x, y, w, h, roleKey, mem) => {
       const role = ROLES[roleKey];

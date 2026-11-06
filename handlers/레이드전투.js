@@ -105,6 +105,7 @@ function monsterProblems(m) {
   if (m.moves?.smash?.readyPose && !s?.poses?.[m.moves.smash.readyPose]) problems.push(`moves.smash.readyPose "${m.moves.smash.readyPose}"가 sprite.poses에 없음`);
   const rate = (v) => typeof v === 'number' && v > 0 && v <= 1; // 0 초과 1 이하 비율
   if (!rate(m.rage?.hpRatio) || !(m.rage?.damageRate > 0)) problems.push('rage.hpRatio(0~1)·rage.damageRate 필요');
+  if (m.rage?.afterPoison !== undefined && !m.moves?.[m.rage.afterPoison]) problems.push(`rage.afterPoison "${m.rage.afterPoison}"이 moves에 없음`);
   const TARGETS = ['single', 'all', 'none', 'self'];
   const range = (v) => Array.isArray(v) && v.length === 2 && v.every(Number.isFinite) && v[0] >= 0 && v[0] <= v[1];
   for (const [key, move] of Object.entries(m.moves ?? {})) {
@@ -188,9 +189,19 @@ function pickWeighted(weights, rng) {
 const SMASH_PITY_TURNS = 7; // 이만큼 큰 한 방(smash)이 없었으면 다음엔 반드시 예고 — 짧은 판에서도 필살기를 보게
 function pickNextIntent(battle, rng) {
   battle.sinceSmash = (battle.sinceSmash || 0) + 1;
+  // 분노 연계(rage.afterPoison): 분노 중 이번 턴에 독을 걸었으면 다음 행동은 반드시 그 기술(독버섯: 독기 흡수).
+  // 필살기 보장(7턴)보다 먼저 — 필살기는 그다음 턴으로 밀린다.
+  const combo = battle.rage && battle.monster.rage?.afterPoison;
+  if (combo && battle.monster.moves[combo] && Object.values(battle.lastTurn?.effects ?? {}).includes('poison')) return combo;
   if (battle.sinceSmash >= SMASH_PITY_TURNS && battle.monster.moves.smash && battle.intent !== 'smash') { battle.sinceSmash = 0; return 'smash'; }
   const weights = battle.monster.intentWeights || INTENT_WEIGHTS;
-  let next = pickWeighted(battle.rage ? weights.rage : weights.normal, rng);
+  let pool = battle.rage ? weights.rage : weights.normal;
+  // 독기 흡수(healPerStack)는 파티에 독이 하나도 없으면 고르지 않는다 — 그 기술을 빼고 나머지 비중으로 다시 고른다
+  if (partyPoisonStacks(battle) === 0) {
+    const withoutAbsorb = Object.fromEntries(Object.entries(pool).filter(([key]) => !battle.monster.moves[key]?.healPerStack));
+    if (Object.values(withoutAbsorb).some(w => w > 0)) pool = withoutAbsorb;
+  }
+  let next = pickWeighted(pool, rng);
   // 재생은 HP가 useBelowHp 이하일 때만, 그보다 많으면 대신 공격
   const nextMove = battle.monster.moves[next];
   if (nextMove?.target === 'self' && battle.hp > battle.maxHp * nextMove.useBelowHp) next = 'attack';
