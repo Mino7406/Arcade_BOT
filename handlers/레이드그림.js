@@ -359,17 +359,26 @@ function star(cx, cy, R, color) {
 }
 // 기절(카드): 아이콘 머리 위 타원 궤도를 도는 별 세 개 — 앞쪽(궤도 아래)일수록 크고 밝게, 뒤쪽은 작고 어둡게
 function stunOrbit(cx, cy) {
-  const rx = 36, ry = 8;
+  const rx = 44, ry = 10;
   const at = (a) => [cx + Math.cos(a) * rx, cy + Math.sin(a) * ry];
-  for (const a of [-2.6, -0.4, 1.6]) {
+  // 별 셋: 오른쪽 앞 · 왼쪽 앞 · 머리 위(뒤). 아이콘 한가운데는 비워 둔다. 뒤쪽부터 그려 앞쪽 별이 위에 오게.
+  const stars = [-1.5, 0.1, 3.3].sort((u, v) => Math.sin(u) - Math.sin(v));
+  for (const a of stars) {
     const front = (Math.sin(a) + 1) / 2; // 0 뒤 ~ 1 앞
-    // 꼬리: 별이 지나온 궤도(시계 방향으로 돈다고 보고 각도가 작은 쪽)를 따라 점점 가늘고 흐려지는 도트
-    for (let i = 7; i >= 1; i--) {
-      const [tx, ty] = at(a - i * 0.13);
-      p.circle(tx, ty, Math.max(1.2, (5 + front * 2) * (1 - i / 8)), i > 4 ? '#8a6a1a' : i > 2 ? '#c99a24' : '#ffe27a');
+    const R = 7 + front * 4;
+    // 꼬리: 별이 지나온 궤도를 따라 굵게 시작해 가늘어지는 빛줄기(겹친 원 — 어두운 테두리 → 밝은 심)
+    const n = 18, span = 1.1;
+    for (const [pad, color] of [[2.5, '#3a2a08'], [0, '#ffe680']]) {
+      for (let i = n; i >= 1; i--) {
+        const t = i / n;
+        const [tx, ty] = at(a - t * span);
+        p.circle(tx, ty, Math.max(0.8, R * 0.62 * (1 - t)) + pad * (1 - t * 0.7), color);
+      }
     }
     const [sx, sy] = at(a);
-    star(sx, sy, 6 + front * 5, front > 0.5 ? '#ffd23f' : '#e0b030');
+    star(sx, sy, R + 2.5, '#3a2a08'); // 테두리
+    star(sx, sy, R, front > 0.4 ? '#ffd23f' : '#e8b62c');
+    p.circle(sx - R * 0.18, sy - R * 0.22, Math.max(1.2, R * 0.16), '#fff8d6'); // 반짝임
   }
 }
 function stunStars(x, y) {
@@ -844,7 +853,7 @@ function renderBattle(r) {
       if (!down && isConfused(b, mem) && !(usedFx === 'hypno' && hit)) confuseSwirl(x + w / 2 + 14, y + 98); // 아이콘 오른쪽 아래에 걸쳐 아이콘도 보이게
       // 기절(별): 환각과 같은 자리(아이콘 오른쪽 아래). 빙결은 얼음 덮개라 그리지 않는다.
       // 기절: 아이콘 머리 위를 도는 별(사용자 요청 — 아이콘 옆 별은 점액 얼룩과 겹쳤음)
-      if (!down && isStunned(b, mem) && !isIced(b, mem)) stunOrbit(x + w / 2, y + 57);
+      if (!down && isStunned(b, mem) && !isIced(b, mem)) stunOrbit(x + w / 2, y + 60);
       // 점액 상태는 아이콘 대신 카드 아이콘에 묻은 점액으로 보여준다. 이번 턴 결과 화면에서 맞은 카드는
       // 타격 표시(할퀸 자국·충격 별·흩뿌리기 얼룩)만 그려 겹치지 않게 하고, 다음 선택 화면부터 다시 점액을 보인다.
 
