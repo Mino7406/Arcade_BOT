@@ -448,7 +448,11 @@ function hitFx(move, cx, cy, color, spore = color, accent = spore) {
   } else if (move === 'attack') {
     for (const d of [-14, 0, 14]) p.line(cx - 26 + d, cy - 26, cx + 14 + d, cy + 26, 5, '#ff4a3a');
   } else if (move === 'sweep') {
-    p.circle(cx - 18, cy - 12, 10, color); p.circle(cx + 20, cy + 8, 8, color); p.circle(cx + 4, cy + 22, 6, color);
+    // 점액 얼룩: 아이콘 색과 섞여 안 보이지 않게 어두운 테두리를 먼저 깔고, 점액색 방울 + 흰 반사광
+    const blobs = [[-18, -12, 11], [20, 8, 9], [2, 22, 7]];
+    for (const [dx, dy, r] of blobs) p.circle(cx + dx, cy + dy, r + 3, '#0e2a14');
+    for (const [dx, dy, r] of blobs) p.circle(cx + dx, cy + dy, r, color);
+    for (const [dx, dy, r] of blobs) p.circle(cx + dx - r * 0.35, cy + dy - r * 0.35, Math.max(1.8, r * 0.28), '#f4fff0');
   } else if (move === 'smash') {
     p.poly([cx, cy - 34, cx + 9, cy - 9, cx + 34, cy, cx + 9, cy + 9, cx, cy + 34, cx - 9, cy + 9, cx - 34, cy, cx - 9, cy - 9], '#ffd166');
   }
