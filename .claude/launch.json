@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "raid-gallery",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:/Users/OWNER/AppData/Local/Temp/claude/04ace5e1bda0031b/22da33a3-85fe-4c94-89bb-b804faa19528/scratchpad/serve.js"],
+      "port": 8765
+    }
+  ]
+}
