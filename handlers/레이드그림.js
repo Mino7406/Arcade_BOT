@@ -556,10 +556,18 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
     }
     return;
   }
+  if (move === 'ignite' && layer === 'back') {
+    // 점화: 몸 둘레로 퍼지는 주황 빛 고리 두 겹(몬스터 칸 안 — 예전 도화선 위 불꽃은 HP 바까지 넘어갔음)
+    for (let k = 0; k < 26; k++) {
+      const a = (k / 26) * Math.PI * 2;
+      dot(cx + Math.cos(a) * 112, cy + 8 + Math.sin(a) * 112 * 0.42, k % 2 ? 6 : 8, k % 2 ? '#ffe066' : '#ff9a3c');
+      if (k % 2 === 0) dot(cx + Math.cos(a + 0.12) * 148, cy + 8 + Math.sin(a + 0.12) * 148 * 0.36, 4, '#ff6a2c');
+    }
+    return;
+  }
   if (move === 'ignite' && layer === 'front') {
-    // 점화: 도화선 끝(머리 오른쪽 위)에서 터지는 불꽃 별
-    sparkle(cx + 40, cy - 70, 8, '#ffe066');
-    for (const [dx, dy] of [[-16, -12], [18, -16], [22, 10], [-14, 14], [0, -24]]) dot(cx + 40 + dx, cy - 70 + dy, 5, '#ff9a3c');
+    // 양옆으로 튀는 불티(위로 살짝 휘며 작아짐)
+    for (const s of [-1, 1]) for (let i = 0; i < 4; i++) dot(cx + s * (150 + i * 16), cy - 6 - i * 9, 7 - i, i % 2 ? '#ffe066' : '#ff9a3c');
     return;
   }
   if (move === 'boom' && layer === 'back') {
