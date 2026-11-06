@@ -99,6 +99,7 @@ function monsterProblems(m) {
     const missing = [...used].filter(ch => !s.palette[ch]);
     if (missing.length) problems.push(`palette에 없는 글자: ${missing.join(' ')}`);
   }
+  if (s?.scale !== undefined && !(s.scale >= 0.5 && s.scale <= 1.3)) problems.push('sprite.scale은 0.5~1.3');
   for (const key of REQUIRED_MOVES) if (!m.moves?.[key]) problems.push(`moves.${key} 없음`);
   if (m.moves?.smash?.readyPose && !s?.poses?.[m.moves.smash.readyPose]) problems.push(`moves.smash.readyPose "${m.moves.smash.readyPose}"가 sprite.poses에 없음`);
   const rate = (v) => typeof v === 'number' && v > 0 && v <= 1; // 0 초과 1 이하 비율

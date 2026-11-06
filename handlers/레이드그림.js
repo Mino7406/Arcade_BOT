@@ -195,7 +195,53 @@ function drawMonster(monster, cx, cy, maxH, { rage = false, gray = false, pose =
   if (!sp) return;
   const rows = (pose && sp.poses?.[pose]) || (rage && sp.rageRows) || sp.rows;
   const colors = rage || outline ? { ...(rage ? sp.rageColors : {}), ...(outline ? { a: outline } : {}) } : null;
-  drawPixels({ ...sp, rows }, cx, cy, Math.floor(maxH / rows.length), { dim: gray, colors });
+  // sprite.scale: 몬스터마다 그림 크기 배율(기본 1). 칸 수가 많아 작아 보이는 몬스터를 키울 때 쓴다.
+  drawPixels({ ...sp, rows }, cx, cy, Math.floor((maxH * (sp.scale ?? 1)) / rows.length), { dim: gray, colors });
+}
+
+// 분노 연출(모든 몬스터 공통 — 얼굴은 바꾸지 않고 주변으로 위험한 느낌을 낸다):
+// 몬스터 상자를 어둡게 붉히고, 몸 둘레에 붉은 기운(실루엣을 사방으로 밀어 찍음), 바닥 불빛, 피어오르는 불씨, 머리 위 분노 마크.
+function monsterSilhouette(monster, cx, cy, maxH, pose, color, d) {
+  const sp = monster.sprite;
+  if (!sp) return;
+  const rows = (pose && sp.poses?.[pose]) || sp.rows;
+  const solid = Object.fromEntries(Object.keys(sp.palette).map(k => [k, color]));
+  const px = Math.floor((maxH * (sp.scale ?? 1)) / rows.length);
+  for (const [dx, dy] of [[-d, 0], [d, 0], [0, -d], [0, d], [-d * 0.7, -d * 0.7], [d * 0.7, -d * 0.7], [-d * 0.7, d * 0.7], [d * 0.7, d * 0.7]]) {
+    drawPixels({ ...sp, rows }, cx + dx, cy + dy, px, { colors: solid });
+  }
+  return { w: rows[0].length * px, h: rows.length * px };
+}
+function rageFx(monster, cx, cy, maxH, pose, layer) {
+  if (layer === 'box') {
+    p.roundRect(21, 121, W - 42, 222, 14, '#6b0f0a', 0.45);
+    p.strokeRoundRect(20, 120, W - 40, 224, 14, 2.5, '#d6332a');
+    // 바닥 불빛
+    p.roundRect(cx - 130, cy + 54, 260, 16, 8, '#ff3b2f', 0.28);
+    p.roundRect(cx - 90, cy + 57, 180, 10, 5, '#ff6a3d', 0.4);
+    // 피어오르는 불씨(위치 고정 — 그릴 때마다 같은 그림이라 깜빡이지 않게)
+    for (const [dx, dy, sz] of [[-150, 20, 8], [-128, -30, 6], [-172, -6, 5], [146, 28, 8], [168, -18, 6], [124, -44, 5], [-104, -70, 5], [108, -76, 6]]) {
+      p.rect(cx + dx - sz / 2, cy + dy - sz / 2, sz, sz, '#ff7a3d');
+      p.rect(cx + dx - sz / 4, cy + dy - sz * 1.6, sz / 2, sz / 2, '#ffb36b');
+    }
+    return;
+  }
+  if (layer === 'aura') {
+    monsterSilhouette(monster, cx, cy, maxH, pose, '#7a1410', 9);
+    monsterSilhouette(monster, cx, cy, maxH, pose, '#ff3b2f', 4);
+    return;
+  }
+  if (layer === 'mark') {
+    // 분노 마크: 네 갈래로 꺾인 붉은 핏줄 표시를 머리 오른쪽 위에
+    const sp = monster.sprite;
+    const rows = (pose && sp?.poses?.[pose]) || sp?.rows || [''];
+    const px = Math.floor((maxH * (sp?.scale ?? 1)) / rows.length);
+    const mx = cx + (rows[0].length * px) / 2 - 6, my = cy - (rows.length * px) / 2 + 4;
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      p.line(mx + sx * 4, my + sy * 14, mx + sx * 4, my + sy * 5, 5, '#ff2a1f');
+      p.line(mx + sx * 14, my + sy * 4, mx + sx * 5, my + sy * 4, 5, '#ff2a1f');
+    }
+  }
 }
 
 // 상태 효과 아이콘(12×12 픽셀, 오리지널). 납작한 단색 배지 + 화살표로 효과를 알아보게 한다.
@@ -467,6 +513,7 @@ function renderBattle(r) {
     const m = b.monster;
     const last = b.lastTurn;
     background('battle', 120, 224);
+    if (b.rage) rageFx(m, W / 2, 196, 112, null, 'box'); // 분노: 몬스터 상자를 붉히고 바닥 불빛·불씨
 
     // 상단: TURN 배지 · 몬스터 이름(분노) · HP 바
     p.roundRect(30, 20, 118, 42, 10, '#2a2119');
@@ -504,8 +551,10 @@ function renderBattle(r) {
         p.line(W / 2 + dx, monsterY + dy - 7, W / 2 + dx, monsterY + dy + 7, 3, '#cfe8ff');
       }
     }
+    if (b.rage) rageFx(m, W / 2, monsterY, 112, pose, 'aura');
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'back', sporeColor);
     drawMonster(m, W / 2, monsterY, 112, { rage: b.rage, pose, outline: shielded ? '#cfe8ff' : null });
+    if (b.rage) rageFx(m, W / 2, monsterY, 112, pose, 'mark');
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'front', sporeColor);
     // 몬스터 오른쪽: 이번 턴 받은 피해(빨강) · 재생 회복량(초록, 피해 아래). 결과 화면에서만.
     const dealtNow = r.showingResult ? last?.monsterDamage : 0;
