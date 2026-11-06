@@ -360,13 +360,16 @@ function star(cx, cy, R, color) {
 // 기절(카드): 아이콘 머리 위 타원 궤도를 도는 별 세 개 — 앞쪽(궤도 아래)일수록 크고 밝게, 뒤쪽은 작고 어둡게
 function stunOrbit(cx, cy) {
   const rx = 36, ry = 8;
-  for (let k = 0; k < 24; k++) {
-    const a = (k / 24) * Math.PI * 2;
-    if (k % 2 === 0) dot(cx + Math.cos(a) * rx, cy + Math.sin(a) * ry, 3, '#e0b84a');
-  }
-  for (const a of [-2.6, -0.4, 1.4]) {
+  const at = (a) => [cx + Math.cos(a) * rx, cy + Math.sin(a) * ry];
+  for (const a of [-2.6, -0.4, 1.6]) {
     const front = (Math.sin(a) + 1) / 2; // 0 뒤 ~ 1 앞
-    star(cx + Math.cos(a) * rx, cy + Math.sin(a) * ry, 6 + front * 5, front > 0.5 ? '#ffd23f' : '#d9a520');
+    // 꼬리: 별이 지나온 궤도(시계 방향으로 돈다고 보고 각도가 작은 쪽)를 따라 점점 가늘고 흐려지는 도트
+    for (let i = 7; i >= 1; i--) {
+      const [tx, ty] = at(a - i * 0.13);
+      p.circle(tx, ty, Math.max(1.2, (5 + front * 2) * (1 - i / 8)), i > 4 ? '#8a6a1a' : i > 2 ? '#c99a24' : '#ffe27a');
+    }
+    const [sx, sy] = at(a);
+    star(sx, sy, 6 + front * 5, front > 0.5 ? '#ffd23f' : '#e0b030');
   }
 }
 function stunStars(x, y) {
