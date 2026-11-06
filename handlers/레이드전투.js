@@ -233,7 +233,10 @@ function pickNextIntent(battle, rng) {
   if (!fz && battle.sinceSmash >= SMASH_PITY_TURNS && battle.monster.moves.smash && battle.intent !== 'smash') { battle.sinceSmash = 0; return 'smash'; }
   const weights = battle.monster.intentWeights || INTENT_WEIGHTS;
   let pool = battle.rage ? weights.rage : weights.normal;
-  if (fz) {
+  // 카운트다운 중, 또는 카운트다운이 막 끝난 뒤 2턴(필살기 카운트 sinceSmash가 새로 시작됨)은 점화를 고르지 않는다 —
+  // 대폭발 바로 다음 턴에 또 점화해서 쉴 틈이 없던 문제(최종 검토)
+  const justEnded = battle.monster.moves.smash?.fuse && battle.sinceSmash <= 2 && battle.fuseEnded;
+  if (fz || justEnded) {
     const withoutSmash = Object.fromEntries(Object.entries(pool).filter(([key]) => key !== 'smash'));
     if (Object.values(withoutSmash).some(w => w > 0)) pool = withoutSmash;
   }
@@ -356,7 +359,7 @@ function telegraphText(battle) {
   const move = battle.monster.moves[battle.intent];
   const names = (battle.marks ?? []).map(id => getMember(battle, id)?.name).filter(Boolean).join(', ') || '누군가';
   // '{target}을(를)'은 마지막 이름의 받침에 맞춰 을/를로(한글이 아니면 그대로 '을(를)')
-  return move.telegraph.replace('{target}을(를)', names + objectJosa(names)).replace('{target}', names);
+  return (move?.telegraph ?? '').replace('{target}을(를)', names + objectJosa(names)).replace('{target}', names);
 }
 function objectJosa(name) {
   const code = String(name).trim().slice(-1).charCodeAt(0) - 0xAC00;
@@ -387,7 +390,11 @@ function markTargets(battle, taunter, rng) {
     if (t && !list.includes(t)) list.push(t);
   }
   if (!list.length && alive.length) list.push(alive[Math.floor(rng() * alive.length)]);
-  if (taunter && taunter.hp > 0 && !list.includes(taunter)) list[0] = taunter;
+  // 도발: 수호자가 표식 공격 한 명 몫을 대신 맞는다. 수호자 자신도 표식이면 다른 사람 몫까지 대신 맞는다(두 번 — 최종 검토).
+  if (taunter && taunter.hp > 0) {
+    const other = list.findIndex(t => t !== taunter);
+    if (other >= 0) list[other] = taunter;
+  }
   return list;
 }
 // 지금 파티에 쌓인 독 중첩 합(살아 있는 사람만). 독기 흡수(healPerStack) 회복량에 쓴다.
@@ -627,6 +634,8 @@ function resolveTurn(battle, rng = Math.random) {
       defused = true;
       last.defused = true;
       battle.fuse = null;
+      battle.sinceSmash = 0; // 필살기 7턴 카운트를 새로(기획서)
+      battle.fuseEnded = true;
       log.push(`😵 불이 꺼졌다! **${battle.monster.name}**이(가) 어지러워 이번 턴 행동하지 못한다`);
     }
   }
@@ -677,7 +686,7 @@ function resolveTurn(battle, rng = Math.random) {
           : [taunter && taunter.hp > 0 ? taunter : aliveMembers(battle)[Math.floor(rng() * aliveMembers(battle).length)]];
       const parts = targets.map(t => {
         const dmg = hit(t);
-        last.hits[t.userId] = dmg;
+        last.hits[t.userId] = (last.hits[t.userId] || 0) + dmg; // 수호자가 표식 두 몫을 맞으면 합산
         let tag = '';
         // 기술 효과: 점액·독은 맞은 사람 전원(guardBlocks면 방어한 사람 제외), 기절은 방어하지 않은 사람만(쓰러진 사람 제외)
         const blocked = !!move.guardBlocks && t.guarding;
@@ -723,7 +732,7 @@ function resolveTurn(battle, rng = Math.random) {
       battle.hiddenTurn = battle.turn + 1;
       log.push(`💨 연막이 퍼졌다! 다음 행동이 보이지 않는다`);
     }
-    if (battle.fuse && battle.intent === battle.fuse.boom) battle.fuse = null; // 대폭발로 카운트다운 끝
+    if (battle.fuse && battle.intent === battle.fuse.boom) { battle.fuse = null; battle.sinceSmash = 0; battle.fuseEnded = true; } // 대폭발로 카운트다운 끝 — 필살기 카운트 새로
     if (move.fuse) {
       const turns = battle.rage ? (move.fuse.rageTurns ?? move.fuse.turns) : move.fuse.turns;
       battle.fuse = { until: battle.turn + turns, need: Math.round(battle.maxHp * move.fuse.need), dealt: 0, boom: move.fuse.boom };

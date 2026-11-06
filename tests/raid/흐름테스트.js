@@ -781,6 +781,11 @@ let ok4;
       b.marks = ['x', 'y'];
       turnWith(null, { t: 'skill', x: 'attack', y: 'attack' });
       assert(Object.keys(b.lastTurn.hits).sort().join() === 't,y', '분노 2인 표식: 도발은 한 명 몫만 대신 맞음');
+      b = E.createBattle(ghost, party, rng); b.rage = true;
+      setIntent('mark'); b.marks = ['x', 't'];
+      const tHp = M('t').hp;
+      turnWith(null, { t: 'skill', x: 'attack', y: 'attack' });
+      assert(Object.keys(b.lastTurn.hits).join() === 't' && M('x').hp === 100 && tHp - M('t').hp === b.lastTurn.hits.t && b.log.join().split('T -').length === 3, '분노 표식에 수호자도 걸렸을 때 도발하면 다른 사람 몫까지 대신 맞음(두 번, 피해 합산)');
 
       b = E.createBattle(ghost, party, rng);
       setIntent('mark'); b.marks = ['x']; M('x').hp = 0;
@@ -856,6 +861,23 @@ let ok4;
       b = E.createBattle(bomb, party, rng);
       turnWith('smoke', {}); b.intent = fuse.boom;
       assert(!E.isIntentHidden(b), '대폭발 예고는 연막으로 가리지 않음');
+
+      // 카운트다운이 끝나면(대폭발·불끄기) 필살기 7턴 카운트를 새로 세고, 끝난 직후 2턴은 다시 점화하지 않음
+      let early = 0, resetBoom = true, resetDefuse = true;
+      for (let i = 0; i < 200; i++) {
+        b = E.createBattle(bomb, party, Math.random);
+        turnWith('smash', {}); b.fuse.need = 1e9;
+        while (b.intent !== fuse.boom) { E.resolveTurn(b, Math.random); }
+        E.resolveTurn(b, Math.random); // 대폭발
+        if (b.sinceSmash > 1) resetBoom = false;
+        const k1 = b.intent; E.resolveTurn(b, Math.random); const k2 = b.intent;
+        if (k1 === 'smash' || k2 === 'smash') early++;
+        b = E.createBattle(bomb, party, Math.random);
+        turnWith('smash', {}); b.fuse.need = 1; b.intent = 'attack';
+        E.resolveTurn(b, Math.random); // 불끄기
+        if (b.fuse || b.sinceSmash > 1 || b.intent === 'smash') resetDefuse = false;
+      }
+      assert(resetBoom && resetDefuse && early === 0, '카운트다운이 끝나면 필살기 카운트를 새로 세고 바로 다시 점화하지 않음');
     }
   }
   // 17) 재시작 후 이어가기: 저장된 모집·전투, 예전 기록, 기록 없는 메시지 / 전멸 벌칙
