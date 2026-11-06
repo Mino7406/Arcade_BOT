@@ -270,13 +270,13 @@ const STATUS_ICONS = {
     ],
     palette: { d: '#1c2a38', b: '#6f8fae', g: '#7ccf5a' },
   },
-  // 공격력 증가(몬스터): 붉은 문장에 흰 칼 + 초록 위 화살표(다음 공격 피해 증가) — 방패 배지와 같은 틀
+  // 공격력 증가(몬스터): 오른쪽 위를 향한 칼(흰 날·금빛 가드·갈색 손잡이) + 오른쪽 아래 초록 위 화살표
   power: {
     rows: [
-      '.dddddddddd.', 'drrrwrrrrgrd', 'drrrwrrrgggd', 'drrrwrrgggggd'.slice(0, 12), 'drrrwrrrrgrd', 'drrrwrrrrgrd',
-      'dryyyyyrrgrd', 'drrrbrrrrrrd', '.drrbrrrrrd.', '..drrrrrrd..', '...drrrrd...', '....dddd....',
+      '........ddd.', '.......dwwd.', '......dwwsd.', '.....dwwsd..', '....dwwsd...', '.dd.dwsd.g..',
+      '.dydwsd.ggg.', '..dyyd.ggggg', '.dbdyyd..g..', 'dbd..dd..g..', 'dd.......g..', '.........g..',
     ],
-    palette: { d: '#2a1410', r: '#b8443a', w: '#f4f1e8', y: '#e8b34a', b: '#6b3a1c', g: '#7ccf5a' },
+    palette: { d: '#2a1410', w: '#ffffff', s: '#b9c6d6', y: '#f0b84a', b: '#8b5a2b', g: '#7ccf5a' },
   },
 };
 // 카드 왼쪽 위 상태 아이콘: 기절(별). 점액는 아이콘 없이 점액 얼룩으로 표시한다.
