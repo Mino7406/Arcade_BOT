@@ -14,6 +14,7 @@ function smart(b, m) {
   const low = E.aliveMembers(b).some(x => x.hp < 50) || b.members.some(x => x.hp <= 0) || E.partyPoisonStacks(b) >= 4;
   if (m.role === 'healer' && low && !E.checkChoice(b, m.userId, 'skill')) return 'skill';
   if (mv === 'smash') return 'guard';
+  if (E.poisonStacks(b, m) >= 2 && m.hp < 75 && !E.checkChoice(b, m.userId, 'potion')) return 'potion'; // 독이 쌓이면 회복약으로 해독
   if (m.hp < 35 && !E.checkChoice(b, m.userId, 'potion')) return 'potion';
   if (m.role === 'tank' && mv === 'attack' && !E.checkChoice(b, m.userId, 'skill')) return 'skill';
   if ((m.role === 'sword' || m.role === 'archer') && !E.checkChoice(b, m.userId, 'skill')) return 'skill';

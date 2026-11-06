@@ -268,7 +268,7 @@ function effectLines(b) {
   // 독류: 사람마다 중첩·남은 턴·이번 턴 피해가 달라 이름 옆에 붙인다
   const poisoned = b.members.filter(mem => mem.hp > 0 && poisonStacks(b, mem) > 0);
   for (const [label, mems] of byStatus(poisoned, 'poisonStatus')) {
-    lines.push(`${label}: ${mems.map(mem => `${mem.name}(${mem.poisonStacks > 1 ? `×${mem.poisonStacks} · ` : ''}${poisonTurnsLeft(b, mem)}턴 · -${poisonDamage(b, mem)})`).join(', ')} - **이번 턴 행동 뒤 HP 감소**`);
+    lines.push(`${label}: ${mems.map(mem => `${mem.name}(${mem.poisonStacks > 1 ? `×${mem.poisonStacks} · ` : ''}${poisonTurnsLeft(b, mem)}턴 · -${poisonDamage(b, mem)})`).join(', ')} - **이번 턴 행동 뒤 HP 감소(회복약·치유사 스킬로 해독)**`);
   }
   const confused = b.members.filter(mem => mem.hp > 0 && isConfused(b, mem));
   for (const [label, mems] of byStatus(confused, 'confuseStatus')) {
@@ -408,6 +408,7 @@ async function endView(r, outcome, rewards = []) {
 function buildHelpView(monster) {
   const rageAt = monster?.rage?.hpRatio === 0.5 ? '절반' : `${Math.round((monster?.rage?.hpRatio ?? 0.5) * 100)}%`;
   const smash = monster?.moves?.smash;
+  const poison = Object.values(monster?.moves ?? {}).find(mv => mv.effect === 'poison'); // 독 기술이 있는 몬스터만 회복약 해독 안내
   // 필살기를 방어하지 않으면 생기는 일(필살기 데이터에서 읽음): 기절류는 행동 불가, 그 밖에 방어로 막는 상태이상은 이름으로
   const smashPenalty = smash?.effect === 'stun' ? ' 방어하지 않으면 다음 턴 **행동 불가**'
     : smash?.guardBlocks && smash.status ? ` 방어하지 않으면 **${smash.status.emoji}${smash.status.name}**` : '';
@@ -426,7 +427,7 @@ function buildHelpView(monster) {
       `${ACTIONS.attack.emoji} **${ACTIONS.attack.name}** - 역할별 기본 공격`,
       `${ACTIONS.skill.emoji} **${ACTIONS.skill.name}** - 역할마다 다름, 쓰면 몇 턴 쿨타임`,
       `${ACTIONS.guard.emoji} **${ACTIONS.guard.name}** - 이번 턴 받는 피해 **-${minusPct(GUARD_DAMAGE_RATE)}%**`,
-      `${ACTIONS.potion.emoji} **${ACTIONS.potion.name}** - HP **+${POTION_HEAL}** · 전투당 ${POTIONS_PER_BATTLE}개`,
+      `${ACTIONS.potion.emoji} **${ACTIONS.potion.name}** - HP **+${POTION_HEAL}**${poison ? ` · ${poison.status.emoji}${poison.status.name} 해독` : ''} · 전투당 ${POTIONS_PER_BATTLE}개`,
     ].join('\n') },
     { separator: true },
     { text: [

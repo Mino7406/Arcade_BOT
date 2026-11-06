@@ -21,7 +21,7 @@ const TAUNT_DAMAGE_RATE = 0.3;   // 도발 중인 수호자: 받는 피해 70% �
 //   shield: 다음 턴 동안 몬스터가 받는 피해 × effectRate
 //   poison: 맞은 사람에게 독 stacks중첩(최대 maxStacks)을 쌓고 남은 턴을 effectTurns로 새로 맞춘다.
 //           다음 턴부터 아군 행동이 끝날 때마다 중첩 × tickDamage × 인원별 피해 배율만큼 HP가 준다(쓰러질 수 있음).
-//           치유사 스킬로 해제.
+//           치유사 스킬(전원)이나 회복약(본인)으로 해제.
 //   confuse: 다음 턴 고른 행동이 effectRate 확률로 빗나간다(헛손질 — 회복약·쿨타임은 쓰지 않음). 방어는 빗나가지 않는다.
 //           치유사 스킬로 해제.
 //   guardBlocks: true면 방어한 사람에게는 그 기술의 상태이상이 걸리지 않는다(stun은 원래 그렇다).
@@ -303,7 +303,8 @@ function checkChoice(battle, userId, action) {
   if (!ACTIONS[action]) return '알 수 없는 행동이에요.';
   if (action === 'skill' && m.cooldown > 0) return `스킬은 ${m.cooldown}턴 뒤에 다시 쓸 수 있어요.`;
   if (action === 'potion' && m.potions <= 0) return '회복약을 다 썼어요.';
-  if (action === 'potion' && m.hp >= PLAYER_MAX_HP) return '이미 HP가 가득 차 있어요.';
+  // HP가 가득해도 독에 걸렸으면 해독하려고 마실 수 있다
+  if (action === 'potion' && m.hp >= PLAYER_MAX_HP && !poisonStacks(battle, m)) return '이미 HP가 가득 차 있어요.';
   return null;
 }
 
@@ -421,8 +422,11 @@ function resolveTurn(battle, rng = Math.random) {
       m.potions--;
       const healed = heal(m, POTION_HEAL);
       m.healing += healed;
+      // 회복약은 독도 푼다(이번 턴 독 피해 전에 마시므로 그 턴 독 피해도 없음)
+      const cured = poisonStacks(battle, m) > 0 ? m.poisonStatus : null;
+      if (cured) { m.poisonStacks = 0; m.poisonUntil = 0; }
       last.acts[m.userId] = { label: '회복약', value: healed, heal: true };
-      log.push(`${role.emoji} **${m.name}** 🍖회복약 → HP +${healed}`);
+      log.push(`${role.emoji} **${m.name}** 🍖회복약 → HP +${healed}${cured ? ` · ${cured.emoji}${cured.name} 해독` : ''}`);
     }
 
     if (battle.hp <= 0) {

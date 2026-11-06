@@ -4,7 +4,7 @@
     "moves 키는 자유(attack·smash만 필수). fx는 연출 종류(레이드전투.js의 MOVE_FX), smash.readyPose는 필살기 예고 중 자세.",
     "palette: a 외곽선 · h 갓 하이라이트 · o 갓 밝은 면 · b 갓 · d 갓 그늘 · p 갓 반점 · s 몸통 · t 몸통 그늘 · w 흰자 · k 눈동자 · m 입 · c 볼 · f 발 · x 포자 · z 환각 무늬 · g 달아오른 반점.",
     "poses: attack 깡충 내려앉아 납작 · spore 포자가 새어 나옴 · hypno 갓 무늬·눈이 빙글빙글 · absorb 입 오므리고 빨아들임 · smash 사방으로 포자 · ready 필살기 예고(반점이 노랗게).",
-    "독(poison): 맞을 때마다 stacks중첩(최대 maxStacks), 남은 턴은 effectTurns로 다시 맞춤. 다음 턴부터 아군 행동이 끝날 때 중첩 × tickDamage × 인원별 피해 배율. 치유사 스킬로 제거.",
+    "독(poison): 맞을 때마다 stacks중첩(최대 maxStacks), 남은 턴은 effectTurns로 다시 맞춤. 다음 턴부터 아군 행동이 끝날 때 중첩 × tickDamage × 인원별 피해 배율. 치유사 스킬(전원)·회복약(본인)으로 제거.",
     "환각(confuse): 다음 턴 방어가 아닌 행동이 effectRate 확률로 헛손질. guardBlocks면 방어한 사람은 안 걸림.",
     "독기 흡수: 최대 HP × (healRate + healPerStack × 파티 독 중첩 합) 회복.",
     "baseHp는 4인 기준 HP. 바꾸면 node tests/raid/밸런스시뮬.js mushroom 으로 승률·턴을 다시 확인한다."
@@ -165,10 +165,10 @@
   },
   "moves": {
     "attack": { "name": "짓밟기", "telegraph": "갓을 숨기며 몸을 웅크린다...", "target": "single", "damage": [ 8, 10 ] },
-    "spore": { "name": "포자 흩뿌리기", "telegraph": "갓 밑에서 보라 가루가 새어 나온다...", "target": "all", "damage": [ 2, 4 ], "fx": "spore", "effect": "poison", "effectTurns": 2, "tickDamage": 1.5, "stacks": 1, "maxStacks": 3, "status": { "name": "독", "emoji": "☠️" } },
-    "hypno": { "name": "최면술", "telegraph": "갓 무늬가 빙글빙글 돌기 시작한다...", "target": "single", "damage": [ 4, 6 ], "fx": "hypno", "effect": "confuse", "effectRate": 0.5, "guardBlocks": true, "status": { "name": "환각", "emoji": "🌀" } },
+    "spore": { "name": "포자 흩뿌리기", "telegraph": "갓 밑에서 보라 가루가 새어 나온다...", "target": "all", "damage": [ 2, 4 ], "fx": "spore", "effect": "poison", "effectTurns": 3, "tickDamage": 2, "stacks": 1, "maxStacks": 3, "status": { "name": "독", "emoji": "☠️" } },
+    "hypno": { "name": "최면술", "telegraph": "갓 무늬가 빙글빙글 돌기 시작한다...", "target": "single", "damage": [ 5, 7 ], "fx": "hypno", "effect": "confuse", "effectRate": 0.5, "guardBlocks": true, "status": { "name": "환각", "emoji": "🌀" } },
     "absorb": { "name": "독기 흡수", "telegraph": "주변의 독기를 빨아들이기 시작한다...", "target": "self", "fx": "absorb", "healRate": 0.02, "healPerStack": 0.012, "useBelowHp": 0.85 },
-    "smash": { "name": "필살 포자 대폭발", "telegraph": "💥 필살기를 준비 중입니다! 방어하세요!", "target": "all", "damage": [ 14, 17 ], "fx": "burst", "readyPose": "ready", "effect": "poison", "effectTurns": 2, "tickDamage": 1.5, "stacks": 3, "maxStacks": 3, "guardBlocks": true, "status": { "name": "독", "emoji": "☠️" } }
+    "smash": { "name": "필살 포자 대폭발", "telegraph": "💥 필살기를 준비 중입니다! 방어하세요!", "target": "all", "damage": [ 14, 17 ], "fx": "burst", "readyPose": "ready", "effect": "poison", "effectTurns": 3, "tickDamage": 2, "stacks": 3, "maxStacks": 3, "guardBlocks": true, "status": { "name": "독", "emoji": "☠️" } }
   },
   "intentWeights": {
     "normal": { "attack": 4, "spore": 2, "hypno": 2.5, "absorb": 1.5, "smash": 1 },

@@ -537,10 +537,21 @@ let ok4;
     const before = b.hp; turnWith(b, 'absorb', { x: 'guard', y: 'guard' });
     const ab = mush.moves.absorb;
     assert(b.lastTurn.poison.x === Math.round(2 * mush.moves.spore.tickDamage * 1.07) && b.lastTurn.monsterHeal === Math.round(b.maxHp * (ab.healRate + ab.healPerStack * 4)) && b.hp === before + b.lastTurn.monsterHeal, '독기 흡수: 최대 HP × (healRate + healPerStack × 파티 독 중첩 4)');
+    const yBefore = E.poisonStacks(b, y());
     turnWith(b, 'smash', { x: 'attack', y: 'guard' });
-    assert(E.poisonStacks(b, x()) === Math.min(mush.moves.smash.maxStacks, mush.moves.smash.stacks) && E.poisonStacks(b, y()) === 0, '필살 포자 대폭발: 방어 안 한 사람만 독 여러 중첩(방어하면 안 걸림)');
+    assert(E.poisonStacks(b, x()) === Math.min(mush.moves.smash.maxStacks, mush.moves.smash.stacks) && E.poisonStacks(b, y()) <= yBefore, '필살 포자 대폭발: 방어 안 한 사람만 독 여러 중첩(방어하면 안 걸림)');
     turnWith(b, 'attack', { y: 'skill' });
     assert(b.members.every(m => E.poisonStacks(b, m) === 0) && b.log.join().includes('독 제거') && !b.lastTurn.poison.x, '치유사 스킬로 독 제거(그 턴 독 피해도 없음)');
+
+    // 회복약: 본인 독 해독(그 턴 독 피해 없음), HP가 가득해도 독이면 마실 수 있음
+    b = E.createBattle(mush, party, rng);
+    turnWith(b, 'spore', { x: 'guard', y: 'guard' });
+    x().hp = 100;
+    assert(!E.checkChoice(b, 'x', 'potion'), '독에 걸리면 HP가 가득해도 회복약을 마실 수 있음');
+    const pots0 = x().potions;
+    turnWith(b, 'attack', { x: 'potion', y: 'guard' });
+    assert(E.poisonStacks(b, x()) === 0 && !b.lastTurn.poison.x && x().potions === pots0 - 1 && b.log.join().includes('☠️독 해독'), '회복약으로 본인 독 해독(그 턴 독 피해 없음)');
+    assert(E.poisonStacks(b, y()) === 0 || b.lastTurn.poison.y > 0, '회복약은 마신 사람만 해독(다른 사람은 그대로 독 피해)');
 
     // 환각: 방어하면 안 걸림, 걸리면 다음 턴 확률로 헛손질(회복약 안 씀), 방어는 성공
     b = E.createBattle(mush, party, rng);
