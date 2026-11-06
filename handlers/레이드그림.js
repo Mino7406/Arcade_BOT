@@ -254,11 +254,22 @@ const STATUS_ICONS = {
   },
 };
 // 카드 왼쪽 위 상태 아이콘: 기절(별). 점액는 아이콘 없이 점액 얼룩으로 표시한다.
-// 카드 왼쪽 상태 배지: 기절(별) · 독(거품). 환각은 배지 대신 아이콘 양옆 작은 최면 물결(카드 그리는 곳에서).
+// 카드 왼쪽 상태 배지: 기절(별) · 독(거품). 환각은 배지 대신 아이콘 위 소용돌이(카드 그리는 곳에서, 점액처럼).
 function statusBadges(b, mem, x, y) {
   if (isStunned(b, mem)) stunStars(x, y);
   const stacks = poisonStacks(b, mem);
   if (stacks) poisonBadge(x, y + 34, stacks);
+}
+// 환각(최면) 상태: 카드 아이콘 위에 겹쳐 그리는 청록 소용돌이(점액 얼룩처럼 아이콘에 묻은 느낌)
+function confuseSwirl(cx, cy) {
+  const turns = 2.2, steps = 44, R = 26;
+  let px = cx + R, py = cy;
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps, a = t * turns * Math.PI * 2, rr = R * (1 - t * 0.85);
+    const nx = cx + Math.cos(a) * rr, ny = cy + Math.sin(a) * rr;
+    p.line(px, py, nx, ny, 4, '#7ef0e0');
+    px = nx; py = ny;
+  }
 }
 // 독: 보라 거품 세 개 + 아래에 중첩 수(2 이상일 때)
 function poisonBadge(cx, cy, stacks) {
@@ -673,8 +684,8 @@ function renderBattle(r) {
       if (poisonHit) text(`-${poisonHit}`, x + w - 38, y + 108, 22, '#d7a3ff');
       // 상태 효과 아이콘(카드 왼쪽, 리본 아래): 점액(남은 턴) · 기절
       if (!down) statusBadges(b, mem, x + 32, y + 66);
-      // 환각(최면술): 아이콘 양옆 작은 최면 물결. 최면술에 막 맞은 결과 화면은 타격 표시가 같은 물결이라 겹쳐 그리지 않는다.
-      if (!down && isConfused(b, mem) && !(usedFx === 'hypno' && hit)) hypnoWaves(x + w / 2, y + 86, 0.27, fxColor, 2);
+      // 환각(최면) 상태는 점액처럼 카드 아이콘 위에 소용돌이로 보여 준다. 최면술에 막 맞은 결과 화면은 타격 표시(작은 최면 물결)만.
+      if (!down && isConfused(b, mem) && !(usedFx === 'hypno' && hit)) confuseSwirl(x + w / 2, y + 86);
       // 점액 상태는 아이콘 대신 카드 아이콘에 묻은 점액으로 보여준다. 이번 턴 결과 화면에서 맞은 카드는
       // 타격 표시(할퀸 자국·충격 별·흩뿌리기 얼룩)만 그려 겹치지 않게 하고, 다음 선택 화면부터 다시 점액을 보인다.
       if (!down && slowTurnsLeft(b, mem) > 0 && !(usedMove && hit)) hitFx('sweep', x + w / 2, y + 86, fxColor);
