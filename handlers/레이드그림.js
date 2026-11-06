@@ -303,7 +303,16 @@ const SPRAY = [
 ];
 // 몬스터 기술 연출(턴 결과 화면). 몬스터마다 그리지 않고 기술 종류(moves 키)로 공통 처리한다.
 // layer 'back'은 몬스터 뒤, 'front'는 앞에 그린다. color는 몬스터 겉면 색(점액·기운).
-function monsterFx(move, cx, cy, color, layer, spore = color) {
+// 연출 도우미 — 몬스터 그림과 어울리게 네모 도트로 그린다.
+function dot(x, y, size, c) { p.rect(Math.round(x - size / 2), Math.round(y - size / 2), Math.round(size), Math.round(size), c); }
+// 반짝임: 가운데 + 상하좌우 네 칸
+function sparkle(x, y, size, c) { for (const [i, j] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) dot(x + i * size, y + j * size, size, c); }
+// 포자 구름 뭉치: 둥근 7칸 덩어리 + 왼쪽 위 밝은 칸
+function puff(x, y, size, c, light) {
+  for (const [i, j] of [[0, -1], [-1, 0], [0, 0], [1, 0], [-1, 1], [0, 1], [1, 1]]) dot(x + i * size, y + j * size, size, c);
+  dot(x - size, y - size * 0.5, size * 0.6, light);
+}
+function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
   if (!move) return;
   const G = 8;
   const cell = (x, y, c) => p.rect(cx + Math.round((x - cx) / G) * G - G / 2, cy + Math.round((y - cy) / G) * G - G / 2, G, G, c);
@@ -319,27 +328,55 @@ function monsterFx(move, cx, cy, color, layer, spore = color) {
     return;
   }
   if (move === 'hypno' && layer === 'back') {
-    // 몸 뒤로 납작하게 도는 소용돌이(위 HP 바·아래 '다음 행동' 상자에 닿지 않게 세로를 줄임)
-    spiral(cx, cy - 6, 165, 5, '#7ef0e0', 2.6, 0.5);
+    // 최면술: 몸 양옆으로 퍼져 나가는 최면 물결(도트 호 세 겹, 청록·보라 번갈아) + 반짝임
+    const rings = [[112, '#7ef0e0'], [142, color], [172, '#7ef0e0']];
+    rings.forEach(([r, c], k) => {
+      for (const side of [-1, 1]) {
+        const span = 0.95 - k * 0.12; // 바깥 물결일수록 짧게
+        const steps = Math.round((r * span * 2) / 10);
+        for (let i = 0; i <= steps; i++) {
+          const a = -span + (i / steps) * span * 2;
+          dot(cx + side * Math.cos(a) * r, cy - 4 + Math.sin(a) * r * 0.58, k === 1 ? 7 : 6, c);
+        }
+      }
+    });
+    for (const [dx, dy, sz] of [[-96, -70, 5], [100, -66, 4], [-200, -20, 4], [204, 10, 5], [-60, 74, 4], [70, 72, 4]]) sparkle(cx + dx, cy + dy, sz, '#e8fffb');
     return;
   }
   if (move === 'absorb' && layer === 'back') {
-    // 바깥에서 몸 쪽으로 빨려 드는 독기(보라 선 + 끝의 가루)
-    for (const [dx, dy] of [[-150, -50], [-160, 16], [-120, 60], [150, -50], [160, 16], [120, 60], [-80, -78], [80, -78]]) {
-      p.line(cx + dx, cy + dy, cx + dx * 0.68, cy + dy * 0.68, 4, spore);
-      cell(cx + dx * 1.08, cy + dy * 1.08, color);
+    // 독기 흡수: 여섯 갈래 독기 줄기가 휘어 들며 몸으로 빨려 듦 — 꼬리는 가늘고 어둡게, 머리는 굵고 밝게.
+    // 위쪽(HP 바)과 오른쪽 피해 숫자 자리는 피한다.
+    const purple = ['#5a2a72', '#8a44b0', spore, '#f1cdfb'];
+    const lime = ['#3d5a1a', '#7aa832', accent, '#f4ffd0'];
+    [-158, -112, 160, -22, 22, 112].forEach((deg, k) => {
+      const tones = k % 2 ? lime : purple;
+      const dir = Math.cos((deg * Math.PI) / 180) > 0 ? 1 : -1;
+      const pts = [];
+      for (let i = 0; i <= 6; i++) {
+        const r = 182 - i * 12;
+        const a = (deg * Math.PI) / 180 + i * 0.09 * dir; // 같은 방향으로 감겨 들어감
+        pts.push([cx + Math.cos(a) * r, cy - 2 + Math.sin(a) * r * 0.46]);
+      }
+      // 혜성처럼: 꼬리 쪽 작은 어두운 도트 → 머리 쪽 큰 밝은 도트(촘촘히 이어 줄기로 보이게)
+      pts.forEach(([x, y], i) => dot(x, y, 4 + i * 1.6, tones[Math.min(3, Math.floor(i / 1.75))]));
+      dot(pts[6][0] - 2, pts[6][1] - 2, 4, '#ffffff');
+    });
+    return;
+  }
+  if (move === 'burst' && layer === 'back') {
+    // 포자 대폭발: 몸 둘레 충격 고리(도트, 보라·연두 번갈아)
+    for (let k = 0; k < 30; k++) {
+      const a = (k / 30) * Math.PI * 2;
+      dot(cx + Math.cos(a) * 128, cy + 6 + Math.sin(a) * 128 * 0.42, 8, k % 2 ? spore : accent);
     }
     return;
   }
   if (move === 'burst' && layer === 'front') {
-    // 바닥 충격파(보라) + 사방으로 터지는 포자
-    for (const sd of [-1, 1]) {
-      p.line(cx + sd * 86, cy + 48, cx + sd * 170, cy + 40, 5, spore);
-      p.line(cx + sd * 92, cy + 58, cx + sd * 200, cy + 60, 5, spore);
-    }
-    for (const [ux, uy, dist] of SPRAY) {
-      const [ex, ey] = [cx + ux * dist * 1.05, cy + uy * dist * 0.6];
-      cell(ex, ey, spore); cell(ex + G, ey - G, color); cell(ex - G, ey + G, color);
+    // 사방으로 터져 나가는 큰 포자 구름 뭉치 + 그 바깥 파편 한 알씩
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2 + Math.PI / 8;
+      puff(cx + Math.cos(a) * 182, cy + 4 + Math.sin(a) * 182 * 0.4, 11, k % 2 ? spore : color, '#f1cdfb');
+      dot(cx + Math.cos(a + 0.16) * 236, cy + 4 + Math.sin(a + 0.16) * 236 * 0.38, 7, accent);
     }
     return;
   }
@@ -381,13 +418,17 @@ function monsterFx(move, cx, cy, color, layer, spore = color) {
   }
 }
 // 맞은 파티원 카드 아이콘 위 타격 표시: 박치기는 할퀸 자국, 흩뿌리기는 점액 얼룩, 짓누르기는 충격 별.
-function hitFx(move, cx, cy, color, spore = color) {
+function hitFx(move, cx, cy, color, spore = color, accent = spore) {
   if (move === 'spore') {
     p.circle(cx - 18, cy - 12, 9, spore); p.circle(cx + 20, cy + 6, 8, spore); p.circle(cx + 2, cy + 22, 6, color); p.circle(cx + 14, cy - 22, 5, color);
   } else if (move === 'hypno') {
-    spiral(cx, cy, 30, 4, '#7ef0e0');
+    // 아이콘을 가리지 않게 둘레에 도트 고리 두 겹(청록·보라)
+    [[36, '#7ef0e0', 16], [28, spore, 12]].forEach(([r, c, n]) => {
+      for (let k = 0; k < n; k++) { const a = (k / n) * Math.PI * 2; dot(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 5, c); }
+    });
   } else if (move === 'burst') {
-    p.poly([cx, cy - 34, cx + 9, cy - 9, cx + 34, cy, cx + 9, cy + 9, cx, cy + 34, cx - 9, cy + 9, cx - 34, cy, cx - 9, cy - 9], spore);
+    // 아이콘 네 귀퉁이로 터진 포자 구름(가운데 아이콘은 보이게)
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([i, j], k) => puff(cx + i * 30, cy + j * 26, 5, k % 2 ? accent : spore, '#f1cdfb'));
   } else if (move === 'attack') {
     for (const d of [-14, 0, 14]) p.line(cx - 26 + d, cy - 26, cx + 14 + d, cy + 26, 5, '#ff4a3a');
   } else if (move === 'sweep') {
@@ -539,6 +580,7 @@ function renderBattle(r) {
     const pose = usedMove || (b.intent === 'smash' ? m.moves.smash?.readyPose : null);
     const fxColor = (b.rage && m.sprite?.rageColors?.o) || m.sprite?.palette?.o || '#7fdc8c';
     const sporeColor = (b.rage && m.sprite?.rageColors?.x) || m.sprite?.palette?.x || fxColor; // 포자 연출 색
+    const accentColor = (b.rage && m.sprite?.rageColors?.p) || m.sprite?.palette?.p || sporeColor; // 반점 색(독기·파편)
     // 박치기·짓누르기는 파티 쪽(아래)으로 몸을 내밀어 그린다
     const monsterY = 196 + (usedFx === 'attack' ? 10 : usedFx === 'smash' || usedFx === 'burst' ? 6 : 0);
     // 보호막(단단해지기 다음 턴): 외곽선을 금속빛으로 바꾸고 둘레에 반짝임 + HP 바 왼쪽에 방패 배지
@@ -550,10 +592,10 @@ function renderBattle(r) {
       }
     }
     if (b.rage) rageFx(m, W / 2, monsterY, 112, pose, 'aura');
-    monsterFx(usedFx, W / 2, monsterY, fxColor, 'back', sporeColor);
+    monsterFx(usedFx, W / 2, monsterY, fxColor, 'back', sporeColor, accentColor);
     drawMonster(m, W / 2, monsterY, 112, { rage: b.rage, pose, outline: shielded ? '#cfe8ff' : null });
     if (b.rage) rageFx(m, W / 2, monsterY, 112, pose, 'mark');
-    monsterFx(usedFx, W / 2, monsterY, fxColor, 'front', sporeColor);
+    monsterFx(usedFx, W / 2, monsterY, fxColor, 'front', sporeColor, accentColor);
     // 몬스터 오른쪽: 이번 턴 받은 피해(빨강) · 재생 회복량(초록, 피해 아래). 결과 화면에서만.
     const dealtNow = r.showingResult ? last?.monsterDamage : 0;
     // 점액 줄기(오른쪽 끝 약 W/2+190)와 오른쪽 위 '방어력 증가' 배지(y 186까지)를 피해 그 오른쪽 아래에,
@@ -624,7 +666,7 @@ function renderBattle(r) {
 
       roleIcon(roleKey, x + w / 2, y + 86, down);
       const hit = last?.hits[mem.userId];
-      if (hit && usedFx) hitFx(usedFx, x + w / 2, y + 86, fxColor, sporeColor);
+      if (hit && usedFx) hitFx(usedFx, x + w / 2, y + 86, fxColor, sporeColor, accentColor);
       // 받은 피해 숫자도 그 턴의 결과 화면에서만(다음 턴 선택 화면에는 남기지 않는다)
       if (hit && r.showingResult) text(`-${hit}`, x + w - 38, y + 78, 24, '#ff5a45');
       // 독 피해(아군 행동 뒤)는 보라 숫자로 그 아래에
