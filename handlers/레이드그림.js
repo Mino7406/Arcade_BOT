@@ -362,12 +362,12 @@ function stunOrbit(cx, cy) {
   const rx = 44, ry = 10;
   const at = (a) => [cx + Math.cos(a) * rx, cy + Math.sin(a) * ry];
   // 별 셋: 오른쪽 앞 · 왼쪽 앞 · 머리 위(뒤). 아이콘 한가운데는 비워 둔다. 뒤쪽부터 그려 앞쪽 별이 위에 오게.
-  const stars = [-1.5, 0.1, 3.3].sort((u, v) => Math.sin(u) - Math.sin(v));
+  const stars = [-1.57, 0.45, 2.69].sort((u, v) => Math.sin(u) - Math.sin(v)); // 사용자가 고른 배치
   for (const a of stars) {
     const front = (Math.sin(a) + 1) / 2; // 0 뒤 ~ 1 앞
     const R = 7 + front * 4;
     // 꼬리: 별이 지나온 궤도를 따라 굵게 시작해 가늘어지는 빛줄기(겹친 원 — 어두운 테두리 → 밝은 심)
-    const n = 18, span = 1.1;
+    const n = 18, span = 1.25;
     for (const [pad, color] of [[2.5, '#3a2a08'], [0, '#ffe680']]) {
       for (let i = n; i >= 1; i--) {
         const t = i / n;
