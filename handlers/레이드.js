@@ -503,14 +503,21 @@ async function flush(r) {
 }
 
 // 레이드 종료 채널 안내를 결과 화면 바로 아래에 붙이지 않고 END_NOTICE_DELAY_MS 뒤에 보낸다.
+// 디스코드는 같은 봇이 연달아 보낸 일반 메시지를 이름·프로필 없이 한 덩어리로 붙여 보여 줘서,
+// 레이드 결과 메시지에 '답장'으로 보낸다 — 답장은 봇 이름·프로필이 다시 붙어 따로 보인다(알림은 울리지 않게).
 const END_NOTICE_DELAY_MS = 1000;
 function sendEndNotice(r) {
   const content = r.endNotice;
   const channel = r.message?.channel;
+  const replyTo = r.message?.id;
   r.endNotice = null;
   if (!content || !channel) return;
   setTimeout(() => {
-    channel.send({ content, allowedMentions: { parse: [] } }).catch(() => {});
+    channel.send({
+      content,
+      ...(replyTo ? { reply: { messageReference: replyTo, failIfNotExists: false } } : {}),
+      allowedMentions: { parse: [], repliedUser: false },
+    }).catch(() => {});
   }, END_NOTICE_DELAY_MS);
 }
 

@@ -124,6 +124,8 @@ let ok4;
   assert(!lv.isRaidXpFrozen(), '종료 후 XP 정지 해제');
   // 테스트 전투는 가끔 지므로(무작위) 지면 복구 안내 대신 XP 손실 안내를 확인한다
   assert(end.includes('RAID CLEAR') ? sent.some(p => p.content?.includes('XP 시스템 복구 완료')) : sent.some(p => p.content?.includes('50XP를 잃어버렸습니다')), '종료 안내 메시지 전송(클리어면 복구 완료, 지면 XP 손실)');
+  { const notice = sent.find(p => p.content?.includes('XP 시스템 복구 완료') || p.content?.includes('잃어버렸습니다'));
+    assert(notice?.reply?.messageReference === message.id && notice.reply.failIfNotExists === false && notice.allowedMentions?.repliedUser === false, '종료 안내는 레이드 메시지에 답장(따로 보이게, 알림 없음)'); }
   if (end.includes('RAID CLEAR')) {
     assert(lv.getXp('gMain', '1') >= 300 && lv.getXp('gMain', '2') >= 300, '토벌 보상 XP 지급');
   }
