@@ -344,7 +344,7 @@ async function onReady(c) {
   await reconcileTempChannels(c); // 재시작 전 만들어둔 임시 음성채널 중 빈 방 정리
   await reconcileMatchBonusMessages(c); // 봇이 꺼져있던 동안 인증 채널에 올라와 예약이 빠진 메시지 복구
   startQuizScheduler(c); // 놀이터 채널에 하루 한 번 무작위 시각으로 상식퀴즈를 출제
-  startRaidScheduler(c); // 하루~사흘마다(무작위) 놀이터에 레이드 몬스터 출현
+  startRaidScheduler(c); // 하루~이틀마다(무작위) 놀이터에 레이드 몬스터 출현
   dataReady = true;
   diagWarn(`📊 시작 직후 메모리 (${runtimeInfo()})`);
   rssPeakMb = process.memoryUsage().rss / 1048576;

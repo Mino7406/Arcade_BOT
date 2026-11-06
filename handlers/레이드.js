@@ -1,4 +1,4 @@
-// 레이드.js — 레이드: 하루~사흘마다(무작위) 놀이터에 몬스터가 출현해 XP 시스템을 멈춰 세우고,
+// 레이드.js — 레이드: 하루~이틀마다(무작위) 놀이터에 몬스터가 출현해 XP 시스템을 멈춰 세우고,
 // 4인 선착순 파티가 턴제로 토벌하면 다시 풀린다. 전투 규칙·몬스터 데이터는 레이드전투.js, 패널 그림은
 // 레이드그림.js에 있고, 이 파일은 출현 스케줄·화면 조립·버튼·타이머·XP 정지/보상을 맡는다.
 //
@@ -36,7 +36,7 @@ const {
 const { renderRecruit, renderBattle, renderEnd, warmUp } = require('./레이드그림');
 
 // ── 설정 ────────────────────────────────────────────────────────
-const SPAWN_INTERVAL_DAYS = [1, 3]; // 출현 간격(일) 최소~최대. 매번 이 안에서 무작위로 뽑은 날 뒤, 아래 시간대 중 무작위 시각
+const SPAWN_INTERVAL_DAYS = [1, 2]; // 출현 간격(일) 최소~최대. 매번 이 안에서 무작위로 뽑은 날 뒤, 아래 시간대 중 무작위 시각
 const SPAWN_WINDOW_START_HOUR = 12; // KST. 사람이 없는 새벽에 떠서 아무도 못 잡는 일이 없게 시간대를 둔다
 const SPAWN_WINDOW_END_HOUR = 23;
 const MAX_MANUAL_SPAWN_AHEAD_DAYS = 30; // 관리자가 출현 시각을 직접 정할 때 최대 며칠 뒤까지(오타로 몇 년 뒤가 되는 것만 막음)
@@ -1129,7 +1129,7 @@ function getRaidStatus(guildId) {
   };
 }
 
-// 본서버 자동 출현 가동/중지. 켜면 오늘부터 1~3일(무작위) 뒤 시간대에 첫 출현을 잡고, 끄면 일정을 지운다.
+// 본서버 자동 출현 가동/중지. 켜면 오늘부터 1~2일(무작위) 뒤 시간대에 첫 출현을 잡고, 끄면 일정을 지운다.
 function setAutoSpawn(on) {
   state.autoSpawn = !!on;
   if (on) scheduleNextSpawn();
@@ -1138,7 +1138,7 @@ function setAutoSpawn(on) {
 }
 
 // 다음 자동 출현 시각을 관리자가 직접 정한다(무작위로 잡힌 값을 덮어씀). 자동 출현이 가동 중일 때만.
-// 출현 뒤 그다음 일정은 평소처럼 1~3일 무작위로 다시 잡힌다. 실패하면 이유 문자열, 성공하면 null.
+// 출현 뒤 그다음 일정은 평소처럼 1~2일 무작위로 다시 잡힌다. 실패하면 이유 문자열, 성공하면 null.
 function setNextSpawnAt(epochMs, now = Date.now()) {
   if (!state.autoSpawn) return '자동 출현이 중지돼 있어요. 먼저 가동해 주세요.';
   if (!Number.isFinite(epochMs) || epochMs <= now) return '지금보다 뒤의 시각을 적어 주세요.';

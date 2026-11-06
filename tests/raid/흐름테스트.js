@@ -402,7 +402,7 @@ let ok4;
   {
     assert(raidMod.getRaidStatus('gMain').autoSpawn === false, '자동 출현 기본값은 중지');
     let st = raidMod.setAutoSpawn(true);
-    assert(st.autoSpawn && st.nextSpawnAt > Date.now() && st.nextSpawnAt < Date.now() + 4 * 86400_000, '가동하면 1~3일 뒤 첫 출현 일정');
+    assert(st.autoSpawn && st.nextSpawnAt > Date.now() && st.nextSpawnAt < Date.now() + 3 * 86400_000, '가동하면 1~2일 뒤 첫 출현 일정');
     const want = Date.now() + 5 * 3600_000;
     assert(raidMod.setNextSpawnAt(want) === null && raidMod.getRaidStatus('gMain').nextSpawnAt === want, '출현 시각 수동 변경');
     assert(raidMod.setNextSpawnAt(Date.now() - 1000) && raidMod.getRaidStatus('gMain').nextSpawnAt === want, '지난 시각은 거절(일정 그대로)');
