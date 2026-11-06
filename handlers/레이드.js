@@ -12,7 +12,8 @@
 //
 // 반응 속도: 버튼 응답(interaction.update)으로 바로 화면을 고친다. 마지막 파티원이 행동을 고르면
 // 그 응답 안에서 턴을 계산해 결과까지 한 번에 그린다. 타이머로 넘어가는 턴만 message.edit을 쓴다.
-// 전투 상태는 메모리에만 두고 시작/끝에만 저장한다.
+// 진행 상태(모집 파티·마감 시각·전투)는 화면을 고칠 때마다 DB/raid.json에 같이 저장해(바뀐 게 없으면 안 씀),
+// 업데이트로 봇을 재시작해도 같은 메시지에서 이어서 진행한다.
 
 const fs = require('fs');
 const path = require('path');
@@ -21,7 +22,7 @@ const {
   ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, SeparatorSpacingSize, MediaGalleryBuilder, MediaGalleryItemBuilder,
   ComponentType, EmbedBuilder,
 } = require('discord.js');
-const { applyXp, isExcludedGuild, announceLevelUp, setRaidXpFrozen } = require('./레벨링');
+const { applyXp, deductXpFromAll, isExcludedGuild, announceLevelUp, setRaidXpFrozen } = require('./레벨링');
 const { KST_OFFSET_MS } = require('./시간');
 const { GUILD_ID, PLAYGROUND_CHANNEL_ID, ADMIN_IDS } = require('../config');
 const { logSystem, logError, userLabel } = require('./로그');
@@ -46,6 +47,9 @@ const BATTLE_LIMIT_MS = 15 * 60 * 1000; // 전투 제한 시간 — 넘기면 �
 const PARTY_MAX = 4;
 const CLEAR_XP = 300;               // 토벌 성공 시 파티원 1인당
 const MVP_BONUS_XP = 100;           // 기여도 1위(피해 + 회복·부활 + 막아 준 피해, 레이드전투.js의 contribution) 추가 보상
+const FAIL_PENALTY_XP = 50;         // 토벌 실패(전멸·시간 초과·무참가로 도주) 시 서버의 모든 유저가 잃는 XP
+const PENALTY_OUTCOMES = new Set(['wipe', 'timeout', 'noshow']);
+const PENALTY_TEXT = `☠️ 모든 유저의 ${FAIL_PENALTY_XP}XP를 잃어버렸습니다...`;
 const SCHEDULER_TICK_MS = 60 * 1000;
 // 남은 시간 표시(00:52:30)를 글자만 고쳐 갱신하는 주기. 디스코드는 채널당 메시지 수정이 대략 5초에 5번까지라
 // 1초마다는 불가능하고 버튼 반응까지 밀린다 — 모집(최대 1시간)은 10초, 전투 턴(60초)은 5초마다.
@@ -55,10 +59,12 @@ const HELP_DELETABLE_MS = 15 * 60 * 1000; // 디스코드가 비공개 응답을
 
 const STATE_PATH = path.join(__dirname, '..', 'DB', 'raid.json');
 
-// 디스크 상태: { autoSpawn, nextSpawnAt, active: { [guildId]: { channelId, messageId } } }
+// 디스크 상태: { autoSpawn, nextSpawnAt, active: { [guildId]: 진행 중인 레이드 } }
 // autoSpawn: 본서버 자동 출현 가동 여부(/xp → XP 관리에서 켜고 끔). 값이 없으면 중지로 본다.
-// active는 "재시작 직전에 진행 중이던 레이드" 표시용이다. 전투 자체는 저장하지 않으므로, 켜질 때
-// 남아 있으면 그 메시지를 '봇 점검으로 사라졌다'로 정리한다(XP 정지는 메모리 플래그라 자동으로 풀린다).
+// active[guildId] = { channelId, messageId, monsterId, phase, recruitEndsAt, party, battle?, battleStartedAt?, battleEndsAt? }
+// (battle은 몬스터 객체를 뺀 전투 상태). 켜질 때 남아 있으면 그 메시지에서 레이드를 이어간다(resumeRaid).
+// 예전 버전이 남긴 { channelId, messageId }뿐인 기록은 메시지에 적힌 남은 시간으로 모집만 이어가고,
+// 이어갈 수 없으면(전투 중이었거나 메시지가 없으면) '봇 점검으로 사라졌다'로 정리한다.
 function loadState() {
   let st = null;
   try {
@@ -358,7 +364,9 @@ function endSummary(r, outcome, rewards) {
   }
   const meta = [];
   if (b) meta.push(`⏱️ ${b.turn}턴${r.battleStartedAt ? ` · ${formatDuration((r.endedAt || Date.now()) - r.battleStartedAt)}` : ''}`);
-  if (r.freezesXp && outcome !== 'clear') meta.push('🔧 XP 시스템 복구됨'); // 클리어는 위 문장에 이미 들어 있다
+  // 클리어는 위 문장에 이미 들어 있다. 전멸·시간 초과·무참가는 복구 대신 XP를 잃었다고 알린다(테스트 서버도 같은 문구).
+  if (PENALTY_OUTCOMES.has(outcome)) meta.push(PENALTY_TEXT);
+  else if (r.freezesXp && outcome !== 'clear') meta.push('🔧 XP 시스템 복구됨');
   if (meta.length) lines.push(`-# ${meta.join(' · ')}`);
   return lines.join('\n');
 }
@@ -378,7 +386,8 @@ async function endView(r, outcome, rewards = []) {
           return `${ROLES[mem.role].emoji} **${mem.name}** — 피해 ${mem.damage.toLocaleString()} · 회복 ${mem.healing} · 방어 ${mem.blocked ?? 0}${xp}${idle}`;
         }).join('\n');
     }
-    if (r.freezesXp) body += '\n\n> 🔧 **XP 시스템이 복구되었습니다!**';
+    if (PENALTY_OUTCOMES.has(outcome)) body += `\n\n> ${PENALTY_TEXT}`;
+    else if (r.freezesXp) body += '\n\n> 🔧 **XP 시스템이 복구되었습니다!**';
     sections.push({ text: body });
   } else {
     sections.push({ text: endSummary(r, outcome, rewards) });
@@ -466,6 +475,7 @@ async function flush(r) {
       r.forceRepost = false;
       const payload = await currentView(r, redraw || (buried && r.hasImage));
       const result = buried ? await repostRaidMessage(r, payload) : await editRaidMessage(r, payload);
+      saveActive(r); // 파티 변동·턴 진행 등 바뀐 상태를 저장(바뀐 게 없으면 쓰지 않음)
       // 채널이 없어졌거나 권한이 없으면 화면을 계속 보여줄 수 없으므로 레이드를 끝낸다(XP 정지가 남지 않게).
       if (result === 'fatal' && r.phase !== 'ended') finishRaid(r, r.phase === 'battle' ? 'timeout' : 'noshow');
       // 일시적인 오류면 다음 갱신(타이머 글자 갱신 등) 때 다시 보낸다. 새 그림을 못 올렸으면 그때 다시 그린다.
@@ -570,8 +580,23 @@ function noteChannelMessage(message) {
 }
 
 // ── 진행 ────────────────────────────────────────────────────────
+// 재시작 후 이어가는 데 필요한 것만 저장한다. 내용이 직전과 같으면 디스크에 쓰지 않으므로(writeJsonIfChanged)
+// 화면을 고칠 때마다 불러도 된다 — 타이머 글자만 바뀌는 갱신에서는 실제로 쓰지 않는다.
 function saveActive(r) {
-  state.active[r.guildId] = { channelId: r.channelId, messageId: r.message.id };
+  if (!isCurrent(r) || r.phase === 'ended' || !r.message) return;
+  const saved = {
+    channelId: r.channelId,
+    messageId: r.message.id,
+    monsterId: r.monster.id,
+    phase: r.phase,
+    recruitEndsAt: r.recruitEndsAt,
+    party: r.party,
+  };
+  if (r.battle) {
+    const { monster, ...battle } = r.battle; // 몬스터는 그림 데이터까지 커서 id만 남긴다
+    Object.assign(saved, { battle, battleStartedAt: r.battleStartedAt, battleEndsAt: r.battleEndsAt });
+  }
+  state.active[r.guildId] = saved;
   saveState(state);
 }
 
@@ -730,17 +755,26 @@ function finishRaid(r, outcome) {
       if (result.leveledUp) announceLevelUp(r.client, r.guildId, mem.userId, result.newLevel);
     }
   }
+  // 전멸·시간 초과·무참가로 몬스터가 도망치면 그 서버의 모든 유저가 XP를 잃는다(레벨 시스템이 없는 테스트 서버는 문구만).
+  const penalty = PENALTY_OUTCOMES.has(outcome);
+  let penalized = 0;
+  if (penalty && !isExcludedGuild(r.guildId)) {
+    penalized = deductXpFromAll(r.guildId, FAIL_PENALTY_XP, `레이드 토벌 실패 '${r.monster.name}' (${OUTCOME_TEXT[outcome]})`);
+  }
 
   logSystem({
     유형: '레이드',
     내용: `레이드 종료 — ${r.monster.name} / ${OUTCOME_TEXT[outcome]}` +
       (r.battle ? ` / ${r.battle.turn}턴, 남은 HP ${r.battle.hp}/${r.battle.maxHp}` : '') +
-      (rewards.length ? ` / 보상: ${rewards.map(x => `${userLabel(x.userId)} +${x.xp}`).join(', ')}` : ''),
+      (rewards.length ? ` / 보상: ${rewards.map(x => `${userLabel(x.userId)} +${x.xp}`).join(', ')}` : '') +
+      (penalized ? ` / 벌칙: 모든 유저 -${FAIL_PENALTY_XP} XP (${penalized}명)` : ''),
   });
 
   // 복구 안내는 채널에 따로 한 줄 올린다 — 결과 화면은 위쪽 메시지라 묻혀 있을 수 있어서.
+  // 토벌 실패(벌칙)면 복구 안내 대신 XP를 잃었다는 안내를 올린다.
   if (r.freezesXp && r.message?.channel) {
-    r.message.channel.send({ content: '🔧 **XP 시스템 복구 완료.**', allowedMentions: { parse: [] } }).catch(() => {});
+    const content = penalty ? `**${PENALTY_TEXT}**` : '🔧 **XP 시스템 복구 완료.**';
+    r.message.channel.send({ content, allowedMentions: { parse: [] } }).catch(() => {});
   }
   r.rewards = rewards;
   requestRender(r, { image: true, immediate: true });
@@ -889,22 +923,148 @@ async function handleRaidButton(interaction) {
 }
 
 // ── 스케줄러 ────────────────────────────────────────────────────
-async function recoverInterruptedRaids(client) {
-  const list = Object.values(state.active);
-  if (!list.length) return;
-  state.active = {};
-  saveState(state);
-  for (const active of list) await recoverInterruptedRaid(client, active).catch(err => console.error('중단된 레이드 정리 실패:', err));
+// ── 재시작 후 이어가기 ──────────────────────────────────────────
+// 메시지의 컴포넌트(컨테이너 안쪽까지 펼쳐서) 목록
+function flatComponents(message) {
+  const top = (message?.components ?? []).map(c => c.toJSON?.() ?? c).filter(Boolean);
+  const all = top.flatMap(c => (c.type === ComponentType.Container ? c.components ?? [] : [c]));
+  return all.flatMap(c => (c.type === ComponentType.ActionRow ? [c, ...(c.components ?? [])] : [c]));
 }
-async function recoverInterruptedRaid(client, active) {
-  const channel = await client.channels.fetch(active.channelId).catch(() => null);
-  const message = channel && await channel.messages.fetch(active.messageId).catch(() => null);
-  if (!message || !MONSTERS.length) return;
+function raidButtonKinds(message) {
+  return new Set(flatComponents(message).map(c => c.custom_id).filter(id => id?.startsWith('raid:')).map(id => id.split(':')[1]));
+}
+
+// 예전 버전이 남긴 기록({ channelId, messageId }뿐)이나 기록 없이 찾은 메시지에서 모집 상태를 읽는다.
+// 모집 화면(역할 버튼)일 때만 이어간다. 마감 시각은 화면의 '⏳ 00:41:48'과 그 글자를 고친 시각으로 계산하고,
+// 못 읽으면 메시지를 올린 시각 + 모집 시간으로 본다. 참가자는 화면에 이름만 있고 유저 id가 없어 비운다.
+function readLegacyRecruit(message) {
+  if (!raidButtonKinds(message).has('role')) return null;
+  const text = flatComponents(message).filter(c => c.type === ComponentType.TextDisplay).map(c => c.content).join('\n');
+  const m = text.match(/⏳\s*(\d{1,2}):(\d{2}):(\d{2})/);
+  const recruitEndsAt = m
+    ? (message.editedTimestamp ?? message.createdTimestamp) + ((+m[1]) * 3600 + (+m[2]) * 60 + (+m[3])) * 1000
+    : message.createdTimestamp + RECRUIT_MS;
+  const monster = MONSTERS.find(x => text.includes(x.name)) ?? MONSTERS[0];
+  return { phase: 'recruit', monsterId: monster.id, recruitEndsAt, party: [] };
+}
+
+// 저장된 상태로 레이드를 되살린다. 이어갔으면 true, 이어갈 수 없으면 false(호출부가 정리).
+async function resumeRaid(client, message, saved) {
+  const guildId = message.guildId;
+  if (raids.has(guildId) || !MONSTERS.length) return false;
+  const info = saved?.phase ? saved : readLegacyRecruit(message);
+  if (!info || (info.phase !== 'recruit' && info.phase !== 'battle')) return false;
+  if (info.phase === 'battle' && !info.battle) return false;
+  const monster = MONSTERS.find(x => x.id === info.monsterId) ?? MONSTERS[0];
+  const now = Date.now();
+  const r = {
+    client,
+    monster,
+    guildId,
+    channelId: message.channelId,
+    message,
+    imageUrl: null,
+    phase: info.phase,
+    party: Array.isArray(info.party) ? info.party : [],
+    recruitEndsAt: info.recruitEndsAt || now,
+    battle: null,
+    battleEndsAt: 0,
+    turnEndsAt: 0,
+    timer: null,
+    freezesXp: !isExcludedGuild(guildId),
+    movedFrom: new Set(),
+    helpReplies: [],
+  };
+  rememberImageUrl(r, message);
+  r.hasImage = !!r.imageUrl;
+  if (info.phase === 'battle') {
+    r.battle = { ...info.battle, monster };
+    r.battleStartedAt = info.battleStartedAt || now;
+    // 봇이 꺼져 있던 동안 전투 시간이 다 지나갔어도 한 턴은 고를 수 있게 한다.
+    r.battleEndsAt = Math.max(info.battleEndsAt || 0, now + TURN_MS);
+  }
+  raids.set(guildId, r);
+  if (r.freezesXp) setRaidXpFrozen(true);
+  saveActive(r);
+  logSystem({
+    유형: '레이드',
+    내용: `재시작 후 레이드 이어가기 — ${monster.name} / ${r.phase === 'recruit' ? `모집 중(파티 ${r.party.length}명, 마감 ${clock(r.recruitEndsAt, true)} 남음)` : `전투 ${r.battle.turn}턴`}` +
+      (saved?.phase ? '' : ' (예전 기록에서 복구)'),
+  });
+
+  if (r.phase === 'recruit') {
+    const left = r.recruitEndsAt - Date.now();
+    if (left <= 0) { await onRecruitEnd(r); return true; } // 꺼져 있던 사이 모집이 끝났으면 바로 마감 처리
+    if (r.party.length >= PARTY_MAX) { startBattle(r); return true; }
+    r.timer = setTimeout(() => onRecruitEnd(r).catch(err => console.error('레이드 모집 마감 처리 실패:', err)), left);
+  } else {
+    // 결과 화면 도중이었으면 다음 턴 선택 화면부터. 이미 고른 행동은 그대로 두고, 고를 시간은 새로 준다.
+    r.showingResult = false;
+    if (allChosen(r.battle)) { advanceTurn(r); startCountdown(r); return true; }
+    armTurnTimer(r);
+  }
+  requestRender(r, { image: true, immediate: true });
+  startCountdown(r);
+  return true;
+}
+
+// 이어갈 수 없는 레이드 메시지를 '봇 점검으로 사라졌다'로 정리한다.
+async function markInterrupted(message) {
+  if (!MONSTERS.length) {
+    await message.edit({ embeds: [new EmbedBuilder().setColor(ACCENT.end).setDescription(`# ${OUTCOME_TEXT.restart}`)], components: [] }).catch(() => {});
+    return;
+  }
   const ghost = { monster: MONSTERS[0], battle: null, party: [], freezesXp: false, imageUrl: null };
   // 예전 버전(임베드)으로 띄운 메시지는 V2로 바꿀 수 없을 수 있어, 실패하면 임베드로 정리한다.
   await message.edit(await endView(ghost, 'restart')).catch(() =>
     message.edit({ embeds: [new EmbedBuilder().setColor(ACCENT.end).setDescription(`# ${OUTCOME_TEXT.restart}`)], components: [] }).catch(() => {}),
   );
+}
+
+async function recoverInterruptedRaids(client) {
+  const handled = new Set(); // 처리한 메시지 id
+  for (const [guildId, saved] of Object.entries(state.active)) {
+    const channel = await client.channels.fetch(saved.channelId).catch(() => null);
+    const message = channel && await channel.messages.fetch(saved.messageId).catch(() => null);
+    if (message) handled.add(message.id);
+    const resumed = message && await resumeRaid(client, message, saved).catch(err => {
+      console.error('레이드 이어가기 실패:', err);
+      logError('레이드', '재시작 후 레이드 이어가기 실패 — 점검 중단으로 정리', err);
+      cleanupFailedResume(guildId);
+      return false;
+    });
+    if (resumed) continue;
+    if (state.active[guildId]?.messageId === saved.messageId) { delete state.active[guildId]; saveState(state); }
+    if (message) await markInterrupted(message).catch(err => console.error('중단된 레이드 정리 실패:', err));
+  }
+  // 기록이 없어도(저장 파일이 지워졌거나 덮어써진 경우) 놀이터에 버튼이 살아 있는 레이드 메시지가 남아 있으면 이어간다.
+  // 레이드 메시지는 묻힘 방지로 늘 채널 맨 아래 근처에 있다.
+  if (raids.has(GUILD_ID)) return;
+  const channel = await client.channels.fetch(PLAYGROUND_CHANNEL_ID).catch(() => null);
+  const recent = channel?.messages && await channel.messages.fetch({ limit: 30 }).catch(() => null);
+  if (!recent) return;
+  const me = client.user?.id;
+  const orphans = [...recent.values()]
+    .filter(msg => !handled.has(msg.id) && (!me || msg.author?.id === me) && raidButtonKinds(msg).size > 0)
+    .sort((a, b) => b.createdTimestamp - a.createdTimestamp);
+  for (const msg of orphans) {
+    const resumed = !raids.has(GUILD_ID) && await resumeRaid(client, msg, null).catch(err => {
+      console.error('레이드 이어가기 실패:', err);
+      cleanupFailedResume(GUILD_ID);
+      return false;
+    });
+    if (!resumed) await markInterrupted(msg).catch(() => {});
+  }
+}
+function cleanupFailedResume(guildId) {
+  const r = raids.get(guildId);
+  if (!r) return;
+  clearTimer(r);
+  if (r.countdownTimer) clearTimeout(r.countdownTimer);
+  raids.delete(guildId);
+  if (r.freezesXp && ![...raids.values()].some(x => x.freezesXp)) setRaidXpFrozen(false);
+  delete state.active[guildId];
+  saveState(state);
 }
 
 async function spawnScheduled(client) {
@@ -921,7 +1081,11 @@ async function spawnScheduled(client) {
 
 function startRaidScheduler(client) {
   warmUp(MONSTERS); // 그림 엔진·글자 모양을 잘게 나눠 미리 준비(첫 레이드가 봇을 멈추지 않게)
-  recoverInterruptedRaids(client).catch(err => console.error('중단된 레이드 정리 실패:', err));
+  // 이어갈 레이드가 있으면 메시지를 불러오는 동안에도 XP가 새지 않게 미리 멈춰 두고, 다 끝난 뒤 실제 상태로 맞춘다.
+  if (Object.keys(state.active).some(g => !isExcludedGuild(g))) setRaidXpFrozen(true);
+  recoverInterruptedRaids(client)
+    .catch(err => console.error('중단된 레이드 정리 실패:', err))
+    .finally(() => { if (![...raids.values()].some(r => r.freezesXp)) setRaidXpFrozen(false); });
   if (!state.autoSpawn) {
     if (state.nextSpawnAt) { state.nextSpawnAt = null; saveState(state); } // 중지 중엔 일정을 두지 않는다
   } else if (!state.nextSpawnAt) scheduleNextSpawn();

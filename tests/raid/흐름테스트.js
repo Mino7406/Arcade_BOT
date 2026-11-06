@@ -126,10 +126,13 @@ let ok4;
   const status = raidMod.getRaidStatus('gMain');
   assert(!status.active, '상태: 진행 중 아님');
 
-  // 7) 무참가 → 도주
+  // 7) 무참가 → 도주 + 모든 유저 -50 XP
+  lv.applyXp('gMain', 'n1', 80);
+  const noshowBefore = lv.getXp('gMain', 'n1');
   await raidMod.forceSpawnRaid({ guildId: 'other', channel: { ...channel, send: async (p) => { current = p; return message; } }, client });
   await runTimers();
   assert(desc().includes('RAID FAILED') && desc().includes('도망쳤다') && !lv.isRaidXpFrozen(), '무참가 시 도주(RAID FAILED) + XP 해제');
+  assert(desc().includes('☠️ 모든 유저의 50XP를 잃어버렸습니다...') && lv.getXp('gMain', 'n1') === noshowBefore - 50, '무참가 도주도 모든 유저 -50 XP + 문구');
 
   // 7.5) 바로 시작: 파티장·관리자만
   {
@@ -507,6 +510,100 @@ let ok4;
     assert(errors.some(e => e.includes('moves.attack.damage')) && errors.some(e => e.includes('합이 0보다')), '피해 수치 없음 · 가중치 합 0인 파일도 건너뜀(HP가 NaN이 되는 것 방지)');
     assert(errors.some(e => e.includes('palette에 없는 글자: z')) && errors.some(e => e.includes('moves.heal 없음')) && errors.some(e => e.includes('겹침')), '건너뛴 사유를 콘솔에 남김');
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+  // 17) 재시작 후 이어가기: 저장된 모집·전투, 예전 기록, 기록 없는 메시지 / 전멸 벌칙
+  {
+    const E = require(path.join(root, 'handlers/레이드전투.js'));
+    const cfg = require(path.join(root, 'config.js'));
+    const { ContainerBuilder, TextDisplayBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+    const statePath = path.join(root, 'DB/raid.json');
+    const modPath = require.resolve(path.join(root, 'handlers/레이드.js'));
+    const settle = async () => { for (let i = 0; i < 20; i++) { await new Promise(r => setImmediate(r)); await flushRender(); } };
+    // 재시작 흉내: raid.json을 써 두고 레이드 모듈을 새로 불러 스케줄러를 켠다
+    const restart = async (active) => {
+      fs.writeFileSync(statePath, JSON.stringify({ autoSpawn: false, nextSpawnAt: null, active }));
+      delete require.cache[modPath];
+      const mod = require(modPath);
+      mod.startRaidScheduler(rclient);
+      await settle();
+      return mod;
+    };
+    const channels = {};
+    const mkChannel = (id, guildId) => {
+      const msgs = new Map();
+      const ch = {
+        id, guildId, name: id, msgs, lastMessageId: null,
+        messages: { fetch: async (q) => (typeof q === 'string' ? msgs.get(q) ?? Promise.reject(new Error('없음')) : new Map(msgs)) },
+        send: async (p) => mkMsg(ch, 'new' + msgs.size, p),
+      };
+      channels[id] = ch;
+      return ch;
+    };
+    const mkMsg = (ch, id, p, extra = {}) => {
+      const m = {
+        id, guildId: ch.guildId, channelId: ch.id, channel: ch, author: { id: 'bot' },
+        createdTimestamp: Date.now(), editedTimestamp: null, components: p.components, last: p,
+        edit: async (np) => { m.components = np.components; m.last = np; return m; },
+        delete: async () => { ch.msgs.delete(id); },
+        ...extra,
+      };
+      ch.msgs.set(id, m);
+      ch.lastMessageId = id;
+      return m;
+    };
+    const rclient = { user: { id: 'bot' }, channels: { fetch: async (id) => channels[id] ?? null }, guilds: { cache: new Map() } };
+    const textOf = (m) => m.last.components.map(c => c.toJSON?.() ?? c).flatMap(c => (c.type === 17 ? c.components : [c])).filter(c => c.type === 10).map(c => c.content).join('\n');
+    const btnsOf = (m) => m.last.components.map(c => c.toJSON?.() ?? c).flatMap(c => (c.type === 17 ? c.components : [c])).filter(c => c.type === 1).flatMap(r => r.components);
+    const press = (mod, m, userId, customId) => {
+      const it = fakeInteraction(userId, customId);
+      it.message = m; it.guildId = m.guildId;
+      return mod.handleRaidButton(it).then(() => flushRender()).then(() => it);
+    };
+    const legacyPayload = (text, customId) => ({ components: [new ContainerBuilder()
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(text))
+      .addActionRowComponents(new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(customId).setLabel('x').setStyle(ButtonStyle.Primary)))] });
+
+    // (가) 새 형식으로 저장된 모집(1명 참가)을 이어간다
+    const chA = mkChannel('chA', 'gMain');
+    const mA = mkMsg(chA, 'mA', legacyPayload('옛 화면', 'raid:role:sword'));
+    let mod = await restart({ gMain: { channelId: 'chA', messageId: 'mA', monsterId: 'slime', phase: 'recruit', recruitEndsAt: Date.now() + 20 * 60_000, party: [{ userId: '7', name: '유저7', role: 'sword' }] } });
+    assert(mod.isPlaygroundPaused('gMain') && lv.isRaidXpFrozen(), '재시작 후 모집 이어가기: 놀이터·XP 정지 유지');
+    assert(/## ⏳ 00:(19|20):\d\d/.test(textOf(mA)) && textOf(mA).includes('파티 1 / 4') && btnsOf(mA).some(b => b.label?.includes('검사 · 유저7')), '같은 메시지에 남은 시간·참가자 그대로');
+    await press(mod, mA, '8', 'raid:role:archer');
+    assert(textOf(mA).includes('파티 2 / 4') && JSON.parse(fs.readFileSync(statePath, 'utf8')).active.gMain.party.length === 2, '이어간 레이드에 참가 가능 + 참가자 저장');
+    await mod.forceEndRaid('gMain'); await flushRender();
+    assert(!lv.isRaidXpFrozen() && !JSON.parse(fs.readFileSync(statePath, 'utf8')).active.gMain, '끝나면 기록·XP 정지 정리');
+
+    // (나) 기록이 없어도 놀이터에 남은 예전 모집 메시지(⏳ 00:41:48, 10초 전에 고침)를 찾아 이어간다
+    const chP = mkChannel(cfg.PLAYGROUND_CHANNEL_ID, cfg.GUILD_ID);
+    const mP = mkMsg(chP, 'mP', legacyPayload('슬라임이 XP 시스템을 망가뜨려\n## ⏳ 00:41:48\n**파티 0 / 4**', 'raid:role:sword'), { editedTimestamp: Date.now() - 10_000 });
+    mod = await restart({});
+    assert(mod.isPlaygroundPaused(cfg.GUILD_ID) && lv.isRaidXpFrozen(), '기록 없이 남은 레이드 메시지도 찾아서 이어감');
+    assert(/## ⏳ 00:41:(3\d|4\d)/.test(textOf(mP)) && textOf(mP).includes('파티 0 / 4'), '예전 화면의 남은 시간으로 마감 시각 복구');
+    await press(mod, mP, '9', 'raid:role:healer');
+    assert(textOf(mP).includes('파티 1 / 4'), '복구한 예전 모집에 참가 가능');
+    await mod.forceEndRaid(cfg.GUILD_ID); await flushRender();
+
+    // (다) 예전 형식 기록인데 전투 중이던 메시지 → 이어갈 수 없어 점검 중단으로 정리
+    const chB = mkChannel('chB', 'gMain');
+    const mB = mkMsg(chB, 'mB', legacyPayload('## ⚔️ TURN 3 · 행동을 고르세요', 'raid:act:attack'));
+    mod = await restart({ gMain: { channelId: 'chB', messageId: 'mB' } });
+    assert(!mod.isPlaygroundPaused('gMain') && !lv.isRaidXpFrozen() && textOf(mB).includes('봇 점검'), '예전 버전의 전투 메시지는 점검 중단으로 정리');
+
+    // (라) 저장된 전투를 이어가고, 전멸하면 서버 모든 유저 -50 XP + 문구
+    lv.applyXp('gMain', 'p1', 100); lv.applyXp('gMain', 'p2', 30);
+    const before = { p1: lv.getXp('gMain', 'p1'), p2: lv.getXp('gMain', 'p2') };
+    const { monster, ...battle } = E.createBattle(E.MONSTERS[0], [{ userId: '5', name: '유저5', role: 'sword' }]);
+    battle.members[0].hp = 1; battle.intent = 'sweep';
+    const chC = mkChannel('chC', 'gMain');
+    const mC = mkMsg(chC, 'mC', legacyPayload('옛 화면', 'raid:act:attack'));
+    mod = await restart({ gMain: { channelId: 'chC', messageId: 'mC', monsterId: 'slime', phase: 'battle', recruitEndsAt: 0, party: [{ userId: '5', name: '유저5', role: 'sword' }], battle, battleStartedAt: Date.now() - 60_000, battleEndsAt: Date.now() - 1000 } });
+    assert(mod.isPlaygroundPaused('gMain') && textOf(mC).includes('TURN 1 · 행동을 고르세요'), '재시작 후 전투 이어가기(전투 시간이 지났어도 한 턴은 줌)');
+    await press(mod, mC, '5', 'raid:act:attack');
+    console.log('--- 전멸 결과 글자 ---\n' + textOf(mC));
+    assert(textOf(mC).includes('☠️ 모든 유저의 50XP를 잃어버렸습니다...') && !textOf(mC).includes('XP 시스템 복구됨'), '전멸 화면: 복구 문구 대신 XP 손실 문구');
+    assert(lv.getXp('gMain', 'p1') === before.p1 - 50 && lv.getXp('gMain', 'p2') === Math.max(0, before.p2 - 50), '전멸하면 서버 모든 유저 -50 XP(0 밑으로는 안 내려감)');
+    assert(!lv.isRaidXpFrozen() && !mod.isPlaygroundPaused('gMain'), '전멸 후 XP 정지 해제');
   }
   console.log('그림 업로드 횟수:', images.length, '· RSS', Math.round(process.memoryUsage().rss/1048576), 'MB');
 })().catch(e => { console.error('테스트 실패', e); process.exitCode = 1; });
