@@ -740,22 +740,23 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
       p.rect(cx + dx - s / 3, cy + dy - s, (s * 2) / 3, s * 2, '#7cff9a');
     }
   } else if (move === 'smash' && layer === 'back') {
-    // 필살 짓누르기: 내리찍는 순간 바닥의 섬광 + 퍼져 나가는 점액 충격파 고리 두 겹(납작한 타원)
-    for (const [r, sz] of [[150, 11], [205, 8]]) {
-      for (let k = 0; k < 30; k++) { const a = (k / 30) * Math.PI * 2; dot(cx + Math.cos(a) * r, cy + 64 + Math.sin(a) * r * 0.16, sz, k % 2 ? color : '#eaffdf'); }
+    // 필살 짓누르기: 위에서 내리꽂힌 흔적 — 몸 양옆 위에서 아래로 굵어지는 낙하 속도선
+    for (const dx of [-92, -64, 64, 92]) {
+      for (let i = 0; i < 4; i++) dot(cx + dx, cy - 62 + i * 14, 3 + i * 1.6, i === 3 ? '#fff6d6' : '#c9b48a');
     }
   } else if (move === 'smash' && layer === 'front') {
-    // 사방으로 철퍼덕 튀어 오르는 점액 방울(몸 쪽으로 꼬리) + 바닥이 갈라진 금
-    for (let k = 0; k < 11; k++) {
-      const a = Math.PI + 0.15 + (k / 10) * (Math.PI - 0.3), r = 150 + (k % 3) * 26;
-      const x = cx + Math.cos(a) * r, y = cy + 40 + Math.sin(a) * r * 0.62;
-      dot(cx + Math.cos(a) * r * 0.62, cy + 40 + Math.sin(a) * r * 0.62 * 0.62, 6, color);
-      dot(cx + Math.cos(a) * r * 0.8, cy + 40 + Math.sin(a) * r * 0.8 * 0.62, 8, color);
-      gooBlob(x, y, k % 2 ? 11 : 14, color);
-    }
+    // 바닥에서 양옆으로 휘몰아치는 굵은 충격 바람(초승달 모양, 어두운 테두리 → 노랑 → 흰 심) + 땅 균열 + 흙먼지 구름
     for (const sd of [-1, 1]) {
-      let [x, y] = [cx + sd * 70, cy + 70];
-      for (const [dx, dy] of [[26, -6], [22, 8], [28, -4], [24, 6]]) { p.line(x, y, x + sd * dx, y + dy, 4, '#16120c'); x += sd * dx; y += dy; }
+      for (const [r0, thick, oy] of [[86, 16, 0], [120, 10, -18]]) {
+        const pts = [];
+        for (let i = 0; i <= 14; i++) { const t = i / 14; pts.push([cx + sd * (r0 + t * 150), cy + 62 + oy - Math.sin(t * Math.PI * 0.9) * (26 + r0 * 0.12)]); }
+        for (const [k, c] of [[1, '#4a3a18'], [0.62, '#ffd166'], [0.25, '#fff6d6']]) {
+          for (let i = 1; i < pts.length; i++) { const taper = 1 - (i / pts.length) * 0.75; p.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], Math.max(1.5, thick * k * taper), c); }
+        }
+      }
+      let [x, y] = [cx + sd * 50, cy + 70];
+      for (const [dx, dy] of [[22, 4], [20, -5], [24, 6], [22, -3], [18, 4]]) { p.line(x, y, x + sd * dx, y + dy, 4, '#16120c'); x += sd * dx; y += dy; }
+      for (const [dx, dy, r] of [[250, 50, 14], [226, 64, 11], [268, 66, 10]]) { p.circle(cx + sd * dx, cy + dy, r + 2, '#3a3020'); p.circle(cx + sd * dx, cy + dy, r, '#9a8a6e'); p.circle(cx + sd * dx - r * 0.3, cy + dy - r * 0.3, r * 0.35, '#c4b69c'); }
     }
   }
 }
@@ -811,21 +812,20 @@ function hitFx(move, cx, cy, color, spore = color, accent = spore) {
     burst(46, 26, '#1a0d08'); burst(42, 23, '#e8401c'); burst(32, 18, '#ff9a3c'); burst(20, 12, '#ffe066');
     for (const [dx, dy] of [[-40, -30], [40, -26], [-36, 34], [42, 30]]) p.rect(cx + dx, cy + dy, 7, 7, '#1a0d08');
   } else if (move === 'frost') {
-    // 서리: 아이콘 네 귀퉁이에 눈송이
-    for (const [dx, dy] of [[-26, -22], [26, 20], [24, -26], [-22, 26]]) flake(cx + dx, cy + dy, 8);
+    // 서리 숨결: 아이콘을 휩쓸고 지나가는 차가운 입김 바람줄기 세 줄(물결, 끝으로 갈수록 가늘게) + 서리 알갱이
+    // — 눈송이·얼음 덩어리는 쓰지 않는다(냉기 배지·빙결 덮개와 헷갈리지 않게, 사용자 지적)
+    for (const [dy, amp] of [[-20, 5], [0, 7], [20, 5]]) {
+      const pts = Array.from({ length: 13 }, (_, i) => [cx - 44 + i * 7.3, cy + dy + Math.sin(i * 0.9) * amp]);
+      for (const [w, c] of [[7, '#2a5f8a'], [4, '#d8f4ff']]) for (let i = 1; i < pts.length; i++) p.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], Math.max(1.5, w * (1 - i / 16)), c);
+    }
+    for (const [dx, dy] of [[-36, -32], [30, -30], [40, 12], [-40, 30], [8, 34], [-6, -36]]) dot(cx + dx, cy + dy, 3, '#ffffff');
   } else if (move === 'icefall') {
     // 빙하 낙하: 아이콘 아래에서 솟구친 날카로운 얼음 결정 무리 + 튀는 조각 + 눈송이
     for (const [dx, len, w, ang] of [[-30, 34, 8, -2.05], [-12, 44, 9, -1.75], [12, 40, 9, -1.4], [30, 32, 7, -1.1]]) iceShard(cx + dx, cy + 22, len, w, ang, color); // 아이콘 아래쪽만 덮게
     for (const [dx, dy] of [[-40, -20], [40, -26], [-34, 34], [38, 30]]) iceShard(cx + dx, cy + dy, 14, 4, 0.8, color);
     flake(cx + 30, cy - 34, 7);
   } else if (move === 'smash') {
-    // 필살 짓누르기: 아이콘에 철퍼덕 묻은 커다란 점액(겹친 방울) + 흘러내리는 방울 + 반사광
-    const blobs = [[18, 10, 13], [30, -6, 9], [6, 24, 10], [-24, 20, 7], [34, 22, 7]]; // 아이콘이 보이게 오른쪽 아래로
-    for (const [dx, dy, r] of blobs) p.circle(cx + dx, cy + dy, r + 3, '#16120c');
-    for (const [dx, dy] of [[8, 38], [24, 32]]) { p.line(cx + dx, cy + dy - 10, cx + dx, cy + dy, 9, '#16120c'); }
-    for (const [dx, dy, r] of blobs) p.circle(cx + dx, cy + dy, r, color);
-    for (const [dx, dy] of [[8, 38], [24, 32]]) { p.line(cx + dx, cy + dy - 10, cx + dx, cy + dy, 5, color); p.circle(cx + dx, cy + dy + 2, 4, color); }
-    for (const [dx, dy, r] of blobs.slice(0, 3)) p.circle(cx + dx - r * 0.35, cy + dy - r * 0.35, r * 0.25, '#f4fff0');
+    p.poly([cx, cy - 34, cx + 9, cy - 9, cx + 34, cy, cx + 9, cy + 9, cx, cy + 34, cx - 9, cy + 9, cx - 34, cy, cx - 9, cy - 9], '#ffd166'); // 충격 별(원래대로)
   }
 }
 
@@ -1044,8 +1044,10 @@ function renderBattle(r) {
       p.roundRect(W - 226, slotY, 200, 66, 12, '#3a1712');
       p.strokeRoundRect(W - 226, slotY, 200, 66, 12, 2, '#ff9a3c');
       text(`불끄기 · 남은 ${left}턴`, W - 126, slotY + 17, 19, '#ffd8b0');
-      bar(W - 214, slotY + 32, 176, 24, Math.min(1, b.fuse.dealt / b.fuse.need), '#ff9a3c');
-      text(`${b.fuse.dealt.toLocaleString()} / ${b.fuse.need.toLocaleString()}`, W - 126, slotY + 44, 16, '#ffffff');
+      // 남은 불: 가득 찬 막대가 피해를 넣을수록 줄어든다(사용자 요청 — 채우는 방향이 거꾸로였음)
+      const fireLeft = Math.max(0, b.fuse.need - b.fuse.dealt);
+      bar(W - 214, slotY + 32, 176, 24, fireLeft / b.fuse.need, '#ff9a3c');
+      text(`남은 불 ${fireLeft.toLocaleString()} / ${b.fuse.need.toLocaleString()}`, W - 126, slotY + 44, 15, '#ffffff');
       slotY += 72;
     }
     if (isPowered(b)) {
@@ -1106,12 +1108,22 @@ function renderBattle(r) {
         p.roundRect(x + 12, y + 12, w - 24, 30, 8, ribbon.fill);
         text(state === 'pending' ? '행동 선택!' : state === 'ready' ? `준비 · ${choiceLabel(mem)}` : state === 'stunned' ? `${mem.stunStatus?.name ?? '기절'} · 행동 불가` : '쓰러짐',
           x + w / 2, y + 27, 19, ribbon.color, { maxWidth: w - 36 });
+      } else if (!down && ['freeze', 'stun'].includes(last?.effects?.[mem.userId])) {
+        // 결과 화면: 이번 턴에 막 빙결·기절된 카드는 행동 선택 리본 자리에 "빙결!" / "기절!"(걸린 순간이 보이게, 사용자 요청)
+        const iced = isIced(b, mem);
+        const ribbon = iced ? RIBBON.frozen : RIBBON.stunned;
+        p.roundRect(x + 12, y + 12, w - 24, 30, 8, ribbon.fill);
+        text(`${mem.stunStatus?.name ?? (iced ? '빙결' : '기절')}!`, x + w / 2, y + 27, 19, ribbon.color, { maxWidth: w - 36 });
       }
 
       roleIcon(roleKey, x + w / 2, y + 86, down);
       // 표식(영혼 사냥 예고 대상): 선택 화면에서 카드 오른쪽 위에 빛나는 눈
       if (!down && !r.showingResult && !isIntentHidden(b) && b.marks?.includes(mem.userId)) markEye(x + w - 36, y + 66);
       if (!down && isIced(b, mem)) iceCover(x + w / 2, y + 86); // 빙결: 아이콘이 얼음에 갇힘
+      // 이번 턴에 막 빙결된 카드: 결과 화면에서 아이콘 둘레로 얼음 결정이 터진다("빙결!"은 위 리본 자리)
+      if (!down && r.showingResult && last?.effects?.[mem.userId] === 'freeze') {
+        for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2 + 0.2; iceShard(x + w / 2 + Math.cos(a) * 44, y + 86 + Math.sin(a) * 40, 22, 6, a, '#bfeaff'); }
+      }
       // 점액: 왼쪽 배지와 함께 아이콘 위 점액 얼룩도 그대로(사용자 요청). 이번 턴 맞은 카드는 타격 표시만.
       if (!down && slowTurnsLeft(b, mem) > 0 && !(usedMove && last?.hits[mem.userId])) hitFx('sweep', x + w / 2, y + 86, fxColor);
       const hit = last?.hits[mem.userId];

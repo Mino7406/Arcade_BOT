@@ -11,7 +11,7 @@
   "emoji": "👻",
   "rageName": "폭주한 고스트",
   "lore": "밤마다 서버를 떠도는 하얀 고스트. 한 사람을 골라 뚫어지게 노려보며 XP를 빨아 간다!",
-  "baseHp": 7700,
+  "baseHp": 7200,
   "rage": {
     "hpRatio": 0.5,
     "damageRate": 1.5
@@ -184,8 +184,8 @@
       "mark": true,
       "rageTargets": 2,
       "damage": [
-        12,
-        15
+        18,
+        22
       ],
       "fx": "curse"
     },
@@ -232,17 +232,17 @@
   },
   "intentWeights": {
     "normal": {
-      "attack": 4,
+      "attack": 3.5,
       "mark": 2.5,
       "wail": 2,
-      "phase": 1.5,
+      "phase": 3,
       "smash": 1
     },
     "rage": {
       "attack": 3,
       "mark": 2.5,
       "wail": 2,
-      "phase": 1.5,
+      "phase": 3,
       "smash": 1.5
     }
   }

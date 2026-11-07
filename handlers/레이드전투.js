@@ -623,8 +623,8 @@ function resolveTurn(battle, rng = Math.random) {
     battle.log = log;
     return 'wipe';
   }
-
-  freezeCheck();
+  // 빙결 판정은 몬스터 기술 뒤에만 한다(기절처럼 몬스터에게 맞은 순간 걸리게 — 아군 행동 직후 조용히 걸려 선택 화면에서야
+  // 차례가 넘어가는 느낌이라 걸린 줄 몰랐음, 사용자 지적)
 
   // 1-3) 점화 카운트다운(꼬마 폭탄): 이번 턴 파티 피해를 쌓고, 기준을 넘으면 불이 꺼져 이번 턴 폭탄은 행동하지 못한다(기절)
   let defused = false;

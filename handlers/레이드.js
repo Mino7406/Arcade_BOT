@@ -289,7 +289,7 @@ function effectLines(b) {
   for (const [label, mems] of byStatus(feared, 'fearStatus')) lines.push(`${label}: ${mems.map(mem => mem.name).join(', ')} - **이번 턴 스킬 사용 불가**`);
   if (isPhased(b)) lines.push(`👻 투명화: ${monsterName} - **이번 턴 일반 공격은 빗나감(스킬은 맞음)**`);
   // 점화(꼬마 폭탄): 불끄기 진행 — 이번 턴 포함 남은 턴
-  if (b.fuse) lines.push(`💣 도화선: **${b.fuse.dealt.toLocaleString()} / ${b.fuse.need.toLocaleString()}** 피해 · 남은 ${Math.max(1, b.fuse.until - b.turn + 1)}턴 - **채우면 불이 꺼져 기절, 못 채우면 대폭발**`);
+  if (b.fuse) lines.push(`💣 도화선: 남은 불 **${Math.max(0, b.fuse.need - b.fuse.dealt).toLocaleString()} / ${b.fuse.need.toLocaleString()}** · 남은 ${Math.max(1, b.fuse.until - b.turn + 1)}턴 - **피해로 불을 다 끄면 기절, 못 끄면 대폭발**`);
   // 냉기: 몇 중첩인지가 중요해서 1중첩도 ×1로 붙인다
   const chilled = chill ? b.members.filter(mem => chillStacks(b, mem) > 0) : [];
   if (chilled.length) {
