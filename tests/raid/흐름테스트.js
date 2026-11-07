@@ -479,11 +479,12 @@ let ok4;
     turnWith(b, 'sweep', { c0: 'guard', c1: 'attack', c2: 'attack', c3: 'attack' });
     assert(E.getMember(b, 'c0').blocked > 0 && E.getMember(b, 'c1').blocked === 0, '방어 칸: 방어한 사람만 줄인 피해가 쌓임');
     const [sw, , tk, hl] = b.members;
+    const dr = b.monster.damageRate ?? 1; // 몬스터가 셀수록 회복·막은 양도 그만큼 많아진다(기여도는 그만큼 나눔)
     Object.assign(sw, { damage: 3000, support: 0, revives: 0, protected: 0 });
-    Object.assign(hl, { damage: 700, support: 520, revives: 0, protected: 0 });
-    Object.assign(tk, { damage: 900, support: 0, revives: 0, protected: 120 });
+    Object.assign(hl, { damage: 700, support: Math.round(520 * dr), revives: 0, protected: 0 });
+    Object.assign(tk, { damage: 900, support: 0, revives: 0, protected: Math.round(120 * dr) });
     assert(E.contribution(b, hl) > E.contribution(b, sw) && E.contribution(b, tk) > E.contribution(b, sw), '기여도: 회복 많이 한 치유사·많이 막은 수호자가 피해 1위 검사보다 높을 수 있음');
-    hl.support = 200;
+    hl.support = Math.round(200 * dr);
     assert(E.contribution(b, sw) > E.contribution(b, hl), '기여도: 회복이 적으면 딜러가 높음');
 
     // 다른 몬스터: 상태이상 이름·세기·분노 조건을 데이터만으로 바꿀 수 있다
@@ -543,11 +544,11 @@ let ok4;
     let hp = x().hp; const tick = E.poisonDamage(b, x());
     b.hp = Math.round(b.maxHp * 0.5);
     turnWith(b, 'spore', { x: 'guard', y: 'guard' }); // 독이 아직 남은 동안 다시 맞기
-    assert(tick === Math.max(1, Math.round(mush.moves.spore.tickDamage * 1.07)) && b.lastTurn.poison.x === tick && x().hp < hp, '독: 다음 턴 아군 행동 뒤 중첩 × tickDamage × 인원 배율만큼 HP 감소');
+    assert(tick === Math.max(1, Math.round(mush.moves.spore.tickDamage * 1.07 * mush.damageRate)) && b.lastTurn.poison.x === tick && x().hp < hp, '독: 다음 턴 아군 행동 뒤 중첩 × tickDamage × 인원 배율만큼 HP 감소');
     assert(E.poisonStacks(b, x()) === 2 && E.poisonTurnsLeft(b, x()) === sporeTurns, '독 다시 맞으면 중첩 +1, 남은 턴 새로');
     const before = b.hp; turnWith(b, 'absorb', { x: 'guard', y: 'guard' });
     const ab = mush.moves.absorb;
-    assert(b.lastTurn.poison.x === Math.round(2 * mush.moves.spore.tickDamage * 1.07) && b.lastTurn.monsterHeal === Math.round(b.maxHp * (ab.healRate + ab.healPerStack * 4 * 4 / 2)) && b.hp === before + b.lastTurn.monsterHeal, '독기 흡수: 최대 HP × (healRate + healPerStack × 파티 독 중첩 4 × 4 ÷ 2인)');
+    assert(b.lastTurn.poison.x === Math.round(2 * mush.moves.spore.tickDamage * 1.07 * mush.damageRate) && b.lastTurn.monsterHeal === Math.round(b.maxHp * (ab.healRate + ab.healPerStack * 4 * 4 / 2)) && b.hp === before + b.lastTurn.monsterHeal, '독기 흡수: 최대 HP × (healRate + healPerStack × 파티 독 중첩 4 × 4 ÷ 2인)');
     const yBefore = E.poisonStacks(b, y());
     turnWith(b, 'smash', { x: 'attack', y: 'guard' });
     assert(E.poisonStacks(b, x()) === Math.min(mush.moves.smash.maxStacks, mush.moves.smash.stacks) && E.poisonStacks(b, y()) <= yBefore, '필살 포자 대폭발: 방어 안 한 사람만 독 여러 중첩(방어하면 안 걸림)');
@@ -564,7 +565,7 @@ let ok4;
     assert(E.isPowered(b), '공격력 증가: 피해 없는 기술에는 쓰이지 않고 남음');
     turnWith(b, 'attack', { x: 'attack', y: 'attack' });
     const pw = b.lastTurn.powered, hitAmt = Object.values(b.lastTurn.hits)[0];
-    assert(pw === mush.moves.absorb.buffRate && !E.isPowered(b) && hitAmt === Math.round(9 * 1.07 * pw), '공격력 증가: 다음 피해 기술 1회 피해 × buffRate 후 사라짐');
+    assert(pw === mush.moves.absorb.buffRate && !E.isPowered(b) && hitAmt === Math.round(9 * 1.07 * mush.damageRate * pw), '공격력 증가: 다음 피해 기술 1회 피해 × buffRate 후 사라짐');
 
     // 회복 기술은 두 턴 연속 없음(슬라임 재생 3연속 방지)
     {
@@ -837,7 +838,7 @@ let ok4;
       turnWith(null, { x: 'guard', y: 'attack' });
       const boom = bomb.moves[fuse.boom];
       const mid = Math.floor(0.5 * (boom.damage[1] - boom.damage[0] + 1)) + boom.damage[0]; // rng 0.5일 때 피해
-      assert(!b.fuse && b.lastTurn.monsterMoveKey === fuse.boom && b.lastTurn.hits.x === Math.max(1, Math.round(mid * 1.07 * boom.guardRate)) && hpX - M('x').hp === b.lastTurn.hits.x + (b.lastTurn.poison.x || 0) && M('y').hp < M('x').hp && b.turn - 1 === lit + fuse.turns, '대폭발: 방어해도 guardRate만큼만 막음, 카운트다운 끝');
+      assert(!b.fuse && b.lastTurn.monsterMoveKey === fuse.boom && b.lastTurn.hits.x === Math.max(1, Math.round(mid * 1.07 * bomb.damageRate * boom.guardRate)) && hpX - M('x').hp === b.lastTurn.hits.x + (b.lastTurn.poison.x || 0) && M('y').hp < M('x').hp && b.turn - 1 === lit + fuse.turns, '대폭발: 방어해도 guardRate만큼만 막음, 카운트다운 끝');
       assert(['x', 'y'].every(u => M(u).hp <= 0 || (M(u).poisonStatus?.name === '화상' && E.poisonStacks(b, M(u)) >= boom.stacks)) && b.log.join().includes('🔥화상'), '대폭발: 맞은 사람 전원 🔥화상(방어해도 걸림)');
 
       b = E.createBattle(bomb, party, rng);

@@ -20,7 +20,7 @@ const TAUNT_DAMAGE_RATE = 0.3;   // 도발 중인 수호자: 받는 피해 70% �
 //   stun: 방어하지 않은 사람은 다음 턴 행동 불가
 //   shield: 다음 턴 동안 몬스터가 받는 피해 × effectRate
 //   poison: 맞은 사람에게 독 stacks중첩(최대 maxStacks)을 쌓고 남은 턴을 effectTurns로 새로 맞춘다.
-//           다음 턴부터 아군 행동이 끝날 때마다 중첩 × tickDamage × 인원별 피해 배율만큼 HP가 준다(쓰러질 수 있음).
+//           다음 턴부터 아군 행동이 끝날 때마다 중첩 × tickDamage × 몬스터 피해 배율만큼 HP가 준다(쓰러질 수 있음).
 //           치유사 스킬(전원)이나 회복약(본인)으로 해제.
 //   confuse: 다음 턴 고른 행동이 effectRate 확률로 빗나간다(헛손질 — 회복약·쿨타임은 쓰지 않음). 방어는 빗나가지 않는다.
 //           치유사 스킬로 해제.
@@ -33,9 +33,14 @@ const TAUNT_DAMAGE_RATE = 0.3;   // 도발 중인 수호자: 받는 피해 70% �
 //   chill(효과): 맞은 사람 냉기 +stacks(분노 중 rageStacks). 방어해도 걸린다.
 //   chillOnHit(보호막 기술): 그 보호막이 켜진 턴에 몬스터에게 피해를 준 사람은 녹는 대신 냉기 +chillOnHit(얼음 갑옷).
 // 인원별 몬스터 피해 배율. 보통 플레이 승률이 인원과 상관없이 80~90%가 되게 맞춘 값(치유사·수호자가 다 있는 4인은 훨씬 버티므로 크게).
-const PARTY_DAMAGE_RATE = { 1: 1.35, 2: 1.07, 3: 1.28, 4: 2.0 }; // 3인은 궁수 차지 샷을 올리면서 1.25 → 1.28
+const PARTY_DAMAGE_RATE = { 1: 1.35, 2: 1.07, 3: 1.28, 4: 1.92 }; // 3인은 궁수 차지 샷을 올리면서 1.25 → 1.28, 4인은 전투를 줄이며(HP ×0.8) 2.0 → 1.92
+// 몬스터가 주는 피해(기술·독) 배율 = 인원별 배율 × 몬스터 파일의 damageRate(없으면 1).
+// damageRate는 baseHp를 줄여 전투를 짧게 하면서 승률은 그대로 두려고 몬스터마다 맞춘 값.
+function monsterDamageRate(battle) {
+  return (PARTY_DAMAGE_RATE[battle.members.length] ?? 1) * (battle.monster.damageRate ?? 1);
+}
 const PARTY_BASE_SIZE = 4;       // 몬스터 baseHp가 기준으로 삼는 인원(역할 4종 한 명씩).
-// 인원수별 HP 보정. 목표는 2~4인 모두 약 24턴(실측 턴당 혼자 5~7초, 여럿이면 더 걸려 3~5분).
+// 인원수별 HP 보정. 목표는 2~4인 모두 약 19~20턴(예전 24턴에서 줄임 — 실측 턴당 혼자 5~7초, 여럿이면 더 걸려 3~5분).
 // (몬스터 재생·보호막과 파티 점액·기절까지 넣은 상태로 맞춘 값 — tests/raid/밸런스시뮬.js)
 // 수호자·치유사는 피해가 적어 인원이 줄어도 턴 수가 크게 안 줄기 때문에 2·3인은 HP를 오히려 늘린다.
 // 1인은 테스트 서버 전용(혼자 시작해도 끝까지 시험해 볼 수 있게 — createBattle의 minParty 1)이라 짧게 둔다.
@@ -99,6 +104,7 @@ function monsterProblems(m) {
   const problems = [];
   for (const key of ['id', 'name', 'emoji', 'rageName', 'lore']) if (typeof m[key] !== 'string' || !m[key]) problems.push(`${key} 없음`);
   if (!(m.baseHp > 0)) problems.push('baseHp는 0보다 큰 숫자');
+  if (m.damageRate !== undefined && !(m.damageRate > 0)) problems.push('damageRate는 0보다 큰 숫자');
   const s = m.sprite;
   if (!Array.isArray(s?.rows) || !s.rows.length || !s.palette) problems.push('sprite.rows/palette 없음');
   else {
@@ -340,7 +346,7 @@ function poisonStacks(battle, m) { return poisonTurnsLeft(battle, m) > 0 ? m.poi
 // 이번 턴 독 피해(인원별 몬스터 피해 배율 적용). 화면 안내와 실제 피해가 같은 식을 쓴다.
 function poisonDamage(battle, m) {
   const n = poisonStacks(battle, m);
-  return n ? Math.max(1, Math.round(n * m.poisonTick * (PARTY_DAMAGE_RATE[battle.members.length] ?? 1))) : 0;
+  return n ? Math.max(1, Math.round(n * m.poisonTick * monsterDamageRate(battle))) : 0;
 }
 function isConfused(battle, m) { return m.confuseTurn === battle.turn; }
 function isFeared(battle, m) { return m.fearTurn === battle.turn; }
@@ -413,7 +419,7 @@ const CONTRIB_REVIVE = 25;   // 부활 1번을 회복 몇으로 칠지(부활로
 const CONTRIB_PROTECT = 39;  // 막아 준 피해에 곱함
 function contribution(battle, m) {
   const n = battle.members.length;
-  const rate = PARTY_DAMAGE_RATE[n] ?? 1;
+  const rate = monsterDamageRate(battle); // 몬스터가 세면 막고 치료한 양도 늘어나므로 그만큼 나눠 몫을 맞춘다
   const heal = CONTRIB_HEAL * (m.support + m.revives * CONTRIB_REVIVE) * Math.pow(PARTY_BASE_SIZE / n, 0.25);
   return m.damage + (heal + CONTRIB_PROTECT * m.protected) / rate;
 }
@@ -645,7 +651,7 @@ function resolveTurn(battle, rng = Math.random) {
   if (move) {
     // 공격력 증가(buffRate 기술을 쓴 뒤 첫 피해 기술 1회): 이번 공격 피해 × powerRate, 쓰고 나면 사라진다
     const powered = (move.target === 'single' || move.target === 'all') && battle.powerRate > 1 ? battle.powerRate : 0;
-    const mult = (battle.rage ? battle.monster.rage.damageRate : 1) * (PARTY_DAMAGE_RATE[battle.members.length] ?? 1) * (powered || 1);
+    const mult = (battle.rage ? battle.monster.rage.damageRate : 1) * monsterDamageRate(battle) * (powered || 1);
     const hit = (target) => {
       let dmg = randInt(move.damage, rng) * mult;
       battle.incoming += Math.round(dmg);

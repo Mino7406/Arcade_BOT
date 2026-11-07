@@ -6,7 +6,7 @@
     "smash.fuse(점화): 피해 없이 카운트다운 시작 — turns턴(분노 중 rageTurns) 안에 파티가 최대 HP × need 피해를 넣으면 불발(그 턴 폭탄 행동 없음). 못 넣으면 마지막 턴에 boom 기술(대폭발)을 쓴다. 카운트다운 중에는 점화를 다시 예고하지 않는다.",
     "boom: intentWeights에 넣지 않는다(점화 뒤에만). guardRate는 방어한 사람이 받는 피해 배율(평소 방어는 0.3). warn: true면 경고(빨간 예고 상자).",
     "화상은 독 규칙(poison)을 그대로 쓰고 status.color로 배지·HP 바 색만 바꾼다. smoke(연막): 다음 행동 예고를 가린다(대폭발은 가리지 않음).",
-    "baseHp는 4인 기준 HP. 바꾸면 node tests/raid/밸런스시뮬.js bomb 로 승률·턴을 다시 확인한다.",
+    "baseHp는 4인 기준 HP, damageRate는 이 몬스터가 주는 피해 배율(없으면 1 — 전투를 줄이며 HP ×0.8, 승률을 맞추려 피해를 올림). 바꾸면 node tests/raid/밸런스시뮬.js bomb 로 승률·턴을 다시 확인한다.",
     "boom은 맞은 사람 전원에게 🔥화상 1중첩(방어해도 걸림). sprite.fuseTip [칸, 줄]: 점화 카운트다운 중 다른 기술을 써도 그 자리에 불꽃을 그린다."
   ],
   "id": "bomb",
@@ -14,7 +14,8 @@
   "emoji": "💣",
   "rageName": "폭주한 꼬마 폭탄",
   "lore": "머리 위 도화선을 달고 아장아장 걷는 빨간 폭탄. 불이 붙기 전에 XP 시스템에서 쫓아내야 한다!",
-  "baseHp": 9400,
+  "baseHp": 7520,
+  "damageRate": 1.4,
   "rage": {
     "hpRatio": 0.5,
     "damageRate": 1.5

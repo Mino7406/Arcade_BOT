@@ -4,14 +4,15 @@
     "palette: a 외곽선 · h 하이라이트 · o 밝은 면 · b 몸 · d 그늘 · w 눈 반사광 · k 눈·눈썹 · g 빛나는 눈(표식·필살기 예고) · c 볼 · m 입 · x 혼불. 표정은 아이스 큐브와 같은 스타일(큰 눈 + 반사광 + 볼터치, 얇게 기운 눈썹, 일자 입).",
     "mark(표식): 예고할 때 대상을 정하고(분노 중 rageTargets명) telegraph의 {target}에 이름이 들어간다. 다음 턴 그 사람에게 damage. 수호자가 도발하면 한 명 몫을 대신 맞는다. 대상이 쓰러지면 다른 사람에게 옮긴다.",
     "fear(공포): 맞은 사람(guardBlocks면 방어한 사람 제외)은 다음 턴 스킬을 못 쓴다. phase(투명화): 다음 턴 일반 공격이 빗나가고 스킬만 맞는다.",
-    "baseHp는 4인 기준 HP. 바꾸면 node tests/raid/밸런스시뮬.js ghost 로 승률·턴을 다시 확인한다."
+    "baseHp는 4인 기준 HP, damageRate는 이 몬스터가 주는 피해 배율(없으면 1 — 전투를 줄이며 HP ×0.8, 승률을 맞추려 피해를 올림). 바꾸면 node tests/raid/밸런스시뮬.js ghost 로 승률·턴을 다시 확인한다."
   ],
   "id": "ghost",
   "name": "고스트",
   "emoji": "👻",
   "rageName": "폭주한 고스트",
   "lore": "밤마다 서버를 떠도는 하얀 고스트. 한 사람을 골라 뚫어지게 노려보며 XP를 빨아 간다!",
-  "baseHp": 7200,
+  "baseHp": 5760,
+  "damageRate": 1.15,
   "rage": {
     "hpRatio": 0.5,
     "damageRate": 1.5

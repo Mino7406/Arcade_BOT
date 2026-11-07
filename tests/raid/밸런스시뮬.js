@@ -8,7 +8,7 @@ const pick = args.find(a => !a.endsWith('.js')) || 'slime';
 const MONSTER = E.MONSTERS.find(m => m.id === pick || m.name === pick);
 if (!MONSTER) throw new Error(`몬스터 없음: ${pick} (있는 것: ${E.MONSTERS.map(m => m.id).join(', ')})`);
 console.log(`몬스터: ${MONSTER.name}`);
-const TURN_CAP = 60; // 15분 제한 넉넉히
+const TURN_CAP = 60; // 20분 제한 넉넉히
 const aliveCount = (b) => E.aliveMembers(b).length;
 function smart(b, m) {
   const mv = b.intent;
