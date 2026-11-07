@@ -6,7 +6,8 @@
     "smash.fuse(점화): 피해 없이 카운트다운 시작 — turns턴(분노 중 rageTurns) 안에 파티가 최대 HP × need 피해를 넣으면 불발(그 턴 폭탄 행동 없음). 못 넣으면 마지막 턴에 boom 기술(대폭발)을 쓴다. 카운트다운 중에는 점화를 다시 예고하지 않는다.",
     "boom: intentWeights에 넣지 않는다(점화 뒤에만). guardRate는 방어한 사람이 받는 피해 배율(평소 방어는 0.3). warn: true면 경고(빨간 예고 상자).",
     "화상은 독 규칙(poison)을 그대로 쓰고 status.color로 배지·HP 바 색만 바꾼다. smoke(연막): 다음 행동 예고를 가린다(대폭발은 가리지 않음).",
-    "baseHp는 4인 기준 HP. 바꾸면 node tests/raid/밸런스시뮬.js bomb 로 승률·턴을 다시 확인한다."
+    "baseHp는 4인 기준 HP. 바꾸면 node tests/raid/밸런스시뮬.js bomb 로 승률·턴을 다시 확인한다.",
+    "boom은 맞은 사람 전원에게 🔥화상 1중첩(방어해도 걸림). sprite.fuseTip [칸, 줄]: 점화 카운트다운 중 다른 기술을 써도 그 자리에 불꽃을 그린다."
   ],
   "id": "bomb",
   "name": "꼬마 폭탄",
@@ -248,7 +249,11 @@
       "n": "#111111",
       "m": "#2a0a06"
     },
-    "scale": 1.15
+    "scale": 1.15,
+    "fuseTip": [
+      15,
+      0
+    ]
   },
   "moves": {
     "attack": {
@@ -305,13 +310,23 @@
       "telegraph": "💣 곧 터진다! 방어해도 절반만 막아요!",
       "target": "all",
       "damage": [
-        18,
-        22
+        14,
+        18
       ],
       "fx": "boom",
       "readyPose": "flash",
       "warn": true,
-      "guardRate": 0.5
+      "guardRate": 0.5,
+      "effect": "poison",
+      "effectTurns": 3,
+      "tickDamage": 2,
+      "stacks": 1,
+      "maxStacks": 3,
+      "status": {
+        "name": "화상",
+        "emoji": "🔥",
+        "color": "#ff9a3c"
+      }
     }
   },
   "intentWeights": {

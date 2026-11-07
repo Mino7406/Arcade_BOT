@@ -840,6 +840,7 @@ let ok4;
       const boom = bomb.moves[fuse.boom];
       const mid = Math.floor(0.5 * (boom.damage[1] - boom.damage[0] + 1)) + boom.damage[0]; // rng 0.5일 때 피해
       assert(!b.fuse && b.lastTurn.monsterMoveKey === fuse.boom && b.lastTurn.hits.x === Math.max(1, Math.round(mid * 1.07 * boom.guardRate)) && hpX - M('x').hp === b.lastTurn.hits.x + (b.lastTurn.poison.x || 0) && M('y').hp < M('x').hp && b.turn - 1 === lit + fuse.turns, '대폭발: 방어해도 guardRate만큼만 막음, 카운트다운 끝');
+      assert(['x', 'y'].every(u => M(u).hp <= 0 || (M(u).poisonStatus?.name === '화상' && E.poisonStacks(b, M(u)) >= boom.stacks)) && b.log.join().includes('🔥화상'), '대폭발: 맞은 사람 전원 🔥화상(방어해도 걸림)');
 
       b = E.createBattle(bomb, party, rng);
       turnWith('smash', {});

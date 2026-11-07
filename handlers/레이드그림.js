@@ -364,19 +364,14 @@ function burnBadge(cx, cy, stacks) {
   flame(cx + 9, cy + 4, 0.5, [['#4a1206', 1.3], ['#ff9a3c', 1], ['#ffe066', 0.55]]);
   if (stacks > 1) text(`×${stacks}`, cx, cy + 22, 15, '#ffc08a');
 }
-// 공포: 겁먹은 얼굴(보라 얼굴 · 커다란 흰 눈 · 떨리는 입) + 식은땀 방울 + 떨림 선
-const FEAR_FACE = {
-  rows: [
-    '...dddddd...', '..dppppppd..', '.dppppppppd.', '.dpwwppwwpd.', 'dppwkppwkppd', 'dppwwppwwppd',
-    'dppppppppppd', 'dpppmpmpmppd', 'dppmpmpmpppd', '.dppppppppd.', '..dppppppd..', '...dddddd...',
-  ],
-  palette: { d: '#24103a', p: '#b39aff', w: '#ffffff', k: '#1a0a2a', m: '#1a0a2a' },
-};
+// 공포: 스킬 봉인 — 짙은 보라 동그라미 안 흰 네 갈래 반짝임(스킬)에 빨간 빗금 + 양옆 떨림 선
 function fearBadge(cx, cy) {
-  drawPixels(FEAR_FACE, cx, cy, 2.3);
-  p.circle(cx + 14, cy - 6, 3.6, '#0e2a3d'); p.poly([cx + 14, cy - 15, cx + 17.2, cy - 6, cx + 10.8, cy - 6], '#0e2a3d'); // 식은땀(테두리)
-  p.circle(cx + 14, cy - 6, 2.4, '#8fd3f4'); p.poly([cx + 14, cy - 12.5, cx + 16.2, cy - 6, cx + 11.8, cy - 6], '#8fd3f4');
-  for (const dy of [-6, 0, 6]) p.line(cx - 19, cy + dy, cx - 16, cy + dy - 2, 2, '#b39aff'); // 떨림
+  p.circle(cx, cy, 14, '#1a0a2a');
+  p.circle(cx, cy, 12, '#6a3fb8');
+  p.poly([cx, cy - 9, cx + 2.6, cy - 2.6, cx + 9, cy, cx + 2.6, cy + 2.6, cx, cy + 9, cx - 2.6, cy + 2.6, cx - 9, cy, cx - 2.6, cy - 2.6], '#f4f0ff');
+  p.line(cx - 9, cy + 9, cx + 9, cy - 9, 6, '#1a0a2a');
+  p.line(cx - 9, cy + 9, cx + 9, cy - 9, 3.4, '#ff5a6e');
+  for (const sd of [-1, 1]) for (const dy of [-5, 3]) p.line(cx + sd * 17, cy + dy, cx + sd * 20, cy + dy + 3, 2, '#c3b4ff');
 }
 // 표식(영혼 사냥 대상): 카드 오른쪽 위 빛나는 눈
 function markEye(cx, cy) {
@@ -548,18 +543,27 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
     return;
   }
   // ── 고스트 ──
+  if (move === 'curse' && layer === 'back') {
+    // 영혼 사냥: 손 뒤로 번지는 보라 빛
+    haze(cx, cy + 96, 58, '#9b7bff', 0.16); // 몬스터 칸 안에서만(카드까지 덮지 않게)
+    return;
+  }
   if (move === 'curse' && layer === 'front') {
-    // 영혼 사냥: 몸 아래에서 파티 쪽으로 구불구불 뻗는 혼령 촉수 넷 + 끝의 혼불(청록 불꽃)
-    for (const [s, spread, drop] of [[-1, 210, 96], [-1, 120, 112], [1, 120, 112], [1, 210, 96]]) {
-      const pts = [];
-      for (let i = 0; i <= 14; i++) {
-        const t = i / 14;
-        pts.push([cx + s * (30 + t * spread) + Math.sin(t * 7 + spread) * 9, cy + 34 + t * drop * 0.7]);
-      }
-      pts.forEach(([x, y], i) => p.circle(x, y, 11 * (1 - i / 16) + 5, '#1a0a2a'));
-      pts.forEach(([x, y], i) => p.circle(x, y, 11 * (1 - i / 16) + 2, i % 3 ? '#6e4fc4' : '#9b7bff'));
-      const [ex, ey] = pts[pts.length - 1];
-      flame(ex, ey + 2, 0.75, [['#0b2b2e', 1.3], ['#3fd6c6', 1], ['#9ffff2', 0.6], ['#ffffff', 0.28]]);
+    // 영혼 사냥: 몸 아래에서 파티 쪽으로 뻗어 내려오는 커다란 저승의 손(보라, 청록 손톱)
+    // + 손끝 아래에서 끌려 올라오는 혼불 셋
+    const P = '#7a5ad6', H = '#b9a6ff', D = '#1a0a2a';
+    p.line(cx, cy + 30, cx, cy + 82, 36, D); p.line(cx, cy + 30, cx, cy + 82, 27, P); // 팔
+    p.roundRect(cx - 50, cy + 72, 100, 38, 16, D); p.roundRect(cx - 46, cy + 75, 92, 32, 14, P); // 손바닥
+    p.roundRect(cx - 36, cy + 79, 38, 9, 4, H); // 손바닥 빛
+    for (const [kx, tx] of [[-34, -46], [-11, -15], [11, 15], [34, 46]]) {
+      p.line(cx + kx, cy + 104, cx + tx, cy + 140, 19, D);
+      p.line(cx + kx, cy + 104, cx + tx, cy + 140, 13, P);
+      p.circle(cx + tx, cy + 141, 6, '#9ffff2'); // 청록 손톱
+    }
+    p.line(cx + 46, cy + 84, cx + 68, cy + 106, 17, D); p.line(cx + 46, cy + 84, cx + 68, cy + 106, 11, P); p.circle(cx + 69, cy + 107, 5.5, '#9ffff2'); // 엄지
+    for (const [x0, y0] of [[-120, 130], [0, 146], [120, 128]]) {
+      for (let i = 1; i <= 4; i++) dot(cx + x0 * (1 - i * 0.18), cy + y0 - i * 7, 6 - i, '#9ffff2'); // 손 쪽으로 끌려가는 자국
+      flame(cx + x0, cy + y0, 0.6, [['#0b2b2e', 1.3], ['#3fd6c6', 1], ['#ffffff', 0.4]]);
     }
     return;
   }
@@ -633,23 +637,20 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
     return;
   }
   if (move === 'ignite' && layer === 'back') {
-    // 점화: 도화선 끝(머리 오른쪽 위)에 번지는 뜨거운 빛
-    haze(cx + 22, cy - 56, 40, '#ff9a3c', 0.28);
-    haze(cx + 22, cy - 56, 22, '#ffe066', 0.4);
+    // 점화: 도화선 끝의 뜨거운 빛
+    haze(cx + 22, cy - 56, 34, '#ffe066', 0.35);
     return;
   }
   if (move === 'ignite' && layer === 'front') {
-    // 도화선 끝에서 터지는 불꽃 별(긴 빛줄기 8개) + 양옆으로 포물선을 그리며 떨어지는 불티
+    // 도화선 끝에서 치익 터지는 불꽃 별 + 바로 둘레를 도는 작은 불티 + 위로 피어오르는 연기 세 줄기
     const fx = cx + 22, fy = cy - 56;
     for (let k = 0; k < 8; k++) {
-      const a = (k / 8) * Math.PI * 2, len = k % 2 ? 16 : 30;
-      p.line(fx, fy, fx + Math.cos(a) * len, fy + Math.sin(a) * len * (Math.sin(a) < 0 ? 0.5 : 1), k % 2 ? 3 : 5, k % 2 ? '#ff9a3c' : '#ffe066');
+      const a = (k / 8) * Math.PI * 2, len = k % 2 ? 14 : 26;
+      p.line(fx, fy, fx + Math.cos(a) * len, fy + Math.sin(a) * len * (Math.sin(a) < 0 ? 0.45 : 1), k % 2 ? 3 : 5, k % 2 ? '#ff9a3c' : '#ffe066');
     }
     p.circle(fx, fy, 6, '#ffffff');
-    for (const s of [-1, 1]) for (let i = 1; i <= 6; i++) {
-      const t = i / 6;
-      dot(fx + s * (20 + t * 120), fy + 4 + t * t * 120, 7 - t * 4, i % 2 ? '#ffe066' : '#ff6a2c');
-    }
+    for (let k = 0; k < 10; k++) { const a = (k / 10) * Math.PI * 2 + 0.3; dot(fx + Math.cos(a) * 36, fy + 6 + Math.sin(a) * 18, k % 2 ? 3 : 4, k % 2 ? '#ffe066' : '#ff6a2c'); }
+    for (const [dx, dy, r] of [[-30, -6, 9], [-44, -12, 7], [40, -8, 8], [56, -12, 6], [-14, -14, 6]]) haze(fx + dx, fy + dy, r, '#a4a4b0', 0.45);
     return;
   }
   if (move === 'boom' && layer === 'back') {
@@ -904,6 +905,7 @@ const RIBBON = {
   ready:   { fill: '#1e6b3c', color: '#d9ffe6' },
   down:    { fill: '#3a3530', color: '#b0a89a' },
   stunned: { fill: '#6b5a14', color: '#fff3b0' },
+  frozen:  { fill: '#1f5f8a', color: '#e6f8ff' }, // 빙결(행동 불가) — 얼음 색
 };
 function memberState(b, mem, showingResult) {
   if (mem.hp <= 0) return 'down';
@@ -980,6 +982,16 @@ function renderBattle(r) {
     // 투명화(유령): 다음 턴 동안 몸을 흐리게(회색)
     drawMonster(m, W / 2, monsterY, 112, { rage: b.rage, pose, outline: shielded ? '#cfe8ff' : null, gray: isPhased(b) });
     if (shaking) shakeFx(m, W / 2, monsterY, 112, pose);
+    // 점화 카운트다운 중엔 어떤 자세·기술이든 도화선 끝에 불꽃 + 열기(sprite.fuseTip = [칸, 줄])
+    if (b.fuse && m.sprite?.fuseTip) {
+      const rowsNow = (pose && m.sprite.poses?.[pose]) || m.sprite.rows;
+      const px = Math.floor((112 * (m.sprite.scale ?? 1)) / rowsNow.length);
+      const [col, row] = m.sprite.fuseTip;
+      const tx = W / 2 - (rowsNow[0].length * px) / 2 + (col + 0.5) * px, ty = monsterY - (rowsNow.length * px) / 2 + (row + 0.5) * px;
+      haze(tx, ty, 18, '#ff9a3c', 0.35);
+      flame(tx + 1, ty - 4, 0.75, [['#4a1206', 1.25], ['#ff6a2c', 1], ['#ffe066', 0.6], ['#ffffff', 0.25]]);
+      for (const [dx, dy] of [[-11, -10], [12, -14], [14, 4], [-10, 6]]) dot(tx + dx, ty + dy, 3, '#ffe066');
+    }
     if (b.rage) rageFx(m, W / 2, monsterY, 112, pose, 'mark');
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'front', sporeColor, accentColor);
     // 몬스터 오른쪽: 이번 턴 받은 피해(빨강) · 재생 회복량(초록, 피해 아래). 결과 화면에서만.
@@ -1076,7 +1088,7 @@ function renderBattle(r) {
       const down = state === 'down';
       // 리본: 결과 단계(턴 전환 3.5초)에는 띄우지 않는다 — 그림은 평소대로 두고 전환은 글자 제목이 알린다
       if (state !== 'result') {
-        const ribbon = RIBBON[state];
+        const ribbon = state === 'stunned' && isIced(b, mem) ? RIBBON.frozen : RIBBON[state];
         p.roundRect(x + 12, y + 12, w - 24, 30, 8, ribbon.fill);
         text(state === 'pending' ? '행동 선택!' : state === 'ready' ? `준비 · ${choiceLabel(mem)}` : state === 'stunned' ? `${mem.stunStatus?.name ?? '기절'} · 행동 불가` : '쓰러짐',
           x + w / 2, y + 27, 19, ribbon.color, { maxWidth: w - 36 });
