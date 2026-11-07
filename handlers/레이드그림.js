@@ -454,7 +454,7 @@ function puff(x, y, size, c, light, dark = '#3a1450') {
 // 작은 유령(원혼 폭풍): 5×5 도트
 const MINI_GHOST = { rows: ['.www.', 'wwwww', 'wkwkw', 'wwwww', 'w.w.w'], palette: { w: '#f1ecff', k: '#2a1f4a' } };
 const MINI_GHOST_DARK = { rows: ['.www.', 'wwwww', 'wkwkw', 'wwwww', 'w.w.w'], palette: { w: '#9b7bff', k: '#1a0f33' } };
-// 들쭉날쭉한 호(울부짖음 음파): 중심에서 r, 각도 a0~a1, 바깥·안쪽을 번갈아
+// 들쭉날쭉한 호(울부짖기 음파): 중심에서 r, 각도 a0~a1, 바깥·안쪽을 번갈아
 function jaggedArc(cx, cy, r, a0, a1, squash, width, color, teeth = 9) {
   let prev = null;
   for (let i = 0; i <= teeth * 2; i++) {
@@ -574,7 +574,7 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
   }
   // ── 고스트 ──
   if (move === 'wail' && layer === 'back') {
-    // 울부짖음: 입에서 터져 나가는 들쭉날쭉한 음파 고리 세 겹(안쪽은 밝고 굵게, 바깥은 흐리게)
+    // 울부짖기: 입에서 터져 나가는 들쭉날쭉한 음파 고리 세 겹(안쪽은 밝고 굵게, 바깥은 흐리게)
     for (const [r, w, c] of [[96, 6, '#f4f0ff'], [132, 5, '#c3b4ff'], [168, 4, '#7c5fd6']]) {
       jaggedArc(cx, cy + 18, r, -0.85, 0.85, 0.62, w, c);
       jaggedArc(cx, cy + 18, r, Math.PI - 0.85, Math.PI + 0.85, 0.62, w, c);
@@ -739,24 +739,14 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
       p.rect(cx + dx - s, cy + dy - s / 3, s * 2, (s * 2) / 3, '#7cff9a');
       p.rect(cx + dx - s / 3, cy + dy - s, (s * 2) / 3, s * 2, '#7cff9a');
     }
-  } else if (move === 'smash' && layer === 'back') {
-    // 필살 짓누르기: 위에서 내리꽂힌 흔적 — 몸 양옆 위에서 아래로 굵어지는 낙하 속도선
-    for (const dx of [-92, -64, 64, 92]) {
-      for (let i = 0; i < 4; i++) dot(cx + dx, cy - 62 + i * 14, 3 + i * 1.6, i === 3 ? '#fff6d6' : '#c9b48a');
-    }
   } else if (move === 'smash' && layer === 'front') {
-    // 바닥에서 양옆으로 휘몰아치는 굵은 충격 바람(초승달 모양, 어두운 테두리 → 노랑 → 흰 심) + 땅 균열 + 흙먼지 구름
+    // 필살 짓누르기(시안 A 굵은 충격선): 양옆으로 뻗는 노란 충격선 세 줄씩(바깥으로 갈수록 가늘게) + 흙먼지 뭉치 + 위로 튀는 작은 충격 별
     for (const sd of [-1, 1]) {
-      for (const [r0, thick, oy] of [[86, 16, 0], [120, 10, -18]]) {
-        const pts = [];
-        for (let i = 0; i <= 14; i++) { const t = i / 14; pts.push([cx + sd * (r0 + t * 150), cy + 62 + oy - Math.sin(t * Math.PI * 0.9) * (26 + r0 * 0.12)]); }
-        for (const [k, c] of [[1, '#4a3a18'], [0.62, '#ffd166'], [0.25, '#fff6d6']]) {
-          for (let i = 1; i < pts.length; i++) { const taper = 1 - (i / pts.length) * 0.75; p.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], Math.max(1.5, thick * k * taper), c); }
-        }
+      for (const [y0, y1, len, w] of [[30, 6, 150, 7], [48, 40, 190, 9], [62, 66, 220, 7]]) {
+        for (let i = 0; i < 8; i++) { const t0 = i / 8, t1 = (i + 1) / 8; p.line(cx + sd * (84 + len * t0), cy + y0 + (y1 - y0) * t0, cx + sd * (84 + len * t1), cy + y0 + (y1 - y0) * t1, Math.max(2, w * (1 - t0 * 0.7)), '#ffd166'); }
       }
-      let [x, y] = [cx + sd * 50, cy + 70];
-      for (const [dx, dy] of [[22, 4], [20, -5], [24, 6], [22, -3], [18, 4]]) { p.line(x, y, x + sd * dx, y + dy, 4, '#16120c'); x += sd * dx; y += dy; }
-      for (const [dx, dy, r] of [[250, 50, 14], [226, 64, 11], [268, 66, 10]]) { p.circle(cx + sd * dx, cy + dy, r + 2, '#3a3020'); p.circle(cx + sd * dx, cy + dy, r, '#9a8a6e'); p.circle(cx + sd * dx - r * 0.3, cy + dy - r * 0.3, r * 0.35, '#c4b69c'); }
+      for (const [dx, dy, r] of [[120, 68, 11], [160, 60, 9], [205, 72, 10], [250, 62, 8]]) { p.circle(cx + sd * dx, cy + dy, r, '#8a7a62'); p.circle(cx + sd * dx - r * 0.3, cy + dy - r * 0.3, r * 0.35, '#b8a888'); }
+      star(cx + sd * 110, cy - 10, 9, '#ffd166'); star(cx + sd * 170, cy - 30, 6, '#fff1c2');
     }
   }
 }
@@ -792,7 +782,7 @@ function hitFx(move, cx, cy, color, spore = color, accent = spore) {
   } else if (move === 'curse') {
     // 영혼 사냥: 대상 카드 표시는 renderBattle의 curseLink가 그린다(세 줄 할퀴기)
   } else if (move === 'wail') {
-    // 울부짖음: 아이콘을 감싸는 들쭉날쭉한 음파 두 겹(양옆)
+    // 울부짖기: 아이콘을 감싸는 들쭉날쭉한 음파 두 겹(양옆)
     for (const [r, c] of [[30, '#f4f0ff'], [42, '#9b7bff']]) {
       jaggedArc(cx, cy, r, -0.9, 0.9, 1, 3, c, 5);
       jaggedArc(cx, cy, r, Math.PI - 0.9, Math.PI + 0.9, 1, 3, c, 5);

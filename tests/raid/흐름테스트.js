@@ -794,7 +794,7 @@ let ok4;
 
       b = E.createBattle(ghost, party, rng);
       turnWith('wail', { x: 'guard', t: 'attack', y: 'attack' });
-      assert(!E.isFeared(b, M('x')) && E.isFeared(b, M('t')) && E.checkChoice(b, 't', 'skill') && E.checkChoice(b, 't', 'attack') === null && b.log.join().includes('😱'), '울부짖음: 방어 안 한 사람 😱공포 — 다음 턴 스킬 못 씀');
+      assert(!E.isFeared(b, M('x')) && E.isFeared(b, M('t')) && E.checkChoice(b, 't', 'skill') && E.checkChoice(b, 't', 'attack') === null && b.log.join().includes('😱'), '울부짖기: 방어 안 한 사람 😱공포 — 다음 턴 스킬 못 씀');
       turnWith('attack', { x: 'attack', t: 'attack', y: 'attack' });
       assert(!E.isFeared(b, M('t')), '공포는 한 턴만');
 

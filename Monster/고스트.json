@@ -190,7 +190,7 @@
       "fx": "curse"
     },
     "wail": {
-      "name": "울부짖음",
+      "name": "울부짖기",
       "telegraph": "입을 크게 벌리고 숨을 들이켠다...",
       "target": "all",
       "damage": [
