@@ -846,6 +846,15 @@ let ok4;
       const hpY = M('y').hp, hpXX = M('x').hp;
       turnWith(null, { x: 'skill', y: 'attack' });
       assert(!b.fuse && b.lastTurn.defused && !Object.keys(b.lastTurn.hits).length && M('y').hp === hpY && M('x').hp === hpXX && b.log.join().includes('불이 꺼졌다'), '불끄기 성공: 그 턴 폭탄 행동 없음(기절)');
+      b = E.createBattle(bomb, party, rng);
+      turnWith('smash', {});
+      b.fuse.need = 1e9;
+      for (let i = 1; i < fuse.turns; i++) turnWith(null, { x: 'guard', y: 'guard' });
+      assert(b.intent === fuse.boom, '마지막 턴: 대폭발 예고');
+      b.fuse.need = b.fuse.dealt + 150;
+      const hpY2 = M('y').hp, hpX2 = M('x').hp;
+      turnWith(null, { x: 'skill', y: 'attack' });
+      assert(!b.fuse && b.lastTurn.defused && b.lastTurn.monsterMoveKey !== fuse.boom && !Object.keys(b.lastTurn.hits).length && M('y').hp === hpY2 - (b.lastTurn.poison.y || 0) && M('x').hp === hpX2 - (b.lastTurn.poison.x || 0), '대폭발 예고 턴(1턴 남음)에 불을 끄면 대폭발 취소');
 
       b = E.createBattle(bomb, party, rng);
       turnWith('ember', { x: 'attack', y: 'attack' });
