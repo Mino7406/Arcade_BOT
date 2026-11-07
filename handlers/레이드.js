@@ -47,9 +47,12 @@ const BATTLE_LIMIT_MS = 15 * 60 * 1000; // 전투 제한 시간 — 넘기면 �
 const PARTY_MAX = 4;
 const CLEAR_XP = 300;               // 토벌 성공 시 파티원 1인당
 const MVP_BONUS_XP = 100;           // 기여도 1위(피해 + 회복·부활 + 막아 준 피해, 레이드전투.js의 contribution) 추가 보상
-const FAIL_PENALTY_XP = 100;        // 토벌 실패(전멸·시간 초과·무참가로 도주) 시 서버의 모든 유저가 잃는 XP
+// 토벌 실패(전멸·시간 초과·무참가로 도주) 시 서버의 모든 유저가 잃는 XP — 레이드마다 이 범위에서 무작위 하나(모두 같은 값)
+const FAIL_PENALTY_XP_MIN = 50;
+const FAIL_PENALTY_XP_MAX = 100;
 const PENALTY_OUTCOMES = new Set(['wipe', 'timeout', 'noshow']);
-const PENALTY_TEXT = `☠️ 모든 유저의 ${FAIL_PENALTY_XP}XP를 잃어버렸습니다...`;
+const rollPenaltyXp = () => FAIL_PENALTY_XP_MIN + Math.floor(Math.random() * (FAIL_PENALTY_XP_MAX - FAIL_PENALTY_XP_MIN + 1));
+const penaltyText = xp => `☠️ 모든 유저의 **${xp}XP**를 잃어버렸습니다...`;
 const SCHEDULER_TICK_MS = 60 * 1000;
 // 남은 시간 표시(00:52:30)를 글자만 고쳐 갱신하는 주기. 디스코드는 채널당 메시지 수정이 대략 5초에 5번까지라
 // 1초마다는 불가능하고 버튼 반응까지 밀린다 — 모집(최대 1시간)은 10초, 전투 턴(60초)은 5초마다.
@@ -386,7 +389,7 @@ function endNoticeDetail(r, deducted) {
   const parts = [];
   if (deducted?.affected) parts.push(`${deducted.affected.toLocaleString()}명 · 합계 : -${deducted.total.toLocaleString()} XP`);
   if (r.frozenAt) parts.push(`중단 시간 : ${formatDuration(r.endedAt - r.frozenAt)} (${kstHourMinute(r.frozenAt)}~${kstHourMinute(r.endedAt)})`);
-  return parts.length ? `\n-# ${parts.join(' · ')}` : '';
+  return parts.map(p => `\n-# ${p}`).join(''); // 한 줄에 하나씩(합계 밑에 중단 시간 — 사용자 요청)
 }
 // 이름 끝 글자 받침에 따라 '이'/'가'를 고른다(한글이 아니면 '이(가)')
 function subjectJosa(name) {
@@ -834,9 +837,10 @@ function finishRaid(r, outcome) {
   }
   // 전멸·시간 초과·무참가로 몬스터가 도망치면 그 서버의 모든 유저가 XP를 잃는다(레벨 시스템이 없는 테스트 서버는 문구만).
   const penalty = PENALTY_OUTCOMES.has(outcome);
+  const penaltyXp = penalty ? rollPenaltyXp() : 0; // 테스트 서버(문구만)도 같은 방식으로 뽑은 값을 보여 준다
   let deducted = null;
   if (penalty && !isExcludedGuild(r.guildId)) {
-    deducted = deductXpFromAll(r.guildId, FAIL_PENALTY_XP, `레이드 토벌 실패 '${r.monster.name}' (${OUTCOME_TEXT[outcome]})`);
+    deducted = deductXpFromAll(r.guildId, penaltyXp, `레이드 토벌 실패 '${r.monster.name}' (${OUTCOME_TEXT[outcome]})`);
   }
   const penalized = deducted?.affected ?? 0;
 
@@ -845,14 +849,14 @@ function finishRaid(r, outcome) {
     내용: `레이드 종료 — ${r.monster.name} / ${OUTCOME_TEXT[outcome]}` +
       (r.battle ? ` / ${r.battle.turn}턴, 남은 HP ${r.battle.hp}/${r.battle.maxHp}` : '') +
       (rewards.length ? ` / 보상: ${rewards.map(x => `${userLabel(x.userId)} +${x.xp}`).join(', ')}` : '') +
-      (penalized ? ` / 벌칙: 모든 유저 -${FAIL_PENALTY_XP} XP (${penalized}명)` : ''),
+      (penalized ? ` / 벌칙: 모든 유저 -${penaltyXp} XP (${penalized}명)` : ''),
   });
 
   // 복구 안내는 채널에 따로 한 줄 올린다 — 결과 화면은 위쪽 메시지라 묻혀 있을 수 있어서.
   // 토벌 실패(벌칙)면 복구 안내 대신 XP를 잃었다는 안내를 올린다.
   // 바로 보내면 결과 화면(그림 그리기·전송)보다 먼저 떠서, 결과 화면을 올린 뒤 조금 있다가 보낸다(flush).
   if (r.freezesXp && r.message?.channel) {
-    r.endNotice = (penalty ? `**${PENALTY_TEXT}**` : '🔧 **XP 시스템 복구 완료.**') + endNoticeDetail(r, deducted);
+    r.endNotice = (penalty ? penaltyText(penaltyXp) : '🔧 **XP 시스템 복구 완료.**') + endNoticeDetail(r, deducted);
   }
   r.rewards = rewards;
   requestRender(r, { image: true, immediate: true });
