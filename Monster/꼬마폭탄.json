@@ -294,7 +294,7 @@
     },
     "smash": {
       "name": "점화",
-      "telegraph": "🔥 도화선에 불을 붙이려 한다! 붙으면 4턴 안에 꺼야 해요!",
+      "telegraph": "🔥 도화선에 불을 붙이려 한다!",
       "target": "none",
       "fx": "ignite",
       "warn": false,
