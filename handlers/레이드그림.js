@@ -1111,10 +1111,6 @@ function renderBattle(r) {
       // 표식(영혼 사냥 예고 대상): 선택 화면에서 카드 오른쪽 위에 빛나는 눈
       if (!down && !r.showingResult && !isIntentHidden(b) && b.marks?.includes(mem.userId)) markEye(x + w - 36, y + 66);
       if (!down && isIced(b, mem)) iceCover(x + w / 2, y + 86); // 빙결: 아이콘이 얼음에 갇힘
-      // 이번 턴에 막 빙결된 카드: 결과 화면에서 아이콘 둘레로 얼음 결정이 터진다("빙결!"은 위 리본 자리)
-      if (!down && r.showingResult && last?.effects?.[mem.userId] === 'freeze') {
-        for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2 + 0.2; iceShard(x + w / 2 + Math.cos(a) * 44, y + 86 + Math.sin(a) * 40, 22, 6, a, '#bfeaff'); }
-      }
       // 점액: 왼쪽 배지와 함께 아이콘 위 점액 얼룩도 그대로(사용자 요청). 이번 턴 맞은 카드는 타격 표시만.
       if (!down && slowTurnsLeft(b, mem) > 0 && !(usedMove && last?.hits[mem.userId])) hitFx('sweep', x + w / 2, y + 86, fxColor);
       const hit = last?.hits[mem.userId];
