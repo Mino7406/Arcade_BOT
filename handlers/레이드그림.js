@@ -467,7 +467,7 @@ function jaggedArc(cx, cy, r, a0, a1, squash, width, color, teeth = 9) {
     prev = pt;
   }
 }
-// 영혼 사냥: 세 줄 할퀴기(시안 B). 고스트 앞에서 대상 쪽으로 휘두른 작은 할퀴기 + 대상 카드 전체를 가르는 큰 할퀴기.
+// 영혼 사냥: 세 줄 할퀴기(시안 B) — 맞은 대상 카드 전체를 가르는 큰 할퀴기만(고스트 쪽 연출은 없음, 사용자 결정).
 // 한 줄은 가운데가 굵고 양끝이 가늘며, 어두운 테두리 → 보라 → 연보라 → 흰 심으로 겹친다.
 function clawMarks(cx, cy, size, flip = 1) {
   for (const [d, w, l] of [[-26, 14, 0.85], [0, 20, 1], [26, 14, 0.85]]) {
@@ -564,13 +564,6 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
     return;
   }
   // ── 고스트 ──
-  if (move === 'curse' && layer === 'front') {
-    // 영혼 사냥: 고스트 앞(양옆)에 휘두른 작은 세 줄 할퀴기 + 흩날리는 보라·청록 기운(대상 카드의 큰 할퀴기와 같은 모양)
-    clawMarks(cx - 132, cy + 22, 0.6, 1);
-    clawMarks(cx + 132, cy + 22, 0.6, -1);
-    for (const [dx, dy, c] of [[-170, -30, '#9ffff2'], [-150, 60, '#d9ceff'], [160, -24, '#9ffff2'], [176, 56, '#d9ceff'], [-90, 70, '#b9a6ff'], [96, 74, '#b9a6ff']]) dot(cx + dx, cy + dy, 5, c);
-    return;
-  }
   if (move === 'wail' && layer === 'back') {
     // 울부짖음: 입에서 터져 나가는 들쭉날쭉한 음파 고리 세 겹(안쪽은 밝고 굵게, 바깥은 흐리게)
     for (const [r, w, c] of [[96, 6, '#f4f0ff'], [132, 5, '#c3b4ff'], [168, 4, '#7c5fd6']]) {
