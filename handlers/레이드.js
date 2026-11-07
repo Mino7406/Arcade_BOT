@@ -49,7 +49,7 @@ const CLEAR_XP = 300;               // 토벌 성공 시 파티원 1인당
 const MVP_BONUS_XP = 100;           // 기여도 1위(피해 + 회복·부활 + 막아 준 피해, 레이드전투.js의 contribution) 추가 보상
 // 토벌 실패(전멸·시간 초과·무참가로 도주) 시 서버의 모든 유저가 잃는 XP — 레이드마다 이 범위에서 무작위 하나(모두 같은 값)
 const FAIL_PENALTY_XP_MIN = 50;
-const FAIL_PENALTY_XP_MAX = 100;
+const FAIL_PENALTY_XP_MAX = 150;
 const PENALTY_OUTCOMES = new Set(['wipe', 'timeout', 'noshow']);
 const rollPenaltyXp = () => FAIL_PENALTY_XP_MIN + Math.floor(Math.random() * (FAIL_PENALTY_XP_MAX - FAIL_PENALTY_XP_MIN + 1));
 const penaltyText = xp => `☠️ 모든 유저의 **${xp}XP**를 잃어버렸습니다...`;

@@ -133,14 +133,14 @@ let ok4;
   const status = raidMod.getRaidStatus('gMain');
   assert(!status.active, '상태: 진행 중 아님');
 
-  // 7) 무참가 → 도주 + 모든 유저 -50~100 XP(무작위)
+  // 7) 무참가 → 도주 + 모든 유저 -50~150 XP(무작위)
   lv.applyXp('gMain', 'n1', 180);
   const noshowBefore = lv.getXp('gMain', 'n1');
   await raidMod.forceSpawnRaid({ guildId: 'other', channel: { ...channel, send: async (p) => { current = p; return message; } }, client });
   await runTimers();
   assert(desc().includes('RAID FAILED') && desc().includes('도망쳤다') && !lv.isRaidXpFrozen(), '무참가 시 도주(RAID FAILED) + XP 해제');
   { const amt = Number(sent.map(p => p.content?.match(/^☠️ 모든 유저의 [*]{2}([0-9]+)XP[*]{2}를 잃어버렸습니다[.]{3}/)?.[1]).filter(Boolean).pop());
-    assert(amt >= 50 && amt <= 100 && lv.getXp('gMain', 'n1') === noshowBefore - amt, `무참가 도주도 모든 유저 -${amt} XP(50~100) + 채널 안내(숫자만 굵게)`); }
+    assert(amt >= 50 && amt <= 150 && lv.getXp('gMain', 'n1') === noshowBefore - amt, `무참가 도주도 모든 유저 -${amt} XP(50~150) + 채널 안내(숫자만 굵게)`); }
   assert(!desc().includes('XP를 잃어') && !desc().includes('XP 시스템 복구됨'), '종료 화면 작은 글씨엔 벌칙·복구 문구 없음');
 
   // 7.5) 바로 시작: 파티장·관리자만
@@ -968,7 +968,7 @@ let ok4;
     mod = await restart({ gMain: { channelId: 'chB', messageId: 'mB' } });
     assert(!mod.isPlaygroundPaused('gMain') && !lv.isRaidXpFrozen() && textOf(mB).includes('봇 점검'), '예전 버전의 전투 메시지는 점검 중단으로 정리');
 
-    // (라) 저장된 전투를 이어가고, 전멸하면 서버 모든 유저 -50~100 XP(무작위) + 문구
+    // (라) 저장된 전투를 이어가고, 전멸하면 서버 모든 유저 -50~150 XP(무작위) + 문구
     lv.applyXp('gMain', 'p1', 200); lv.applyXp('gMain', 'p2', 60);
     const before = { p1: lv.getXp('gMain', 'p1'), p2: lv.getXp('gMain', 'p2') };
     const { monster, ...battle } = E.createBattle(E.MONSTERS[0], [{ userId: '5', name: '유저5', role: 'sword' }]);
@@ -983,7 +983,7 @@ let ok4;
     const chNotes = [...chC.msgs.values()].map(m => m.last?.content).filter(Boolean);
     assert(!textOf(mC).includes('XP를 잃어') && !textOf(mC).includes('XP 시스템 복구됨'), '전멸 화면 작은 글씨엔 벌칙·복구 문구 없음');
     const amt = Number(chNotes.map(c => c.match(/^☠️ 모든 유저의 [*]{2}([0-9]+)XP[*]{2}를 잃어버렸습니다[.]{3}/)?.[1]).find(Boolean));
-    assert(amt >= 50 && amt <= 100 && !chNotes.some(c => c.includes('복구 완료')), `전멸 시 채널 안내: 복구 완료 대신 XP 손실(${amt}, 50~100)`);
+    assert(amt >= 50 && amt <= 150 && !chNotes.some(c => c.includes('복구 완료')), `전멸 시 채널 안내: 복구 완료 대신 XP 손실(${amt}, 50~150)`);
     assert(lv.getXp('gMain', 'p1') === before.p1 - amt && lv.getXp('gMain', 'p2') === Math.max(0, before.p2 - amt), `전멸하면 서버 모든 유저 -${amt} XP(0 밑으로는 안 내려감)`);
     { // 안내의 인원·합계는 실제로 깎인 값이어야 한다(0에서 잘린 만큼은 합계에서 빠짐)
       const note = chNotes.find(c => c.includes('잃어버렸습니다')) ?? '';
