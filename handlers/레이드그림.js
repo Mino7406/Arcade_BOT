@@ -486,6 +486,21 @@ function curseLink(mx, my, tx, ty) {
   // 대상 카드: 카드 전체를 비스듬히 가르는 큰 할퀴기 세 줄
   clawMarks(tx, ty, 1);
 }
+// 얼음 결정 조각: (x, y) 중심, 길이 len, 폭 w, 방향 ang(라디안, 뾰족한 끝이 향하는 쪽)
+function iceShard(x, y, len, w, ang, color) {
+  const c = Math.cos(ang), sn = Math.sin(ang);
+  const pt = (a, b) => [x + c * a - sn * b, y + sn * a + c * b];
+  const shape = (k) => [pt(len * 0.5 * k, 0), pt(len * 0.12 * k, w * k), pt(-len * 0.36 * k, w * 0.8 * k), pt(-len * 0.5 * k, 0), pt(-len * 0.36 * k, -w * 0.8 * k), pt(len * 0.12 * k, -w * k)].flat();
+  p.poly(shape(1.18), '#1b3a5c');
+  p.poly(shape(1), color);
+  p.poly([...pt(len * 0.5, 0), ...pt(len * 0.12, -w), ...pt(-len * 0.36, -w * 0.8), ...pt(-len * 0.3, -w * 0.45), ...pt(len * 0.1, -w * 0.5)], '#ffffff');
+}
+// 점액 방울(어두운 테두리 · 몸 색 · 흰 반사광)
+function gooBlob(x, y, r, color) {
+  p.circle(x, y, r + 3, '#16120c');
+  p.circle(x, y, r, color);
+  p.circle(x - r * 0.35, y - r * 0.35, Math.max(1.6, r * 0.3), '#f4fff0');
+}
 // 반투명 동그라미(연기·먼지·섬광)
 function haze(x, y, r, color, alpha) { p.roundRect(x - r, y - r, r * 2, r * 2, r, color, alpha); }
 function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
@@ -541,24 +556,20 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
     return;
   }
   if (move === 'icefall' && layer === 'back') {
-    // 빙하 낙하: 양옆 위에서 떨어지는 네모 얼음 덩어리(위로 속도선)
-    for (const [dx, dy, s] of [[-150, -46, 14], [152, -52, 12], [-206, 4, 10], [208, -6, 11]]) {
-      for (let i = 0; i < 3; i++) dot(cx + dx, cy + dy - s - 8 - i * 10, 4 - i, '#e8fbff');
-      p.rect(cx + dx - s, cy + dy - s, s * 2, s * 2, '#1b3a5c');
-      p.rect(cx + dx - s + 3, cy + dy - s + 3, s * 2 - 6, s * 2 - 6, color);
-      p.rect(cx + dx - s + 5, cy + dy - s + 5, Math.round(s * 0.6), Math.round(s * 0.6), '#ffffff');
+    // 빙하 낙하: 떨어지는 조각들 뒤의 짧은 속도선
+    for (const [x0, y0] of [[-210, -60], [-120, -78], [120, -80], [210, -62], [-40, -84], [40, -86]]) {
+      for (let i = 0; i < 3; i++) p.line(cx + x0 - 16 - i * 10, cy + y0 + 40 - i * 12, cx + x0 - 9 - i * 10, cy + y0 + 50 - i * 12, 3 - i * 0.6, '#e8fbff'); // 조각 뒤 짧은 속도선(몬스터 칸 안)
     }
     return;
   }
   if (move === 'icefall' && layer === 'front') {
-    // 바닥에 꽂힌 얼음 가시(양옆 네 개씩)
-    for (const s of [-1, 1]) {
-      for (const [d, h] of [[100, 26], [132, 40], [166, 22], [200, 32]]) {
-        const x0 = cx + s * d, y0 = cy + 66;
-        p.poly([x0 - 10, y0, x0 + 10, y0, x0, y0 - h], '#1b3a5c');
-        p.poly([x0 - 6, y0 - 2, x0 + 6, y0 - 2, x0, y0 - h + 6], color);
-      }
+    // 비스듬히 내리꽂히는 커다란 빙하 결정 조각 + 바닥에서 터지는 서리 충격파(흰 고리 · 얼음 가시 · 눈송이)
+    for (const [x0, y0, len, w] of [[-210, -24, 74, 16], [-126, 6, 92, 20], [126, 4, 92, 20], [212, -26, 74, 16], [-44, 30, 60, 13], [48, 28, 60, 13]]) {
+      iceShard(cx + x0, cy + y0, len, w, 1.05, color);
     }
+    for (let k = 0; k < 26; k++) { const a = (k / 26) * Math.PI * 2; dot(cx + Math.cos(a) * 190, cy + 66 + Math.sin(a) * 26, k % 2 ? 5 : 7, k % 2 ? '#bfeaff' : '#ffffff'); }
+    for (const sd of [-1, 1]) for (const [d, h] of [[150, 24], [196, 34], [236, 20]]) iceShard(cx + sd * d, cy + 62 - h / 2, h + 10, 6, -Math.PI / 2, color);
+    for (const [dx, dy, r] of [[-250, -60, 8], [250, -54, 8], [-90, 60, 7], [92, 62, 7]]) flake(cx + dx, cy + dy, r);
     return;
   }
   // ── 고스트 ──
@@ -728,13 +739,23 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
       p.rect(cx + dx - s, cy + dy - s / 3, s * 2, (s * 2) / 3, '#7cff9a');
       p.rect(cx + dx - s / 3, cy + dy - s, (s * 2) / 3, s * 2, '#7cff9a');
     }
+  } else if (move === 'smash' && layer === 'back') {
+    // 필살 짓누르기: 내리찍는 순간 바닥의 섬광 + 퍼져 나가는 점액 충격파 고리 두 겹(납작한 타원)
+    for (const [r, sz] of [[150, 11], [205, 8]]) {
+      for (let k = 0; k < 30; k++) { const a = (k / 30) * Math.PI * 2; dot(cx + Math.cos(a) * r, cy + 64 + Math.sin(a) * r * 0.16, sz, k % 2 ? color : '#eaffdf'); }
+    }
   } else if (move === 'smash' && layer === 'front') {
-    // 바닥 충격파 + 흙먼지
-    for (const s of [-1, 1]) {
-      p.line(cx + s * 86, cy + 48, cx + s * 170, cy + 40, 5, '#ffd166');
-      p.line(cx + s * 92, cy + 58, cx + s * 200, cy + 60, 5, '#ffd166');
-      p.circle(cx + s * 120, cy + 64, 8, '#8a7a62');
-      p.circle(cx + s * 150, cy + 56, 6, '#8a7a62');
+    // 사방으로 철퍼덕 튀어 오르는 점액 방울(몸 쪽으로 꼬리) + 바닥이 갈라진 금
+    for (let k = 0; k < 11; k++) {
+      const a = Math.PI + 0.15 + (k / 10) * (Math.PI - 0.3), r = 150 + (k % 3) * 26;
+      const x = cx + Math.cos(a) * r, y = cy + 40 + Math.sin(a) * r * 0.62;
+      dot(cx + Math.cos(a) * r * 0.62, cy + 40 + Math.sin(a) * r * 0.62 * 0.62, 6, color);
+      dot(cx + Math.cos(a) * r * 0.8, cy + 40 + Math.sin(a) * r * 0.8 * 0.62, 8, color);
+      gooBlob(x, y, k % 2 ? 11 : 14, color);
+    }
+    for (const sd of [-1, 1]) {
+      let [x, y] = [cx + sd * 70, cy + 70];
+      for (const [dx, dy] of [[26, -6], [22, 8], [28, -4], [24, 6]]) { p.line(x, y, x + sd * dx, y + dy, 4, '#16120c'); x += sd * dx; y += dy; }
     }
   }
 }
@@ -793,13 +814,18 @@ function hitFx(move, cx, cy, color, spore = color, accent = spore) {
     // 서리: 아이콘 네 귀퉁이에 눈송이
     for (const [dx, dy] of [[-26, -22], [26, 20], [24, -26], [-22, 26]]) flake(cx + dx, cy + dy, 8);
   } else if (move === 'icefall') {
-    // 얼음 파편: 아이콘 둘레로 튀는 마름모 조각
-    for (const [dx, dy, s] of [[-30, -18, 9], [30, -24, 8], [-26, 26, 7], [32, 20, 9], [0, -36, 6]]) {
-      p.poly([cx + dx, cy + dy - s - 3, cx + dx + s + 3, cy + dy, cx + dx, cy + dy + s + 3, cx + dx - s - 3, cy + dy], '#1b3a5c');
-      p.poly([cx + dx, cy + dy - s, cx + dx + s, cy + dy, cx + dx, cy + dy + s, cx + dx - s, cy + dy], color);
-    }
+    // 빙하 낙하: 아이콘 아래에서 솟구친 날카로운 얼음 결정 무리 + 튀는 조각 + 눈송이
+    for (const [dx, len, w, ang] of [[-30, 34, 8, -2.05], [-12, 44, 9, -1.75], [12, 40, 9, -1.4], [30, 32, 7, -1.1]]) iceShard(cx + dx, cy + 22, len, w, ang, color); // 아이콘 아래쪽만 덮게
+    for (const [dx, dy] of [[-40, -20], [40, -26], [-34, 34], [38, 30]]) iceShard(cx + dx, cy + dy, 14, 4, 0.8, color);
+    flake(cx + 30, cy - 34, 7);
   } else if (move === 'smash') {
-    p.poly([cx, cy - 34, cx + 9, cy - 9, cx + 34, cy, cx + 9, cy + 9, cx, cy + 34, cx - 9, cy + 9, cx - 34, cy, cx - 9, cy - 9], '#ffd166');
+    // 필살 짓누르기: 아이콘에 철퍼덕 묻은 커다란 점액(겹친 방울) + 흘러내리는 방울 + 반사광
+    const blobs = [[18, 10, 13], [30, -6, 9], [6, 24, 10], [-24, 20, 7], [34, 22, 7]]; // 아이콘이 보이게 오른쪽 아래로
+    for (const [dx, dy, r] of blobs) p.circle(cx + dx, cy + dy, r + 3, '#16120c');
+    for (const [dx, dy] of [[8, 38], [24, 32]]) { p.line(cx + dx, cy + dy - 10, cx + dx, cy + dy, 9, '#16120c'); }
+    for (const [dx, dy, r] of blobs) p.circle(cx + dx, cy + dy, r, color);
+    for (const [dx, dy] of [[8, 38], [24, 32]]) { p.line(cx + dx, cy + dy - 10, cx + dx, cy + dy, 5, color); p.circle(cx + dx, cy + dy + 2, 4, color); }
+    for (const [dx, dy, r] of blobs.slice(0, 3)) p.circle(cx + dx - r * 0.35, cy + dy - r * 0.35, r * 0.25, '#f4fff0');
   }
 }
 
