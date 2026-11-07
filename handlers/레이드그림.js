@@ -1043,11 +1043,11 @@ function renderBattle(r) {
       const left = Math.max(1, b.fuse.until - b.turn + 1);
       p.roundRect(W - 226, slotY, 200, 66, 12, '#3a1712');
       p.strokeRoundRect(W - 226, slotY, 200, 66, 12, 2, '#ff9a3c');
-      text(`불끄기 · 남은 ${left}턴`, W - 126, slotY + 17, 19, '#ffd8b0');
+      text(`점화 · 남은 ${left}턴`, W - 126, slotY + 17, 19, '#ffd8b0');
       // 남은 불: 가득 찬 막대가 피해를 넣을수록 줄어든다(사용자 요청 — 채우는 방향이 거꾸로였음)
       const fireLeft = Math.max(0, b.fuse.need - b.fuse.dealt);
       bar(W - 214, slotY + 32, 176, 24, fireLeft / b.fuse.need, '#ff9a3c');
-      text(`남은 불 ${fireLeft.toLocaleString()} / ${b.fuse.need.toLocaleString()}`, W - 126, slotY + 44, 15, '#ffffff');
+      text(`${fireLeft.toLocaleString()} / ${b.fuse.need.toLocaleString()}`, W - 126, slotY + 44, 16, '#ffffff');
       slotY += 72;
     }
     if (isPowered(b)) {
