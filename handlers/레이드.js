@@ -47,7 +47,7 @@ const BATTLE_LIMIT_MS = 15 * 60 * 1000; // 전투 제한 시간 — 넘기면 �
 const PARTY_MAX = 4;
 const CLEAR_XP = 300;               // 토벌 성공 시 파티원 1인당
 const MVP_BONUS_XP = 100;           // 기여도 1위(피해 + 회복·부활 + 막아 준 피해, 레이드전투.js의 contribution) 추가 보상
-const FAIL_PENALTY_XP = 50;         // 토벌 실패(전멸·시간 초과·무참가로 도주) 시 서버의 모든 유저가 잃는 XP
+const FAIL_PENALTY_XP = 100;        // 토벌 실패(전멸·시간 초과·무참가로 도주) 시 서버의 모든 유저가 잃는 XP
 const PENALTY_OUTCOMES = new Set(['wipe', 'timeout', 'noshow']);
 const PENALTY_TEXT = `☠️ 모든 유저의 ${FAIL_PENALTY_XP}XP를 잃어버렸습니다...`;
 const SCHEDULER_TICK_MS = 60 * 1000;
@@ -372,7 +372,21 @@ const END_HEADING = {
 };
 function formatDuration(ms) {
   const sec = Math.max(0, Math.round(ms / 1000));
+  if (sec >= 3600) return `${Math.floor(sec / 3600)}시간 ${Math.floor((sec % 3600) / 60)}분`;
   return sec >= 60 ? `${Math.floor(sec / 60)}분 ${sec % 60}초` : `${sec}초`;
+}
+// 한국 시각 '14:02'
+function kstHourMinute(epochMs) {
+  const kst = new Date(epochMs + KST_OFFSET_MS);
+  return `${String(kst.getUTCHours()).padStart(2, '0')}:${String(kst.getUTCMinutes()).padStart(2, '0')}`;
+}
+// 종료 채널 안내 아래 작은 글씨 — 문구만이 아니라 실제로 처리됐다는 걸 숫자로 보여 준다.
+// 벌칙이면 실제로 깎인 인원·합계(deductXpFromAll 결과), 끝으로 XP가 멈춰 있던 중단 시간(출현~종료).
+function endNoticeDetail(r, deducted) {
+  const parts = [];
+  if (deducted?.affected) parts.push(`${deducted.affected.toLocaleString()}명 · 합계 : -${deducted.total.toLocaleString()} XP`);
+  if (r.frozenAt) parts.push(`중단 시간 : ${formatDuration(r.endedAt - r.frozenAt)} (${kstHourMinute(r.frozenAt)}~${kstHourMinute(r.endedAt)})`);
+  return parts.length ? `\n-# ${parts.join(' · ')}` : '';
 }
 // 이름 끝 글자 받침에 따라 '이'/'가'를 고른다(한글이 아니면 '이(가)')
 function subjectJosa(name) {
@@ -651,6 +665,7 @@ function saveActive(r) {
     recruitEndsAt: r.recruitEndsAt,
     party: r.party,
   };
+  if (r.frozenAt) saved.frozenAt = r.frozenAt; // 재시작해도 '중단 시간' 안내가 출현 시각부터 세도록
   if (r.battle) {
     const { monster, ...battle } = r.battle; // 몬스터는 그림 데이터까지 커서 id만 남긴다
     Object.assign(saved, { battle, battleStartedAt: r.battleStartedAt, battleEndsAt: r.battleEndsAt });
@@ -714,7 +729,7 @@ async function spawnRaid(client, channel, { forced = false, monsterId = null } =
     logError('레이드', '레이드 출현 메시지 전송 실패', err);
     return '출현 메시지를 보내지 못했어요(채널 권한 확인).';
   }
-  if (r.freezesXp) setRaidXpFrozen(true);
+  if (r.freezesXp) { setRaidXpFrozen(true); r.frozenAt = Date.now(); }
   saveActive(r);
   r.timer = setTimeout(() => onRecruitEnd(r).catch(err => console.error('레이드 모집 마감 처리 실패:', err)), RECRUIT_MS);
   startCountdown(r);
@@ -819,10 +834,11 @@ function finishRaid(r, outcome) {
   }
   // 전멸·시간 초과·무참가로 몬스터가 도망치면 그 서버의 모든 유저가 XP를 잃는다(레벨 시스템이 없는 테스트 서버는 문구만).
   const penalty = PENALTY_OUTCOMES.has(outcome);
-  let penalized = 0;
+  let deducted = null;
   if (penalty && !isExcludedGuild(r.guildId)) {
-    penalized = deductXpFromAll(r.guildId, FAIL_PENALTY_XP, `레이드 토벌 실패 '${r.monster.name}' (${OUTCOME_TEXT[outcome]})`);
+    deducted = deductXpFromAll(r.guildId, FAIL_PENALTY_XP, `레이드 토벌 실패 '${r.monster.name}' (${OUTCOME_TEXT[outcome]})`);
   }
+  const penalized = deducted?.affected ?? 0;
 
   logSystem({
     유형: '레이드',
@@ -836,7 +852,7 @@ function finishRaid(r, outcome) {
   // 토벌 실패(벌칙)면 복구 안내 대신 XP를 잃었다는 안내를 올린다.
   // 바로 보내면 결과 화면(그림 그리기·전송)보다 먼저 떠서, 결과 화면을 올린 뒤 조금 있다가 보낸다(flush).
   if (r.freezesXp && r.message?.channel) {
-    r.endNotice = penalty ? `**${PENALTY_TEXT}**` : '🔧 **XP 시스템 복구 완료.**';
+    r.endNotice = (penalty ? `**${PENALTY_TEXT}**` : '🔧 **XP 시스템 복구 완료.**') + endNoticeDetail(r, deducted);
   }
   r.rewards = rewards;
   requestRender(r, { image: true, immediate: true });
@@ -1046,7 +1062,11 @@ async function resumeRaid(client, message, saved) {
     r.battleEndsAt = Math.max(info.battleEndsAt || 0, now + TURN_MS);
   }
   raids.set(guildId, r);
-  if (r.freezesXp) setRaidXpFrozen(true);
+  if (r.freezesXp) {
+    setRaidXpFrozen(true);
+    // 출현 시각. 예전 기록엔 없어서 레이드 메시지를 올린 시각으로 본다(아래로 다시 올린 메시지면 조금 늦게 잡힘).
+    r.frozenAt = info.frozenAt || message.createdTimestamp || now;
+  }
   saveActive(r);
   logSystem({
     유형: '레이드',

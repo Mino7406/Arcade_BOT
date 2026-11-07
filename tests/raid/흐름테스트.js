@@ -123,23 +123,24 @@ let ok4;
   assert(buttons().length === 0, '전투 종료 후 버튼 제거');
   assert(!lv.isRaidXpFrozen(), '종료 후 XP 정지 해제');
   // 테스트 전투는 가끔 지므로(무작위) 지면 복구 안내 대신 XP 손실 안내를 확인한다
-  assert(end.includes('RAID CLEAR') ? sent.some(p => p.content?.includes('XP 시스템 복구 완료')) : sent.some(p => p.content?.includes('50XP를 잃어버렸습니다')), '종료 안내 메시지 전송(클리어면 복구 완료, 지면 XP 손실)');
+  assert(end.includes('RAID CLEAR') ? sent.some(p => p.content?.includes('XP 시스템 복구 완료')) : sent.some(p => p.content?.includes('100XP를 잃어버렸습니다')), '종료 안내 메시지 전송(클리어면 복구 완료, 지면 XP 손실)');
   { const notice = sent.find(p => p.content?.includes('XP 시스템 복구 완료') || p.content?.includes('잃어버렸습니다'));
-    assert(notice?.reply?.messageReference === message.id && notice.reply.failIfNotExists === false && notice.allowedMentions?.repliedUser === false, '종료 안내는 레이드 메시지에 답장(따로 보이게, 알림 없음)'); }
+    assert(notice?.reply?.messageReference === message.id && notice.reply.failIfNotExists === false && notice.allowedMentions?.repliedUser === false, '종료 안내는 레이드 메시지에 답장(따로 보이게, 알림 없음)');
+    assert(/\n-# (.+ · )?중단 시간 : \d.* \(\d\d:\d\d~\d\d:\d\d\)$/.test(notice?.content ?? ''), '종료 안내 아래 작은 글씨: 중단 시간 : N분 N초 (시각~시각)'); }
   if (end.includes('RAID CLEAR')) {
     assert(lv.getXp('gMain', '1') >= 300 && lv.getXp('gMain', '2') >= 300, '토벌 보상 XP 지급');
   }
   const status = raidMod.getRaidStatus('gMain');
   assert(!status.active, '상태: 진행 중 아님');
 
-  // 7) 무참가 → 도주 + 모든 유저 -50 XP
-  lv.applyXp('gMain', 'n1', 80);
+  // 7) 무참가 → 도주 + 모든 유저 -100 XP
+  lv.applyXp('gMain', 'n1', 180);
   const noshowBefore = lv.getXp('gMain', 'n1');
   await raidMod.forceSpawnRaid({ guildId: 'other', channel: { ...channel, send: async (p) => { current = p; return message; } }, client });
   await runTimers();
   assert(desc().includes('RAID FAILED') && desc().includes('도망쳤다') && !lv.isRaidXpFrozen(), '무참가 시 도주(RAID FAILED) + XP 해제');
-  assert(lv.getXp('gMain', 'n1') === noshowBefore - 50 && sent.some(p => p.content?.includes('☠️ 모든 유저의 50XP를 잃어버렸습니다...')), '무참가 도주도 모든 유저 -50 XP + 채널 안내');
-  assert(!desc().includes('50XP를 잃어') && !desc().includes('XP 시스템 복구됨'), '종료 화면 작은 글씨엔 벌칙·복구 문구 없음');
+  assert(lv.getXp('gMain', 'n1') === noshowBefore - 100 && sent.some(p => p.content?.includes('☠️ 모든 유저의 100XP를 잃어버렸습니다...')), '무참가 도주도 모든 유저 -100 XP + 채널 안내');
+  assert(!desc().includes('XP를 잃어') && !desc().includes('XP 시스템 복구됨'), '종료 화면 작은 글씨엔 벌칙·복구 문구 없음');
 
   // 7.5) 바로 시작: 파티장·관리자만
   {
@@ -956,8 +957,8 @@ let ok4;
     mod = await restart({ gMain: { channelId: 'chB', messageId: 'mB' } });
     assert(!mod.isPlaygroundPaused('gMain') && !lv.isRaidXpFrozen() && textOf(mB).includes('봇 점검'), '예전 버전의 전투 메시지는 점검 중단으로 정리');
 
-    // (라) 저장된 전투를 이어가고, 전멸하면 서버 모든 유저 -50 XP + 문구
-    lv.applyXp('gMain', 'p1', 100); lv.applyXp('gMain', 'p2', 30);
+    // (라) 저장된 전투를 이어가고, 전멸하면 서버 모든 유저 -100 XP + 문구
+    lv.applyXp('gMain', 'p1', 200); lv.applyXp('gMain', 'p2', 60);
     const before = { p1: lv.getXp('gMain', 'p1'), p2: lv.getXp('gMain', 'p2') };
     const { monster, ...battle } = E.createBattle(E.MONSTERS[0], [{ userId: '5', name: '유저5', role: 'sword' }]);
     battle.members[0].hp = 1; battle.intent = 'sweep';
@@ -965,12 +966,21 @@ let ok4;
     const mC = mkMsg(chC, 'mC', legacyPayload('옛 화면', 'raid:act:attack'));
     mod = await restart({ gMain: { channelId: 'chC', messageId: 'mC', monsterId: 'slime', phase: 'battle', recruitEndsAt: 0, party: [{ userId: '5', name: '유저5', role: 'sword' }], battle, battleStartedAt: Date.now() - 60_000, battleEndsAt: Date.now() - 1000 } });
     assert(mod.isPlaygroundPaused('gMain') && textOf(mC).includes('TURN 1 · 행동을 고르세요'), '재시작 후 전투 이어가기(전투 시간이 지났어도 한 턴은 줌)');
+    const allBefore = lv.getLeaderboard('gMain', 1e9).map(x => x.xp).filter(xp => xp > 0);
     await press(mod, mC, '5', 'raid:act:attack');
     console.log('--- 전멸 결과 글자 ---\n' + textOf(mC));
     const chNotes = [...chC.msgs.values()].map(m => m.last?.content).filter(Boolean);
-    assert(!textOf(mC).includes('50XP를 잃어') && !textOf(mC).includes('XP 시스템 복구됨'), '전멸 화면 작은 글씨엔 벌칙·복구 문구 없음');
-    assert(chNotes.some(c => c.includes('☠️ 모든 유저의 50XP를 잃어버렸습니다...')) && !chNotes.some(c => c.includes('복구 완료')), '전멸 시 채널 안내: 복구 완료 대신 XP 손실');
-    assert(lv.getXp('gMain', 'p1') === before.p1 - 50 && lv.getXp('gMain', 'p2') === Math.max(0, before.p2 - 50), '전멸하면 서버 모든 유저 -50 XP(0 밑으로는 안 내려감)');
+    assert(!textOf(mC).includes('XP를 잃어') && !textOf(mC).includes('XP 시스템 복구됨'), '전멸 화면 작은 글씨엔 벌칙·복구 문구 없음');
+    assert(chNotes.some(c => c.includes('☠️ 모든 유저의 100XP를 잃어버렸습니다...')) && !chNotes.some(c => c.includes('복구 완료')), '전멸 시 채널 안내: 복구 완료 대신 XP 손실');
+    assert(lv.getXp('gMain', 'p1') === before.p1 - 100 && lv.getXp('gMain', 'p2') === Math.max(0, before.p2 - 100), '전멸하면 서버 모든 유저 -100 XP(0 밑으로는 안 내려감)');
+    { // 안내의 인원·합계는 실제로 깎인 값이어야 한다(0에서 잘린 만큼은 합계에서 빠짐)
+      const note = chNotes.find(c => c.includes('잃어버렸습니다')) ?? '';
+      const m = note.match(/\n-# ([\d,]+)명 · 합계 : -([\d,]+) XP · 중단 시간 : .+ \(\d\d:\d\d~\d\d:\d\d\)$/);
+      const num = s => Number(s.replace(/,/g, ''));
+      const wantTotal = allBefore.reduce((s, xp) => s + Math.min(xp, 100), 0);
+      console.log('--- 전멸 채널 안내 ---\n' + note);
+      assert(m && num(m[1]) === allBefore.length && num(m[2]) === wantTotal, `전멸 안내 작은 글씨: N명 · 합계 : -N XP · 중단 시간 : … (실제 깎인 값 ${allBefore.length}명/${wantTotal})`);
+    }
     assert(!lv.isRaidXpFrozen() && !mod.isPlaygroundPaused('gMain'), '전멸 후 XP 정지 해제');
   }
   console.log('그림 업로드 횟수:', images.length, '· RSS', Math.round(process.memoryUsage().rss/1048576), 'MB');

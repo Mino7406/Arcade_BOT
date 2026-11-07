@@ -282,10 +282,11 @@ function writeXp(guildLevels, userId, oldXp, newXp, requestedDelta) {
 }
 
 // 그 서버에 XP 기록이 있는 모든 유저에게서 amount만큼 뺀다(0 밑으로는 안 내려감). 레이드 토벌 실패 벌칙용.
-// 유저마다 로그를 남기면 수백 줄이 되므로 요약 한 줄만 남기고, 바로 저장한다. 실제로 깎인 유저 수를 돌려준다.
+// 유저마다 로그를 남기면 수백 줄이 되므로 요약 한 줄만 남기고, 바로 저장한다.
+// 실제로 깎인 유저 수(affected)와 실제로 깎인 XP 합계(total, 0에서 잘린 만큼은 빠짐)를 돌려준다 — 채널 안내에 그대로 보여 준다.
 function deductXpFromAll(guildId, amount, reason) {
-  if (!loaded) return 0; // 레벨 데이터를 못 읽은 상태에서 깎으면 저장도 안 되고 의미가 없다
-  if (!Number.isFinite(amount) || amount <= 0) return 0;
+  if (!loaded) return { affected: 0, total: 0 }; // 레벨 데이터를 못 읽은 상태에서 깎으면 저장도 안 되고 의미가 없다
+  if (!Number.isFinite(amount) || amount <= 0) return { affected: 0, total: 0 };
   const guildLevels = getGuildLevels(guildId);
   let affected = 0, total = 0;
   for (const [userId, xp] of Object.entries(guildLevels)) {
@@ -298,7 +299,7 @@ function deductXpFromAll(guildId, amount, reason) {
   }
   logSystem({ 유형: 'XP 지급', 내용: `${reason} — 모든 유저 -${amount} XP (${affected}명, 합계 -${total} XP)` });
   saveLevels();
-  return affected;
+  return { affected, total };
 }
 
 // 레벨 L의 시작 지점(그 레벨에 갓 도달한 상태)의 누적 XP.
