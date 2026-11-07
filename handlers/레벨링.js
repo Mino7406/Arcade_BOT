@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { logSystem, logError, userLabel } = require('./로그');
 const { writeJsonIfChanged } = require('./저장');
+const { isTempVoiceChannel } = require('./음성채널');
 
 const {
   EXCLUDED_GUILD_IDS,
@@ -142,6 +143,7 @@ function hasNewbieBoost(member) {
 
 // 통화방(음성 채널) 체류 XP: 봇이 음성에 직접 참가하지 않고도
 // voiceStateUpdate 게이트웨이 이벤트만으로 1분마다 활동 중인 유저에게 XP를 지급한다.
+// 임시 음성채널(허브로 만든 방)에서, 같은 방에 다른 사람이 있을 때만 준다(isEarningVoiceXp 참고).
 // 1분에 한 번, 틱당 2~3 XP(평균 2.5) → 시간당 60틱 = 평균 150 XP.
 const VOICE_XP_TICK_MS = 60 * 1000;
 const VOICE_XP_MIN = 2;
@@ -157,6 +159,9 @@ let levels = {}; // { [guildId]: { [userId]: xp } }
 let loaded = false;
 const cooldowns = new Map(); // `${guildId}:${userId}:${main|tts}` → 마지막 XP 지급 시각
 const activeVoiceUsers = new Set(); // `${guildId}:${userId}` — 현재 음성 채널에서 음소거/헤드셋오프가 아닌 상태로 활동 중
+// 음성 채널에서 본 봇 계정(`${guildId}:${userId}`). 멤버 캐시는 1시간마다 비워져(index.js sweeper)
+// state.member로는 노래봇 등을 못 알아볼 수 있어, 입장 이벤트 때 알아낸 걸 따로 기억해 둔다.
+const voiceBots = new Set();
 
 function loadLevels() {
   try {
@@ -317,7 +322,7 @@ function handleMessageXp(message) {
 
   // TTS 채널은 음성 통화방과 짝지어 쓰이는 채널이라,
   // 음소거 없이 음성 틱 XP를 이미 받고 있는 유저에게는 텍스트 XP를 중복 지급하지 않는다.
-  if (isTtsChannel && activeVoiceUsers.has(key)) return null;
+  if (isTtsChannel && isEarningVoiceXp(message.guild, userId)) return null;
 
   const type = isTtsChannel ? 'tts' : 'main';
   const cooldownKey = `${key}:${type}`;
@@ -375,10 +380,33 @@ function isVoiceStateActive(state) {
   return true;
 }
 
+function rememberVoiceBot(state) {
+  if (state?.member?.user?.bot) voiceBots.add(`${state.guild.id}:${state.id}`);
+}
+
+// 지금 이 순간 통화방 체류 XP를 받는 상태인지. 틱마다, 그리고 TTS 중복 지급 판정 때 그때그때 확인한다.
+//  1) 본인이 음소거/헤드셋오프가 아니고(activeVoiceUsers)
+//  2) 봇이 만든 임시 음성채널(허브로 만든 방)에 있고 — 고정 채널(1인실 등)에서는 지급 안 함
+//  3) 같은 방에 헤드셋을 끄지 않은 다른 사람(봇 제외)이 최소 1명 있어야 한다
+//     — 혼자 마이크 켜두고 잠수하며 XP만 쌓는 악용을 막는다.
+// 같은 방 사람 여부는 멤버 캐시가 아니라 음성 상태 캐시로 본다(멤버 캐시는 1시간마다 비워짐).
+function isEarningVoiceXp(guild, userId) {
+  if (!guild || !activeVoiceUsers.has(`${guild.id}:${userId}`)) return false;
+  const channelId = guild.voiceStates.cache.get(userId)?.channelId;
+  if (!isTempVoiceChannel(channelId)) return false;
+  return guild.voiceStates.cache.some(s =>
+    s.channelId === channelId &&
+    s.id !== userId &&
+    !s.selfDeaf && !s.serverDeaf &&
+    !s.member?.user?.bot &&
+    !voiceBots.has(`${guild.id}:${s.id}`));
+}
+
 // voiceStateUpdate 이벤트에서 호출: 유저의 활동 상태(입장/퇴장/음소거 전환)를 갱신한다.
 function trackVoiceStateUpdate(oldState, newState) {
   const guildId = newState.guild?.id;
   if (!guildId || isExcludedGuild(guildId)) return;
+  rememberVoiceBot(newState);
   const key = `${guildId}:${newState.id}`;
   if (isVoiceStateActive(newState)) {
     activeVoiceUsers.add(key);
@@ -392,6 +420,7 @@ function initVoiceStates(client) {
   for (const guild of client.guilds.cache.values()) {
     if (isExcludedGuild(guild.id)) continue;
     for (const state of guild.voiceStates.cache.values()) {
+      rememberVoiceBot(state);
       const key = `${guild.id}:${state.id}`;
       if (isVoiceStateActive(state)) {
         activeVoiceUsers.add(key);
@@ -428,7 +457,7 @@ function sweepCooldowns(now = Date.now()) {
   }
 }
 
-// 1분마다 그 시점에 활동 중인 유저들에게 통화방 체류 XP를 지급한다.
+// 1분마다 그 시점에 XP 지급 조건(isEarningVoiceXp)을 만족하는 유저들에게 통화방 체류 XP를 지급한다.
 // 레벨업한 유저는 레벨업 안내 채널에 축하 메시지를 보낸다.
 function startVoiceXpTicker(client) {
   setInterval(async () => {
@@ -437,6 +466,7 @@ function startVoiceXpTicker(client) {
     for (const key of activeVoiceUsers) {
       const [guildId, userId] = key.split(':');
       const guild = client.guilds.cache.get(guildId);
+      if (!isEarningVoiceXp(guild, userId)) continue;
       const member = guild?.members.cache.get(userId)
         || await guild?.members.fetch(userId).catch(() => null);
       const boost = hasNewbieBoost(member) ? NEWBIE_BOOST_XP_MULTIPLIER : 1;
@@ -488,6 +518,7 @@ module.exports = {
   xpForLevelStart,
   trackVoiceStateUpdate,
   initVoiceStates,
+  isEarningVoiceXp,
   startVoiceXpTicker,
   announceLevelUp,
   levelFromXp,

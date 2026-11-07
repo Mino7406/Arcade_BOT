@@ -238,4 +238,9 @@ async function handleTempVoiceState(oldState, newState) {
   }
 }
 
-module.exports = { handleTempVoiceState, reconcileTempChannels };
+// 봇이 만든 임시 음성채널인지. 통화방 체류 XP는 이 채널들에서만 지급된다(handlers/레벨링.js).
+function isTempVoiceChannel(channelId) {
+  return !!channelId && tempChannelIds.has(channelId);
+}
+
+module.exports = { handleTempVoiceState, reconcileTempChannels, isTempVoiceChannel };
