@@ -700,7 +700,7 @@ function resolveTurn(battle, rng = Math.random) {
         }
         if (t.hp > 0 && move.effect === 'confuse' && !blocked) { t.confuseTurn = battle.turn + 1; t.confuseRate = move.effectRate; t.confuseStatus = move.status; last.effects[t.userId] = 'confuse'; tag = ` ${move.status.emoji}${move.status.name}`; }
         if (t.hp > 0 && move.effect === 'slow' && !blocked) { t.slowUntil = battle.turn + move.effectTurns; t.slowRate = move.effectRate; t.slowStatus = move.status; last.effects[t.userId] = 'slow'; tag = ` ${move.status.emoji}${move.status.name}`; }
-        if (t.hp > 0 && move.effect === 'chill') {
+        if (t.hp > 0 && move.effect === 'chill' && !blocked) { // guardBlocks면 방어한 사람은 냉기를 막는다
           addChill(t, battle.rage ? (move.rageStacks ?? move.stacks) : move.stacks);
           const st = move.status ?? chill.status;
           last.effects[t.userId] = 'chill';

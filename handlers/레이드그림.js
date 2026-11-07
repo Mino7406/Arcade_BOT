@@ -967,9 +967,10 @@ function renderBattle(r) {
       || (!isIntentHidden(b) ? m.moves[b.intent]?.readyPose : null)
       || (isShielded(b) && poses.shielded ? 'shielded' : null) // 보호막(갑옷)이 남은 턴엔 그 모습
       || (b.fuse && poses.lit ? 'lit' : null);
-    const fxColor = (b.rage && m.sprite?.rageColors?.o) || m.sprite?.palette?.o || '#7fdc8c';
-    const sporeColor = (b.rage && m.sprite?.rageColors?.x) || m.sprite?.palette?.x || fxColor; // 포자 연출 색
-    const accentColor = (b.rage && m.sprite?.rageColors?.p) || m.sprite?.palette?.p || sporeColor; // 반점 색(독기·파편)
+    // 기술·피격·디버프 연출 색은 분노해도 원래 색(몸 색만 분노 색으로 바뀜 — 사용자 요청)
+    const fxColor = m.sprite?.palette?.o || '#7fdc8c';
+    const sporeColor = m.sprite?.palette?.x || fxColor; // 포자 연출 색
+    const accentColor = m.sprite?.palette?.p || sporeColor; // 반점 색(독기·파편)
     // 박치기·짓누르기는 파티 쪽(아래)으로 몸을 내밀어 그린다
     const monsterY = 196 + (usedFx === 'attack' ? 10 : usedFx === 'smash' || usedFx === 'burst' || usedFx === 'icefall' ? 6 : 0);
     // 보호막(단단해지기 다음 턴): 외곽선을 금속빛으로 바꾸고 둘레에 반짝임 + HP 바 왼쪽에 방패 배지

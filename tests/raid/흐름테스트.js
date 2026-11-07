@@ -644,7 +644,7 @@ let ok4;
     const solo = [{ userId: 's', name: 'S', role: 'sword' }];
     assert(E.createBattle(mush, solo, rng, { minParty: 1 }).maxHp < E.createBattle(mush, solo, rng).maxHp, '테스트 서버(minParty 1)는 혼자일 때 1인 HP, 기본은 2인 HP');
   }
-  // 14-2) 얼음 큐브(Monster-all): 냉기(방어 +1 · 공격·스킬 -1 · 3중첩 빙결) · 서리 숨결 · 얼음 갑옷
+  // 14-2) 얼음 큐브(Monster-all): 냉기(몬스터 기술로만 쌓이고 녹지 않음 · 서리 숨결은 방어로 막음 · 3중첩 빙결) · 얼음 갑옷
   {
     const E = require(path.join(root, 'handlers/레이드전투.js'));
     const all = E.loadMonsters(path.join(root, 'Monster-all'));
@@ -660,34 +660,30 @@ let ok4;
       const fresh = (p = party) => { b = E.createBattle(ice, p, rng); return b; };
 
       fresh();
-      turnWith(b, 'attack', { x: 'guard', y: 'guard' });
-      assert(E.chillStacks(b, x()) === 1 && E.chillStacks(b, y()) === 1, '방어하면 냉기 +1');
       x().chillStacks = 2;
-      turnWith(b, 'attack', { x: 'attack', y: 'attack' });
-      const afterOne = E.chillStacks(b, x());
-      turnWith(b, 'attack', { x: 'attack', y: 'attack' });
-      turnWith(b, 'attack', { x: 'attack', y: 'attack' });
-      assert(afterOne === 1 && E.chillStacks(b, x()) === 0 && E.chillStacks(b, y()) === 0, '공격·스킬하면 냉기 -1(0 아래로 안 감)');
+      turnWith(b, 'attack', { x: 'attack', y: 'guard' });
+      turnWith(b, 'attack', { x: 'skill', y: 'guard' });
+      assert(E.chillStacks(b, x()) === 2 && E.chillStacks(b, y()) === 0, '냉기는 공격·스킬로 녹지 않고 방어로 쌓이지도 않음');
 
       fresh();
-      turnWith(b, 'frost', { x: 'guard' });
+      turnWith(b, 'frost', { x: 'guard', y: 'attack' });
       const frostX = E.chillStacks(b, x()), frostY = E.chillStacks(b, y());
       b.rage = true; x().chillStacks = 0; y().chillStacks = 0;
       turnWith(b, 'frost', { x: 'attack', y: 'attack' });
-      assert(frostX === 2 && frostY === 1 && E.chillStacks(b, x()) === 2 && E.chillStacks(b, y()) === 2 && b.lastTurn.effects.x === 'chill' && b.log.join().includes('❄️냉기'), '서리 숨결: 방어해도 전원 냉기 +1, 분노 중 +2');
+      assert(frostX === 0 && frostY === 1 && E.chillStacks(b, x()) === 2 && E.chillStacks(b, y()) === 2 && b.lastTurn.effects.x === 'chill' && b.log.join().includes('❄️냉기'), '서리 숨결: 방어한 사람은 막고 나머지 냉기 +1, 분노 중 +2');
 
       fresh();
       x().chillStacks = 2;
-      turnWith(b, 'attack', { x: 'guard', y: 'attack' });
-      assert(E.isStunned(b, x()) && x().stunStatus.name === '빙결' && E.chillStacks(b, x()) === 0 && b.lastTurn.effects.x === 'freeze' && b.log.join().includes('🧊') && E.checkChoice(b, 'x', 'attack'), '3중첩이면 빙결: 다음 턴 행동 불가, 냉기 0');
+      turnWith(b, 'frost', { x: 'attack', y: 'guard' });
+      assert(E.isStunned(b, x()) && x().stunStatus.name === '빙결' && E.chillStacks(b, x()) === 0 && b.lastTurn.effects.x === 'freeze' && b.log.join().includes('🧊') && E.checkChoice(b, 'x', 'attack'), '3중첩이면(몬스터 기술 뒤) 빙결: 다음 턴 행동 불가, 냉기 0');
       x().chillStacks = 1;
       turnWith(b, 'attack', { y: 'attack' });
       assert(E.chillStacks(b, x()) === 1 && b.lastTurn.acts.x.label === '빙결', '빙결 중엔 냉기 그대로');
 
       fresh();
       x().chillStacks = 2;
-      turnWith(b, 'attack', { x: 'guard', y: 'skill' });
-      assert(E.chillStacks(b, x()) === 0 && !E.isStunned(b, x()) && b.log.join().includes('냉기 제거'), '치유사 스킬이 빙결 전에 냉기를 지우면 빙결 없음');
+      turnWith(b, 'frost', { x: 'attack', y: 'skill' });
+      assert(E.chillStacks(b, x()) === 1 && !E.isStunned(b, x()) && b.log.join().includes('냉기 제거'), '치유사 스킬이 숨결 전에 냉기를 지우면 빙결 없음');
 
       fresh();
       x().chillStacks = 1;
@@ -700,7 +696,7 @@ let ok4;
       turnWith(b, 'armor', { x: 'attack', y: 'attack' });
       const armorLog = b.log.join();
       turnWith(b, 'attack', { x: 'attack', y: 'guard' });
-      assert(armorLog.includes('때리면 ❄️냉기 +1') && E.chillStacks(b, x()) === 1 && E.chillStacks(b, y()) === 1 && b.lastTurn.acts.x.value === Math.round(100 * ice.moves.armor.effectRate), '얼음 갑옷: 다음 턴 때린 사람 냉기 +1(녹지 않음), 방어한 사람은 +1');
+      assert(armorLog.includes('때리면 ❄️냉기 +1') && E.chillStacks(b, x()) === 1 && E.chillStacks(b, y()) === 0 && b.lastTurn.acts.x.value === Math.round(100 * ice.moves.armor.effectRate), '얼음 갑옷: 다음 턴 때린 사람 냉기 +1, 방어한 사람은 그대로');
 
       fresh();
       turnWith(b, 'smash', { x: 'guard', y: 'attack' });
@@ -714,8 +710,8 @@ let ok4;
       fresh();
       delete x().chillStacks; delete y().chillStacks;
       const oldZero = E.chillStacks(b, x()) === 0;
-      turnWith(b, 'attack', { x: 'attack', y: 'guard' });
-      assert(oldZero && E.chillStacks(b, x()) === 0 && E.chillStacks(b, y()) === 1, '냉기 칸 없는 예전 기록은 0');
+      turnWith(b, 'frost', { x: 'attack', y: 'guard' });
+      assert(oldZero && E.chillStacks(b, x()) === 1 && E.chillStacks(b, y()) === 0, '냉기 칸 없는 예전 기록은 0');
 
       fresh([...party, { userId: 'z', name: 'Z', role: 'tank' }]);
       y().hp = 0; x().hp = 1; x().chillStacks = 2;
@@ -734,10 +730,10 @@ let ok4;
       const lines = () => raidMod.effectLines(b).join('\n');
       fresh();
       x().chillStacks = 2; y().chillStacks = 1;
-      assert(lines().includes('❄️ 냉기: X(×2), Y(×1) - **3중첩이면 🧊빙결(방어 +1 · 공격·스킬 -1)**'), '전투 화면: 냉기 중첩 줄');
+      assert(lines().includes('❄️ 냉기: X(×2), Y(×1) - **3중첩이면 🧊빙결(서리 숨결은 방어로 막음 · 치유사 스킬·회복약으로 제거)**'), '전투 화면: 냉기 중첩 줄');
       fresh();
       x().chillStacks = 2;
-      turnWith(b, 'attack', { x: 'guard', y: 'attack' });
+      turnWith(b, 'frost', { x: 'attack', y: 'guard' });
       assert(lines().includes('🧊 빙결: X - **이번 턴 행동 불가**') && !lines().includes('❄️ 냉기'), '전투 화면: 빙결 줄(냉기 0이면 냉기 줄 없음)');
       fresh();
       turnWith(b, 'armor', { x: 'attack', y: 'attack' });

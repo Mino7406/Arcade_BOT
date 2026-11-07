@@ -19,7 +19,10 @@ function smart(b, m) {
   const chill = b.monster.chill;
   if (chill) {
     if (m.role === 'healer' && E.partyChillStacks(b) >= 2 * aliveCount(b) && !E.checkChoice(b, m.userId, 'skill')) return 'skill';
-    if (mv === 'smash' && E.chillStacks(b, m) >= chill.freezeAt - chill.guardStacks && !E.checkChoice(b, m.userId, 'potion')) return 'potion';
+    if (mv === 'smash' && chill.guardStacks && E.chillStacks(b, m) >= chill.freezeAt - chill.guardStacks && !E.checkChoice(b, m.userId, 'potion')) return 'potion';
+    // 서리 숨결(방어로 막는 냉기 기술): 이번에 맞으면 얼 사람은 방어
+    const cm = b.monster.moves[mv];
+    if (cm?.effect === 'chill' && cm.guardBlocks && E.chillStacks(b, m) + (b.rage ? (cm.rageStacks ?? cm.stacks) : cm.stacks) >= chill.freezeAt) return 'guard';
   }
   if (E.isWarnIntent(b)) return 'guard'; // 필살기·대폭발 경고(꼬마 폭탄의 점화는 경고 아님)
   // 표식(유령 영혼 사냥): 수호자는 도발로 대신 맞고, 표식 대상은 방어(수호자가 못 막을 때만 — 분노 2인이면 한 명은 직접)

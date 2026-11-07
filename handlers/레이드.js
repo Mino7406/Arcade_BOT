@@ -294,7 +294,12 @@ function effectLines(b) {
   const chilled = chill ? b.members.filter(mem => chillStacks(b, mem) > 0) : [];
   if (chilled.length) {
     const fz = chill.freezeStatus;
-    lines.push(`${chill.status.emoji} ${chill.status.name}: ${chilled.map(mem => `${mem.name}(×${chillStacks(b, mem)})`).join(', ')} - **${chill.freezeAt}중첩이면 ${fz.emoji}${fz.name}(방어 +${chill.guardStacks} · 공격·스킬 -${chill.melt})**`);
+    // 몬스터 설정에 따라 안내: 방어로 쌓이거나 공격으로 녹는 규칙이 있으면 그걸, 없으면 막는 법·지우는 법
+    const rules = [];
+    if (chill.guardStacks) rules.push(`방어 +${chill.guardStacks}`);
+    if (chill.melt) rules.push(`공격·스킬 -${chill.melt}`);
+    if (!rules.length) rules.push('서리 숨결은 방어로 막음', '치유사 스킬·회복약으로 제거');
+    lines.push(`${chill.status.emoji} ${chill.status.name}: ${chilled.map(mem => `${mem.name}(×${chillStacks(b, mem)})`).join(', ')} - **${chill.freezeAt}중첩이면 ${fz.emoji}${fz.name}(${rules.join(' · ')})**`);
   }
   return lines;
 }
