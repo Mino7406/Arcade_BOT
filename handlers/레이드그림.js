@@ -364,14 +364,12 @@ function burnBadge(cx, cy, stacks) {
   flame(cx + 9, cy + 4, 0.5, [['#4a1206', 1.3], ['#ff9a3c', 1], ['#ffe066', 0.55]]);
   if (stacks > 1) text(`×${stacks}`, cx, cy + 22, 15, '#ffc08a');
 }
-// 공포: 스킬 봉인 — 짙은 보라 동그라미 안 흰 네 갈래 반짝임(스킬)에 빨간 빗금 + 양옆 떨림 선
+// 공포: 질린 눈 — 보라 눈꺼풀 안 커다란 흰자 + 오그라든 작은 눈동자
 function fearBadge(cx, cy) {
-  p.circle(cx, cy, 14, '#1a0a2a');
-  p.circle(cx, cy, 12, '#6a3fb8');
-  p.poly([cx, cy - 9, cx + 2.6, cy - 2.6, cx + 9, cy, cx + 2.6, cy + 2.6, cx, cy + 9, cx - 2.6, cy + 2.6, cx - 9, cy, cx - 2.6, cy - 2.6], '#f4f0ff');
-  p.line(cx - 9, cy + 9, cx + 9, cy - 9, 6, '#1a0a2a');
-  p.line(cx - 9, cy + 9, cx + 9, cy - 9, 3.4, '#ff5a6e');
-  for (const sd of [-1, 1]) for (const dy of [-5, 3]) p.line(cx + sd * 17, cy + dy, cx + sd * 20, cy + dy + 3, 2, '#c3b4ff');
+  p.poly([cx - 17, cy, cx - 9, cy - 10, cx + 9, cy - 10, cx + 17, cy, cx + 9, cy + 10, cx - 9, cy + 10], '#1a0a2a');
+  p.poly([cx - 14, cy, cx - 7, cy - 8, cx + 7, cy - 8, cx + 14, cy, cx + 7, cy + 8, cx - 7, cy + 8], '#8a5fe0');
+  p.poly([cx - 11, cy, cx - 5, cy - 6, cx + 5, cy - 6, cx + 11, cy, cx + 5, cy + 6, cx - 5, cy + 6], '#ffffff');
+  p.circle(cx, cy, 2.4, '#1a0a2a');
 }
 // 표식(영혼 사냥 대상): 카드 오른쪽 위 빛나는 눈
 function markEye(cx, cy) {
