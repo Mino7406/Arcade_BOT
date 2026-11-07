@@ -467,6 +467,39 @@ function jaggedArc(cx, cy, r, a0, a1, squash, width, color, teeth = 9) {
     prev = pt;
   }
 }
+// 해골(영혼 사냥): 11×11 도트, 어두운 테두리 · 보랏빛 흰 뼈 · 청록으로 빛나는 눈
+const SKULL = {
+  rows: [
+    '...ooooo...', '..owwwwwo..', '.owwwwwwwo.', 'owwwwwwwwwo', 'owkkwwwkkwo', 'owkgwwwgkwo',
+    'owwwwkwwwwo', '.owwwwwwwo.', '..owkwkwo..', '..owwwwwo..', '...ooooo...',
+  ],
+  palette: { o: '#1a0a2a', w: '#e8e0ff', k: '#2a1040', g: '#9ffff2' },
+};
+// 영혼 사냥: 고스트(mx, my)에서 맞은 카드 아이콘(tx, ty) 쪽으로 베어 내리는 저승 낫(보라 초승달 + 잔상)과
+// 낫 날에 겹친 큰 해골, 대상 아이콘의 베기 자국에 겹친 작은 해골
+function curseLink(mx, my, tx, ty) {
+  const D = '#1a0a2a';
+  const dir = Math.atan2(ty - my, tx - mx);
+  const arc = (r, a0, a1, cx0, cy0) => { const pts = []; for (let i = 0; i <= 16; i++) { const a = a0 + ((a1 - a0) * i) / 16; pts.push([cx0 + Math.cos(a) * r, cy0 + Math.sin(a) * r * 0.8]); } return pts; };
+  const a0 = dir - 1.2, a1 = dir + 0.5;
+  for (const [off, col] of [[-0.5, '#3b2470'], [-0.25, '#5a3aa0']]) { // 잔상
+    const o = arc(150, a0 + off, a1 + off, mx, my + 20);
+    for (let i = 1; i < o.length; i++) p.line(o[i - 1][0], o[i - 1][1], o[i][0], o[i][1], 5, col);
+  }
+  const off = [mx + Math.cos(dir) * 14, my + 20 + Math.sin(dir) * 14];
+  const outer = arc(150, a0, a1, mx, my + 20), inner = arc(118, a0 + 0.2, a1, off[0], off[1]);
+  p.poly([...outer, ...inner.reverse()].flat(), D);
+  const outer2 = arc(146, a0 + 0.04, a1 - 0.02, mx, my + 20), inner2 = arc(122, a0 + 0.24, a1 - 0.02, off[0], off[1]);
+  p.poly([...outer2, ...inner2.reverse()].flat(), '#9b7bff');
+  for (let i = 1; i < outer2.length; i++) p.line(outer2[i - 1][0], outer2[i - 1][1], outer2[i][0], outer2[i][1], 3, '#f4f0ff'); // 날
+  // 낫 날 한가운데에 겹친 큰 해골 + 둘레 혼불 알갱이(사용자 요청 — 옆으로 빼지 않고 겹치게)
+  const [hx, hy] = outer2[9];
+  drawPixels(SKULL, hx, hy, 6);
+  for (const [dx, dy] of [[-38, -14], [36, -20], [-30, 26], [40, 18]]) dot(hx + dx, hy + dy, 4, '#9ffff2');
+  // 대상: 베기 자국 + 작은 해골
+  for (const [w, c] of [[11, D], [6, '#9b7bff'], [2.5, '#f4f0ff']]) p.line(tx - 30, ty + 26, tx + 30, ty - 26, w, c);
+  drawPixels(SKULL, tx, ty, 3.2); // 베기 자국 한가운데에 겹침
+}
 // 반투명 동그라미(연기·먼지·섬광)
 function haze(x, y, r, color, alpha) { p.roundRect(x - r, y - r, r * 2, r * 2, r, color, alpha); }
 function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
@@ -544,27 +577,7 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
   }
   // ── 고스트 ──
   if (move === 'curse' && layer === 'back') {
-    // 영혼 사냥: 손 뒤로 번지는 보라 빛
-    haze(cx, cy + 96, 58, '#9b7bff', 0.16); // 몬스터 칸 안에서만(카드까지 덮지 않게)
-    return;
-  }
-  if (move === 'curse' && layer === 'front') {
-    // 영혼 사냥: 몸 아래에서 파티 쪽으로 뻗어 내려오는 커다란 저승의 손(보라, 청록 손톱)
-    // + 손끝 아래에서 끌려 올라오는 혼불 셋
-    const P = '#7a5ad6', H = '#b9a6ff', D = '#1a0a2a';
-    p.line(cx, cy + 30, cx, cy + 82, 36, D); p.line(cx, cy + 30, cx, cy + 82, 27, P); // 팔
-    p.roundRect(cx - 50, cy + 72, 100, 38, 16, D); p.roundRect(cx - 46, cy + 75, 92, 32, 14, P); // 손바닥
-    p.roundRect(cx - 36, cy + 79, 38, 9, 4, H); // 손바닥 빛
-    for (const [kx, tx] of [[-34, -46], [-11, -15], [11, 15], [34, 46]]) {
-      p.line(cx + kx, cy + 104, cx + tx, cy + 140, 19, D);
-      p.line(cx + kx, cy + 104, cx + tx, cy + 140, 13, P);
-      p.circle(cx + tx, cy + 141, 6, '#9ffff2'); // 청록 손톱
-    }
-    p.line(cx + 46, cy + 84, cx + 68, cy + 106, 17, D); p.line(cx + 46, cy + 84, cx + 68, cy + 106, 11, P); p.circle(cx + 69, cy + 107, 5.5, '#9ffff2'); // 엄지
-    for (const [x0, y0] of [[-120, 130], [0, 146], [120, 128]]) {
-      for (let i = 1; i <= 4; i++) dot(cx + x0 * (1 - i * 0.18), cy + y0 - i * 7, 6 - i, '#9ffff2'); // 손 쪽으로 끌려가는 자국
-      flame(cx + x0, cy + y0, 0.6, [['#0b2b2e', 1.3], ['#3fd6c6', 1], ['#ffffff', 0.4]]);
-    }
+    // 영혼 사냥: 몸 둘레에 번지는 보라 기운(대상 카드까지 잇는 연출은 renderBattle의 curseLink)
     return;
   }
   if (move === 'wail' && layer === 'back') {
@@ -773,14 +786,7 @@ function hitFx(move, cx, cy, color, spore = color, accent = spore) {
     for (const [dx, dy, r] of blobs) p.circle(cx + dx, cy + dy, r, color);
     for (const [dx, dy, r] of blobs) p.circle(cx + dx - r * 0.35, cy + dy - r * 0.35, Math.max(1.8, r * 0.28), '#f4fff0');
   } else if (move === 'curse') {
-    // 영혼 사냥: 아이콘을 긁고 지나간 혼령 손톱 세 줄(보라 → 청록 심) + 빠져나가는 혼불
-    for (const d of [-14, 0, 14]) {
-      const pts = Array.from({ length: 11 }, (_, t) => [cx - 24 + d + t * 4.6 + Math.sin(t / 2) * 3, cy - 24 + t * 4.4]);
-      for (const [x, y] of pts) dot(x, y, 9, '#1a0a2a');
-      for (const [x, y] of pts) dot(x, y, 5, '#9b7bff');
-      for (const [x, y] of pts.slice(3, 8)) dot(x, y, 2, '#9ffff2');
-    }
-    flame(cx + 26, cy - 30, 0.55, [['#0b2b2e', 1.3], ['#3fd6c6', 1], ['#ffffff', 0.4]]);
+    // 영혼 사냥: 대상 카드 표시는 renderBattle의 curseLink가 그린다(베기 자국 + 해골)
   } else if (move === 'wail') {
     // 울부짖음: 아이콘을 감싸는 들쭉날쭉한 음파 두 겹(양옆)
     for (const [r, c] of [[30, '#f4f0ff'], [42, '#9b7bff']]) {
@@ -1152,6 +1158,15 @@ function renderBattle(r) {
       if (state === 'stunned') return { color: '#ffd23f', width: 2.5 };
       return null;
     });
+    // 영혼 사냥: 결과 화면에서 고스트와 맞은 카드를 잇는다(누구를 노렸는지 보이게)
+    if (r.showingResult && usedFx === 'curse') {
+      for (const uid of Object.keys(last.hits || {})) {
+        const mem = b.members.find(q => q.userId === uid);
+        if (!mem) continue;
+        const i = ROLE_ORDER.indexOf(mem.role);
+        curseLink(W / 2, monsterY, 20 + i * (CARD_W + CARD_GAP) + CARD_W / 2, CARD_Y + 86);
+      }
+    }
   });
 }
 

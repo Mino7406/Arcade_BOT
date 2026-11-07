@@ -270,8 +270,8 @@
       "telegraph": "몸을 부르르 털며 화약 가루를 뿌린다...",
       "target": "all",
       "damage": [
-        3,
-        5
+        2,
+        4
       ],
       "fx": "dust",
       "effect": "poison",
@@ -301,7 +301,7 @@
       "fuse": {
         "turns": 3,
         "rageTurns": 2,
-        "need": 0.24,
+        "need": 0.2,
         "boom": "boom"
       }
     },
@@ -310,8 +310,8 @@
       "telegraph": "💣 곧 터진다! 방어해도 절반만 막아요!",
       "target": "all",
       "damage": [
-        14,
-        18
+        18,
+        22
       ],
       "fx": "boom",
       "readyPose": "flash",
