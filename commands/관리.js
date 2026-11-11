@@ -62,7 +62,7 @@ function buildAdminHome({ guildId, note } = {}) {
   return payload(card({
     color: bad ? COLORS.warn : COLORS.ok,
     header: '🛠️ ARCADE 관리',
-    sub: '소식 알림 · XP · 퀴즈 · 패널 · 게시물',
+    sub: '소식 알림 · XP · 퀴즈 · 패널 · 게시물 · 채널',
     blocks: [
       note || null,
       ...buildPatchBlocks(patch),
@@ -80,6 +80,7 @@ function buildAdminHome({ guildId, note } = {}) {
             new ButtonBuilder().setCustomId('xp:menu:adjust').setLabel('XP 조정').setEmoji('⚙️').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId('admin:panels').setLabel('패널 게시').setEmoji('📌').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId('admin:refresh').setLabel('게시물 최신화').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('admin:channel').setLabel('채널 관리').setEmoji('🧹').setStyle(ButtonStyle.Secondary),
           ),
           new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('admin:home').setLabel('새로고침').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
@@ -155,6 +156,12 @@ async function handleAdminButton(interaction) {
   if (sub === 'panels') {
     const { buildPanelSelectPayload } = require('./패널');
     await interaction.update(buildPanelSelectPayload({ withBack: true }));
+    return;
+  }
+
+  if (sub === 'channel') {
+    const { buildAdminMenuPayload } = require('./패널');
+    await interaction.update(buildAdminMenuPayload('admin'));
     return;
   }
 

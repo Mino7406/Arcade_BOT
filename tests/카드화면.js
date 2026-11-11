@@ -144,6 +144,7 @@ async function buildScreens() {
   patchState = { ...patchState, paused: true };
   add('관리 · 안내 패널', '/관리 홈 — 소식 알림 일시정지됨', '일시정지하면 재개 버튼으로 바뀌고 확인도 멈춰요', adminHome({ guildId: '1', note: '⏸️ **소식 알림을 일시정지했어요.** 재개할 때까지 새 글이 올라와도 알리지 않아요.' }));
   patchState = { ...patchState, paused: false };
+  add('관리 · 안내 패널', '/관리 → 채널 관리', '패널의 ⚙️ 관리 기능을 /관리에서도 (새로고침은 자동 최신화라 없음)', panel.buildAdminMenuPayload('admin'));
   add('관리 · 안내 패널', '패널 게시 선택', '/관리 → 패널 게시', panel.buildPanelSelectPayload({ withBack: true }));
   add('관리 · 안내 패널', '퀴즈 관리 (메뉴로 버튼)', '', quizCmd.buildQuizPanelPayload('1', '▶️ 자동 출제를 다시 시작했습니다.'));
 

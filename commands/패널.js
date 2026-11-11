@@ -161,21 +161,27 @@ function buildSetupPanelPayload(interaction) {
 // 모든 상호작용(새로고침/채널 청소/매치 삭제/봇 메시지 삭제)은 'panel:' 프리픽스로 공개 패널 버튼('recruit:')과 구분한다.
 // 이 페이로드는 최초 노출(reply)뿐 아니라 update/editReply로도 재사용되는데, 뒤의 둘은 Ephemeral
 // flag를 받지 않는다(이미 비공개 메시지라 붙일 필요가 없다). 그래서 flags는 여기 두지 않고 reply 호출부에서만 붙인다.
+// panelMessageId 가 'admin' 이면 /관리 홈에서 연 채널 관리 화면이다(원본 패널 메시지가 없으므로 새로고침은 없고, 게시물은 자동으로 최신화된다).
+const FROM_ADMIN = 'admin';
 function buildAdminMenuPayload(panelMessageId, notice) {
-  return menu({
-    header: '⚙️ 패널 관리',
-    sub: '새로고침 · 채널 청소 · 삭제',
-    note: notice,
-    rows: [
-      new ActionRowBuilder().addComponents(
+  const fromAdmin = panelMessageId === FROM_ADMIN;
+  const clean = new ButtonBuilder().setCustomId(`panel:purge:${panelMessageId}`).setLabel('🧹 채널 청소').setStyle(ButtonStyle.Success);
+  const firstRow = fromAdmin
+    ? new ActionRowBuilder().addComponents(clean)
+    : new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`panel:refresh:${panelMessageId}`).setLabel('🔄 새로고침').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId(`panel:purge:${panelMessageId}`).setLabel('🧹 채널 청소').setStyle(ButtonStyle.Success),
-      ),
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`panel:match_delete:${panelMessageId}`).setLabel('🗑️ 내전/모집 삭제').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`panel:bot_msg_delete:${panelMessageId}`).setLabel('🤖 봇 메시지 삭제').setStyle(ButtonStyle.Secondary),
-      ),
-    ],
+        clean,
+      );
+  const secondRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`panel:match_delete:${panelMessageId}`).setLabel('🗑️ 내전/모집 삭제').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`panel:bot_msg_delete:${panelMessageId}`).setLabel('🤖 봇 메시지 삭제').setStyle(ButtonStyle.Secondary),
+    ...(fromAdmin ? [new ButtonBuilder().setCustomId('admin:home').setLabel('↩️ 메뉴로').setStyle(ButtonStyle.Secondary)] : []),
+  );
+  return menu({
+    header: fromAdmin ? '🧹 채널 관리' : '⚙️ 패널 관리',
+    sub: fromAdmin ? '지금 이 채널 기준 · 채널 청소 · 삭제' : '새로고침 · 채널 청소 · 삭제',
+    note: notice,
+    rows: [firstRow, secondRow],
   });
 }
 
