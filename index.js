@@ -2,7 +2,7 @@ const path = require('path');
 // 실행 디렉터리(CWD)가 아니라 이 파일 기준으로 env를 찾는다 — systemd 등 다른 CWD에서 띄워도
 // 토큰을 놓치지 않게. (파일명이 '.env'가 아니라 'env'인 것은 의도된 것)
 require('dotenv').config({ path: path.join(__dirname, 'env') });
-const { Client, GatewayIntentBits, Partials, Collection, MessageFlags, Events, Options } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, Collection, Events, Options } = require('discord.js');
 const { notice, asEphemeral } = require('./handlers/공통/카드');
 const fs = require('fs');
 
@@ -33,7 +33,7 @@ const RAID_PAUSED_COMMANDS = {
 };
 const { handleQuizAdminButton, handleQuizCreateModal } = require('./handlers/관리/퀴즈관리');
 const { buildNaejeonGameSelectPayload, buildMojipGameSelectPayload, buildReloadListPayload, buildTeamMatchListPayload } = require('./handlers/매치/메뉴');
-const { buildCommandListPayload, buildSetupPanelPayload, buildAdminMenuPayload, handlePanelButton, handlePanelMatchDeleteSelect, handlePanelBotMessageDeleteModal, handlePanelSelectButton } = require('./handlers/관리/패널');
+const { buildCommandListPayload, buildAdminMenuPayload, handlePanelButton, handlePanelMatchDeleteSelect, handlePanelBotMessageDeleteModal, handlePanelSelectButton } = require('./handlers/관리/패널');
 const { handleRealmButton, handleRealmModal, handleRealmRosterModal, initRulesAgreementCache, handleRealmRulesReactionAdd, handleRealmRulesReactionRemove } = require('./forms/마크');
 const { handleCobblemonButton, startCobblemonOpenTimer } = require('./forms/코블몬');
 const { handleLevelShareButton } = require('./handlers/레벨/레벨카드');
