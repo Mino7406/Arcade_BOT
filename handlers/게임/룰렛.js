@@ -5,7 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp, isMinigameXpFrozen, isRaidXpFrozen } = require('../레벨/레벨링');
+const { applyXp, getXp, levelFromXp, isLevelsLoaded, isExcludedGuild, announceLevelUp, isMinigameXpFrozen, isRaidXpFrozen } = require('../레벨/레벨링');
 const { kstDateString, timeUntilKstMidnight } = require('../공통/시간');
 const { logSystem, logAction, logError, userLabel } = require('../공통/로그');
 const { writeJsonIfChanged } = require('../공통/저장');
@@ -236,8 +236,16 @@ async function startRouletteCommand(interaction) {
     return;
   }
 
+  // 봇이 막 켜져 XP 데이터를 아직 읽기 전이면 모든 XP가 0으로 보인다 — "XP 부족"으로 오해하지 않게 따로 안내한다.
+  if (!isLevelsLoaded()) {
+    logAction(interaction, '룰렛', 'XP 데이터를 아직 불러오지 못해 대기 안내');
+    await interaction.reply(notice('⏳ **XP 데이터를 불러오는 중이에요.**\n봇이 막 켜졌다면 잠시 뒤 다시 시도해 주세요.', { ephemeral: true }));
+    return;
+  }
+
   const currentLevelXp = levelFromXp(getXp(guildId, userId)).currentLevelXp;
   if (currentLevelXp < MIN_BET) {
+    logAction(interaction, '룰렛', `베팅 부족으로 거부됨 — 레벨 안 XP ${currentLevelXp}, 누적 ${getXp(guildId, userId)}, 서버 ${guildId}`);
     // 레벨이 내려가지 않도록 "현재 레벨 안에서 쌓은 XP"만 걸 수 있다. 누적 XP가 많아도(레벨업 직후·레벨 설정 직후) 0일 수 있어 이유를 같이 알려 준다.
     const totalXp = getXp(guildId, userId);
     await interaction.reply(notice(`⚠️ **베팅 가능한 XP가 부족합니다.**\n레벨이 내려가지 않도록 **현재 레벨 안에서 쌓은 XP**만 걸 수 있어요.\n-# 최소 ${MIN_BET} XP 필요 · 지금 레벨 안 XP: ${currentLevelXp} · 누적 XP: ${totalXp}`, { ephemeral: true }));
