@@ -14,6 +14,36 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const req = p => require(path.join(ROOT, p));
 
+// 소스에서 notice('…')/quick('…') 의 첫 번째 문구를 전부 뽑는다(예시 페이지에 모든 경고·안내가 자동으로 들어가도록).
+// ${…} 자리는 〈…〉 로 바꿔 보여 준다. 같은 문구는 한 번만, 파일(기능)별로 묶는다.
+function extractNotices() {
+  const roots = ['handlers', 'forms', 'commands'];
+  const files = ['index.js'];
+  const walk = (d) => {
+    for (const e of fs.readdirSync(path.join(ROOT, d), { withFileTypes: true })) {
+      const rel = path.join(d, e.name);
+      if (e.isDirectory()) walk(rel); else if (e.name.endsWith('.js')) files.push(rel);
+    }
+  };
+  roots.forEach(walk);
+  const re = /\b(?:notice|quick)\(\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1/g;
+  const seen = new Set();
+  const out = [];
+  for (const rel of files.sort()) {
+    const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    for (const m of src.matchAll(re)) {
+      let t = m[2]
+        .replace(/\\n/g, '\n').replace(/\\(['"`\\])/g, '$1')
+        .replace(/\$\{[^}]*\}/g, '〈…〉');
+      t = t.trim();
+      if (!t || t.length < 4 || seen.has(t)) continue;
+      seen.add(t);
+      out.push({ file: rel.split(path.sep).join('/'), text: t });
+    }
+  }
+  return out;
+}
+
 async function buildScreens() {
   // /관리 홈은 실행 중인 패치노트 감시기의 상태를 읽는다 — 그림용으로 가짜 상태를 끼워 넣는다(관리 모듈을 부르기 전에).
   const now = Date.now();
@@ -144,6 +174,12 @@ async function buildScreens() {
   add('DM 알림', '내전 마감 알림 (주최자에게)', '', common.buildMatchDmPayload({ kind: 'close', match: dmMatch, label: '내전' }));
   add('DM 알림', '렐름 신청 승인 DM', '', mark.buildRealmResultDm('approved', 'Steve_7406', '민호'));
   add('DM 알림', '렐름 신청 거절 DM', '', mark.buildRealmResultDm('rejected', 'Steve_7406', '민호'));
+
+  // ── 경고·안내 메시지 전부(소스에서 자동 추출) ──────────
+  for (const n of extractNotices()) {
+    const feature = n.file.replace(/^(handlers|forms|commands)\//, '').replace(/\.js$/, '').replace(/\/index$/, '');
+    add('경고·안내 메시지', feature, n.text.length > 60 ? '' : '', card.notice(n.text, { ephemeral: true }));
+  }
 
   // ── 관리 · 안내 패널 ──────────────────────────
   const adminHome = req('handlers/관리/홈.js').buildAdminHome;

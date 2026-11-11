@@ -95,32 +95,6 @@ function sleep(ms) {
 }
 
 // 릴 3개 중 어느 인덱스끼리 심볼이 같은지(당첨 조합) 반환 — 결과 버튼을 초록으로 강조하는 데 사용.
-function getMatchIndices(reels) {
-  const [a, b, c] = reels;
-  if (a === b && b === c) return [0, 1, 2];
-  if (a === b) return [0, 1];
-  if (b === c) return [1, 2];
-  if (a === c) return [0, 2];
-  return [];
-}
-
-// 릴 3개를 버튼 3개(비활성)로 그린다 — winIndices에 포함된 릴은 초록으로 강조.
-function buildReelRow(lobbyId, display, winIndices = []) {
-  const buttons = display.map((symbol, i) =>
-    new ButtonBuilder()
-      .setCustomId(`roulette:reel:${lobbyId}:${i}`)
-      .setLabel(symbol)
-      .setStyle(winIndices.includes(i) ? ButtonStyle.Success : ButtonStyle.Secondary)
-      .setDisabled(true),
-  );
-  return new ActionRowBuilder().addComponents(...buttons);
-}
-
-// 틱 하나당 message.edit이 한 번 나간다. 예전엔 180ms 간격 12회(2.2초에 12번 수정)였는데,
-// 디스코드는 같은 메시지 수정에 라우트별 레이트리밋을 빡빡하게 걸어서(대략 5초에 5회 수준)
-// 거의 매번 걸렸다. discord.js가 알아서 큐에 넣고 기다리므로 오류가 나는 대신 연출이
-// 늘어지고, 그동안 같은 라우트의 다른 요청까지 뒤에 밀린다. 전체 길이(약 2.4초)는 그대로
-// 두고 호출 횟수만 절반으로 줄인다.
 const SPIN_TICKS = 6;
 const SPIN_TICK_MS = 400;
 const REEL_STOP_AT = [2, 4, 5]; // 각 릴이 최종값에 고정되는 틱(순서대로 하나씩 멈춤 — 마지막 틱에 결과 완성)
@@ -143,14 +117,32 @@ function getLobbies(client) {
   return client.rouletteLobbies;
 }
 
+// 슬롯머신 화면: 이모지를 큰 제목 글자로 한 줄에 늘어놓아 버튼 릴보다 훨씬 크게 보인다.
+function slotLine(display) {
+  return `# ${display.join('　')}`;
+}
+
+// 심볼별 배당표(TRIPLE_PAYOUTS 에서 만든다 — 배당을 바꾸면 화면도 같이 바뀐다)
+function payoutTable() {
+  const entries = Object.entries(TRIPLE_PAYOUTS).map(([sym, x]) => `${sym.repeat(3)} **x${x}**`);
+  return `### 💰 배당표\n${entries.slice(0, 3).join('　')}\n${entries.slice(3).join('　')}\n-# 같은 심볼 2개 **x${TWO_MATCH_PAYOUT}** · 모두 다르면 꽝(베팅 전액 손실)`;
+}
+
 function buildLobbyCard(lobby) {
-  const betLine = lobby.bet ? `**${lobby.bet} XP**` : '*아직 선택 안 함*';
+  const bet = lobby.bet;
+  const best = Math.max(...Object.values(TRIPLE_PAYOUTS));
+  const betText = bet
+    ? `### 💰 베팅　**${bet} XP**\n-# 7️⃣ 트리플이면 **+${Math.round(bet * best) - bet} XP** · 꽝이면 **-${bet} XP**`
+    : '### 💰 베팅　*아직 선택 안 함*\n-# 아래에서 금액을 고르세요';
   return card({
     color: COLORS.info,
     header: '🎰 룰렛머신',
+    sub: ['하루 1회', `베팅 가능 최대 ${lobby.maxAvailable} XP`],
     blocks: [
       `<@${lobby.userId}>님, 베팅 XP를 고른 뒤 **🎰 돌리기**를 누르세요.`,
-      `💰 선택한 베팅　${betLine}\n📊 최대 베팅 가능　**${lobby.maxAvailable} XP**`,
+      betText,
+      slotLine(['🎰', '🎰', '🎰']),
+      payoutTable(),
     ],
     footer: '⏰ 60초 안에 돌리지 않으면 자동으로 취소됩니다.',
     ...footerSide(buildLobbyComponents(lobby), /^roulette:cancel:/),
@@ -162,26 +154,32 @@ function buildLobbyPayload(lobby, extra) {
   return payload(buildLobbyCard(lobby), extra);
 }
 
-// 릴이 도는 중 / 결과 화면. 릴 버튼 3개가 카드 안에서 슬롯머신처럼 보인다.
+// 릴이 도는 중: 멈춘 릴부터 심볼이 보이고 나머지는 🎰 가 돈다.
 function buildSpinningPayload(lobby, bet, display) {
   return payload(card({
     color: COLORS.info,
     header: '🎰 룰렛머신',
-    blocks: [`<@${lobby.userId}>님이 **${bet} XP**를 걸고 돌립니다...\n\n🎰 릴이 돌아가는 중...`],
-    rows: [buildReelRow(lobby.id, display)],
+    sub: ['릴이 돌아가는 중...', `베팅 ${bet} XP`],
+    blocks: [
+      `<@${lobby.userId}>님이 **${bet} XP**를 걸고 돌립니다...`,
+      slotLine(display),
+    ],
+    footer: '🎰 두근두근... 릴이 하나씩 멈춰요',
   }));
 }
 
 function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels }) {
+  const win = net > 0;
   return payload(card({
-    color: net > 0 ? 0xFFD700 : COLORS.muted,
+    color: win ? 0xFFD700 : COLORS.muted,
     header: '🎰 룰렛머신',
+    sub: ['결과', `베팅 ${bet} XP`],
     blocks: [
       `<@${lobby.userId}>님이 **${bet} XP**를 걸었습니다.`,
-      `${resultLine}\n${netLine}`,
+      slotLine(reels),
+      `### ${resultLine}\n## ${netLine}`,
     ],
     footer: '⏰ 하루에 한 번만 돌릴 수 있어요.',
-    rows: [buildReelRow(lobby.id, reels, getMatchIndices(reels))],
   }));
 }
 

@@ -123,7 +123,8 @@ function rowsIn(list, acc = []) {
     const data = { game: 'lol', gameInfo: gi, title: '롤 내전', datetime: 'x', organizer: { id: '1', displayName: 'a' } };
     const cancelled = asMsg(card.payload(common.buildCancelledCard({ label: '내전', data, byOrganizer: true })));
     assert.ok(card.messageText(cancelled).includes('🔴 취소됨'));
-    assert.ok(card.messageText(cancelled).split('\n').includes('# 롤 내전'), '제목 줄(# 제목)을 찾을 수 있어야 함');
+    assert.ok(card.hasHeaderLine(cancelled, '롤 내전'), '제목 줄(## 제목)을 찾을 수 있어야 함');
+    assert.ok(card.hasHeaderLine({ components: [{ content: '# 롤 내전' }], embeds: [] }, '롤 내전'), '예전 `# 제목` 카드도 찾아야 함');
     const legacy = { components: [], embeds: [{ title: null, description: '## 롤 내전\n📊 **상태**　　🔴 취소됨', fields: [] }] };
     assert.ok(card.messageText(legacy).includes('🔴 취소됨'));
   });

@@ -102,7 +102,7 @@ function toneOf(content) {
  *
  * @param {object} o
  * @param {number|string} [o.color]  띠 색(숫자) 또는 COLORS 키
- * @param {string} [o.header]        큰 제목(`# ` 자동). 이모지 포함 가능
+ * @param {string} [o.header]        제목(`## ` 자동 — 예전 `# ` 카드도 찾을 수 있게 헤더 판별은 hasHeaderLine 사용). 이모지 포함 가능
  * @param {string} [o.sub]           제목 아래 작은 회색 줄(`-# ` 자동). 배열이면 " · "로 이음
  * @param {string} [o.thumb]         오른쪽 위 작은 그림 URL (제목+부제와 같은 섹션에 붙음)
  * @param {string} [o.thumbAlt]
@@ -122,7 +122,7 @@ function card(o = {}) {
   if (accent !== undefined && accent !== null) container.setAccentColor(accent);
 
   const head = [];
-  if (o.header) head.push(text(`# ${o.header}`));
+  if (o.header) head.push(text(`## ${o.header}`));
   const subText = Array.isArray(o.sub) ? o.sub.filter(Boolean).join(' · ') : o.sub;
   if (subText) head.push(text(`-# ${subText}`));
 
@@ -264,6 +264,15 @@ function messageText(msg) {
 }
 
 /**
+ * 메시지 글자 중에 제목 줄이 title 인 줄이 있는지(카드 제목은 `## 제목`, 예전 카드는 `# 제목`, 옛 임베드는 title).
+ */
+function hasHeaderLine(msg, title) {
+  if (msg?.embeds?.some(e => e.title === title)) return true;
+  const lines = messageText(msg).split('\n');
+  return lines.includes(`## ${title}`) || lines.includes(`# ${title}`);
+}
+
+/**
  * 메시지(컨테이너 안까지)에 customId 가 prefix 로 시작하는 버튼/메뉴가 있는지 찾는다.
  * v2는 버튼 줄이 컨테이너 안에 들어갈 수 있어서 message.components 를 한 겹만 훑으면 놓친다.
  */
@@ -344,5 +353,6 @@ module.exports = {
   headerSide,
   hasCustomId,
   messageText,
+  hasHeaderLine,
   notice,
 };

@@ -9,10 +9,10 @@ const path = require('path');
 const { GUILD_ID } = require('../../config');
 const { writeJsonIfChanged } = require('../공통/저장');
 const { logSystem, logError } = require('../공통/로그');
-const { messageText } = require('../공통/카드');
+const { hasHeaderLine } = require('../공통/카드');
 
 const PANELS_PATH = path.join(__dirname, '..', '..', 'DB', 'panels.json');
-// 게임모집 안내 패널의 제목 줄(카드는 `# 제목`, 옛 임베드는 title)
+// 게임모집 안내 패널의 제목 줄(카드는 `## 제목`, 예전 카드는 `# 제목`, 옛 임베드는 title)
 const RECRUIT_TITLE = '게임모집 채널에 오신 걸 환영합니다!';
 
 function load() {
@@ -43,8 +43,7 @@ function rememberRecruitPanel(message) {
 
 function isRecruitPanelMessage(m, botId) {
   if (m.author?.id !== botId) return false;
-  if (m.embeds?.[0]?.title === RECRUIT_TITLE) return true;
-  return messageText(m).split('\n').includes(`# ${RECRUIT_TITLE}`);
+  return hasHeaderLine(m, RECRUIT_TITLE);
 }
 
 // 저장 목록이 비어 있을 때(기능 이전에 게시했거나 DB를 옮긴 경우) 봇이 올린 패널을 채널에서 찾아 기억한다.

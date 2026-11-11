@@ -448,6 +448,7 @@ client.on('interactionCreate', async (interaction) => {
       interaction.customId?.startsWith('quiz:') ||
       interaction.customId?.startsWith('xp:') ||
       interaction.customId?.startsWith('admin:') ||
+      interaction.customId?.startsWith('panel:') || // 채널 관리(청소·삭제) 메뉴 — 관리자 전용이라 어느 채널에서든 쓸 수 있다
       interaction.customId?.startsWith('realm:') ||
       interaction.customId?.startsWith('cobblemon:') ||
       interaction.customId?.startsWith('raid:') || // 레이드는 출현한 채널(놀이터·테스트 채널)에서 그대로 진행

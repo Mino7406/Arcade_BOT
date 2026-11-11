@@ -272,7 +272,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await roulette.handleRouletteButton(mkInteraction({ user: 'u1', customId: `roulette:max:${lobbyId}`, message: s._reply }));
     const spin = mkInteraction({ user: 'u1', customId: `roulette:spin:${lobbyId}`, message: s._reply });
     await roulette.handleRouletteButton(spin);
-    assert(channel.sent.some(m => JSON.stringify(m.components || []).includes('roulette:reel')), '룰렛 결과 카드가 채널에 안 올라옴');
+    assert(channel.sent.some(m => JSON.stringify(m.components || []).includes('룰렛머신')), '룰렛 결과 카드가 채널에 안 올라옴');
     const s2 = mkInteraction({ user: 'u2', command: '룰렛' });
     lv.applyXp('g1', 'u2', 500, 'test');
     await roulette.startRouletteCommand(s2);

@@ -8,7 +8,7 @@ const {
 } = require('discord.js');
 const { writeJsonIfChanged } = require('../../handlers/공통/저장');
 const { logSystem, logError } = require('../../handlers/공통/로그');
-const { card, payload, messageText, notice } = require('../../handlers/공통/카드');
+const { card, payload, hasHeaderLine, notice } = require('../../handlers/공통/카드');
 
 const COBBLEMON_COLOR = 0xE8344E;
 // 패널 제목. 재시작 시 저장 목록이 비어 있으면 이 제목(또는 예전 제목)으로 게시된 패널을 찾는다.
@@ -98,11 +98,9 @@ function rememberCobblemonPanel(message) {
   savePanels(panels);
 }
 
-// 코블몬 안내 패널인지: 카드(제목이 `# 제목` 줄)와 예전 임베드(title) 둘 다 알아본다.
+// 코블몬 안내 패널인지: 카드(제목이 `## 제목` 줄)와 예전 임베드(title) 둘 다 알아본다.
 function isCobblemonPanelMessage(m) {
-  if (PANEL_TITLES.includes(m.embeds?.[0]?.title)) return true;
-  const lines = messageText(m).split('\n');
-  return PANEL_TITLES.some(t => lines.includes(`# ${t}`));
+  return PANEL_TITLES.some(t => hasHeaderLine(m, t));
 }
 
 // 저장된 목록이 비어 있을 때(목록 저장 기능 이전에 게시했거나 DB를 옮긴 경우) 봇이 올린 패널을 채널에서 찾아 기억한다.
