@@ -21,7 +21,7 @@ const {
   ContainerBuilder, SectionBuilder, TextDisplayBuilder, ThumbnailBuilder,
   ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags,
 } = require('discord.js');
-const { PATCHNOTE_CHANNEL_ID, PATCHNOTE_TEST_CHANNEL_ID, PATCHNOTE_EMOJIS } = require('../../config');
+const { PATCHNOTE_CHANNEL_ID, PATCHNOTE_EMOJIS, ALLOWED_CHANNEL_IDS, isTestGuild } = require('../../config');
 const { logSystem, logErrorThrottled } = require('../공통/로그');
 const { writeJsonIfChanged } = require('../공통/저장');
 
@@ -386,12 +386,21 @@ function startPatchNoteWatcher(client) {
 function getPatchNoteStatus() { return active ? active.watcher.status() : null; }
 function setPatchNotePaused(value) { if (!active) return false; active.watcher.setPaused(value); return true; }
 async function checkPatchNotesNow() { return active ? active.watcher.checkNow() : false; }
-// 테스트 서버 채널(PATCHNOTE_TEST_CHANNEL_ID)에 "테스트" 카드를 한 장 올려 알림 모양과 봇 권한이 정상인지 확인한다.
+// 테스트 서버의 채널에 "테스트" 카드를 한 장 올려 알림 모양과 봇 권한이 정상인지 확인한다.
+// 채널은 새 설정 없이, 허용 채널(ALLOWED_CHANNEL_IDS) 중 테스트 서버(TEST_GUILD_IDS)에 속한 첫 채널을 쓴다.
 // 진짜 공지 채널에는 올리지 않고, 이미 알린 글로 기록하지도 않는다.
+async function findTestChannel(client) {
+  for (const id of ALLOWED_CHANNEL_IDS) {
+    const channel = await client.channels.fetch(id).catch(() => null);
+    if (channel?.isTextBased?.() && isTestGuild(channel.guildId)) return channel;
+  }
+  return null;
+}
+
 async function sendPatchNoteTest() {
   if (!active) throw new Error('패치노트 감시가 아직 시작되지 않았습니다.');
-  const channel = await active.client.channels.fetch(PATCHNOTE_TEST_CHANNEL_ID).catch(() => null);
-  if (!channel?.isTextBased()) throw new Error(`테스트 채널을 찾을 수 없음(${PATCHNOTE_TEST_CHANNEL_ID}) — 봇이 그 서버에 있는지, 채널 권한이 있는지 확인하세요.`);
+  const channel = await findTestChannel(active.client);
+  if (!channel) throw new Error('테스트 서버의 채널을 찾을 수 없음 — 봇이 테스트 서버에 있는지, 허용 채널(ALLOWED_CHANNEL_IDS)에 그 서버 채널이 있는지 확인하세요.');
   const game = GAMES[0];
   await channel.send(buildPatchNotePayload(game, { key: 'test', title: '[테스트] 패치노트 알림이 정상적으로 도착했어요', url: 'https://discord.com', at: Date.now(), note: '관리자가 보낸 테스트 알림입니다' }));
 }
