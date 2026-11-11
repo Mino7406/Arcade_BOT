@@ -67,7 +67,7 @@ async function discoverRecruitPanels(client) {
 }
 
 async function refreshRecruitPanels(client) {
-  const { buildSetupPanelPayload } = require('../../commands/패널');
+  const { buildSetupPanelPayload } = require('./패널');
   const data = load();
   let list = data.recruit ?? [];
   if (!list.length) {

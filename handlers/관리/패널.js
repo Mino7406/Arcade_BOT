@@ -10,14 +10,14 @@ const {
   MessageFlags,
 } = require('discord.js');
 
-const { ADMIN_IDS, AUTO_CLOSE_DELAY_MS, disarmAutoEnd, clearNotifyTimer, deleteMentionMessage, announceMatchCompletionXp, getCancelledDeletions } = require('../handlers/매치/공용');
+const { ADMIN_IDS, AUTO_CLOSE_DELAY_MS, disarmAutoEnd, clearNotifyTimer, deleteMentionMessage, announceMatchCompletionXp, getCancelledDeletions } = require('../매치/공용');
 // 끝말잇기/틱택토/레벨/랭킹은 이 채널(놀이터)에서만 사용 가능.
-const { PLAYGROUND_CHANNEL_ID } = require('../config');
-const { card, payload, menu, footerSide, COLORS, notice: quick } = require('../handlers/공통/카드');
-const { buildRealmPanelPayload } = require('../forms/마크');
-const { rememberRecruitPanel } = require('../handlers/관리/최신화');
-const { backRow: adminBackRow } = require('./관리');
-const { buildCobblemonPanelPayload, rememberCobblemonPanel } = require('../forms/코블몬');
+const { PLAYGROUND_CHANNEL_ID } = require('../../config');
+const { card, payload, menu, footerSide, COLORS, notice: quick } = require('../공통/카드');
+const { buildRealmPanelPayload } = require('../../forms/마크');
+const { rememberRecruitPanel } = require('./최신화');
+const { backRow: adminBackRow } = require('./홈');
+const { buildCobblemonPanelPayload, rememberCobblemonPanel } = require('../../forms/코블몬');
 
 // /패널 실행 시 뜨는 선택 메뉴에서 고를 수 있는 패널 등록표. 각 항목이 버튼 하나('form:publish:<종류>')가 된다.
 // (예전엔 게임모집 패널은 /패널, 신청서 패널은 /신청서로 따로 게시했다 — 버튼 커스텀ID는 그대로 유지해

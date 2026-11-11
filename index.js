@@ -31,18 +31,15 @@ const RAID_PAUSED_COMMANDS = {
   끝말잇기: '끝말잇기를 할', 틱택토: '틱택토를 할', 오목: '오목을 둘', 룰렛: '룰렛을 돌릴',
   레벨: '레벨을 확인할', 랭킹: '랭킹을 확인할',
 };
-const { handleQuizAdminButton, handleQuizCreateModal } = require('./commands/퀴즈');
-const { buildGameSelectPayload: buildNaejeonGameSelectPayload } = require('./commands/내전');
-const { buildGameSelectPayload: buildMojipGameSelectPayload } = require('./commands/모집');
-const { buildReloadListPayload } = require('./commands/불러오기');
-const { buildTeamMatchListPayload } = require('./commands/팀');
-const { buildCommandListPayload, buildSetupPanelPayload, buildAdminMenuPayload, handlePanelButton, handlePanelMatchDeleteSelect, handlePanelBotMessageDeleteModal, handlePanelSelectButton } = require('./commands/패널');
+const { handleQuizAdminButton, handleQuizCreateModal } = require('./handlers/관리/퀴즈관리');
+const { buildNaejeonGameSelectPayload, buildMojipGameSelectPayload, buildReloadListPayload, buildTeamMatchListPayload } = require('./handlers/매치/메뉴');
+const { buildCommandListPayload, buildSetupPanelPayload, buildAdminMenuPayload, handlePanelButton, handlePanelMatchDeleteSelect, handlePanelBotMessageDeleteModal, handlePanelSelectButton } = require('./handlers/관리/패널');
 const { handleRealmButton, handleRealmModal, handleRealmRosterModal, initRulesAgreementCache, handleRealmRulesReactionAdd, handleRealmRulesReactionRemove } = require('./forms/마크');
 const { handleCobblemonButton, startCobblemonOpenTimer } = require('./forms/코블몬');
-const { handleLevelShareButton } = require('./commands/레벨');
-const { handleRankingPageButton, handleRankingGotoButton, handleRankingGotoModal, handleRankingShareButton } = require('./commands/랭킹');
-const { handleXpUserSelect, handleXpButton, handleXpModal } = require('./commands/XP');
-const { handleAdminButton } = require('./commands/관리');
+const { handleLevelShareButton } = require('./handlers/레벨/레벨카드');
+const { handleRankingPageButton, handleRankingGotoButton, handleRankingGotoModal, handleRankingShareButton } = require('./handlers/레벨/랭킹');
+const { handleXpUserSelect, handleXpButton, handleXpModal } = require('./handlers/관리/XP');
+const { handleAdminButton } = require('./handlers/관리/홈');
 const { refreshPostedMessages } = require('./handlers/관리/최신화');
 const { loadLevels, saveLevels, loadXpState, handleMessageXp, trackVoiceStateUpdate, initVoiceStates, startVoiceXpTicker, announceLevelUp, MATCH_BONUS_CHANNEL_ID } = require('./handlers/레벨/레벨링');
 const { handleTempVoiceState, reconcileTempChannels } = require('./handlers/레벨/음성채널');
@@ -92,10 +89,15 @@ const client = new Client({
 client.commands = new Collection();
 
 const commandsPath = path.join(__dirname, 'commands');
-const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
+// commands/ 는 handlers/ 와 같은 폴더(매치·게임·레벨)로 묶여 있어 하위 폴더까지 훑는다.
+function listCommandFiles(dir) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap(e =>
+    e.isDirectory() ? listCommandFiles(path.join(dir, e.name)) : e.name.endsWith('.js') ? [path.join(dir, e.name)] : []);
+}
+const commandFiles = listCommandFiles(commandsPath);
 
 for (const file of commandFiles) {
-  const command = require(path.join(commandsPath, file));
+  const command = require(file);
   if (command.data && command.execute) {
     client.commands.set(command.data.name, command);
   }

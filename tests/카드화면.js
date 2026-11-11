@@ -45,17 +45,17 @@ async function buildScreens() {
   const omok = req('handlers/게임/오목.js');
   const wc = req('handlers/게임/끝말잇기.js');
   const rl = req('handlers/게임/룰렛.js');
-  const xp = req('commands/XP.js').views;
-  const panel = req('commands/패널.js');
-  const rank = req('commands/랭킹.js');
-  const level = req('commands/레벨.js');
+  const xp = req('handlers/관리/XP.js').views;
+  const panel = req('handlers/관리/패널.js');
+  const rank = req('handlers/레벨/랭킹.js');
+  const level = req('handlers/레벨/레벨카드.js');
   const quizMod = req('handlers/게임/퀴즈.js');
   const mark = req('forms/마크/index.js');
   const cob = req('forms/코블몬/index.js');
   const naejeonMod = req('handlers/매치/내전.js');
-  const quizCmd = req('commands/퀴즈.js');
-  const gameSelect = req('commands/내전.js');
-  const reload = req('commands/불러오기.js');
+  const quizCmd = req('handlers/관리/퀴즈관리.js');
+  const gameSelect = req('handlers/매치/메뉴.js');
+  const reload = gameSelect; // 메뉴 화면 빌더(게임 선택·불러오기 목록)는 handlers/매치/메뉴.js 에 모여 있다
   const { ButtonBuilder, ButtonStyle } = require('discord.js');
 
   const users = n => Array.from({ length: n }, (_, i) => ({ id: String(100 + i), displayName: ['민호', '지수', '하늘', '도윤', '서연', '준호', '예린', '태양', '나래', '현우'][i % 10] }));
@@ -95,7 +95,7 @@ async function buildScreens() {
   add('나만 보이는 메시지', '주최자 관리 메뉴 (모집 중)', '제목·상태·버튼이 한 카드에', common.buildManagePayload({ label: '내전', match: mm(), rows: naejeonMod.buildManageMenu(mm(), '1'), ephemeral: true }));
   add('나만 보이는 메시지', '주최자 관리 메뉴 (마감 + 조작 결과)', '방금 한 조작 결과가 맨 위에', common.buildManagePayload({ label: '내전', match: mm({ closed: true }), note: '✅ **내전이 마감되었습니다.**', rows: naejeonMod.buildManageMenu(mm({ closed: true }), '1') }));
   add('나만 보이는 메시지', '참가 완료 안내 + 참가 취소', '이전엔 평문 한 줄이었던 화면', card.notice('✅ **참가 완료!** 명단에 등록되었습니다.\n취소하려면 아래 버튼을 눌러주세요.', { rows: [naejeonMod.buildLeaveButton('1')], ephemeral: true }));
-  add('나만 보이는 메시지', '게임 선택 메뉴', '', gameSelect.buildGameSelectPayload('1'));
+  add('나만 보이는 메시지', '게임 선택 메뉴', '', gameSelect.buildNaejeonGameSelectPayload('1'));
   add('나만 보이는 메시지', '불러오기 목록', '', reload.buildReloadListPayload({ guildId: '1', client: { naejeonMatches: new Map([['1', { guildId: '1', participants: users(3), closed: false, data: base('lol') }]]), mojipMatches: new Map() } }));
   add('나만 보이는 메시지', '권한 없음 / 오류 안내', '', card.notice('❌ **내전 주최자만 팀을 관리할 수 있습니다.**', { ephemeral: true }));
   add('나만 보이는 메시지', '패널 관리 메뉴', '', panel.buildAdminMenuPayload('1', '✅ **패널을 새로고침했습니다.**'));
@@ -139,7 +139,7 @@ async function buildScreens() {
   add('레벨 · 랭킹 · 퀴즈', '퀴즈 정답', '', quizMod.buildCorrectPayload({ word: '고양이', xpReward: 40 }));
 
   // ── 관리 · 안내 패널 ──────────────────────────
-  const adminHome = req('commands/관리.js').buildAdminHome;
+  const adminHome = req('handlers/관리/홈.js').buildAdminHome;
   add('관리 · 안내 패널', '/관리 홈 — 소식 알림 작동 중', '일시정지 버튼이 줄 오른쪽 · 출처별 마지막 확인', adminHome({ guildId: '1' }));
   patchState = { ...patchState, paused: true };
   add('관리 · 안내 패널', '/관리 홈 — 소식 알림 일시정지됨', '일시정지하면 재개 버튼으로 바뀌고 확인도 멈춰요', adminHome({ guildId: '1', note: '⏸️ **소식 알림을 일시정지했어요.** 재개할 때까지 새 글이 올라와도 알리지 않아요.' }));

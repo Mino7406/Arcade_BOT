@@ -9,9 +9,9 @@ const {
   TextInputStyle,
   MessageFlags,
 } = require('discord.js');
-const { ADMIN_IDS } = require('../config');
-const { buildAdminHome, backRow: adminBackRow } = require('./관리');
-const { card, payload, COLORS, notice: quick } = require('../handlers/공통/카드');
+const { ADMIN_IDS } = require('../../config');
+const { buildAdminHome, backRow: adminBackRow } = require('./홈');
+const { card, payload, COLORS, notice: quick } = require('../공통/카드');
 const {
   getXp,
   levelFromXp,
@@ -26,12 +26,12 @@ const {
   setXpSwitch,
   isUserXpFrozen,
   setUserXpFrozen,
-} = require('../handlers/레벨/레벨링');
-const { logAction } = require('../handlers/공통/로그');
-const { getRaidStatus, setAutoSpawn, setNextSpawnAt, setNextMonster, forceSpawnRaid, forceEndRaid } = require('../handlers/레이드');
-const { MONSTERS } = require('../handlers/레이드/전투');
-const { kstDateTimeString, parseKstDateTime } = require('../handlers/공통/시간');
-const { displayNameFromMember } = require('../handlers/공통/이름');
+} = require('../레벨/레벨링');
+const { logAction } = require('../공통/로그');
+const { getRaidStatus, setAutoSpawn, setNextSpawnAt, setNextMonster, forceSpawnRaid, forceEndRaid } = require('../레이드');
+const { MONSTERS } = require('../레이드/전투');
+const { kstDateTimeString, parseKstDateTime } = require('../공통/시간');
+const { displayNameFromMember } = require('../공통/이름');
 
 // 한 번에 조정 가능한 XP 폭 / 레벨 상한. 오타로 터무니없는 값이 들어가는 것만 막는 안전장치.
 const MAX_ABS = 10_000_000;

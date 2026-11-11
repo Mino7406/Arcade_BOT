@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require('discord.js');
-const { startTttCommand } = require('../handlers/게임/틱택토');
+const { startTttCommand } = require('../../handlers/게임/틱택토');
 
 module.exports = {
   data: new SlashCommandBuilder()

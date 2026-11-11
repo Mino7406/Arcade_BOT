@@ -1,6 +1,6 @@
-const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { card, payload, notice, hasCustomId, COLORS, headerSide } = require('../handlers/공통/카드');
-const { getLeaderboard, getLeaderboardSize, buildProgressBar } = require('../handlers/레벨/레벨링');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { card, payload, notice, hasCustomId, COLORS, headerSide } = require('../공통/카드');
+const { getLeaderboard, getLeaderboardSize, buildProgressBar } = require('./레벨링');
 
 const PAGE_SIZE = 5;
 const MEDALS = ['🥇', '🥈', '🥉'];
@@ -109,23 +109,16 @@ async function buildRankingView(guild, page, includeShare = true) {
   return { payload: payload(rankingCard) };
 }
 
-module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('랭킹')
-    .setDescription('서버 레벨 순위표를 확인합니다.'),
-
-  async execute(interaction) {
-    // 멤버 조회(네트워크 요청) 전에 먼저 ack해서 3초 인터랙션 응답 제한을 넘기지 않는다.
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const view = await buildRankingView(interaction.guild, 1);
-    if (!view) {
-      await interaction.editReply(notice('📭 **아직 레벨 기록이 없습니다.**'));
-      return;
-    }
-
-    await interaction.editReply(view.payload);
-  },
-};
+// /랭킹 실행: 멤버 조회(네트워크 요청) 전에 먼저 ack해서 3초 인터랙션 응답 제한을 넘기지 않는다.
+async function showRanking(interaction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const view = await buildRankingView(interaction.guild, 1);
+  if (!view) {
+    await interaction.editReply(notice('📭 **아직 레벨 기록이 없습니다.**'));
+    return;
+  }
+  await interaction.editReply(view.payload);
+}
 
 // ── 페이지 이동 버튼 처리 ────────────────────────────────────────
 // 3초 인터랙션 응답 제한을 넘기지 않도록, 멤버 조회 등 오래 걸릴 수 있는 작업 전에 먼저 ack한다.
@@ -195,6 +188,7 @@ async function handleRankingShareButton(interaction) {
   await interaction.deleteReply();
 }
 
+module.exports.showRanking = showRanking;
 module.exports.buildRankingView = buildRankingView; // 화면 모음·테스트용
 module.exports.handleRankingPageButton = handleRankingPageButton;
 module.exports.handleRankingGotoButton = handleRankingGotoButton;

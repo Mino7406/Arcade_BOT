@@ -1,7 +1,7 @@
-const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
-const { getXp, levelFromXp, buildProgressBar } = require('../handlers/레벨/레벨링');
-const { displayNameFromMember } = require('../handlers/공통/이름');
-const { card, payload, notice, COLORS, pullButton } = require('../handlers/공통/카드');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
+const { getXp, levelFromXp, buildProgressBar } = require('./레벨링');
+const { displayNameFromMember } = require('../공통/이름');
+const { card, payload, notice, COLORS, pullButton } = require('../공통/카드');
 
 // rows: 카드 안에 넣을 버튼 줄(나에게만 보이는 화면에는 공유하기 버튼, 공개 게시에는 없음)
 function buildLevelPayload(guildId, targetUser, displayName, rows = []) {
@@ -32,25 +32,17 @@ function buildShareRow(targetUserId) {
   );
 }
 
-module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('레벨')
-    .setDescription('나 또는 다른 사용자의 레벨과 XP를 확인합니다.')
-    .addUserOption(opt =>
-      opt.setName('유저').setDescription('확인할 유저 (비우면 본인)').setRequired(false),
-    ),
+// /레벨 실행: 나 또는 지정한 유저의 레벨 카드를 나에게만 보여 준다.
+async function showLevel(interaction) {
+  const targetUser = interaction.options.getUser('유저') || interaction.user;
+  const targetMember = interaction.options.getMember('유저') || interaction.member;
+  const displayName = displayNameFromMember(targetMember, targetUser);
 
-  async execute(interaction) {
-    const targetUser = interaction.options.getUser('유저') || interaction.user;
-    const targetMember = interaction.options.getMember('유저') || interaction.member;
-    const displayName = displayNameFromMember(targetMember, targetUser);
-
-    await interaction.reply({
-      ...buildLevelPayload(interaction.guildId, targetUser, displayName, [buildShareRow(targetUser.id)]),
-      flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
-    });
-  },
-};
+  await interaction.reply({
+    ...buildLevelPayload(interaction.guildId, targetUser, displayName, [buildShareRow(targetUser.id)]),
+    flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+  });
+}
 
 // ── 공유하기 버튼 처리 ──────────────────────────────────────────
 // 3초 인터랙션 응답 제한을 넘기지 않도록, 멤버 조회 등 오래 걸릴 수 있는 작업 전에 먼저 ack한다.
@@ -70,5 +62,6 @@ async function handleLevelShareButton(interaction) {
   await interaction.deleteReply();
 }
 
+module.exports.showLevel = showLevel;
 module.exports.buildLevelPayload = buildLevelPayload; // 화면 모음·테스트용
 module.exports.handleLevelShareButton = handleLevelShareButton;

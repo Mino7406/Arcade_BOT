@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require('discord.js');
-const { startWcCommand } = require('../handlers/게임/끝말잇기');
+const { startWcCommand } = require('../../handlers/게임/끝말잇기');
 
 module.exports = {
   data: new SlashCommandBuilder()

@@ -7,10 +7,15 @@ const { GUILD_ID, TEST_GUILD_IDS } = require('./config');
 
 const commands = [];
 const commandsPath = path.join(__dirname, 'commands');
-const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
+// commands/ 는 하위 폴더(매치·게임·레벨)로 묶여 있어 폴더까지 훑는다.
+function listCommandFiles(dir) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap(e =>
+    e.isDirectory() ? listCommandFiles(path.join(dir, e.name)) : e.name.endsWith('.js') ? [path.join(dir, e.name)] : []);
+}
+const commandFiles = listCommandFiles(commandsPath);
 
 for (const file of commandFiles) {
-  const command = require(path.join(commandsPath, file));
+  const command = require(file);
   if (command.data) {
     commands.push(command.data.toJSON());
   }
