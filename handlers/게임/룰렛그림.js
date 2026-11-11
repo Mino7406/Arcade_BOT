@@ -11,15 +11,16 @@ const path = require('path');
 const { Painter, loadFont } = require('../레이드/그림판');
 
 const W = 640;
-const H = 320;
-const SCALE = 0.8; // 설계 크기 640×320 → 실제 512×256 (디스코드가 채팅 폭으로 줄여 보여 주므로 글자 크기는 그대로)
+const H = 252;
+const SCALE = 0.8; // 설계 크기 640×252 → 실제 512×202 (디스코드가 채팅 폭으로 줄여 보여 주므로 글자 크기는 그대로)
 const FONT_PATH = path.join(__dirname, '..', '..', 'assets', 'fonts', 'NanumGothic-Bold.ttf');
 
 // 화면 배치(설계 좌표)
 const WIN_W = 140;
-const WIN_H = 140;
-const WIN_Y = 88;
+const WIN_H = 124;
+const WIN_Y = 52;
 const WIN_X = [66, 220, 374];
+const WIN_CY = WIN_Y + WIN_H / 2; // 릴 가운데 높이
 
 let font = null;
 let painter = null;
@@ -46,22 +47,25 @@ function cherry(p, cx, cy) {
   p.circle(cx + 13, cy + 21, 6, '#ff8a96');
 }
 function lemon(p, cx, cy) {
-  const ell = (rx, ry) => {
+  // 진짜 레몬처럼 약간 기울어진 타원(-26도) + 양 끝의 뾰족한 꼭지. 납작하게 눌려 보이지 않게 가로:세로를 1.35:1로 둔다.
+  const ang = -0.45, ca = Math.cos(ang), sa = Math.sin(ang);
+  const rot = (x, y) => [cx + x * ca - y * sa, cy + x * sa + y * ca];
+  const ell = (rx, ry, ox = 0, oy = 0) => {
     const pts = [];
-    for (let k = 0; k < 28; k++) { const t = (k / 28) * Math.PI * 2; pts.push(cx + Math.cos(t) * rx, cy + Math.sin(t) * ry); }
+    for (let k = 0; k < 32; k++) { const t = (k / 32) * Math.PI * 2; pts.push(...rot(ox + Math.cos(t) * rx, oy + Math.sin(t) * ry)); }
     return pts;
   };
-  p.poly(ell(50, 36), '#d9a820');
-  p.poly([cx - 56, cy + 2, cx - 44, cy - 8, cx - 44, cy + 10], '#d9a820');
-  p.poly([cx + 56, cy + 2, cx + 44, cy - 8, cx + 44, cy + 10], '#d9a820');
-  p.poly(ell(46, 32), '#f7d12c');
-  p.poly(ell(20, 8).map((v, i) => (i % 2 ? v - 14 : v - 10)), '#fff2a6');
-  p.poly([cx + 6, cy - 34, cx + 34, cy - 50, cx + 28, cy - 28], '#4caf3d');
+  p.poly(ell(46, 36), '#d9a820');                                   // 테두리
+  p.poly([...rot(42, -9), ...rot(62, 0), ...rot(42, 9)], '#d9a820'); // 오른쪽 꼭지
+  p.poly([...rot(-42, -9), ...rot(-62, 0), ...rot(-42, 9)], '#d9a820'); // 왼쪽 꼭지
+  p.poly(ell(42, 32), '#f7d12c');                                   // 몸
+  p.poly(ell(22, 8, -8, -14), '#fff2a6');                           // 빛 반사
+  p.poly([...rot(10, -30), ...rot(30, -52), ...rot(40, -26)], '#4caf3d'); // 잎
 }
 function grapes(p, cx, cy) {
-  p.line(cx, cy - 22, cx, cy - 46, 6, '#6b4a2a');
-  p.poly([cx + 2, cy - 40, cx + 34, cy - 54, cx + 26, cy - 32], '#4caf3d');
-  const spots = [[-28, -6], [0, -6], [28, -6], [-14, 18], [14, 18], [0, 42]];
+  p.line(cx, cy - 20, cx, cy - 42, 6, '#6b4a2a');
+  p.poly([cx + 2, cy - 36, cx + 32, cy - 50, cx + 24, cy - 28], '#4caf3d');
+  const spots = [[-28, -4], [0, -4], [28, -4], [-14, 18], [14, 18], [0, 40]];
   for (const [dx, dy] of spots) {
     p.circle(cx + dx, cy + dy, 16, '#7d3fb8');
     p.circle(cx + dx - 5, cy + dy - 5, 4.5, '#c8a0f0');
@@ -86,35 +90,31 @@ function diamond(p, cx, cy) {
 }
 function seven(p, cx, cy) {
   const f = getFont();
-  p.text(f, '7', cx + 4, cy + 8, { size: 132, color: '#6e0e1c' });
-  p.text(f, '7', cx, cy + 3, { size: 132, color: '#ff3347' });
+  p.text(f, '7', cx + 4, cy + 8, { size: 118, color: '#6e0e1c' });
+  p.text(f, '7', cx, cy + 3, { size: 118, color: '#ff3347' });
 }
 const SYMBOL_DRAW = { '🍒': cherry, '🍋': lemon, '🍇': grapes, '🔔': bell, '💎': diamond, '7️⃣': seven };
 
 // ── 고정 배경(기계 틀) ─────────────────────────────────────────
 function drawStaticBg(p) {
-  const f = getFont();
   p.clear('#150d26');
-  // 몸체 + 금색 테두리
-  p.roundRect(20, 14, 560, 292, 28, '#a81e2c');
-  p.strokeRoundRect(20, 14, 560, 292, 28, 6, '#f5c542');
-  // 위쪽 간판
-  p.roundRect(170, 22, 260, 40, 20, '#f5c542');
-  p.text(f, '룰렛머신', 300, 42, { size: 24, color: '#7a1020' });
+  // 몸체 + 금색 테두리(제목은 카드 제목과 겹쳐서 그림 안에는 넣지 않는다 — 그래서 그림이 납작하다)
+  p.roundRect(20, 8, 560, 236, 26, '#a81e2c');
+  p.strokeRoundRect(20, 8, 560, 236, 26, 6, '#f5c542');
   // 릴 판
-  p.roundRect(40, 76, 500, 166, 18, '#2b0f1f');
+  p.roundRect(40, 44, 500, 140, 16, '#2b0f1f');
   for (const x of WIN_X) {
     p.roundRect(x - 4, WIN_Y - 4, WIN_W + 8, WIN_H + 8, 14, '#d9b24c');
     p.roundRect(x, WIN_Y, WIN_W, WIN_H, 10, '#fff6dc');
   }
   // 당첨선 화살표
-  p.poly([44, 148, 62, 158, 44, 168], '#ff3347');
-  p.poly([536, 148, 518, 158, 536, 168], '#ff3347');
+  p.poly([44, WIN_CY - 10, 62, WIN_CY, 44, WIN_CY + 10], '#ff3347');
+  p.poly([536, WIN_CY - 10, 518, WIN_CY, 536, WIN_CY + 10], '#ff3347');
   // 아래 표시판
-  p.roundRect(40, 250, 500, 42, 12, '#150a14');
+  p.roundRect(40, 192, 500, 42, 12, '#150a14');
   // 레버 받침
-  p.circle(596, 222, 12, '#7a7f8c');
-  p.roundRect(584, 222, 24, 28, 6, '#5a5f6c');
+  p.circle(596, 208, 12, '#7a7f8c');
+  p.roundRect(584, 208, 24, 26, 6, '#5a5f6c');
 }
 
 function getBg() {
@@ -134,7 +134,7 @@ function drawSpinningWindow(p, x, phase) {
     const y = WIN_Y + 8 + ((k * 26 + phase * 11) % (WIN_H - 20));
     p.roundRect(x + 10, y, WIN_W - 20, 10, 5, colors[k % 3]);
   }
-  p.text(getFont(), '?', x + WIN_W / 2, WIN_Y + WIN_H / 2, { size: 70, color: '#d1b36a' });
+  p.text(getFont(), '?', x + WIN_W / 2, WIN_CY, { size: 64, color: '#d1b36a' });
 }
 
 /**
@@ -155,17 +155,16 @@ function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = 
   getBg().copy(p.buf);
   const f = getFont();
 
-  // 간판 양옆 전구(프레임마다 번갈아 켜진다)
-  for (let k = 0; k < 6; k++) {
+  // 위쪽 전구 줄(프레임마다 번갈아 켜진다)
+  for (let k = 0; k < 14; k++) {
     const lit = (k + phase) % 2 === 0;
-    p.circle(60 + k * 18, 42, 6, lit ? '#ffe45c' : '#7a5a20');
-    p.circle(540 - k * 18, 42, 6, lit ? '#ffe45c' : '#7a5a20');
+    p.circle(66 + k * 36.5, 26, 6, lit ? '#ffe45c' : '#7a5a20');
   }
 
   // 레버: 돌리는 중이면 아래로 당겨진 모양
   const pulled = reels.some(r => r === null);
-  const topY = pulled ? 196 : 130;
-  p.line(596, 222, 596, topY + 14, 9, '#b8bcc6');
+  const topY = pulled ? 168 : 108;
+  p.line(596, 208, 596, topY + 14, 9, '#b8bcc6');
   p.circle(596, topY, 16, '#e0243a');
   p.circle(590, topY - 5, 5, '#ff8a96');
 
@@ -174,7 +173,7 @@ function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = 
     const x = WIN_X[i];
     if (reels[i] === null) { drawSpinningWindow(p, x, phase + i * 2); continue; }
     const draw = SYMBOL_DRAW[reels[i]];
-    if (draw) draw(p, x + WIN_W / 2, WIN_Y + WIN_H / 2);
+    if (draw) draw(p, x + WIN_W / 2, WIN_CY);
   }
 
   // 당첨 릴 테두리
@@ -183,17 +182,17 @@ function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = 
   }
 
   // 아래 표시판
-  if (bet != null) p.text(f, `베팅 ${bet} XP`, 58, 271, { size: 22, color: '#ffe9a8', align: 'left' });
+  if (bet != null) p.text(f, `베팅 ${bet} XP`, 58, 213, { size: 22, color: '#ffe9a8', align: 'left' });
   let rightX = 522;
   if (right) {
-    p.text(f, right, rightX, 271, { size: 24, color: rightColor, align: 'right' });
+    p.text(f, right, rightX, 213, { size: 24, color: rightColor, align: 'right' });
     rightX -= p.textWidth(f, right, 24) + 14;
   }
   if (badge) {
     // 배율 배지: 금색 알약 + 어두운 글자
     const w = p.textWidth(f, badge, 22) + 22;
-    p.roundRect(rightX - w, 258, w, 26, 13, badgeColor);
-    p.text(f, badge, rightX - w / 2, 271, { size: 22, color: '#3a1a00' });
+    p.roundRect(rightX - w, 200, w, 26, 13, badgeColor);
+    p.text(f, badge, rightX - w / 2, 213, { size: 22, color: '#3a1a00' });
   }
 
   return p.png();

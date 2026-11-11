@@ -170,8 +170,8 @@ function buildSpinningPayload(lobby, bet, reels, phase = 0) {
   return payload(card({
     color: COLORS.info,
     header: '🎰 룰렛머신',
-    sub: ['릴이 돌아가는 중...', `베팅 ${bet} XP`],
-    blocks: [`<@${lobby.userId}>님이 **${bet} XP**를 걸고 돌립니다...`, { image: SLOT_URL }],
+    sub: [`<@${lobby.userId}>`, '릴이 돌아가는 중...', `베팅 ${bet} XP`],
+    blocks: [{ image: SLOT_URL }],
     footer: '🎰 두근두근... 릴이 하나씩 멈춰요',
   }), { files: [slotFile(png)] });
 }
@@ -189,11 +189,10 @@ function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multi
   return payload(card({
     color: win ? 0xFFD700 : COLORS.muted,
     header: '🎰 룰렛머신',
-    sub: ['결과', `베팅 ${bet} XP`],
+    sub: [`<@${lobby.userId}>`, '결과', `베팅 ${bet} XP`],
     blocks: [
-      `<@${lobby.userId}>님이 **${bet} XP**를 걸었습니다.`,
       { image: SLOT_URL },
-      `### ${resultLine}\n## ${netLine}`,
+      `### ${resultLine}　${netLine}`, // 결과와 손익을 한 줄에
     ],
     footer: '⏰ 하루에 한 번만 돌릴 수 있어요.',
   }), { files: [slotFile(png)] });
