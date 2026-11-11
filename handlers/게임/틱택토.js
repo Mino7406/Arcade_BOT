@@ -4,14 +4,14 @@ const {
   ButtonStyle,
   MessageFlags,
 } = require('discord.js');
-const { card, payload, notice, text, withTopRows, COLORS, footerSide } = require('./카드');
-const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp, isMinigameXpFrozen, isRaidXpFrozen, isUserXpFrozen } = require('./레벨링');
+const { card, payload, notice, text, withTopRows, COLORS, footerSide } = require('../공통/카드');
+const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp, isMinigameXpFrozen, isRaidXpFrozen, isUserXpFrozen } = require('../레벨/레벨링');
 const {
   getRemainingBotXp, addBotMatchXp, DAILY_BOT_MATCH_XP_CAP, timeUntilKstMidnight,
   WAGER_XP, BOT_WIN_XP_MIN, BOT_WIN_XP_MAX, rollBotWinXp,
 } = require('./봇전한도');
-const { displayNameFromInteraction } = require('./이름');
-const { logGameResult, userLabel } = require('./로그');
+const { displayNameFromInteraction } = require('../공통/이름');
+const { logGameResult, userLabel } = require('../공통/로그');
 
 const TIMEOUT_MS = 5 * 60 * 1000;
 // 대기 로비를 열어두는 시간 — 끝말잇기와 동일하게 2분. 그 안에 시작하지 않으면 자동 취소된다.

@@ -1,6 +1,6 @@
 const { buildPublicMessagePayload } = require('./내전');
 const { buildMojipMessagePayload } = require('./모집');
-const { notice } = require('./카드');
+const { notice } = require('../공통/카드');
 const { armAutoEnd, AUTO_CLOSE_DELAY_MS, armNotifyReminder, saveNow } = require('./공용');
 
 async function handleRMatchSelect(interaction) {

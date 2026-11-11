@@ -14,9 +14,9 @@ const {
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
   buildNotifyModal: buildNotifyModalBase, parseNotifyTime, formatNotifyTimeSmart, isNotify12HourInput, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
 } = require('./공용');
-const { notice, payload, text } = require('./카드');
-const { displayNameFromInteraction } = require('./이름');
-const { logAction, logError } = require('./로그');
+const { notice, payload, text } = require('../공통/카드');
+const { displayNameFromInteraction } = require('../공통/이름');
+const { logAction, logError } = require('../공통/로그');
 
 const GAMES = {
   lol:       { name: '리그 오브 레전드', emoji: '<:Lol:1510933684750913626>',    defaultPlayers: 5,   color: 0xC89B3C },

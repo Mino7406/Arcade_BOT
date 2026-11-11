@@ -14,7 +14,7 @@ const {
   buildCancelledCard,
   gameHeader,
 } = require('./공용');
-const { card, notice, payload, COLORS } = require('./카드');
+const { card, notice, payload, COLORS } = require('../공통/카드');
 
 function buildMatchSelectMenu(matches) {
   const options = matches.map(([id, m]) => {

@@ -7,7 +7,7 @@ const path = require('path');
 const {
   createWatcher, buildPatchNotePayload, parseRiotPatches, parseOverwatchPatches, parsePubgPatches,
   parseRiotMaintenances, POLL_MS, MAX_BACKOFF, describeFetchError,
-} = require('../handlers/패치노트');
+} = require('../handlers/관리/패치노트');
 
 let passed = 0;
 const tests = [];

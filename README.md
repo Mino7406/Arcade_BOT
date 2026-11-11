@@ -75,16 +75,17 @@ Arcade_BOT/
 │  ├─ 내전.js                # /내전
 │  ├─ 모집.js                # /모집
 │  ├─ 불러오기.js             # /불러오기
-│  ├─ 패널.js                # /패널 [관리자 전용] 게시할 패널(게임모집·신청서)을 버튼으로 골라 게시
+│  ├─ 관리.js                # /관리 [관리자 전용] 소식 알림·XP·퀴즈·패널 게시·게시물 최신화를 한 곳에서 (기존 /xp·/퀴즈·/패널을 통합)
+│  ├─ 패널.js                # (명령 없음) 패널 게시 선택 화면·게임모집 안내 패널·패널 관리 메뉴 로직
 │  ├─ 팀.js                 # /팀
 │  ├─ 끝말잇기.js             # /끝말잇기
 │  ├─ 틱택토.js               # /틱택토
 │  ├─ 오목.js                # /오목
 │  ├─ 룰렛.js                # /룰렛
-│  ├─ 퀴즈.js                # /퀴즈 [관리자 전용] 상식퀴즈 제어 패널(버튼)
+│  ├─ 퀴즈.js                # (명령 없음) 상식퀴즈 제어 패널 화면·버튼 로직 — /관리에서 열림
 │  ├─ 레벨.js                # /레벨
 │  ├─ 랭킹.js                # /랭킹
-│  ├─ XP.js                  # /xp [관리자 전용] XP 조정(유저 선택→버튼, 유저별 지급 정지 포함) / XP 관리(긴급정지·뉴비부스트 토글)
+│  ├─ XP.js                  # (명령 없음) XP 조정(유저 선택→버튼, 유저별 지급 정지 포함) / XP 관리(긴급정지·뉴비부스트 토글) 화면 — /관리에서 열림
 ├─ forms/                   # /패널로 게시하는 신청서(폼)별 로직 — 폼마다 폴더 하나
 │  └─ 마크/                  # 마인크래프트 렐름 참가 신청 폼
 │     ├─ index.js            # 패널·신청 모달·검토 임베드·명단 관리 상호작용 ('realm:' / 'realm:roster:')
@@ -95,28 +96,37 @@ Arcade_BOT/
 │  ├─ 아이스큐브.json          # 세 번째 몬스터(❄️냉기 — 방어하면 쌓이고 3중첩이면 🧊빙결)
 │  ├─ 고스트.json              # 네 번째 몬스터(👁️표식 — 한 사람만 노림 · 😱공포 · 투명화)
 │  └─ 꼬마폭탄.json          # 다섯 번째 몬스터(💣점화 카운트다운 · 🔥화상 · 💨연막)
-├─ handlers/                # 실제 비즈니스 로직 (버튼/모달/셀렉트 메뉴 처리 포함)
-│  ├─ 내전.js
-│  ├─ 모집.js
-│  ├─ 불러오기.js
-│  ├─ 팀.js
-│  ├─ 끝말잇기.js
-│  ├─ 틱택토.js
-│  ├─ 오목.js                # /오목 — 게임 로직 + 판 PNG 렌더링 + 봇 AI 한 파일에 통합
-│  ├─ 룰렛.js
-│  ├─ 퀴즈.js                # 놀이터 채널 일일 상식퀴즈 자동 출제 (커맨드 없음)
-│  ├─ 레이드.js              # 레이드 출현 스케줄·화면·버튼·XP 정지/보상 (커맨드 없음)
-│  ├─ 레이드전투.js          # 레이드 턴제 전투 규칙·역할, Monster 폴더 읽기 (디스코드 무관 순수 로직)
-│  ├─ 레이드그림.js          # 레이드 패널 그림(모집·전투·결과 PNG)
-│  ├─ 그림판.js              # 순수 JS 그림 엔진(RGB 버퍼 + 안티앨리어싱 + opentype.js 글자 + zlib PNG)
-│  ├─ 레벨링.js              # XP/레벨 시스템 (레벨업 축하 메시지 announceLevelUp 공용)
-│  ├─ 로그.js                # 명령어/버튼/선택 메뉴/모달 제출 상호작용 로그 기록
-│  ├─ 음성채널.js             # 허브 채널 입장 시 임시 음성채널 자동 생성/삭제
-│  ├─ 시간.js                # KST 오프셋·날짜·자정까지 남은 시간 공용 유틸
-│  ├─ 이름.js                # 상호작용/멤버 → 표시 이름 공용 규칙
-│  ├─ 봇전한도.js             # 미니게임 내기/봇전 보상 XP 상수와 하루 누적 한도(KST 자정 초기화) 공용 관리
-│  ├─ 저장.js                # JSON 저장 공용 헬퍼 — 직전 저장과 내용이 같으면 건너뛰고, tmp→rename 원자적 쓰기
-│  └─ 공용.js                # 내전/모집/팀 공용 유틸 (관리자 목록, 임베드 빌더, 자동 종료 타이머, 내전/모집 매치 저장·복원 등)
+├─ handlers/                # 실제 비즈니스 로직 (버튼/모달/셀렉트 메뉴 처리 포함) — 관련 있는 파일끼리 폴더로 묶음
+│  ├─ 매치/                  # 내전·모집 시스템
+│  │  ├─ 공용.js             # 내전/모집/팀 공용 유틸 (관리자 목록, 카드 빌더, 자동 종료 타이머, 매치 저장·복원 등)
+│  │  ├─ 내전.js
+│  │  ├─ 모집.js
+│  │  ├─ 팀.js
+│  │  └─ 불러오기.js
+│  ├─ 게임/                  # 놀이터 미니게임
+│  │  ├─ 끝말잇기.js
+│  │  ├─ 틱택토.js
+│  │  ├─ 오목.js             # /오목 — 게임 로직 + 판 PNG 렌더링 + 봇 AI 한 파일에 통합
+│  │  ├─ 룰렛.js
+│  │  ├─ 퀴즈.js             # 놀이터 채널 일일 상식퀴즈 자동 출제 (커맨드 없음)
+│  │  └─ 봇전한도.js         # 미니게임 내기/봇전 보상 XP 상수와 하루 누적 한도(KST 자정 초기화)
+│  ├─ 레이드/                # 레이드 (require('./handlers/레이드')는 index.js로 연결)
+│  │  ├─ index.js            # 레이드 출현 스케줄·화면·버튼·XP 정지/보상 (커맨드 없음)
+│  │  ├─ 전투.js             # 턴제 전투 규칙·역할, Monster 폴더 읽기 (디스코드 무관 순수 로직)
+│  │  ├─ 그림.js             # 패널 그림(모집·전투·결과 PNG)
+│  │  └─ 그림판.js           # 순수 JS 그림 엔진(RGB 버퍼 + 안티앨리어싱 + opentype.js 글자 + zlib PNG)
+│  ├─ 레벨/
+│  │  ├─ 레벨링.js           # XP/레벨 시스템 (레벨업 축하 announceLevelUp 공용)
+│  │  └─ 음성채널.js         # 허브 채널 입장 시 임시 음성채널 자동 생성/삭제
+│  ├─ 관리/
+│  │  ├─ 패치노트.js         # 롤·발로란트·오버워치·배그 공식 홈페이지 패치노트·점검 공지 알림(일시정지/상태 포함)
+│  │  └─ 최신화.js           # 이미 올라간 안내 패널·렐름 패널/명단·코블몬 패널을 새 디자인으로 자동 갱신
+│  └─ 공통/                  # 어디서나 쓰는 도구
+│     ├─ 카드.js             # 컴포넌트 v2 카드(embed 대체) 공통 빌더 — card/payload/notice/menu 등
+│     ├─ 로그.js             # 명령어/버튼/선택 메뉴/모달 제출 상호작용 로그 기록
+│     ├─ 시간.js             # KST 오프셋·날짜·자정까지 남은 시간 공용 유틸
+│     ├─ 이름.js             # 상호작용/멤버 → 표시 이름 공용 규칙
+│     └─ 저장.js             # JSON 저장 공용 헬퍼 — 직전 저장과 내용이 같으면 건너뛰고, tmp→rename 원자적 쓰기
 ├─ DB/                      # fs 기반 JSON 저장 파일 전부 (자동 생성, 폴더째 gitignore)
 │  ├─ N-M.json               # 진행 중인 내전(N)/모집(M) 매치
 │  ├─ *.json.tmp             # 원자적 저장용 임시 파일(tmp에 다 쓴 뒤 rename, 정상 종료 시 남지 않음)
@@ -232,7 +242,7 @@ npm start
 > 항목 제목을 클릭하면 상세 내용이 펼쳐집니다.
 
 <details>
-<summary>⚔️ <b>내전</b> <sub><code>/내전</code>, <code>handlers/내전.js</code></sub></summary>
+<summary>⚔️ <b>내전</b> <sub><code>/내전</code>, <code>handlers/매치/내전.js</code></sub></summary>
 
 1. `/내전` 실행 → 게임 선택 메뉴(롤/발로란트/오버워치/배틀그라운드/직접 입력)
 2. 게임 선택 → 모달로 제목/일시/인원/설명 입력
@@ -250,14 +260,14 @@ npm start
 </details>
 
 <details>
-<summary>📋 <b>모집</b> <sub><code>/모집</code>, <code>handlers/모집.js</code></sub></summary>
+<summary>📋 <b>모집</b> <sub><code>/모집</code>, <code>handlers/매치/모집.js</code></sub></summary>
 
 내전과 동일한 생성/게시/참가/관리 흐름을 갖되 **팀 배정 기능이 없는** 더 가벼운 버전입니다. 기본 인원수도 더 적게 설정되어 있습니다(롤/발로란트/오버워치 5명, 배그 4명 vs 내전 10명/8명).
 
 </details>
 
 <details>
-<summary>🛠️ <b>팀 배정</b> <sub><code>/팀</code>, <code>handlers/팀.js</code></sub></summary>
+<summary>🛠️ <b>팀 배정</b> <sub><code>/팀</code>, <code>handlers/매치/팀.js</code></sub></summary>
 
 - 참가자 2명 이상인 진행 중 내전만 선택 가능
 - `🛠️ 팀 만들기`(팀1을 수동으로 선택, 나머지는 자동으로 팀2) 또는 `🎲 자동 배정`(Fisher–Yates 셔플 후 절반씩 분할) 선택
@@ -266,7 +276,7 @@ npm start
 </details>
 
 <details>
-<summary>🔎 <b>불러오기</b> <sub><code>/불러오기</code>, <code>handlers/불러오기.js</code></sub></summary>
+<summary>🔎 <b>불러오기</b> <sub><code>/불러오기</code>, <code>handlers/매치/불러오기.js</code></sub></summary>
 
 - 현재 서버에서 진행 중인 내전/모집 목록을 셀렉트 메뉴로 표시(상태: 🔒 마감됨 / 🟢 모집중)
 - 선택 시 기존 메시지를 삭제하고 동일한 내용으로 새 메시지를 게시, 내부적으로 매치 데이터의 메시지 ID를 갱신
@@ -292,7 +302,7 @@ npm start
 </details>
 
 <details>
-<summary>🔤 <b>끝말잇기</b> <sub><code>/끝말잇기</code>, <code>handlers/끝말잇기.js</code></sub></summary>
+<summary>🔤 <b>끝말잇기</b> <sub><code>/끝말잇기</code>, <code>handlers/게임/끝말잇기.js</code></sub></summary>
 
 - `config.js`의 `WORDCHAIN_RANKING_CHANNEL_ID`로 지정된 채널에서만 사용 가능
 - 참가 버튼으로 대기열에 합류(최대 2분), 2명 이상이면 시작 가능, 사람이 1명뿐이면 봇과 대결 가능
@@ -313,7 +323,7 @@ npm start
 </details>
 
 <details>
-<summary>⭕ <b>틱택토</b> <sub><code>/틱택토</code>, <code>handlers/틱택토.js</code></sub></summary>
+<summary>⭕ <b>틱택토</b> <sub><code>/틱택토</code>, <code>handlers/게임/틱택토.js</code></sub></summary>
 
 - `config.js`의 `WORDCHAIN_RANKING_CHANNEL_ID`로 지정된 채널에서만 사용 가능
 - **대기 로비는 끝말잇기와 동일한 형태** — `/틱택토` 실행 시 참가자 목록·규칙·XP 내기 안내가 담긴 대기 임베드가 뜨고, `✋ 참가`로 합류, 방장(👑)이 `▶️ 게임 시작`을 누르면 시작(혼자면 `🤖 봇과 시작`), `❌ 취소`는 방장만. 2분 내 시작하지 않으면 자동 취소됨. 끝말잇기와 달리 **1vs1 게임이라 참가자는 2명까지만** — 2명이 차면 `✋ 참가` 버튼이 비활성화됨. 지목해서 부르는 명령어 옵션은 없고, 로비에 참가 버튼으로만 합류함
@@ -329,7 +339,7 @@ npm start
 </details>
 
 <details>
-<summary>⚫ <b>오목</b> <sub><code>/오목</code>, <code>handlers/오목.js</code></sub></summary>
+<summary>⚫ <b>오목</b> <sub><code>/오목</code>, <code>handlers/게임/오목.js</code></sub></summary>
 
 - `config.js`의 `WORDCHAIN_RANKING_CHANNEL_ID`로 지정된 채널에서만 사용 가능
 - **대기 로비·봇전·XP 내기는 틱택토와 동일한 형태·상수** — `✋ 참가`(최대 2명)/`▶️ 게임 시작`/`🤖 봇과 시작`/`❌ 취소`, 2분 내 미시작 시 자동 취소. XP 정산·쿨다운·하루 한도(`DAILY_BOT_MATCH_XP_CAP`=100, 끝말잇기·틱택토와 합산)도 틱택토와 같은 코드 구조
@@ -345,7 +355,7 @@ npm start
 </details>
 
 <details>
-<summary>🎰 <b>룰렛</b> <sub><code>/룰렛</code>, <code>handlers/룰렛.js</code></sub></summary>
+<summary>🎰 <b>룰렛</b> <sub><code>/룰렛</code>, <code>handlers/게임/룰렛.js</code></sub></summary>
 
 - `config.js`의 `WORDCHAIN_RANKING_CHANNEL_ID`로 지정된 채널에서만 사용 가능
 - 이름은 "룰렛"이지만 실제로는 **슬롯머신형**(3릴 심볼 매칭) 솔로(대 봇) 도박 게임 — PvP가 아니라 봇을 상대로 XP를 걸고 하루 한 번 스핀
@@ -358,7 +368,7 @@ npm start
 </details>
 
 <details>
-<summary>👾 <b>레이드</b> <sub><code>handlers/레이드.js</code> + <code>handlers/레이드전투.js</code>, 관리자 제어는 <code>/xp</code> → XP 관리</sub></summary>
+<summary>👾 <b>레이드</b> <sub><code>handlers/레이드/index.js</code> + <code>handlers/레이드/전투.js</code>, 관리자 제어는 <code>/xp</code> → XP 관리</sub></summary>
 
 - **출현**: 자동 출현은 `/xp` → `XP 관리`의 `레이드 자동 출현 가동/중지` 버튼으로 켜고 끔(`DB/raid.json`의 `autoSpawn`, 값이 없으면 중지 — 정식 개시 전까지 중지). 가동하면 그날로부터, 이후엔 출현한 날로부터 **1~2일 중 무작위** 뒤(매번 새로 뽑음), KST **12시~23시** 사이 무작위 시각에 본서버 놀이터 채널(`PLAYGROUND_CHANNEL_ID`)에 "🚨 레이드 발생!" 임베드가 뜸. 다음 출현 시각은 `DB/raid.json`에 저장돼 재시작해도 유지되고, 봇이 꺼져 있어 시각을 한참 넘겼으면 바로 띄우지 않고 남은 시간대(없으면 다음 날)로 다시 잡음
 - **XP 정지**: 출현~종료 동안 메인·TTS 채팅 XP, 통화방 체류 XP, 미니게임 XP(오목·틱택토·끝말잇기·룰렛·퀴즈)가 멈춤. 내전/모집 완료 보너스는 그대로. 관리자 긴급정지 스위치와 별개인 메모리 플래그(`setRaidXpFrozen`)라 /xp 설정을 건드리지 않고, 봇 재시작 시 자동으로 풀림. 미니게임 결과·룰렛에는 "몬스터 때문에 XP 시스템이 고장" 안내가 뜸
@@ -373,21 +383,21 @@ npm start
 - **결과**: 토벌 성공 시 직접 한 번 이상 행동한 파티원에게 +300 XP, 기여도 1위 MVP +100 XP(기여도 = 피해 + [9.75 × (아군 회복 + 부활×25) × (4 ÷ 인원)^0.25 + 39 × 도발로 대신 맞아 준 피해] ÷ 인원별 몬스터 피해 배율 — 피해만 보면 딜러만 MVP가 돼서 회복·막아 준 피해를 더함. 목표는 4인에서 네 역할 25%씩이고, 시뮬 기준 4인 검사 24%·궁수 24%·수호자 26%·치유사 26%). 전멸·시간 초과·무참가면 몬스터 도주(보상 없음). 어느 쪽이든 XP 정지 해제 + 채널에 "🔧 XP 시스템 복구 완료." 안내
 - **실패 벌칙**: 전멸·시간 초과·무참가로 몬스터가 도망치면 본서버 **모든 유저 -50~150 XP**(레이드마다 무작위 하나, 모두 같은 값 — `FAIL_PENALTY_XP_MIN`~`MAX`, `레벨링.js`의 `deductXpFromAll`, 0 밑으로는 안 내려감, 레벨 시스템 제외 서버는 문구만). 채널 안내 "🔧 XP 시스템 복구 완료." 대신 "☠️ 모든 유저의 **73XP**를 잃어버렸습니다..."(숫자만 굵게)가 뜸(종료 화면 작은 글씨에는 복구·벌칙 문구 모두 없음). 두 안내 아래 작은 글씨로 실제 처리 결과를 보여 줌: 벌칙이면 `-# 312명 · 합계 : -14,880 XP` 다음 줄 `-# 중단 시간 : 12분 34초 (14:02~14:15)`(실제로 깎인 인원·합계, 0에서 잘린 만큼은 빠짐), 복구면 `-# 중단 시간 : …`(출현~종료, `r.frozenAt`은 재시작해도 저장돼 이어짐)
 - **몬스터 HP**: 4인 기준 `baseHp`에 참가 역할별 가중치(딜러 1.15 / 수호자 0.85 / 치유사 0.9)와 인원 보정(1인 0.75 · 2인 1.25 · 3인 1.1)을 곱함. 수호자·치유사는 피해가 적어 인원이 줄어도 턴 수가 크게 안 줄어서 2·3인은 HP를 오히려 늘려 2~4인 모두 약 19~20턴이 되게 맞춤. `레이드전투.js`의 `HP_MIN_PARTY`가 2(정식 개시 설정)라 본서버는 혼자 시작해도 2인 기준 HP가 됨(빈 자리는 평균 가중치 1.0) — 혼자서는 거의 잡을 수 없고, 혼자 시작 확인 문구로 알려 줌. **테스트 서버만** `createBattle`에 `minParty: 1`을 넘겨 혼자일 때 1인 0.75 보정 HP로 끝까지 시험할 수 있음. 몬스터 피해는 인원별 배율(`PARTY_DAMAGE_RATE`: 1인 1.35 · 2인 1.07 · 3인 1.28 · 4인 1.92)과 몬스터 파일의 `damageRate`(몬스터마다 1.15~1.4)를 곱함 — 치유사·수호자가 다 있는 4인이 훨씬 잘 버텨서 크게. 시뮬레이션 기준(슬라임 baseHp 4880·damageRate 1.2, 기술 효과 포함) 잘 플레이하면 100%, 보통(가끔 실수)은 승률 80~88%, 평균 18~20턴(혼자는 2인 HP라 시뮬 승률 0%). 역할: 궁수 차지 샷 220~260(치명타 30%·×1.5), 수호자 공격 60~80·도발 시 받는 피해 -70% — 실측 턴당 혼자 5~7초, 여럿이면 기다리는 시간이 붙어 3~5분 목표. 생각 없이 연타하면 대부분 패배
-- **화면(Components V2)**: 컨테이너 하나에 ① 패널 그림(몬스터 + 파티 카드 4장, `handlers/레이드그림.js`가 PNG로 그림) ② 실시간 타이머(`<t:..:R>` — 디스코드 앱이 알아서 줄여 보여줌, 봇은 매초 고치지 않음) ③ 선택 현황(✅/⏳/💫/💀)과 상태 효과 안내(보호막·기절·점액) ④ 지난 턴 기록 ⑤ 버튼. 테두리 색은 모집 빨강 · 전투 금색 · 분노 빨강 · 클리어 초록
+- **화면(Components V2)**: 컨테이너 하나에 ① 패널 그림(몬스터 + 파티 카드 4장, `handlers/레이드/그림.js`가 PNG로 그림) ② 실시간 타이머(`<t:..:R>` — 디스코드 앱이 알아서 줄여 보여줌, 봇은 매초 고치지 않음) ③ 선택 현황(✅/⏳/💫/💀)과 상태 효과 안내(보호막·기절·점액) ④ 지난 턴 기록 ⑤ 버튼. 테두리 색은 모집 빨강 · 전투 금색 · 분노 빨강 · 클리어 초록
 - **남은 시간 표시**: 모집 대기는 "⏳ 00:52:30"(시:분:초), 전투 턴은 "⏳ 00:45 남음"(분:초)으로 보여주고 글자만 모집 10초 · 전투 5초마다 갱신(디스코드 메시지 수정 제한 때문에 1초 단위는 불가, 그림은 다시 올리지 않음). 결과 단계(턴 전환) 중에는 멈춤
 - **시작 멘션**: 전투가 시작되면 "⚔️ 레이드 전투 시작! @파티원…" 한 줄로 파티원을 한 번 부르고 레이드 메시지를 그 아래로 다시 올림. 시작을 누른 사람(방장·관리자·4번째 참가자)은 빼고, 모집 마감으로 저절로 시작하면 전원, 혼자면 보내지 않음. 채팅에 남지 않게 1턴이 끝나면 자동으로 지움
 - **❔ 플레이 방법**: 본인에게만 보이는 안내(턴 진행·행동·몬스터·역할, 몬스터 전용 기술 설명은 없음). 모집 중에 연 안내는 전투가 시작되면, 전투 중에 연 안내는 레이드가 끝나면 자동으로 닫힘(디스코드 제한으로 연 지 15분이 지난 안내는 남음)
 - **변수 상황**: 메시지 수정이 일시적으로 실패하면 다음 갱신 때 다시 보냄(전투를 끝내지 않음) · 레이드 메시지가 지워지면 새로 올려 이어 감 · 채널이 없어지거나 권한이 없으면 바로 종료(XP 정지 해제) · XP를 멈추는 레이드가 여러 서버에 있으면 전부 끝나야 정지 해제 · 자동 출현 시각에 이미 레이드가 떠 있으면 그 회차는 건너뛰고 다음 일정
 - **반응 속도·동시 클릭**: 버튼은 즉시 ack(`deferUpdate`)만 하고 상태를 바꾼다. 메시지 수정은 레이드마다 대기열 하나가 차례로 맡아, 보낼 때마다 "지금 상태"로 화면을 새로 만든다 — 4명이 거의 동시에 눌러도 늦게 도착한 옛 화면(지난 턴·옛 그림)이 새 화면을 덮어쓰지 않는다. 선택 현황처럼 글자만 바뀌는 건 300ms 동안 모아 한 번에(그림 재업로드 없음), 턴 결과·참가자 변동은 바로 새 그림으로. 그림 그리기도 이 대기열 안에서만 일어나 버튼 응답 경로를 막지 않는다. 진행 상태(모집 파티·마감 시각·전투)는 화면을 고칠 때마다 `DB/raid.json`의 `active`에 함께 저장(바뀐 게 없으면 안 씀)하고, 재시작하면 같은 메시지에서 이어감(`resumeRaid`) — 모집은 남은 시간 그대로, 전투는 그 턴 선택 화면부터(전투 시간이 지났어도 한 턴은 줌). 저장 기록이 없거나 예전 버전 기록(`channelId`·`messageId`뿐)이어도 놀이터 최근 메시지 30개에서 버튼이 살아 있는 레이드 메시지를 찾아, 모집 화면이면 적힌 남은 시간으로 이어감(참가자는 유저 id가 없어 비움). 이어갈 수 없는 메시지는 "봇 점검으로 몬스터가 사라졌다"로 정리
-- **그림 엔진**: 네이티브 라이브러리 없이 `handlers/그림판.js`가 RGB 버퍼 하나를 재사용해 직접 그림(도형·픽셀 아트·글자 안티앨리어싱, PNG는 Node 내장 zlib). 글자는 opentype.js 저메모리 모드로 `assets/fonts/NanumGothic-*.ttf`에서 쓰는 글자만 읽음(상주 약 +4MB). 속도: 장면별 변하지 않는 배경을 한 번 그려 저장해 두고 복사, 같은 글자(폰트·크기·문자열)는 모양 마스크를 캐시(최대 300개)해 색만 입혀 찍음, 봇 시작 후 라벨 글자들을 잘게 나눠 미리 준비 — 로컬 기준 장당 12ms → 3ms(서버 약 10배). 예전 `@napi-rs/canvas`는 리눅스에서 로드만으로 RSS +133MB라 교체함. 그림 안 글자는 디스코드가 그림을 줄여 보여주는 걸 감안해 20px 이상. 폰트를 못 불러오면 같은 정보를 글자로 대신 보여줌. 참고: 호스팅 패널의 RAM 수치는 컨테이너 기준이라 봇 로그의 RSS보다 낮게 나온다(RSS 201MB일 때 패널 120MB)
-- **몬스터 추가**: `Monster/` 폴더에 몬스터 하나당 JSON 파일 하나(현재 `슬라임.json`·`독버섯.json`·`아이스큐브.json`·`고스트.json`·`꼬마폭탄.json`). 봇이 켜질 때 폴더의 `.json`을 이름순으로 전부 읽고(`handlers/레이드전투.js`의 `loadMonsters`), 출현할 때 무작위로 고름. 새 몬스터는 `슬라임.json`을 복사해 `id`(겹치면 안 됨)·이름·그림·기술·수치를 고치면 되고, 파일 안 `"_메모"`에 칸마다 설명이 있음(`_`로 시작하는 키는 무시). 깨진 JSON, palette에 없는 글자, 빠진 필수 기술(attack 기본 공격·smash 필살기 — 나머지 기술 키는 자유), 모르는 연출(`fx`)·효과(`effect`), id 중복이 있으면 그 파일만 건너뛰고 콘솔에 사유를 남김 — 쓸 몬스터가 하나도 없으면 레이드가 뜨지 않고 소환 버튼이 "등록된 몬스터가 없어요"로 알려 줌. 수치를 바꾸면 `node tests/raid/밸런스시뮬.js [몬스터 id]`(기본 slime)로 승률·턴 확인. 효과 종류: slow(주는 피해 감소)·stun(행동 불가)·shield(몬스터 받는 피해 감소)·**poison**(중첩 독 — 다음 턴부터 아군 행동 뒤 중첩 × tickDamage × 인원 배율 피해, 치유사 스킬(전원)·회복약(본인)으로 해독)·**confuse**(다음 턴 방어 외 행동이 확률로 헛손질), `guardBlocks`(방어하면 상태이상 안 걸림), 재생의 `healPerStack`(파티 독 중첩만큼 추가 회복), **냉기**(몬스터 최상위 `chill` 블록 { freezeAt, guardStacks, melt, status, freezeStatus } — 행동 즉시 방어 +guardStacks · 공격·스킬 -melt, freezeAt 중첩이면 freezeStatus로 다음 턴 행동 불가, 치유사 스킬·회복약으로 제거)·**chill** 효과(맞은 사람 냉기 +stacks, 분노 중 rageStacks, 방어해도 걸림)·보호막의 `chillOnHit`(보호막 턴에 때린 사람 냉기 +n). 상태이상 `status.fx: "ice"`면 기절 별 대신 얼음 덮개. **mark**(표식 — 예고 때 대상을 정하고 telegraph `{target}`에 이름, 분노 중 `rageTargets`명, 수호자 도발은 한 명 몫)·**fear**(다음 턴 스킬 못 씀)·**phase**(다음 턴 일반 공격 빗나감)·**smoke**(다음 예고를 가림, `warn` 기술은 안 가림)·smash의 **fuse**({ turns, rageTurns, need, boom } — 피해 없이 카운트다운, 최대 HP × need 피해를 넣으면 불발로 그 턴 행동 없음, 못 넣으면 마지막 턴에 boom 기술)·`guardRate`(방어 시 받는 피해 배율, 평소 0.3)·`warn`(빨간 경고 예고, 없으면 smash만)·독류 `status.color`(배지·HP 바 색). `readyPose`는 모든 기술에 쓸 수 있고, 카운트다운 중엔 `lit`, 불이 꺼진 결과엔 `dizzy` 자세를 씀. 연출은 `fx`(attack·sweep·charge·smash·heal·spore·hypno·absorb·burst·frost·icefall·curse·wail·phase·storm·dust·smoke·ignite·boom, 없으면 기술 키), 필살기 예고 자세는 `smash.readyPose`
+- **그림 엔진**: 네이티브 라이브러리 없이 `handlers/레이드/그림판.js`가 RGB 버퍼 하나를 재사용해 직접 그림(도형·픽셀 아트·글자 안티앨리어싱, PNG는 Node 내장 zlib). 글자는 opentype.js 저메모리 모드로 `assets/fonts/NanumGothic-*.ttf`에서 쓰는 글자만 읽음(상주 약 +4MB). 속도: 장면별 변하지 않는 배경을 한 번 그려 저장해 두고 복사, 같은 글자(폰트·크기·문자열)는 모양 마스크를 캐시(최대 300개)해 색만 입혀 찍음, 봇 시작 후 라벨 글자들을 잘게 나눠 미리 준비 — 로컬 기준 장당 12ms → 3ms(서버 약 10배). 예전 `@napi-rs/canvas`는 리눅스에서 로드만으로 RSS +133MB라 교체함. 그림 안 글자는 디스코드가 그림을 줄여 보여주는 걸 감안해 20px 이상. 폰트를 못 불러오면 같은 정보를 글자로 대신 보여줌. 참고: 호스팅 패널의 RAM 수치는 컨테이너 기준이라 봇 로그의 RSS보다 낮게 나온다(RSS 201MB일 때 패널 120MB)
+- **몬스터 추가**: `Monster/` 폴더에 몬스터 하나당 JSON 파일 하나(현재 `슬라임.json`·`독버섯.json`·`아이스큐브.json`·`고스트.json`·`꼬마폭탄.json`). 봇이 켜질 때 폴더의 `.json`을 이름순으로 전부 읽고(`handlers/레이드/전투.js`의 `loadMonsters`), 출현할 때 무작위로 고름. 새 몬스터는 `슬라임.json`을 복사해 `id`(겹치면 안 됨)·이름·그림·기술·수치를 고치면 되고, 파일 안 `"_메모"`에 칸마다 설명이 있음(`_`로 시작하는 키는 무시). 깨진 JSON, palette에 없는 글자, 빠진 필수 기술(attack 기본 공격·smash 필살기 — 나머지 기술 키는 자유), 모르는 연출(`fx`)·효과(`effect`), id 중복이 있으면 그 파일만 건너뛰고 콘솔에 사유를 남김 — 쓸 몬스터가 하나도 없으면 레이드가 뜨지 않고 소환 버튼이 "등록된 몬스터가 없어요"로 알려 줌. 수치를 바꾸면 `node tests/raid/밸런스시뮬.js [몬스터 id]`(기본 slime)로 승률·턴 확인. 효과 종류: slow(주는 피해 감소)·stun(행동 불가)·shield(몬스터 받는 피해 감소)·**poison**(중첩 독 — 다음 턴부터 아군 행동 뒤 중첩 × tickDamage × 인원 배율 피해, 치유사 스킬(전원)·회복약(본인)으로 해독)·**confuse**(다음 턴 방어 외 행동이 확률로 헛손질), `guardBlocks`(방어하면 상태이상 안 걸림), 재생의 `healPerStack`(파티 독 중첩만큼 추가 회복), **냉기**(몬스터 최상위 `chill` 블록 { freezeAt, guardStacks, melt, status, freezeStatus } — 행동 즉시 방어 +guardStacks · 공격·스킬 -melt, freezeAt 중첩이면 freezeStatus로 다음 턴 행동 불가, 치유사 스킬·회복약으로 제거)·**chill** 효과(맞은 사람 냉기 +stacks, 분노 중 rageStacks, 방어해도 걸림)·보호막의 `chillOnHit`(보호막 턴에 때린 사람 냉기 +n). 상태이상 `status.fx: "ice"`면 기절 별 대신 얼음 덮개. **mark**(표식 — 예고 때 대상을 정하고 telegraph `{target}`에 이름, 분노 중 `rageTargets`명, 수호자 도발은 한 명 몫)·**fear**(다음 턴 스킬 못 씀)·**phase**(다음 턴 일반 공격 빗나감)·**smoke**(다음 예고를 가림, `warn` 기술은 안 가림)·smash의 **fuse**({ turns, rageTurns, need, boom } — 피해 없이 카운트다운, 최대 HP × need 피해를 넣으면 불발로 그 턴 행동 없음, 못 넣으면 마지막 턴에 boom 기술)·`guardRate`(방어 시 받는 피해 배율, 평소 0.3)·`warn`(빨간 경고 예고, 없으면 smash만)·독류 `status.color`(배지·HP 바 색). `readyPose`는 모든 기술에 쓸 수 있고, 카운트다운 중엔 `lit`, 불이 꺼진 결과엔 `dizzy` 자세를 씀. 연출은 `fx`(attack·sweep·charge·smash·heal·spore·hypno·absorb·burst·frost·icefall·curse·wail·phase·storm·dust·smoke·ignite·boom, 없으면 기술 키), 필살기 예고 자세는 `smash.readyPose`
 - **관리자**: `/xp` → `XP 관리`에 자동 출현 상태·다음 출현 시각, `레이드 자동 출현 가동/중지`와 `👾 레이드 소환`(누르면 🎲 무작위 또는 몬스터를 골라 소환, 자동 출현 몬스터는 일정을 잡을 때 무작위로 미리 정해 `⚪ 대기 · 다음 몬스터`로 보여 주고 `🔄 몬스터 변경`으로 바꿀 수 있음) / `🛑 레이드 종료` 버튼(소환·종료는 그 서버의 레이드만). 본서버에서 소환하면 놀이터에, 다른 서버(테스트 서버)에서는 버튼을 누른 채널에 뜸. 레벨 시스템 제외 서버에서 띄운 레이드는 XP를 멈추지도 보상을 주지도 않음
 - 커스텀ID: `raid:role:<역할>` · `raid:leave` · `raid:act:<행동>` · `raid:help`. 채널 제한 면제, `raid:act:`는 클릭 로그에서 제외(결과는 '레이드' 로그로 남음)
 
 </details>
 
 <details>
-<summary>🧠 <b>상식퀴즈</b> <sub><code>handlers/퀴즈.js</code>, 관리자 전용 제어 커맨드는 <code>/퀴즈</code></sub></summary>
+<summary>🧠 <b>상식퀴즈</b> <sub><code>handlers/게임/퀴즈.js</code>, 관리자 전용 제어 커맨드는 <code>/퀴즈</code></sub></summary>
 
 - 매일 KST 기준 **오전 10시~밤 11시** 사이 무작위 시각에 놀이터 채널(`QUIZ_CHANNEL_ID`)에 자동으로 1문제 출제, 하루 최대 1회
 - 출제 시각은 `Math.random()`이 아니라 **"사이클 날짜 + 시드" 해시로 결정적으로 계산**됨(시드는 `DB/quiz.json`에 최초 1회만 생성·보관) — 봇을 몇 시에 켜든 그날 예약 시각이 항상 같은 값으로 나오므로 출제 시각이 봇 가동 시각에 끌려가지 않음. 예전 방식은 "봇을 켠 시각 ~ 시간대 끝" 사이에서만 추첨해서, 매일 비슷한 시간에 봇을 켜면 출제 시각도 계속 비슷한 대로 몰렸음
@@ -404,7 +414,7 @@ npm start
 </details>
 
 <details>
-<summary>🔊 <b>임시 음성채널</b> <sub><code>handlers/음성채널.js</code></sub></summary>
+<summary>🔊 <b>임시 음성채널</b> <sub><code>handlers/레벨/음성채널.js</code></sub></summary>
 
 - 지정된 허브 채널(`HUB_CHANNEL_ID`)에 입장하면 지정된 카테고리(`TEMP_CATEGORY_ID`)에 `🔊│{닉네임}의 방` 음성채널을 새로 만들어 그리로 이동시킴
 - 방을 만든 사람에게는 해당 채널의 "채널 관리" 권한을 부여(이름/인원제한 등을 스스로 수정 가능)
@@ -414,7 +424,7 @@ npm start
 </details>
 
 <details>
-<summary>📈 <b>XP / 레벨 시스템</b> <sub><code>/레벨</code>, <code>/랭킹</code>, <code>handlers/레벨링.js</code></sub></summary>
+<summary>📈 <b>XP / 레벨 시스템</b> <sub><code>/레벨</code>, <code>/랭킹</code>, <code>handlers/레벨/레벨링.js</code></sub></summary>
 
 레벨 `L → L+1` 필요 XP 공식(MEE6 방식): `5×L² + 50×L + 100`
 
@@ -472,10 +482,10 @@ npm start
 > [!TIP]
 > 파일명을 클릭하면 함수 표가 펼쳐집니다.
 
-각 파일에서 내보내는(export) 함수와 핵심 내부 함수를 정리했습니다. `handlers/내전.js`/`handlers/모집.js`는 버튼/셀렉트/모달 커스텀ID 하나하나를 처리하는 대형 `if/else` 분기 함수(`handleNaejeonButton`, `handleMojipButton`)가 실질적인 로직 대부분을 담고 있어, 그 내부 동작은 위 "기능 상세" 절에서 흐름 위주로 설명했습니다.
+각 파일에서 내보내는(export) 함수와 핵심 내부 함수를 정리했습니다. `handlers/매치/내전.js`/`handlers/매치/모집.js`는 버튼/셀렉트/모달 커스텀ID 하나하나를 처리하는 대형 `if/else` 분기 함수(`handleNaejeonButton`, `handleMojipButton`)가 실질적인 로직 대부분을 담고 있어, 그 내부 동작은 위 "기능 상세" 절에서 흐름 위주로 설명했습니다.
 
 <details>
-<summary>📄 <b><code>handlers/레벨링.js</code> — XP/레벨</b></summary>
+<summary>📄 <b><code>handlers/레벨/레벨링.js</code> — XP/레벨</b></summary>
 
 | 함수 | 설명 |
 |---|---|
@@ -504,7 +514,7 @@ npm start
 </details>
 
 <details>
-<summary>📄 <b><code>handlers/공용.js</code> — 내전/모집/팀 공용 유틸</b></summary>
+<summary>📄 <b><code>handlers/매치/공용.js</code> — 내전/모집/팀 공용 유틸</b></summary>
 
 | 함수 | 설명 |
 |---|---|
@@ -531,7 +541,7 @@ npm start
 </details>
 
 <details>
-<summary>📄 <b><code>handlers/내전.js</code> — 내전</b></summary>
+<summary>📄 <b><code>handlers/매치/내전.js</code> — 내전</b></summary>
 
 | 함수 | 설명 |
 |---|---|
@@ -548,14 +558,14 @@ npm start
 </details>
 
 <details>
-<summary>📄 <b><code>handlers/모집.js</code> — 모집</b></summary>
+<summary>📄 <b><code>handlers/매치/모집.js</code> — 모집</b></summary>
 
 내전과 동일한 구조로 `handleMojipNotifyModal`(🔔 알림 예약)을 포함해 `handleMojipGameSelect`, `handleMojipModal`, `handleMojipEditModal`, `handleMojipButton`, `handleMojipMatchEditModal`, `handleMojipMemberAdd`, `handleMojipMemberRemove`, `buildMojipMessagePayload`를 내보내며 역할도 각각 내전 쪽 대응 함수와 동일합니다(팀 배정 관련 함수만 없음).
 
 </details>
 
 <details>
-<summary>📄 <b><code>handlers/팀.js</code> — 팀 배정</b></summary>
+<summary>📄 <b><code>handlers/매치/팀.js</code> — 팀 배정</b></summary>
 
 | 함수 | 설명 |
 |---|---|
@@ -567,7 +577,7 @@ npm start
 </details>
 
 <details>
-<summary>📄 <b><code>handlers/불러오기.js</code> — 불러오기</b></summary>
+<summary>📄 <b><code>handlers/매치/불러오기.js</code> — 불러오기</b></summary>
 
 | 함수 | 설명 |
 |---|---|
@@ -576,7 +586,7 @@ npm start
 </details>
 
 <details>
-<summary>📄 <b><code>handlers/끝말잇기.js</code> — 끝말잇기</b></summary>
+<summary>📄 <b><code>handlers/게임/끝말잇기.js</code> — 끝말잇기</b></summary>
 
 | 함수 | 설명 |
 |---|---|
@@ -597,7 +607,7 @@ npm start
 </details>
 
 <details>
-<summary>📄 <b><code>handlers/틱택토.js</code> — 틱택토</b></summary>
+<summary>📄 <b><code>handlers/게임/틱택토.js</code> — 틱택토</b></summary>
 
 | 함수 | 설명 |
 |---|---|
@@ -614,7 +624,7 @@ npm start
 </details>
 
 <details>
-<summary>📄 <b><code>handlers/오목.js</code> — 오목</b> <sub>게임 로직 + 판 렌더링 + 봇 AI 통합</sub></summary>
+<summary>📄 <b><code>handlers/게임/오목.js</code> — 오목</b> <sub>게임 로직 + 판 렌더링 + 봇 AI 통합</sub></summary>
 
 | 함수 | 설명 |
 |---|---|
@@ -635,7 +645,7 @@ npm start
 </details>
 
 <details>
-<summary>📄 <b><code>handlers/룰렛.js</code> — 룰렛</b> <sub>슬롯머신형</sub></summary>
+<summary>📄 <b><code>handlers/게임/룰렛.js</code> — 룰렛</b> <sub>슬롯머신형</sub></summary>
 
 | 함수 | 설명 |
 |---|---|
@@ -654,7 +664,7 @@ npm start
 </details>
 
 <details>
-<summary>📄 <b><code>handlers/퀴즈.js</code> — 상식퀴즈</b></summary>
+<summary>📄 <b><code>handlers/게임/퀴즈.js</code> — 상식퀴즈</b></summary>
 
 | 함수 | 설명 |
 |---|---|
@@ -684,7 +694,7 @@ npm start
 </details>
 
 <details>
-<summary>📄 <b><code>handlers/로그.js</code> — 상호작용 로그</b></summary>
+<summary>📄 <b><code>handlers/공통/로그.js</code> — 상호작용 로그</b></summary>
 
 | 함수 | 설명 |
 |---|---|
@@ -700,7 +710,7 @@ npm start
 </details>
 
 <details>
-<summary>📄 <b><code>handlers/음성채널.js</code> — 임시 음성채널</b></summary>
+<summary>📄 <b><code>handlers/레벨/음성채널.js</code> — 임시 음성채널</b></summary>
 
 | 함수 | 설명 |
 |---|---|
@@ -739,7 +749,7 @@ npm start
 </details>
 
 <details>
-<summary>📄 <b><code>handlers/봇전한도.js</code> — 미니게임 XP 상수·봇전 하루 한도</b></summary>
+<summary>📄 <b><code>handlers/게임/봇전한도.js</code> — 미니게임 XP 상수·봇전 하루 한도</b></summary>
 
 끝말잇기·틱택토·오목이 공유하는 XP 상수와 봇전 보상 한도를 한 곳에 모은 모듈(예전엔 같은 값이 각 파일에 복붙돼 있었음).
 
@@ -754,7 +764,7 @@ npm start
 </details>
 
 <details>
-<summary>📄 <b><code>handlers/저장.js</code> — JSON 저장 공용 헬퍼</b></summary>
+<summary>📄 <b><code>handlers/공통/저장.js</code> — JSON 저장 공용 헬퍼</b></summary>
 
 | 함수 | 설명 |
 |---|---|
@@ -765,7 +775,7 @@ npm start
 </details>
 
 <details>
-<summary>📄 <b><code>handlers/시간.js</code> · <code>handlers/이름.js</code> — 공용 소품</b></summary>
+<summary>📄 <b><code>handlers/공통/시간.js</code> · <code>handlers/공통/이름.js</code> — 공용 소품</b></summary>
 
 | 함수 | 설명 |
 |---|---|
@@ -805,7 +815,7 @@ npm start
 
 ---
 
-## 상호작용 로그 (`handlers/로그.js`)
+## 상호작용 로그 (`handlers/공통/로그.js`)
 
 - (예전 이름: `handlers/명령어로그.js` / `command-log.json` — 슬래시 커맨드만 남기다가, 버튼·선택 메뉴·모달 제출까지 전부 남기도록 넓히면서 이름도 바꿨습니다)
 - `index.js`의 `interactionCreate` 핸들러 맨 앞에서 호출되어, **명령어·버튼·선택 메뉴·모달 제출**을 전부 `DB/log/날짜.json`(KST 하루 한 파일)에 기록합니다 — 채널 제한 등으로 뒤에서 막히는 시도까지 포함해, 실제로 어떤 입력이 들어왔는지 놓치지 않습니다.
@@ -830,12 +840,12 @@ npm start
 
 ---
 
-## 데이터 저장 (`handlers/공용.js`의 `saveAll`/`loadRows`)
+## 데이터 저장 (`handlers/매치/공용.js`의 `saveAll`/`loadRows`)
 
 - SQLite 등 별도 DB 엔진 없이, `fs`로 `DB/N-M.json`에 내전/모집 매치를 직렬화해 저장합니다(Discord 메시지 참조·타이머 등 직렬화 불가능한 필드는 저장 전 제외).
 - `DB/levels.json`에는 길드별 유저 XP가 저장됩니다.
 - 30초마다 자동 저장되는 대상은 매치(`N-M.json`) · XP(`levels.json`) · 룰렛 일일 기록(`roulette.json`) · 봇전 XP 한도(`botmatch-xp.json`) · 마크 승인 명단(`realm_roster.json`)이며, `SIGTERM`/`SIGINT` 종료 시에도 마지막으로 한 번 저장됩니다. 복원이 끝나기 전(`dataReady`)에는 저장을 건너뜁니다 — 비어있는 메모리로 기존 파일을 덮어쓰지 않기 위해서입니다.
-- 저장은 모두 `handlers/저장.js`의 `writeJsonIfChanged`를 거칩니다 — **직전 저장과 내용이 같으면 아예 쓰지 않고**(아무도 접속하지 않은 새벽의 의미 없는 디스크 쓰기 제거), 쓸 때는 `<파일>.tmp`에 전부 쓴 뒤 `rename`으로 교체하는 **원자적 저장**입니다. 덮어쓰기 도중 봇이 죽어도 파일이 잘리지 않아, 재시작 시 파싱 실패로 데이터가 통째로 날아가는 일을 막습니다.
+- 저장은 모두 `handlers/공통/저장.js`의 `writeJsonIfChanged`를 거칩니다 — **직전 저장과 내용이 같으면 아예 쓰지 않고**(아무도 접속하지 않은 새벽의 의미 없는 디스크 쓰기 제거), 쓸 때는 `<파일>.tmp`에 전부 쓴 뒤 `rename`으로 교체하는 **원자적 저장**입니다. 덮어쓰기 도중 봇이 죽어도 파일이 잘리지 않아, 재시작 시 파싱 실패로 데이터가 통째로 날아가는 일을 막습니다.
 - 봇 재시작 시 `DB/N-M.json`을 읽어 매치를 복원하고, 실제 채널/메시지를 다시 조회해 최신 코드 기준으로 임베드를 다시 렌더링하며, 남은 자동 종료 시간도 재계산해 타이머를 다시 겁니다.
 
 ---
@@ -844,13 +854,13 @@ npm start
 
 - **비공개(ephemeral) 응답은 `flags: MessageFlags.Ephemeral`로 통일합니다.** discord.js v14에서 `ephemeral: true` 옵션은 deprecated이며 v15에서 제거되므로(실행 시 `Supplying "ephemeral" for interaction response options is deprecated` 경고), `reply`/`deferReply`/`followUp`에는 항상 `flags`를 씁니다. `MessageFlags`는 각 파일의 `require('discord.js')` 구조분해에 포함시킵니다.
 - 단, **`update`/`editReply`에는 Ephemeral flag를 넣지 않습니다** — 이미 비공개인 메시지를 고치는 것이라 불필요하고, 디스코드가 받지 않는 조합입니다. 그래서 `reply`와 `update`/`editReply` 양쪽에서 재사용되는 페이로드 빌더(`buildAdminMenuPayload`)는 flag를 담지 않고, 최초 노출하는 `reply` 호출부에서만 `{ ...payload, flags: MessageFlags.Ephemeral }`로 붙입니다.
-- 컴포넌트 v2 메시지의 `flags: MessageFlags.IsComponentsV2`(`handlers/공용.js`의 DM 등)와는 별개입니다. 두 flag를 함께 쓰는 곳은 레이드 ❔ 플레이 방법(`handlers/레이드.js`의 `buildHelpView`, 본인에게만 보이는 V2 컨테이너)뿐이며 `MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral`로 합칩니다.
+- 컴포넌트 v2 메시지의 `flags: MessageFlags.IsComponentsV2`(`handlers/매치/공용.js`의 DM 등)와는 별개입니다. 두 flag를 함께 쓰는 곳은 레이드 ❔ 플레이 방법(`handlers/레이드/index.js`의 `buildHelpView`, 본인에게만 보이는 V2 컨테이너)뿐이며 `MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral`로 합칩니다.
 
 ---
 
 ## 권한
 
-- 관리자 기능(`/패널`, `/패널`의 "⚙️ 관리" 버튼, `/퀴즈` 등)은 `config.js`의 `ADMIN_IDS`에 등록된 유저만 사용할 수 있습니다(`handlers/공용.js`가 그대로 재export하므로 기존 `require('../handlers/공용')` 경로도 유효). `/퀴즈`는 `/패널`과 마찬가지로 `ALLOWED_CHANNEL_IDS` 제한과 무관하게 아무 채널에서나 사용 가능합니다.
+- 관리자 기능(`/패널`, `/패널`의 "⚙️ 관리" 버튼, `/퀴즈` 등)은 `config.js`의 `ADMIN_IDS`에 등록된 유저만 사용할 수 있습니다(`handlers/매치/공용.js`가 그대로 재export하므로 기존 `require('../handlers/공용')` 경로도 유효). `/퀴즈`는 `/패널`과 마찬가지로 `ALLOWED_CHANNEL_IDS` 제한과 무관하게 아무 채널에서나 사용 가능합니다.
 - 내전/모집의 일반 관리 메뉴(마감/수정/취소 등)는 해당 매치의 주최자 또는 `ADMIN_IDS`만 사용할 수 있습니다.
 - `config.js`의 `ALLOWED_CHANNEL_IDS`에 등록되지 않은 채널에서는 내전/모집/팀 관련 상호작용이 차단됩니다. 배열이 비어 있으면(`[]`) 채널 제한을 걸지 않습니다.
 - `/끝말잇기`, `/틱택토`, `/오목`, `/룰렛`, `/레벨`, `/랭킹`과 관련 버튼은 `ALLOWED_CHANNEL_IDS`와 무관하게 `config.js`의 `WORDCHAIN_RANKING_CHANNEL_ID`(= 놀이터) 채널에서만 사용할 수 있습니다.

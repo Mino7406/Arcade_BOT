@@ -21,11 +21,11 @@ const {
   ContainerBuilder, SectionBuilder, TextDisplayBuilder, ThumbnailBuilder,
   ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags,
 } = require('discord.js');
-const { PATCHNOTE_CHANNEL_ID, PATCHNOTE_EMOJIS } = require('../config');
-const { logSystem, logErrorThrottled } = require('./로그');
-const { writeJsonIfChanged } = require('./저장');
+const { PATCHNOTE_CHANNEL_ID, PATCHNOTE_EMOJIS } = require('../../config');
+const { logSystem, logErrorThrottled } = require('../공통/로그');
+const { writeJsonIfChanged } = require('../공통/저장');
 
-const STORE_PATH = path.join(__dirname, '..', 'DB', 'patchnote.json');
+const STORE_PATH = path.join(__dirname, '..', '..', 'DB', 'patchnote.json');
 
 const POLL_MS = 10 * 60_000;          // 게임마다 이 간격으로 확인(패치는 1~2주에 한 번이라 충분)
 const TICK_MS = 60_000;               // 어느 게임이 확인할 차례인지 보는 주기(비교만 해서 거의 공짜)

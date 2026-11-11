@@ -4,12 +4,12 @@
 
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const { ADMIN_IDS } = require('../config');
-const { card, payload, asEphemeral, notice, COLORS } = require('../handlers/카드');
-const { getXpState } = require('../handlers/레벨링');
+const { card, payload, asEphemeral, notice, COLORS } = require('../handlers/공통/카드');
+const { getXpState } = require('../handlers/레벨/레벨링');
 const { getRaidStatus } = require('../handlers/레이드');
-const { getQuizStatus } = require('../handlers/퀴즈');
-const { getPatchNoteStatus, setPatchNotePaused, checkPatchNotesNow, sendPatchNoteTest } = require('../handlers/패치노트');
-const { logAction } = require('../handlers/로그');
+const { getQuizStatus } = require('../handlers/게임/퀴즈');
+const { getPatchNoteStatus, setPatchNotePaused, checkPatchNotesNow, sendPatchNoteTest } = require('../handlers/관리/패치노트');
+const { logAction } = require('../handlers/공통/로그');
 
 // 같은 게임의 패치노트·점검 확인을 한 줄로 합쳐 보여 준다(리그 오브 레전드 = 패치노트 + 점검).
 function patchSourceLines(status) {
@@ -160,7 +160,7 @@ async function handleAdminButton(interaction) {
 
   if (sub === 'refresh') {
     await interaction.deferUpdate();
-    const { refreshPostedMessages } = require('../handlers/최신화');
+    const { refreshPostedMessages } = require('../handlers/관리/최신화');
     const result = await refreshPostedMessages(interaction.client, { includeCobblemon: true }).catch(err => ({ error: err?.message ?? String(err) }));
     logAction(interaction, '관리', `게시물 최신화 — ${result.summary ?? result.error}`);
     await interaction.editReply(buildAdminHome({ guildId, note: result.error ? `⚠️ **최신화 중 오류:** ${result.error}` : `🔄 **게시물을 최신 디자인으로 갱신했어요.**\n-# ${result.summary}` }));

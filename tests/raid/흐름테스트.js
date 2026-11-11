@@ -20,12 +20,12 @@ async function flushRender() {
 }
 const runTimers = async () => { const due = timers.filter(t => !t.cancelled && t.ms > 1000); for (const t of due) { timers.splice(timers.indexOf(t), 1); await t.fn(); } await flushRender(); };
 
-const raidMod = require(path.join(root, 'handlers/레이드.js'));
+const raidMod = require(path.join(root, 'handlers/레이드/index.js'));
 const origHandle = raidMod.handleRaidButton, origEnd = raidMod.forceEndRaid, origSpawn = raidMod.forceSpawnRaid;
 raidMod.handleRaidButton = async (it) => { await origHandle(it); await flushRender(); };
 raidMod.forceEndRaid = async (g = 'gMain') => { const v = await origEnd(g); await flushRender(); return v; };
 raidMod.forceSpawnRaid = async (...a) => { const v = await origSpawn(...a); await flushRender(); return v; };
-const lv = require(path.join(root, 'handlers/레벨링.js'));
+const lv = require(path.join(root, 'handlers/레벨/레벨링.js'));
 const assert = (c, m) => { if (!c) { console.error('❌', m); process.exitCode = 1; } else console.log('✅', m); };
 
 const sent = [];
@@ -422,7 +422,7 @@ let ok4;
     assert(!st.autoSpawn && st.nextSpawnAt === null && st.nextMonster === null, '중지하면 일정·다음 몬스터 삭제');
     assert(raidMod.setNextMonster('slime') && raidMod.getRaidStatus('gMain').nextMonster === null, '중지 중엔 다음 몬스터를 못 정함');
     assert(raidMod.setNextSpawnAt(want) && raidMod.getRaidStatus('gMain').nextSpawnAt === null, '중지 중엔 출현 시각을 못 정함');
-    const T = require(path.join(root, 'handlers/시간.js'));
+    const T = require(path.join(root, 'handlers/공통/시간.js'));
     const now = Date.UTC(2026, 10, 4, 15, 39); // KST 2026-11-05 00:39
     assert(T.kstDateTimeString(T.parseKstDateTime('2026-11-07 12:58', now)) === '2026-11-07 12:58', '시각 입력: 전체 날짜');
     assert(T.kstDateTimeString(T.parseKstDateTime('11/7 20시 30분', now)) === '2026-11-07 20:30', '시각 입력: 월/일 + 시분');
@@ -432,7 +432,7 @@ let ok4;
 
   // 12) 몬스터 기술 효과: 점액·보호막·기절·재생 (전투 엔진만, 몬스터 행동을 직접 지정)
   {
-    const E = require(path.join(root, 'handlers/레이드전투.js'));
+    const E = require(path.join(root, 'handlers/레이드/전투.js'));
     const party = [{ userId: 'x', name: 'X', role: 'sword' }, { userId: 'y', name: 'Y', role: 'healer' }];
     const fixed = () => 0.5;
     const turnWith = (b, intent, choices = {}) => {
@@ -506,7 +506,7 @@ let ok4;
 
   // 13) 몬스터 파일(Monster 폴더): 슬라임.json을 읽고, 깨진 파일은 그 파일만 건너뛴다
   {
-    const E = require(path.join(root, 'handlers/레이드전투.js'));
+    const E = require(path.join(root, 'handlers/레이드/전투.js'));
     assert(E.MONSTERS.length === 1 && E.MONSTERS[0].id === 'slime' && !('_메모' in E.MONSTERS[0]), 'Monster/슬라임.json 불러옴(_메모는 제외)');
     const dir = fs.mkdtempSync(path.join(root, 'monster-'));
     const slime = fs.readFileSync(path.join(root, 'Monster', '슬라임.json'), 'utf8');
@@ -527,7 +527,7 @@ let ok4;
   }
   // 14) 독버섯(Monster-all): 독 중첩·환각·독기 흡수 / 테스트 서버 1인 HP
   {
-    const E = require(path.join(root, 'handlers/레이드전투.js'));
+    const E = require(path.join(root, 'handlers/레이드/전투.js'));
     const origError = console.error; const errors = []; console.error = (...a) => errors.push(a.join(' '));
     const all = E.loadMonsters(path.join(root, 'Monster-all'));
     console.error = origError;
@@ -649,7 +649,7 @@ let ok4;
   }
   // 14-2) 얼음 큐브(Monster-all): 냉기(몬스터 기술로만 쌓이고 녹지 않음 · 서리 숨결은 방어로 막음 · 3중첩 빙결) · 얼음 갑옷
   {
-    const E = require(path.join(root, 'handlers/레이드전투.js'));
+    const E = require(path.join(root, 'handlers/레이드/전투.js'));
     const all = E.loadMonsters(path.join(root, 'Monster-all'));
     const ice = all.find(m => m.id === 'icecube');
     const slime = all.find(m => m.id === 'slime');
@@ -745,7 +745,7 @@ let ok4;
   }
   // 14-3) 유령(Monster-all): 표식(예고 때 대상 확정, 도발로 대신 맞기, 분노 2명) · 공포(스킬 봉인) · 투명화(일반 공격 무효)
   {
-    const E = require(path.join(root, 'handlers/레이드전투.js'));
+    const E = require(path.join(root, 'handlers/레이드/전투.js'));
     const all = E.loadMonsters(path.join(root, 'Monster-all'));
     const ghost = all.find(m => m.id === 'ghost');
     assert(ghost, '유령을 Monster 폴더에서 불러옴');
@@ -815,7 +815,7 @@ let ok4;
   }
   // 14-4) 꼬마 폭탄(Monster-all): 점화 카운트다운(불끄기 성공 → 기절, 실패 → 대폭발) · 화상 · 연막
   {
-    const E = require(path.join(root, 'handlers/레이드전투.js'));
+    const E = require(path.join(root, 'handlers/레이드/전투.js'));
     const all = E.loadMonsters(path.join(root, 'Monster-all'));
     const bomb = all.find(m => m.id === 'bomb');
     assert(bomb, '꼬마 폭탄을 Monster 폴더에서 불러옴');
@@ -891,11 +891,11 @@ let ok4;
   }
   // 17) 재시작 후 이어가기: 저장된 모집·전투, 예전 기록, 기록 없는 메시지 / 전멸 벌칙
   {
-    const E = require(path.join(root, 'handlers/레이드전투.js'));
+    const E = require(path.join(root, 'handlers/레이드/전투.js'));
     const cfg = require(path.join(root, 'config.js'));
     const { ContainerBuilder, TextDisplayBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
     const statePath = path.join(root, 'DB/raid.json');
-    const modPath = require.resolve(path.join(root, 'handlers/레이드.js'));
+    const modPath = require.resolve(path.join(root, 'handlers/레이드/index.js'));
     const settle = async () => { for (let i = 0; i < 20; i++) { await new Promise(r => setImmediate(r)); await flushRender(); } };
     // 재시작 흉내: raid.json을 써 두고 레이드 모듈을 새로 불러 스케줄러를 켠다
     const restart = async (active) => {

@@ -3,7 +3,7 @@
 //   node tests/raid/밸런스시뮬.js mushroom   → 몬스터 id(또는 이름)로 고르기
 // .js로 끝나는 인자는 다른 전투 엔진 파일(비교용)로 쓴다.
 const args = process.argv.slice(2);
-const E = require(args.find(a => a.endsWith('.js')) || require('path').join(__dirname, '..', '..', 'handlers', '레이드전투.js'));
+const E = require(args.find(a => a.endsWith('.js')) || require('path').join(__dirname, '..', '..', 'handlers', '레이드', '전투.js'));
 const pick = args.find(a => !a.endsWith('.js')) || 'slime';
 const MONSTER = E.MONSTERS.find(m => m.id === pick || m.name === pick);
 if (!MONSTER) throw new Error(`몬스터 없음: ${pick} (있는 것: ${E.MONSTERS.map(m => m.id).join(', ')})`);

@@ -3,11 +3,11 @@ const {
   ModalBuilder, TextInputBuilder, TextInputStyle,
   MessageFlags,
 } = require('discord.js');
-const { menu, asEphemeral, notice: quick } = require('../handlers/카드');
-const { ADMIN_IDS } = require('../handlers/공용');
+const { menu, asEphemeral, notice: quick } = require('../handlers/공통/카드');
+const { ADMIN_IDS } = require('../handlers/매치/공용');
 const { OWNER_IDS } = require('../config');
-const { pauseQuiz, resumeQuiz, postCustomQuiz, getQuizStatus } = require('../handlers/퀴즈');
-const { KST_OFFSET_MS } = require('../handlers/시간');
+const { pauseQuiz, resumeQuiz, postCustomQuiz, getQuizStatus } = require('../handlers/게임/퀴즈');
+const { KST_OFFSET_MS } = require('../handlers/공통/시간');
 
 const WORD_ONLY = /^[가-힣]{2,10}$/;
 

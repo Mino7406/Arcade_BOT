@@ -91,7 +91,7 @@ const ACTIONS = {
 // - smash.readyPose: 필살기를 예고하는 동안 보여 줄 자세(sprite.poses 키). 없으면 평상시 모습.
 // - sprite: 레이드 패널 그림(handlers/레이드그림.js)에 그릴 픽셀 아트. rows의 각 글자가 palette 색 한 칸('.'은 투명),
 //   rageColors는 분노 시 바꿔 칠할 색, poses는 기술별 자세(키는 moves와 같음).
-const MONSTER_DIR = path.join(__dirname, '..', 'Monster');
+const MONSTER_DIR = path.join(__dirname, '..', '..', 'Monster');
 const REQUIRED_MOVES = ['attack', 'smash'];
 // 그림(레이드그림.js)이 아는 연출 종류. 새 연출은 레이드그림.js의 monsterFx·hitFx에 그리고 여기에 이름을 더한다.
 const MOVE_FX = ['attack', 'sweep', 'charge', 'smash', 'heal', 'spore', 'hypno', 'absorb', 'burst', 'frost', 'icefall',

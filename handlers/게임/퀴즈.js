@@ -6,15 +6,15 @@
 // 그래야 두 문제가 동시에 유효해서 생기는 중복/혼선을 막을 수 있다.
 // API를 못 쓰는 경우(키 없음/장애)에만 아주 작은 비상용 목록으로 대체한다.
 
-const { card, payload, COLORS } = require('./카드');
+const { card, payload, COLORS } = require('../공통/카드');
 const fs = require('fs');
 const path = require('path');
-const { applyXp, isExcludedGuild, isMinigameXpFrozen } = require('./레벨링');
-const { KST_OFFSET_MS } = require('./시간');
-const { QUIZ_CHANNEL_ID } = require('../config'); // 놀이터 채널 (config.js의 PLAYGROUND_CHANNEL_ID)
-const { logSystem, logError, userLabel } = require('./로그');
-const { writeJsonIfChanged } = require('./저장');
-const { isPlaygroundPaused } = require('./레이드');
+const { applyXp, isExcludedGuild, isMinigameXpFrozen } = require('../레벨/레벨링');
+const { KST_OFFSET_MS } = require('../공통/시간');
+const { QUIZ_CHANNEL_ID } = require('../../config'); // 놀이터 채널 (config.js의 PLAYGROUND_CHANNEL_ID)
+const { logSystem, logError, userLabel } = require('../공통/로그');
+const { writeJsonIfChanged } = require('../공통/저장');
+const { isPlaygroundPaused } = require('../레이드');
 
 // KST 기준 출제 가능 시간대: 오전 10시 ~ 밤 11시. 이 시각(23:00)까지 봇이 안 켜져 있었다면
 // 그날 사이클은 건너뜀.
@@ -27,7 +27,7 @@ const WINDOW_END_HOUR = 23;
 const OVERNIGHT_CUTOFF_HOUR = WINDOW_END_HOUR > 24 ? WINDOW_END_HOUR - 24 : 0;
 const RECENT_WORD_MEMORY = 30; // 최근 이만큼은 다시 출제하지 않음
 
-const STATE_PATH = path.join(__dirname, '..', 'DB', 'quiz.json');
+const STATE_PATH = path.join(__dirname, '..', '..', 'DB', 'quiz.json');
 fs.mkdirSync(path.dirname(STATE_PATH), { recursive: true });
 
 const KOREAN_ONLY = /^[가-힣]+$/;

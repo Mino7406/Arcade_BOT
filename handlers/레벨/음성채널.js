@@ -6,11 +6,11 @@ const fs = require('fs');
 const path = require('path');
 const { ChannelType } = require('discord.js');
 
-const { GUILD_ID, HUB_CHANNEL_ID, TEMP_CATEGORY_ID } = require('../config');
-const { logSystem } = require('./로그');
-const { writeJsonIfChanged } = require('./저장');
+const { GUILD_ID, HUB_CHANNEL_ID, TEMP_CATEGORY_ID } = require('../../config');
+const { logSystem } = require('../공통/로그');
+const { writeJsonIfChanged } = require('../공통/저장');
 
-const DATA_PATH = path.join(__dirname, '..', 'DB', 'voiceRooms.json');
+const DATA_PATH = path.join(__dirname, '..', '..', 'DB', 'voiceRooms.json');
 fs.mkdirSync(path.dirname(DATA_PATH), { recursive: true });
 
 // 봇이 만든 임시 채널 ID 목록. 재시작해도 잃어버리지 않게 파일로 저장한다

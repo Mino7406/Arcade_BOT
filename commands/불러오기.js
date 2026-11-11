@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, ActionRowBuilder, StringSelectMenuBuilder, MessageFlags } = require('discord.js');
-const { menu, notice } = require('../handlers/카드');
+const { menu, notice } = require('../handlers/공통/카드');
 
 // 안내 패널의 "불러오기" 버튼(index.js)에서도 재사용하기 위해 페이로드 생성 로직을 분리.
 // naejeonMatches/mojipMatches가 길드별로 client에 실려있기 때문에 interaction이 필요하다.

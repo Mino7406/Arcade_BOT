@@ -5,13 +5,13 @@
 const fs = require('fs');
 const path = require('path');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
-const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp, isMinigameXpFrozen, isRaidXpFrozen } = require('./레벨링');
-const { kstDateString, timeUntilKstMidnight } = require('./시간');
-const { logSystem, logAction, logError, userLabel } = require('./로그');
-const { writeJsonIfChanged } = require('./저장');
-const { card, payload, notice, COLORS, footerSide } = require('./카드');
+const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp, isMinigameXpFrozen, isRaidXpFrozen } = require('../레벨/레벨링');
+const { kstDateString, timeUntilKstMidnight } = require('../공통/시간');
+const { logSystem, logAction, logError, userLabel } = require('../공통/로그');
+const { writeJsonIfChanged } = require('../공통/저장');
+const { card, payload, notice, COLORS, footerSide } = require('../공통/카드');
 
-const ROULETTE_PATH = path.join(__dirname, '..', 'DB', 'roulette.json');
+const ROULETTE_PATH = path.join(__dirname, '..', '..', 'DB', 'roulette.json');
 fs.mkdirSync(path.dirname(ROULETTE_PATH), { recursive: true });
 
 const MIN_BET = 10;

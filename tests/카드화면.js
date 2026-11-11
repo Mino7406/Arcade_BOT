@@ -27,32 +27,32 @@ async function buildScreens() {
       { id: 'pubg', name: '배틀그라운드', kind: 'patch', lastAt: now - 59e3, ok: true },
     ],
   };
-  req('handlers/패치노트.js').getPatchNoteStatus = () => patchState;
+  req('handlers/관리/패치노트.js').getPatchNoteStatus = () => patchState;
   // 랭킹은 레벨링 데이터 대신 가짜 순위를 쓴다(랭킹·레벨 모듈을 부르기 전에 패치).
-  const lv = req('handlers/레벨링.js');
+  const lv = req('handlers/레벨/레벨링.js');
   lv.getLeaderboardSize = () => 12;
   lv.getLeaderboard = (g, limit, offset) => Array.from({ length: 12 }, (_, i) => ({
     userId: 'u' + i, rank: i + 1, level: 14 - i, xp: 9200 - i * 610, currentLevelXp: 120 + i * 37, neededXp: 480,
   })).slice(offset, offset + limit);
   lv.getXp = () => 3120;
 
-  const { buildPublicMessagePayload } = req('handlers/내전.js');
-  const { buildMojipMessagePayload } = req('handlers/모집.js');
-  const common = req('handlers/공용.js');
-  const card = req('handlers/카드.js');
-  const team = req('handlers/팀.js');
-  const ttt = req('handlers/틱택토.js');
-  const omok = req('handlers/오목.js');
-  const wc = req('handlers/끝말잇기.js');
-  const rl = req('handlers/룰렛.js');
+  const { buildPublicMessagePayload } = req('handlers/매치/내전.js');
+  const { buildMojipMessagePayload } = req('handlers/매치/모집.js');
+  const common = req('handlers/매치/공용.js');
+  const card = req('handlers/공통/카드.js');
+  const team = req('handlers/매치/팀.js');
+  const ttt = req('handlers/게임/틱택토.js');
+  const omok = req('handlers/게임/오목.js');
+  const wc = req('handlers/게임/끝말잇기.js');
+  const rl = req('handlers/게임/룰렛.js');
   const xp = req('commands/XP.js').views;
   const panel = req('commands/패널.js');
   const rank = req('commands/랭킹.js');
   const level = req('commands/레벨.js');
-  const quizMod = req('handlers/퀴즈.js');
+  const quizMod = req('handlers/게임/퀴즈.js');
   const mark = req('forms/마크/index.js');
   const cob = req('forms/코블몬/index.js');
-  const naejeonMod = req('handlers/내전.js');
+  const naejeonMod = req('handlers/매치/내전.js');
   const quizCmd = req('commands/퀴즈.js');
   const gameSelect = req('commands/내전.js');
   const reload = req('commands/불러오기.js');
@@ -135,7 +135,7 @@ async function buildScreens() {
   add('레벨 · 랭킹 · 퀴즈', '레벨 카드', '', level.buildLevelPayload('g', { id: '100', displayAvatarURL: () => 'https://cdn.discordapp.com/embed/avatars/0.png' }, '민호'));
   add('레벨 · 랭킹 · 퀴즈', '오늘의 퀴즈', '', card.payload(quizMod.buildQuizCard({ word: '고양이', hint: '집에서 기르는 작은 동물로, 야옹 하고 운다.', grade: '쉬움', xpReward: 40 })));
 
-  add('레벨 · 랭킹 · 퀴즈', '레벨업 축하', '', req('handlers/레벨링.js').buildLevelUpPayload('100', 8));
+  add('레벨 · 랭킹 · 퀴즈', '레벨업 축하', '', req('handlers/레벨/레벨링.js').buildLevelUpPayload('100', 8));
   add('레벨 · 랭킹 · 퀴즈', '퀴즈 정답', '', quizMod.buildCorrectPayload({ word: '고양이', xpReward: 40 }));
 
   // ── 관리 · 안내 패널 ──────────────────────────

@@ -11,7 +11,7 @@
 const assert = require('assert');
 const { MessageFlags } = require('discord.js');
 const { buildScreens } = require('./카드화면');
-const card = require('../handlers/카드');
+const card = require('../handlers/공통/카드');
 
 let pass = 0;
 let fail = 0;
@@ -74,7 +74,7 @@ function rowsIn(list, acc = []) {
 
   // 길이가 긴 참가자 목록도 잘려서 한도 안에 들어와야 한다.
   check('참가자 100명 목록도 4000자 이하', () => {
-    const { buildPublicMessagePayload } = require('../handlers/내전');
+    const { buildPublicMessagePayload } = require('../handlers/매치/내전');
     const users = Array.from({ length: 100 }, (_, i) => ({ id: String(i), displayName: `참가자이름이긴유저${i}` }));
     const gameInfo = { name: '리그 오브 레전드', emoji: '<:Lol:1510933684750913626>', color: 0xC89B3C };
     const data = { game: 'lol', gameInfo, title: '큰 내전', datetime: '내일', players: '100', description: '', organizer: { id: '1', displayName: '민호' } };

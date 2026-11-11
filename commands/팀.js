@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, ActionRowBuilder, MessageFlags } = require('discord.js');
-const { menu, notice } = require('../handlers/카드');
-const { buildMatchSelectMenu } = require('../handlers/팀');
+const { menu, notice } = require('../handlers/공통/카드');
+const { buildMatchSelectMenu } = require('../handlers/매치/팀');
 
 // 안내 패널의 "팀 관리" 버튼(index.js)에서도 재사용하기 위해 페이로드 생성 로직을 분리.
 function buildTeamMatchListPayload(interaction) {

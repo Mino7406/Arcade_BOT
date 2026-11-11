@@ -3,7 +3,7 @@ const path = require('path');
 // 토큰을 놓치지 않게. (파일명이 '.env'가 아니라 'env'인 것은 의도된 것)
 require('dotenv').config({ path: path.join(__dirname, 'env') });
 const { Client, GatewayIntentBits, Partials, Collection, MessageFlags, Events, Options } = require('discord.js');
-const { notice, asEphemeral } = require('./handlers/카드');
+const { notice, asEphemeral } = require('./handlers/공통/카드');
 const fs = require('fs');
 
 // 예전 위치(루트)에 남아있던 JSON 저장 파일이 있다면 DB/ 폴더로 옮긴다(내용은 그대로, 위치만
@@ -12,19 +12,19 @@ const fs = require('fs');
 // 가장 먼저 실행한다. 옮길 파일이 없으면 아무 일도 하지 않는다(migrate.js 참고).
 require('./migrate').migrateOldDbFiles();
 
-const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleNaejeonNotifyModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload: buildNaejeonMessagePayload } = require('./handlers/내전');
-const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipNotifyModal, handleMojipMemberAdd, handleMojipMemberRemove, buildMojipMessagePayload } = require('./handlers/모집');
-const { armAutoEnd, AUTO_CLOSE_DELAY_MS, GENERAL_MESSAGE_DELETE_DELAY_MS, announceMatchCompletionXp, scheduleCancelledDelete, scheduleMessageDelete, deleteMentionMessage, armNotifyReminder, ADMIN_IDS, saveAll, enableSaveNow, loadRows, recoverCancelledEmbeds } = require('./handlers/공용');
-const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/팀');
-const { handleRMatchSelect } = require('./handlers/불러오기');
-const { handleWcButton, handleWcMessage } = require('./handlers/끝말잇기');
-const { handleTttButton } = require('./handlers/틱택토');
-const { handleOmokButton, handleOmokMessage } = require('./handlers/오목');
-const { loadRoulette, saveRoulette, handleRouletteButton } = require('./handlers/룰렛');
-const { loadBotMatchXp, saveBotMatchXp } = require('./handlers/봇전한도');
+const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleNaejeonNotifyModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload: buildNaejeonMessagePayload } = require('./handlers/매치/내전');
+const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipNotifyModal, handleMojipMemberAdd, handleMojipMemberRemove, buildMojipMessagePayload } = require('./handlers/매치/모집');
+const { armAutoEnd, AUTO_CLOSE_DELAY_MS, GENERAL_MESSAGE_DELETE_DELAY_MS, announceMatchCompletionXp, scheduleCancelledDelete, scheduleMessageDelete, deleteMentionMessage, armNotifyReminder, ADMIN_IDS, saveAll, enableSaveNow, loadRows, recoverCancelledEmbeds } = require('./handlers/매치/공용');
+const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/매치/팀');
+const { handleRMatchSelect } = require('./handlers/매치/불러오기');
+const { handleWcButton, handleWcMessage } = require('./handlers/게임/끝말잇기');
+const { handleTttButton } = require('./handlers/게임/틱택토');
+const { handleOmokButton, handleOmokMessage } = require('./handlers/게임/오목');
+const { loadRoulette, saveRoulette, handleRouletteButton } = require('./handlers/게임/룰렛');
+const { loadBotMatchXp, saveBotMatchXp } = require('./handlers/게임/봇전한도');
 const { loadRealmRoster, saveRealmRoster } = require('./forms/마크/명단');
-const { startQuizScheduler, handleQuizMessage } = require('./handlers/퀴즈');
-const { startPatchNoteWatcher } = require('./handlers/패치노트');
+const { startQuizScheduler, handleQuizMessage } = require('./handlers/게임/퀴즈');
+const { startPatchNoteWatcher } = require('./handlers/관리/패치노트');
 const { handleRaidButton, startRaidScheduler, isPlaygroundPaused, noteChannelMessage: noteRaidChannelMessage } = require('./handlers/레이드');
 // 레이드 중 막는 명령어 → 안내 문구의 "~수 없습니다" 앞부분(문구는 룰렛 안내와 같은 형식으로 통일)
 const RAID_PAUSED_COMMANDS = {
@@ -43,10 +43,10 @@ const { handleLevelShareButton } = require('./commands/레벨');
 const { handleRankingPageButton, handleRankingGotoButton, handleRankingGotoModal, handleRankingShareButton } = require('./commands/랭킹');
 const { handleXpUserSelect, handleXpButton, handleXpModal } = require('./commands/XP');
 const { handleAdminButton } = require('./commands/관리');
-const { refreshPostedMessages } = require('./handlers/최신화');
-const { loadLevels, saveLevels, loadXpState, handleMessageXp, trackVoiceStateUpdate, initVoiceStates, startVoiceXpTicker, announceLevelUp, MATCH_BONUS_CHANNEL_ID } = require('./handlers/레벨링');
-const { handleTempVoiceState, reconcileTempChannels } = require('./handlers/음성채널');
-const { logInteraction, logAction, logSystem, logError, logErrorThrottled, setLogClient, userLabel, flushLogsSync } = require('./handlers/로그');
+const { refreshPostedMessages } = require('./handlers/관리/최신화');
+const { loadLevels, saveLevels, loadXpState, handleMessageXp, trackVoiceStateUpdate, initVoiceStates, startVoiceXpTicker, announceLevelUp, MATCH_BONUS_CHANNEL_ID } = require('./handlers/레벨/레벨링');
+const { handleTempVoiceState, reconcileTempChannels } = require('./handlers/레벨/음성채널');
+const { logInteraction, logAction, logSystem, logError, logErrorThrottled, setLogClient, userLabel, flushLogsSync } = require('./handlers/공통/로그');
 
 // 끝말잇기/틱택토/랭킹 명령어와 관련 버튼을 이 채널에서만 사용할 수 있게 제한한다.
 // ALLOWED_CHANNEL_IDS는 내전/모집/팀 상호작용을 허용할 채널 목록(비어 있으면 제한 없음).
@@ -272,7 +272,7 @@ loopDelay.enable();
 const SLOW_INTERACTION_MS = 2500;  // 디스코드 응답 제한(3초)에 근접한 상호작용만 기록
 const MEMORY_WARN_RSS_MB = 230;   // 요금제 RAM 256MB 기준 경고선
 // 로그가 얼마나 자주 반복되는지 보이도록 각 줄 앞에 KST 시각을 붙인다.
-const { KST_OFFSET_MS } = require('./handlers/시간');
+const { KST_OFFSET_MS } = require('./handlers/공통/시간');
 function diagWarn(msg) {
   const t = new Date(Date.now() + KST_OFFSET_MS).toISOString().slice(5, 19).replace('T', ' ');
   console.warn(`[${t}] ${msg} — ${diagSnapshot()}`);

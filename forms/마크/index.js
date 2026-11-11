@@ -13,8 +13,8 @@ const {
   MessageFlags,
 } = require('discord.js');
 
-const { ADMIN_IDS } = require('../../handlers/공용');
-const { logSystem } = require('../../handlers/로그');
+const { ADMIN_IDS } = require('../../handlers/매치/공용');
+const { logSystem } = require('../../handlers/공통/로그');
 const {
   addApprovedMember,
   removeApprovedMember,
@@ -57,7 +57,7 @@ function logRealmDmFailure(err, applicant) {
   }
 }
 
-const { card, payload, menu, asEphemeral, messageText, COLORS, notice: quick } = require('../../handlers/카드');
+const { card, payload, menu, asEphemeral, messageText, COLORS, notice: quick } = require('../../handlers/공통/카드');
 
 const REALM_COLOR = 0x57F287;
 const PENDING_COLOR = 0xF0B232;

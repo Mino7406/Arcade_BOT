@@ -22,18 +22,18 @@ const {
   ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, SeparatorSpacingSize, MediaGalleryBuilder, MediaGalleryItemBuilder,
   ComponentType,
 } = require('discord.js');
-const { applyXp, deductXpFromAll, isExcludedGuild, announceLevelUp, setRaidXpFrozen } = require('./레벨링');
-const { KST_OFFSET_MS } = require('./시간');
-const { GUILD_ID, PLAYGROUND_CHANNEL_ID, ADMIN_IDS } = require('../config');
-const { logSystem, logError, userLabel } = require('./로그');
-const { writeJsonIfChanged } = require('./저장');
-const { displayNameFromInteraction } = require('./이름');
+const { applyXp, deductXpFromAll, isExcludedGuild, announceLevelUp, setRaidXpFrozen } = require('../레벨/레벨링');
+const { KST_OFFSET_MS } = require('../공통/시간');
+const { GUILD_ID, PLAYGROUND_CHANNEL_ID, ADMIN_IDS } = require('../../config');
+const { logSystem, logError, userLabel } = require('../공통/로그');
+const { writeJsonIfChanged } = require('../공통/저장');
+const { displayNameFromInteraction } = require('../공통/이름');
 const {
   PLAYER_MAX_HP, POTIONS_PER_BATTLE, POTION_HEAL, GUARD_DAMAGE_RATE, ROLES, ROLE_ORDER, ACTIONS, MONSTERS,
   createBattle, checkChoice, choose, allChosen, resolveTurn,
   isStunned, slowTurnsLeft, isShielded, isPowered, poisonTurnsLeft, poisonStacks, poisonDamage, isConfused, chillStacks, isFeared, isPhased, telegraphText, isWarnIntent, minusPct, contribution,
-} = require('./레이드전투');
-const { renderRecruit, renderBattle, renderEnd, warmUp } = require('./레이드그림');
+} = require('./전투');
+const { renderRecruit, renderBattle, renderEnd, warmUp } = require('./그림');
 
 // ── 설정 ────────────────────────────────────────────────────────
 const SPAWN_INTERVAL_DAYS = [1, 3]; // 출현 간격(일) 최소~최대. 매번 이 안에서 무작위로 뽑은 날 뒤, 아래 시간대 중 무작위 시각
@@ -60,7 +60,7 @@ const COUNTDOWN_TICK_MS = { recruit: 10 * 1000, battle: 5 * 1000 };
 const IMAGE_NAME = 'raid.png';
 const HELP_DELETABLE_MS = 15 * 60 * 1000; // 디스코드가 비공개 응답을 지우게 해 주는 시간(응답 토큰 유효 15분)
 
-const STATE_PATH = path.join(__dirname, '..', 'DB', 'raid.json');
+const STATE_PATH = path.join(__dirname, '..', '..', 'DB', 'raid.json');
 
 // 디스크 상태: { autoSpawn, nextSpawnAt, nextMonsterId, active: { [guildId]: 진행 중인 레이드 } }
 // nextMonsterId: 다음 자동 출현 때 나올 몬스터(일정을 잡을 때 무작위로 미리 정하고, 관리자가 /xp에서 바꿀 수 있음).

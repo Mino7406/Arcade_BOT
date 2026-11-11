@@ -10,12 +10,12 @@ const {
   MessageFlags,
 } = require('discord.js');
 
-const { ADMIN_IDS, AUTO_CLOSE_DELAY_MS, disarmAutoEnd, clearNotifyTimer, deleteMentionMessage, announceMatchCompletionXp, getCancelledDeletions } = require('../handlers/공용');
+const { ADMIN_IDS, AUTO_CLOSE_DELAY_MS, disarmAutoEnd, clearNotifyTimer, deleteMentionMessage, announceMatchCompletionXp, getCancelledDeletions } = require('../handlers/매치/공용');
 // 끝말잇기/틱택토/레벨/랭킹은 이 채널(놀이터)에서만 사용 가능.
 const { PLAYGROUND_CHANNEL_ID } = require('../config');
-const { card, payload, menu, footerSide, COLORS, notice: quick } = require('../handlers/카드');
+const { card, payload, menu, footerSide, COLORS, notice: quick } = require('../handlers/공통/카드');
 const { buildRealmPanelPayload } = require('../forms/마크');
-const { rememberRecruitPanel } = require('../handlers/최신화');
+const { rememberRecruitPanel } = require('../handlers/관리/최신화');
 const { backRow: adminBackRow } = require('./관리');
 const { buildCobblemonPanelPayload, rememberCobblemonPanel } = require('../forms/코블몬');
 

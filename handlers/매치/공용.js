@@ -16,12 +16,12 @@ const {
   SeparatorSpacingSize,
   MessageFlags,
 } = require('discord.js');
-const { awardMatchCompletionXp, announceLevelUp } = require('./레벨링');
-const { KST_OFFSET_MS } = require('./시간');
-const { ADMIN_IDS, STEAM_EMOJI_ID } = require('../config');
-const { logSystem, logError, userLabel } = require('./로그');
-const { writeJsonIfChanged } = require('./저장');
-const { card, payload, text, messageText, footerSide, COLORS, clipLines, emojiUrl, customEmojiId } = require('./카드');
+const { awardMatchCompletionXp, announceLevelUp } = require('../레벨/레벨링');
+const { KST_OFFSET_MS } = require('../공통/시간');
+const { ADMIN_IDS, STEAM_EMOJI_ID } = require('../../config');
+const { logSystem, logError, userLabel } = require('../공통/로그');
+const { writeJsonIfChanged } = require('../공통/저장');
+const { card, payload, text, messageText, footerSide, COLORS, clipLines, emojiUrl, customEmojiId } = require('../공통/카드');
 
 // 내전(naejeon)/모집(mojip) 두 시스템이 공유하는 게임 → 역할 이름 매핑.
 // (역할 멘션 대상 채널이 있으면 해당 역할을 핑한다.)
@@ -541,8 +541,9 @@ async function announceMatchCompletionXp(match) {
 // 같은 뼈대(제목 → 정보 → 메모 → 참가자 → 안내 문구 → 버튼)를 써서 어디서 봐도 같은 모양이다.
 // label: '내전' | '모집'
 
+// 게임 로고는 카드 오른쪽 위 썸네일로 보여 주므로 제목에는 이모지를 붙이지 않는다.
 function gameHeader(game, gameInfo, title) {
-  return game === 'custom' ? title : `${gameInfo.emoji}  ${title}`;
+  return title;
 }
 
 // 게임 이모지가 커스텀 이모지면 카드 오른쪽 위 작은 그림으로 쓴다(직접 입력은 그림 없음).
@@ -863,7 +864,7 @@ function buildCancelComponents(type) {
 
 // 흩어져 있던 JSON 저장 파일들을 DB/ 폴더 하나로 모아둔다(다른 모듈들도 동일).
 // 파일명 N-M.json은 이 파일이 담는 두 매치 타입, 내전(N)/모집(M)의 앞글자를 딴 것.
-const DB_DIR  = path.join(__dirname, '..', 'DB');
+const DB_DIR  = path.join(__dirname, '..', '..', 'DB');
 const DB_PATH = path.join(DB_DIR, 'N-M.json');
 
 fs.mkdirSync(DB_DIR, { recursive: true });

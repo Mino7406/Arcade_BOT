@@ -1,11 +1,11 @@
 // 레벨링.js — MEE6과 동일한 방식의 레벨/XP 시스템
 // 메시지 XP는 채널 종류(메인/TTS)별로 쿨다운과 1회 지급량이 다르다. 레벨업 요구치 공식은 MEE6와 동일.
 
-const { card, payload, COLORS } = require('./카드');
+const { card, payload, COLORS } = require('../공통/카드');
 const fs = require('fs');
 const path = require('path');
-const { logSystem, logError, userLabel } = require('./로그');
-const { writeJsonIfChanged } = require('./저장');
+const { logSystem, logError, userLabel } = require('../공통/로그');
+const { writeJsonIfChanged } = require('../공통/저장');
 const { isTempVoiceChannel } = require('./음성채널');
 
 const {
@@ -16,9 +16,9 @@ const {
   XP_TTS_CHANNEL_IDS,
   MATCH_BONUS_CHANNEL_ID,
   NEWBIE_BOOST_ROLE_ID,
-} = require('../config');
+} = require('../../config');
 
-const LEVELS_PATH = path.join(__dirname, '..', 'DB', 'levels.json');
+const LEVELS_PATH = path.join(__dirname, '..', '..', 'DB', 'levels.json');
 fs.mkdirSync(path.dirname(LEVELS_PATH), { recursive: true });
 
 // 메시지 XP는 채널 종류별로 쿨다운과 1회 지급량을 따로 둔다(쿨다운도 종류별로 따로 셈).
@@ -50,7 +50,7 @@ function randomMatchBonusXp() {
 // ── XP 런타임 스위치 ────────────────────────────────────────────
 // 관리자가 /xp → "XP 관리"에서 토글한다. xp-state.json에 저장돼 재시작해도 유지된다
 // (긴급정지는 봇이 재시작돼도 조용히 풀리면 안 되므로 반드시 디스크에 남긴다).
-const XP_STATE_PATH = path.join(__dirname, '..', 'DB', 'xp-state.json');
+const XP_STATE_PATH = path.join(__dirname, '..', '..', 'DB', 'xp-state.json');
 const xpState = {
   farmFrozen: false,        // 일반 파밍(메시지·TTS·통화방 체류·내전/모집 완료 보너스) XP 지급 정지
   minigameFrozen: false,    // 미니게임(오목·룰렛·틱택토·끝말잇기·퀴즈) XP 정산 정지

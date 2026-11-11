@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, ActionRowBuilder, StringSelectMenuBuilder, MessageFlags } = require('discord.js');
-const { menu, notice } = require('../handlers/카드');
+const { menu, notice } = require('../handlers/공통/카드');
 
 const { GAME_EMOJIS, OWNER_IDS } = require('../config');
 

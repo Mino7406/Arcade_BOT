@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
-const { getXp, levelFromXp, buildProgressBar } = require('../handlers/레벨링');
-const { displayNameFromMember } = require('../handlers/이름');
-const { card, payload, notice, COLORS, pullButton } = require('../handlers/카드');
+const { getXp, levelFromXp, buildProgressBar } = require('../handlers/레벨/레벨링');
+const { displayNameFromMember } = require('../handlers/공통/이름');
+const { card, payload, notice, COLORS, pullButton } = require('../handlers/공통/카드');
 
 // rows: 카드 안에 넣을 버튼 줄(나에게만 보이는 화면에는 공유하기 버튼, 공개 게시에는 없음)
 function buildLevelPayload(guildId, targetUser, displayName, rows = []) {

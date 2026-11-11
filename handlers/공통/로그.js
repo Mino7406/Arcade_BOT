@@ -24,8 +24,8 @@ const { displayNameFromInteraction } = require('./이름');
 // 예전엔 DB/log.json 하나에 최근 10000개를 담았는데, pretty-print로 2MB를 넘기면서 호스팅 사이트
 // 파일 편집기(2MB 초과 파일은 못 엶)에서 열 수 없게 됐고, 클릭마다 2MB를 통째로 다시 쓰는 부담도 컸다.
 // 지금은 오늘 파일만 메모리에 들고 그 파일만 다시 쓴다. 파일 안에서는 최신 기록이 맨 위(내림차순).
-const LOG_DIR = path.join(__dirname, '..', 'DB', 'log');
-const LEGACY_PATH = path.join(__dirname, '..', 'DB', 'log.json'); // 예전 단일 파일 — 처음 한 번 날짜별로 옮기고 지운다
+const LOG_DIR = path.join(__dirname, '..', '..', 'DB', 'log');
+const LEGACY_PATH = path.join(__dirname, '..', '..', 'DB', 'log.json'); // 예전 단일 파일 — 처음 한 번 날짜별로 옮기고 지운다
 fs.mkdirSync(LOG_DIR, { recursive: true });
 
 // 하루 기록이 이만큼을 넘으면 같은 날짜의 다음 파일(2026-11-12_2.json, _3 …)로 이어 쓴다.

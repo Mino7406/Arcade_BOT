@@ -24,7 +24,7 @@ fs.writeFileSync(path.join(tmp, 'DB', 'log.json'), JSON.stringify(legacy, null, 
 
 let now = at('2026-11-20 23:59:58');
 Date.now = () => now;
-const L = require(path.join(tmp, 'handlers', '로그.js'));
+const L = require(path.join(tmp, 'handlers', '공통', '로그.js'));
 const dir = path.join(tmp, 'DB', 'log');
 const read = (f) => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
 

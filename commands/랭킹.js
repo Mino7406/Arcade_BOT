@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { card, payload, notice, hasCustomId, COLORS, headerSide } = require('../handlers/카드');
-const { getLeaderboard, getLeaderboardSize, buildProgressBar } = require('../handlers/레벨링');
+const { card, payload, notice, hasCustomId, COLORS, headerSide } = require('../handlers/공통/카드');
+const { getLeaderboard, getLeaderboardSize, buildProgressBar } = require('../handlers/레벨/레벨링');
 
 const PAGE_SIZE = 5;
 const MEDALS = ['🥇', '🥈', '🥉'];

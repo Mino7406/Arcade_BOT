@@ -9,8 +9,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const { writeJsonIfChanged } = require('../../handlers/저장');
-const { logSystem } = require('../../handlers/로그');
+const { writeJsonIfChanged } = require('../../handlers/공통/저장');
+const { logSystem } = require('../../handlers/공통/로그');
 
 const REALM_ROSTER_PATH = path.join(__dirname, '..', '..', 'DB', 'realm_roster.json');
 fs.mkdirSync(path.dirname(REALM_ROSTER_PATH), { recursive: true });

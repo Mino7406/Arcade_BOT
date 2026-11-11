@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require('discord.js');
-const { startRouletteCommand } = require('../handlers/룰렛');
+const { startRouletteCommand } = require('../handlers/게임/룰렛');
 
 module.exports = {
   data: new SlashCommandBuilder()

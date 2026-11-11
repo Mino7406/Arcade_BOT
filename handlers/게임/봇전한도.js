@@ -6,11 +6,11 @@
 
 const fs = require('fs');
 const path = require('path');
-const { kstDateString, timeUntilKstMidnight } = require('./시간');
-const { logSystem } = require('./로그');
-const { writeJsonIfChanged } = require('./저장');
+const { kstDateString, timeUntilKstMidnight } = require('../공통/시간');
+const { logSystem } = require('../공통/로그');
+const { writeJsonIfChanged } = require('../공통/저장');
 
-const STORE_PATH = path.join(__dirname, '..', 'DB', 'botmatch-xp.json');
+const STORE_PATH = path.join(__dirname, '..', '..', 'DB', 'botmatch-xp.json');
 fs.mkdirSync(path.dirname(STORE_PATH), { recursive: true });
 
 // 유저 한 명이 하루에 봇전(끝말잇기 + 틱택토 합산)으로 받을 수 있는 최대 보상 XP.

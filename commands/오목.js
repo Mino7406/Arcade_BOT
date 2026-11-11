@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require('discord.js');
-const { startOmokCommand } = require('../handlers/오목');
+const { startOmokCommand } = require('../handlers/게임/오목');
 
 module.exports = {
   data: new SlashCommandBuilder()

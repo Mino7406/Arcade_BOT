@@ -17,14 +17,14 @@ const {
   AttachmentBuilder,
   MessageFlags,
 } = require('discord.js');
-const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp, isMinigameXpFrozen, isRaidXpFrozen, isUserXpFrozen } = require('./레벨링');
+const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp, isMinigameXpFrozen, isRaidXpFrozen, isUserXpFrozen } = require('../레벨/레벨링');
 const {
   getRemainingBotXp, addBotMatchXp, DAILY_BOT_MATCH_XP_CAP, timeUntilKstMidnight,
   WAGER_XP, BOT_WIN_XP_MIN, BOT_WIN_XP_MAX, rollBotWinXp,
 } = require('./봇전한도');
-const { displayNameFromInteraction } = require('./이름');
-const { card, payload, notice, text, withTopRows, COLORS, footerSide } = require('./카드');
-const { logGameResult, logError, userLabel } = require('./로그');
+const { displayNameFromInteraction } = require('../공통/이름');
+const { card, payload, notice, text, withTopRows, COLORS, footerSide } = require('../공통/카드');
+const { logGameResult, logError, userLabel } = require('../공통/로그');
 
 const N = 15;
 const cellIdx = (x, y) => y * N + x;
