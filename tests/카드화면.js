@@ -168,7 +168,17 @@ async function buildScreens() {
 module.exports = { buildScreens };
 
 // 직접 실행하면 그림용 data.js 를 만든다.
-if (require.main === module) {
+if (require.main === module && process.argv[2] === '--docs') {
+  // 예시 페이지(docs/v2-화면모음.html)를 한 파일로 바로 갱신한다: node tests/카드화면.js --docs
+  buildScreens().then(screens => {
+    const plain = screens.map(({ payload, ...rest }) => rest);
+    const html = fs.readFileSync(path.join(__dirname, '카드화면.html'), 'utf8');
+    const data = 'window.SCREENS = ' + JSON.stringify(plain) + ';';
+    fs.writeFileSync(path.join(ROOT, 'docs', 'v2-화면모음.html'), html.replace('<script src="data.js"></script>', () => '<script>' + data + '</script>'));
+    console.log('예시 페이지 갱신: docs/v2-화면모음.html (' + plain.length + '장)');
+    process.exit(0);
+  }).catch(err => { console.error(err); process.exit(1); });
+} else if (require.main === module) {
   const outDir = process.argv[2];
   if (!outDir) { console.error('사용: node tests/카드화면.js <출력 폴더>'); process.exit(1); }
   buildScreens().then(screens => {
