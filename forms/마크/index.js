@@ -57,7 +57,7 @@ function logRealmDmFailure(err, applicant) {
   }
 }
 
-const { card, payload, messageText, COLORS } = require('../../handlers/카드');
+const { card, payload, menu, asEphemeral, messageText, COLORS, notice: quick } = require('../../handlers/카드');
 
 const REALM_COLOR = 0x57F287;
 const PENDING_COLOR = 0xF0B232;
@@ -253,9 +253,12 @@ function buildRealmRosterButtons() {
 // "⚙️ 관리" 클릭 시 뜨는 ephemeral 메뉴 — 순서 변경/명단 새로고침은 두 번째 줄, 세 번째 줄엔
 // 본서버 모집글에 게시된 신청서 패널을 그 자리에서 다시 그리는 버튼(APPLY_DISABLED 등 반영).
 function buildRealmRosterAdminMenuPayload(notice) {
-  return {
-    content: (notice ? `${notice}\n\n` : '') + '<:OP:1544340150585262180> **명단 관리**',
-    components: [
+  return menu({
+    color: REALM_COLOR,
+    header: '<:OP:1544340150585262180> 명단 관리',
+    sub: '편집 · 추가 · 제외 · 순서 변경',
+    note: notice,
+    rows: [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('realm:roster:edit').setLabel('편집').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('realm:roster:add').setLabel('추가').setStyle(ButtonStyle.Success),
@@ -269,7 +272,7 @@ function buildRealmRosterAdminMenuPayload(notice) {
         new ButtonBuilder().setCustomId('realm:roster:panelrefresh').setLabel('신청서 패널 새로고침').setStyle(ButtonStyle.Primary),
       ),
     ],
-  };
+  });
 }
 
 // 검토 채널에 항상 하나만 유지되는 명단 메시지. 승인/거절이 있을 때마다 refreshRealmRosterMessage가
@@ -450,7 +453,7 @@ module.exports = {
   buildRealmPanelPayload,
   buildRealmApplyModal,
   buildRealmReviewPayload,
-  buildRealmRosterMessagePayload, // 화면 모음·테스트용
+  buildRealmRosterMessagePayload, buildRealmRosterAdminMenuPayload, // 화면 모음·테스트용
   refreshRealmRosterMessage,
 };
 
@@ -458,22 +461,19 @@ module.exports = {
 async function handleRealmButton(interaction) {
   if (interaction.customId === 'realm:apply') {
     if (APPLY_DISABLED) {
-      await interaction.reply({ content: '<:Barrier:1544331503448625233> **아직 신청을 받고 있지 않습니다.** 신청 시작일에 다시 시도해주세요.', flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick('<:Barrier:1544331503448625233> **아직 신청을 받고 있지 않습니다.** 신청 시작일에 다시 시도해주세요.', { ephemeral: true }));
       return;
     }
     if (isApprovedMember(interaction.guildId, interaction.user.id)) {
-      await interaction.reply({ content: '<:Barrier:1544331503448625233> **이미 렐름 참가가 승인된 멤버입니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick('<:Barrier:1544331503448625233> **이미 렐름 참가가 승인된 멤버입니다.**', { ephemeral: true }));
       return;
     }
     if (hasPendingApplication(interaction.guildId, interaction.user.id)) {
-      await interaction.reply({ content: '⚠️ **이미 제출한 신청서가 검토 대기중입니다.** 처리될 때까지 기다려주세요.', flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick('⚠️ **이미 제출한 신청서가 검토 대기중입니다.** 처리될 때까지 기다려주세요.', { ephemeral: true }));
       return;
     }
     if (!rulesAgreedUserIds.has(interaction.user.id)) {
-      await interaction.reply({
-        content: `⚠️ **먼저 규정집 메시지에 ${RULES_CHECK_EMOJI} 이모지로 동의 표시를 해주세요.**`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await interaction.reply(quick(`⚠️ **먼저 규정집 메시지에 ${RULES_CHECK_EMOJI} 이모지로 동의 표시를 해주세요.**`, { ephemeral: true }));
       return;
     }
     await interaction.showModal(buildRealmApplyModal());
@@ -489,7 +489,7 @@ async function handleRealmButton(interaction) {
   if (action !== 'approve' && action !== 'reject') return;
 
   if (!ADMIN_IDS.includes(interaction.user.id)) {
-    await interaction.reply({ content: '<:Barrier:1544331503448625233> **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.reply(quick('<:Barrier:1544331503448625233> **권한이 없습니다.**', { ephemeral: true }));
     return;
   }
 
@@ -501,7 +501,7 @@ async function handleRealmButton(interaction) {
   const applicant = applicantMember?.user
     ?? await interaction.client.users.fetch(applicantId).catch(() => null);
   if (!applicant) {
-    await interaction.followUp({ content: '⚠️ **신청자 정보를 찾을 수 없습니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.followUp(quick('⚠️ **신청자 정보를 찾을 수 없습니다.**', { ephemeral: true }));
     return;
   }
   const displayName = applicantMember?.displayName ?? applicant.username;
@@ -546,13 +546,13 @@ async function handleRealmModal(interaction) {
   const nickname = interaction.fields.getTextInputValue('mc_nickname').trim();
 
   if (!REALM_REVIEW_CHANNEL_ID) {
-    await interaction.reply({ content: '⚠️ **검토 채널이 아직 설정되지 않았습니다.** 관리자에게 문의해주세요.', flags: MessageFlags.Ephemeral });
+    await interaction.reply(quick('⚠️ **검토 채널이 아직 설정되지 않았습니다.** 관리자에게 문의해주세요.', { ephemeral: true }));
     return;
   }
 
   const reviewChannel = await interaction.client.channels.fetch(REALM_REVIEW_CHANNEL_ID).catch(() => null);
   if (!reviewChannel) {
-    await interaction.reply({ content: '⚠️ **검토 채널을 찾을 수 없습니다.** 관리자에게 문의해주세요.', flags: MessageFlags.Ephemeral });
+    await interaction.reply(quick('⚠️ **검토 채널을 찾을 수 없습니다.** 관리자에게 문의해주세요.', { ephemeral: true }));
     return;
   }
 
@@ -561,23 +561,20 @@ async function handleRealmModal(interaction) {
   await reviewChannel.send(buildRealmReviewPayload({ applicant: interaction.user, displayName, nickname, appliedAt, status: 'pending' }));
   addPendingApplication(interaction.guildId, interaction.user.id, { nickname, appliedAt });
 
-  await interaction.reply({
-    content: `<:Emerald:1544331499976007810> **신청이 접수되었습니다.** (닉네임: \`${nickname}\`)\n검토 후 결과를 DM으로 안내드릴게요.`,
-    flags: MessageFlags.Ephemeral,
-  });
+  await interaction.reply(quick(`<:Emerald:1544331499976007810> **신청이 접수되었습니다.** (닉네임: \`${nickname}\`)\n검토 후 결과를 DM으로 안내드릴게요.`, { ephemeral: true }));
 }
 
 // ── 명단 메시지 관리 버튼("⚙️ 관리" 진입 버튼 + 메뉴 안의 "편집"·"추가"·"제외"·"순서 변경"·"새로고침"·"신청서 패널 새로고침", 'realm:roster:' 프리픽스) ──
 async function handleRosterAdminButton(interaction) {
   if (!ADMIN_IDS.includes(interaction.user.id)) {
-    await interaction.reply({ content: '<:Barrier:1544331503448625233> **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.reply(quick('<:Barrier:1544331503448625233> **권한이 없습니다.**', { ephemeral: true }));
     return;
   }
 
   const sub = interaction.customId.split(':')[2];
 
   if (sub === 'menu') {
-    await interaction.reply({ ...buildRealmRosterAdminMenuPayload(), flags: MessageFlags.Ephemeral });
+    await interaction.reply(asEphemeral(buildRealmRosterAdminMenuPayload()));
     return;
   }
 
@@ -617,11 +614,11 @@ async function resolveRosterTarget(interaction, { requireInRoster }) {
   const userId = interaction.fields.getTextInputValue('user_id').trim().replace(/\D/g, '');
   const user = await interaction.client.users.fetch(userId).catch(() => null);
   if (!user) {
-    await interaction.editReply({ content: '⚠️ **해당 ID의 유저를 찾을 수 없습니다.**' });
+    await interaction.editReply(quick('⚠️ **해당 ID의 유저를 찾을 수 없습니다.**'));
     return null;
   }
   if (requireInRoster && !isApprovedMember(interaction.guildId, userId)) {
-    await interaction.editReply({ content: '⚠️ **명단에서 해당 유저를 찾을 수 없습니다.**' });
+    await interaction.editReply(quick('⚠️ **명단에서 해당 유저를 찾을 수 없습니다.**'));
     return null;
   }
   return { userId, user };
@@ -632,7 +629,7 @@ async function resolveRosterTarget(interaction, { requireInRoster }) {
 // API 호출이 여러 번 이어져 3초 응답 제한을 넘기기 쉬우므로, 맨 앞에서 먼저 deferReply로 확정해둔다.
 async function handleRealmRosterModal(interaction) {
   if (!ADMIN_IDS.includes(interaction.user.id)) {
-    await interaction.reply({ content: '<:Barrier:1544331503448625233> **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.reply(quick('<:Barrier:1544331503448625233> **권한이 없습니다.**', { ephemeral: true }));
     return;
   }
 
@@ -654,7 +651,7 @@ async function handleRealmRosterModal(interaction) {
     });
 
     await refreshRealmRosterMessage(interaction.client, interaction.guildId).catch(err => console.error('렐름 명단 메시지 갱신 실패:', err));
-    await interaction.editReply({ content: `<:Emerald:1544331499976007810> **${discordName}**님을 명단에 추가했습니다.` });
+    await interaction.editReply(quick(`<:Emerald:1544331499976007810> **${discordName}**님을 명단에 추가했습니다.`));
     return;
   }
 
@@ -665,7 +662,7 @@ async function handleRealmRosterModal(interaction) {
 
     updateApprovedMemberNickname(interaction.guildId, target.userId, nickname);
     await refreshRealmRosterMessage(interaction.client, interaction.guildId).catch(err => console.error('렐름 명단 메시지 갱신 실패:', err));
-    await interaction.editReply({ content: '<:Emerald:1544331499976007810> **닉네임을 수정했습니다.**' });
+    await interaction.editReply(quick('<:Emerald:1544331499976007810> **닉네임을 수정했습니다.**'));
     return;
   }
 
@@ -675,7 +672,7 @@ async function handleRealmRosterModal(interaction) {
 
     removeApprovedMember(interaction.guildId, target.userId);
     await refreshRealmRosterMessage(interaction.client, interaction.guildId).catch(err => console.error('렐름 명단 메시지 갱신 실패:', err));
-    await interaction.editReply({ content: '<:Barrier:1544331503448625233> **명단에서 제외했습니다.**' });
+    await interaction.editReply(quick('<:Barrier:1544331503448625233> **명단에서 제외했습니다.**'));
     return;
   }
 
@@ -684,13 +681,13 @@ async function handleRealmRosterModal(interaction) {
     if (!target) return;
     const position = parseInt(interaction.fields.getTextInputValue('position').trim(), 10);
     if (!Number.isInteger(position) || position < 1) {
-      await interaction.editReply({ content: '⚠️ **순번은 1 이상의 숫자로 입력해주세요.**' });
+      await interaction.editReply(quick('⚠️ **순번은 1 이상의 숫자로 입력해주세요.**'));
       return;
     }
 
     setApprovedMemberPosition(interaction.guildId, target.userId, position);
     await refreshRealmRosterMessage(interaction.client, interaction.guildId).catch(err => console.error('렐름 명단 메시지 갱신 실패:', err));
-    await interaction.editReply({ content: `<:Emerald:1544331499976007810> **${position}번째로 순서를 옮겼습니다.**` });
+    await interaction.editReply(quick(`<:Emerald:1544331499976007810> **${position}번째로 순서를 옮겼습니다.**`));
   }
 }
 

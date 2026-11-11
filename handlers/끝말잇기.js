@@ -10,7 +10,7 @@ const {
   WAGER_XP, BOT_WIN_XP_MIN, BOT_WIN_XP_MAX, rollBotWinXp,
 } = require('./봇전한도');
 const { displayNameFromInteraction } = require('./이름');
-const { card, payload, notice, text, withTopRows, COLORS } = require('./카드');
+const { card, payload, notice, text, withTopRows, COLORS, notice: quick } = require('./카드');
 const { logGameResult, logError } = require('./로그');
 
 const TURN_MS  = 20_000;
@@ -518,7 +518,7 @@ async function startRematchRequest(interaction, oldGame, humanPlayers, hadBot) {
     console.error('끝말잇기 재대결 신청 메시지 전송 실패:', err);
     logError('게임 오류', '끝말잇기 재대결 신청 메시지 전송 실패', err);
     games.delete(gameId);
-    await interaction.followUp({ content: '⚠️ **재대결 신청을 올리지 못했습니다.** 잠시 후 다시 시도해주세요.', flags: MessageFlags.Ephemeral }).catch(() => {});
+    await interaction.followUp(quick('⚠️ **재대결 신청을 올리지 못했습니다.** 잠시 후 다시 시도해주세요.', { ephemeral: true })).catch(() => {});
     return false;
   }
 
@@ -584,7 +584,7 @@ async function startRematchGame(interaction, gameId, humanPlayers, hadBot, { rep
     console.error('끝말잇기 재대결 시작 실패:', err);
     logError('게임 오류', '끝말잇기 재대결 시작 실패', err);
     games.delete(gameId);
-    await interaction.followUp({ content: '⚠️ **재대결을 시작하지 못했습니다.** 잠시 후 다시 시도해주세요.', flags: MessageFlags.Ephemeral }).catch(() => {});
+    await interaction.followUp(quick('⚠️ **재대결을 시작하지 못했습니다.** 잠시 후 다시 시도해주세요.', { ephemeral: true })).catch(() => {});
     return false;
   }
 
@@ -952,11 +952,11 @@ async function handleWcButton(interaction) {
     const gameId = customId.slice('wc:join:'.length);
     const game = games.get(gameId);
     if (!game || game.status !== 'waiting') {
-      await interaction.reply({ content: '⚠️ **참가할 수 없는 게임입니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick('⚠️ **참가할 수 없는 게임입니다.**', { ephemeral: true }));
       return;
     }
     if (game.players.some(p => p.id === interaction.user.id)) {
-      await interaction.reply({ content: '⚠️ **이미 참가 중입니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick('⚠️ **이미 참가 중입니다.**', { ephemeral: true }));
       return;
     }
     game.players.push({ id: interaction.user.id, name: displayNameFromInteraction(interaction) });
@@ -969,15 +969,15 @@ async function handleWcButton(interaction) {
     const gameId = customId.slice('wc:start:'.length);
     const game = games.get(gameId);
     if (!game || game.status !== 'waiting') {
-      await interaction.reply({ content: '⚠️ **게임을 시작할 수 없습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick('⚠️ **게임을 시작할 수 없습니다.**', { ephemeral: true }));
       return;
     }
     if (interaction.user.id !== game.hostId) {
-      await interaction.reply({ content: '⚠️ **방장만 게임을 시작할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick('⚠️ **방장만 게임을 시작할 수 있습니다.**', { ephemeral: true }));
       return;
     }
     if (game.players.length < 2) {
-      await interaction.reply({ content: '⚠️ **최소 2명이 필요합니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick('⚠️ **최소 2명이 필요합니다.**', { ephemeral: true }));
       return;
     }
     clearTimeout(game.timeoutId);
@@ -997,19 +997,19 @@ async function handleWcButton(interaction) {
     const gameId = customId.slice('wc:bot_start:'.length);
     const game = games.get(gameId);
     if (!game || game.status !== 'waiting') {
-      await interaction.reply({ content: '⚠️ **게임을 시작할 수 없습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick('⚠️ **게임을 시작할 수 없습니다.**', { ephemeral: true }));
       return;
     }
     if (interaction.user.id !== game.hostId) {
-      await interaction.reply({ content: '⚠️ **방장만 사용할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick('⚠️ **방장만 사용할 수 있습니다.**', { ephemeral: true }));
       return;
     }
     if (game.players.some(p => p.id === 'BOT')) {
-      await interaction.reply({ content: '⚠️ **봇은 이미 참가 중입니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick('⚠️ **봇은 이미 참가 중입니다.**', { ephemeral: true }));
       return;
     }
     if (game.players.length !== 1) {
-      await interaction.reply({ content: '⚠️ **참가자가 1명일 때만 봇과 시작할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick('⚠️ **참가자가 1명일 때만 봇과 시작할 수 있습니다.**', { ephemeral: true }));
       return;
     }
     clearTimeout(game.timeoutId);
@@ -1030,11 +1030,11 @@ async function handleWcButton(interaction) {
     const gameId = customId.slice('wc:cancel:'.length);
     const game = games.get(gameId);
     if (!game) {
-      await interaction.reply({ content: '⚠️ **게임을 찾을 수 없습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick('⚠️ **게임을 찾을 수 없습니다.**', { ephemeral: true }));
       return;
     }
     if (interaction.user.id !== game.hostId) {
-      await interaction.reply({ content: '⚠️ **방장만 취소할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick('⚠️ **방장만 취소할 수 있습니다.**', { ephemeral: true }));
       return;
     }
     clearTimeout(game.timeoutId);
@@ -1053,12 +1053,12 @@ async function handleWcButton(interaction) {
     const gameId = customId.slice('wc:giveup:'.length);
     const game = games.get(gameId);
     if (!game || game.status !== 'playing') {
-      await interaction.reply({ content: '⚠️ **진행 중인 게임이 아닙니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick('⚠️ **진행 중인 게임이 아닙니다.**', { ephemeral: true }));
       return;
     }
     const currentPlayer = game.players[game.currentIdx];
     if (currentPlayer.id === 'BOT' || interaction.user.id !== currentPlayer.id) {
-      await interaction.reply({ content: `⚠️ **지금은 \`${currentPlayer.name}\`의 차례입니다.**`, flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick(`⚠️ **지금은 \`${currentPlayer.name}\`의 차례입니다.**`, { ephemeral: true }));
       return;
     }
     await interaction.deferUpdate();
@@ -1071,11 +1071,11 @@ async function handleWcButton(interaction) {
     const oldGameId = customId.slice('wc:rematch:'.length);
     const oldGame = games.get(oldGameId);
     if (!oldGame || oldGame.status !== 'finished') {
-      await interaction.reply({ content: '⚠️ **재대결을 시작할 수 없습니다.** `/끝말잇기`로 새로 시작해주세요.', flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick('⚠️ **재대결을 시작할 수 없습니다.** `/끝말잇기`로 새로 시작해주세요.', { ephemeral: true }));
       return;
     }
     if (!oldGame.players.some(p => p.id === interaction.user.id)) {
-      await interaction.reply({ content: '⚠️ **이전 게임 참가자만 재대결을 시작할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick('⚠️ **이전 게임 참가자만 재대결을 시작할 수 있습니다.**', { ephemeral: true }));
       return;
     }
 
@@ -1083,7 +1083,7 @@ async function handleWcButton(interaction) {
     // 그러면 밀려난 쪽이 60초 뒤 '만료' 처리를 하면서 그 사이 시작된 게임 화면을 지워버린다.
     // 한 판당 재대결 신청은 하나만 만들어지게 막는다.
     if (oldGame.rematchStarted) {
-      await interaction.reply({ content: '⚠️ **이미 재대결 신청이 진행 중입니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick('⚠️ **이미 재대결 신청이 진행 중입니다.**', { ephemeral: true }));
       return;
     }
     oldGame.rematchStarted = true;
@@ -1107,11 +1107,11 @@ async function handleWcButton(interaction) {
     const gameId = customId.slice('wc:rematch_accept:'.length);
     const game = games.get(gameId);
     if (!game || game.status !== 'rematch_pending') {
-      await interaction.reply({ content: '⚠️ **만료된 재대결 신청입니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick('⚠️ **만료된 재대결 신청입니다.**', { ephemeral: true }));
       return;
     }
     if (!game.humanPlayers.some(p => p.id === interaction.user.id)) {
-      await interaction.reply({ content: '⚠️ **이전 게임 참가자만 응답할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick('⚠️ **이전 게임 참가자만 응답할 수 있습니다.**', { ephemeral: true }));
       return;
     }
     game.accepted.add(interaction.user.id);
@@ -1131,11 +1131,11 @@ async function handleWcButton(interaction) {
     const gameId = customId.slice('wc:rematch_decline:'.length);
     const game = games.get(gameId);
     if (!game || game.status !== 'rematch_pending') {
-      await interaction.reply({ content: '⚠️ **만료된 재대결 신청입니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick('⚠️ **만료된 재대결 신청입니다.**', { ephemeral: true }));
       return;
     }
     if (!game.humanPlayers.some(p => p.id === interaction.user.id)) {
-      await interaction.reply({ content: '⚠️ **이전 게임 참가자만 응답할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick('⚠️ **이전 게임 참가자만 응답할 수 있습니다.**', { ephemeral: true }));
       return;
     }
     clearTimeout(game.timeoutId);

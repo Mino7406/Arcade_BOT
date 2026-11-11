@@ -39,6 +39,11 @@ async function buildScreens() {
   const quizMod = req('handlers/퀴즈.js');
   const mark = req('forms/마크/index.js');
   const cob = req('forms/코블몬/index.js');
+  const naejeonMod = req('handlers/내전.js');
+  const quizCmd = req('commands/퀴즈.js');
+  const gameSelect = req('commands/내전.js');
+  const reload = req('commands/불러오기.js');
+  const { ButtonBuilder, ButtonStyle } = require('discord.js');
 
   const users = n => Array.from({ length: n }, (_, i) => ({ id: String(100 + i), displayName: ['민호', '지수', '하늘', '도윤', '서연', '준호', '예린', '태양', '나래', '현우'][i % 10] }));
   const GAMES = {
@@ -72,6 +77,19 @@ async function buildScreens() {
   add('내전 · 모집', '안내 한 줄 — 만료', '모든 짧은 안내가 같은 카드 모양', card.notice('⚠️ **만료된 내전입니다.**', { ephemeral: true }));
   add('내전 · 모집', '안내 한 줄 — 완료', '', card.notice('✅ **채널에 공개 게시되었습니다!**', { ephemeral: true }));
 
+  // 나만 보이는 메뉴·안내 (버튼을 눌렀을 때 뜨는 임시 메시지)
+  const mm = (extra = {}) => ({ data: base('lol'), participants: users(6), closed: false, teams: null, ...extra });
+  add('나만 보이는 메시지', '주최자 관리 메뉴 (모집 중)', '제목·상태·버튼이 한 카드에', common.buildManagePayload({ label: '내전', match: mm(), rows: naejeonMod.buildManageMenu(mm(), '1'), ephemeral: true }));
+  add('나만 보이는 메시지', '주최자 관리 메뉴 (마감 + 조작 결과)', '방금 한 조작 결과가 맨 위에', common.buildManagePayload({ label: '내전', match: mm({ closed: true }), note: '✅ **내전이 마감되었습니다.**', rows: naejeonMod.buildManageMenu(mm({ closed: true }), '1') }));
+  add('나만 보이는 메시지', '참가 완료 안내 + 참가 취소', '이전엔 평문 한 줄이었던 화면', card.notice('✅ **참가 완료!** 명단에 등록되었습니다.\n취소하려면 아래 버튼을 눌러주세요.', { rows: [naejeonMod.buildLeaveButton('1')], ephemeral: true }));
+  add('나만 보이는 메시지', '게임 선택 메뉴', '', gameSelect.buildGameSelectPayload('1'));
+  add('나만 보이는 메시지', '불러오기 목록', '', reload.buildReloadListPayload({ guildId: '1', client: { naejeonMatches: new Map([['1', { guildId: '1', participants: users(3), closed: false, data: base('lol') }]]), mojipMatches: new Map() } }));
+  add('나만 보이는 메시지', '권한 없음 / 오류 안내', '', card.notice('❌ **내전 주최자만 팀을 관리할 수 있습니다.**', { ephemeral: true }));
+  add('나만 보이는 메시지', '패널 관리 메뉴', '', panel.buildAdminMenuPayload('1', '✅ **패널을 새로고침했습니다.**'));
+  add('나만 보이는 메시지', '삭제 확인', '', panel.buildMatchDeleteConfirmPayload('1', 'naejeon', '2', '"롤 내전" 내전'));
+  add('나만 보이는 메시지', '렐름 명단 관리', '', mark.buildRealmRosterAdminMenuPayload('✅ **명단을 새로고침했습니다.**'));
+  add('나만 보이는 메시지', '퀴즈 관리 — 작동 중', '일시정지 버튼이 상태 줄 오른쪽에 따로', quizCmd.buildQuizPanelPayload('1'));
+
   // ── 놀이터 게임 ───────────────────────────────
   const lobby = (n, extra = {}) => ({ id: '1', hostId: '1', lobbyPlayers: users(n).map(u => ({ id: u.id, name: u.displayName })), infinite: false, status: 'waiting', ...extra });
   add('틱택토', '대기 로비', '', ttt.buildLobbyPayload(lobby(1)));
@@ -103,6 +121,9 @@ async function buildScreens() {
   add('레벨 · 랭킹 · 퀴즈', '랭킹 1페이지', '', (await rank.buildRankingView(guild, 1, true)).payload);
   add('레벨 · 랭킹 · 퀴즈', '레벨 카드', '', level.buildLevelPayload('g', { id: '100', displayAvatarURL: () => 'https://cdn.discordapp.com/embed/avatars/0.png' }, '민호'));
   add('레벨 · 랭킹 · 퀴즈', '오늘의 퀴즈', '', card.payload(quizMod.buildQuizCard({ word: '고양이', hint: '집에서 기르는 작은 동물로, 야옹 하고 운다.', grade: '쉬움', xpReward: 40 })));
+
+  add('레벨 · 랭킹 · 퀴즈', '레벨업 축하', '', req('handlers/레벨링.js').buildLevelUpPayload('100', 8));
+  add('레벨 · 랭킹 · 퀴즈', '퀴즈 정답', '', quizMod.buildCorrectPayload({ word: '고양이', xpReward: 40 }));
 
   // ── 관리 · 안내 패널 ──────────────────────────
   const fake = { client: { user: { displayAvatarURL: () => 'https://cdn.discordapp.com/embed/avatars/1.png', username: 'ARCADE' } }, guild: { id: '1' }, guildId: '1' };

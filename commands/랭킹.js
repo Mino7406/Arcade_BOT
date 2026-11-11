@@ -159,7 +159,7 @@ async function handleRankingGotoModal(interaction) {
   await interaction.deferUpdate();
   const input = interaction.fields.getTextInputValue('page').trim();
   if (!/^[0-9]+$/.test(input)) {
-    await interaction.followUp({ content: '❌ 페이지 번호는 숫자로 입력해주세요.', flags: MessageFlags.Ephemeral });
+    await interaction.followUp(notice('❌ 페이지 번호는 숫자로 입력해주세요.', { ephemeral: true }));
     return;
   }
   await showRankingPage(interaction, parseInt(input, 10)); // 범위를 벗어난 값은 buildRankingView에서 보정된다.

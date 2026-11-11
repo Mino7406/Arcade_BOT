@@ -926,12 +926,12 @@ async function startRematch(interaction, prevBId, prevWId) {
   const prevIds = isBot ? [prevBId] : [prevBId, prevWId];
 
   if (!prevIds.includes(interaction.user.id)) {
-    await interaction.reply({ content: '⚠️ **원래 참가자만 재대결할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.reply(notice('⚠️ **원래 참가자만 재대결할 수 있습니다.**', { ephemeral: true }));
     return;
   }
   for (const g of games.values()) {
     if (g.sourceMessageId === interaction.message.id) {
-      await interaction.reply({ content: '⚠️ **이미 재대결 신청이 진행 중입니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⚠️ **이미 재대결 신청이 진행 중입니다.**', { ephemeral: true }));
       return;
     }
   }
@@ -970,35 +970,35 @@ async function handleOmokButton(interaction) {
 
   if (customId.startsWith('omok:join:')) {
     const game = games.get(customId.slice('omok:join:'.length));
-    if (!game || game.status !== 'waiting') return interaction.reply({ content: '⚠️ **참가할 수 없는 게임입니다.**', flags: MessageFlags.Ephemeral });
-    if (game.lobbyPlayers.some(p => p.id === interaction.user.id)) return interaction.reply({ content: '⚠️ **이미 참가 중입니다.**', flags: MessageFlags.Ephemeral });
-    if (game.lobbyPlayers.length >= 2) return interaction.reply({ content: '⚠️ **정원(2명)이 이미 찼습니다.**', flags: MessageFlags.Ephemeral });
+    if (!game || game.status !== 'waiting') return interaction.reply(notice('⚠️ **참가할 수 없는 게임입니다.**', { ephemeral: true }));
+    if (game.lobbyPlayers.some(p => p.id === interaction.user.id)) return interaction.reply(notice('⚠️ **이미 참가 중입니다.**', { ephemeral: true }));
+    if (game.lobbyPlayers.length >= 2) return interaction.reply(notice('⚠️ **정원(2명)이 이미 찼습니다.**', { ephemeral: true }));
     game.lobbyPlayers.push({ id: interaction.user.id, name: displayNameFromInteraction(interaction) });
     return interaction.update(buildLobbyPayload(game));
   }
 
   if (customId.startsWith('omok:start:')) {
     const game = games.get(customId.slice('omok:start:'.length));
-    if (!game || game.status !== 'waiting') return interaction.reply({ content: '⚠️ **게임을 시작할 수 없습니다.**', flags: MessageFlags.Ephemeral });
-    if (interaction.user.id !== game.hostId) return interaction.reply({ content: '⚠️ **방장만 게임을 시작할 수 있습니다.**', flags: MessageFlags.Ephemeral });
-    if (game.lobbyPlayers.length < 2) return interaction.reply({ content: '⚠️ **최소 2명이 필요합니다.**', flags: MessageFlags.Ephemeral });
+    if (!game || game.status !== 'waiting') return interaction.reply(notice('⚠️ **게임을 시작할 수 없습니다.**', { ephemeral: true }));
+    if (interaction.user.id !== game.hostId) return interaction.reply(notice('⚠️ **방장만 게임을 시작할 수 있습니다.**', { ephemeral: true }));
+    if (game.lobbyPlayers.length < 2) return interaction.reply(notice('⚠️ **최소 2명이 필요합니다.**', { ephemeral: true }));
     return beginGame(interaction, game, games);
   }
 
   if (customId.startsWith('omok:bot_start:')) {
     const game = games.get(customId.slice('omok:bot_start:'.length));
-    if (!game || game.status !== 'waiting') return interaction.reply({ content: '⚠️ **게임을 시작할 수 없습니다.**', flags: MessageFlags.Ephemeral });
-    if (interaction.user.id !== game.hostId) return interaction.reply({ content: '⚠️ **방장만 사용할 수 있습니다.**', flags: MessageFlags.Ephemeral });
-    if (game.lobbyPlayers.some(p => p.id === 'BOT')) return interaction.reply({ content: '⚠️ **봇은 이미 참가 중입니다.**', flags: MessageFlags.Ephemeral });
-    if (game.lobbyPlayers.length !== 1) return interaction.reply({ content: '⚠️ **참가자가 1명일 때만 봇과 시작할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+    if (!game || game.status !== 'waiting') return interaction.reply(notice('⚠️ **게임을 시작할 수 없습니다.**', { ephemeral: true }));
+    if (interaction.user.id !== game.hostId) return interaction.reply(notice('⚠️ **방장만 사용할 수 있습니다.**', { ephemeral: true }));
+    if (game.lobbyPlayers.some(p => p.id === 'BOT')) return interaction.reply(notice('⚠️ **봇은 이미 참가 중입니다.**', { ephemeral: true }));
+    if (game.lobbyPlayers.length !== 1) return interaction.reply(notice('⚠️ **참가자가 1명일 때만 봇과 시작할 수 있습니다.**', { ephemeral: true }));
     game.lobbyPlayers.push({ id: 'BOT', name: '봇' });
     return beginGame(interaction, game, games);
   }
 
   if (customId.startsWith('omok:cancel:')) {
     const game = games.get(customId.slice('omok:cancel:'.length));
-    if (!game) return interaction.reply({ content: '⚠️ **게임을 찾을 수 없습니다.**', flags: MessageFlags.Ephemeral });
-    if (interaction.user.id !== game.hostId) return interaction.reply({ content: '⚠️ **방장만 취소할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+    if (!game) return interaction.reply(notice('⚠️ **게임을 찾을 수 없습니다.**', { ephemeral: true }));
+    if (interaction.user.id !== game.hostId) return interaction.reply(notice('⚠️ **방장만 취소할 수 있습니다.**', { ephemeral: true }));
     clearTimeout(game.timeoutId);
     games.delete(game.id);
     return interaction.update(notice('❌ **게임이 취소되었습니다.**'));
@@ -1006,9 +1006,9 @@ async function handleOmokButton(interaction) {
 
   if (customId.startsWith('omok:resign:')) {
     const game = games.get(customId.slice('omok:resign:'.length));
-    if (!game || game.status !== 'playing') return interaction.reply({ content: '⚠️ **진행 중인 게임이 아닙니다.**', flags: MessageFlags.Ephemeral });
+    if (!game || game.status !== 'playing') return interaction.reply(notice('⚠️ **진행 중인 게임이 아닙니다.**', { ephemeral: true }));
     const myColor = interaction.user.id === game.players.B ? 'B' : interaction.user.id === game.players.W ? 'W' : null;
-    if (!myColor) return interaction.reply({ content: '⚠️ **대국 참가자만 포기할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+    if (!myColor) return interaction.reply(notice('⚠️ **대국 참가자만 포기할 수 있습니다.**', { ephemeral: true }));
     await interaction.deferUpdate();
     finishGame(game, games, other(myColor), 'resign', { resignedBy: interaction.user.id });
     await finishBoard(game);
@@ -1022,17 +1022,17 @@ async function handleOmokButton(interaction) {
 
   if (customId.startsWith('omok:rematch_accept:')) {
     const game = games.get(customId.slice('omok:rematch_accept:'.length));
-    if (!game || game.status !== 'rematch_pending') return interaction.reply({ content: '⚠️ **만료된 재대결 신청입니다.**', flags: MessageFlags.Ephemeral });
-    if (interaction.user.id !== game.opponentId) return interaction.reply({ content: '⚠️ **재대결을 신청받은 상대만 수락할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+    if (!game || game.status !== 'rematch_pending') return interaction.reply(notice('⚠️ **만료된 재대결 신청입니다.**', { ephemeral: true }));
+    if (interaction.user.id !== game.opponentId) return interaction.reply(notice('⚠️ **재대결을 신청받은 상대만 수락할 수 있습니다.**', { ephemeral: true }));
     game.accepted.add(interaction.user.id);
     return beginRematchGame(interaction, game, games);
   }
 
   if (customId.startsWith('omok:rematch_decline:')) {
     const game = games.get(customId.slice('omok:rematch_decline:'.length));
-    if (!game || game.status !== 'rematch_pending') return interaction.reply({ content: '⚠️ **만료된 재대결 신청입니다.**', flags: MessageFlags.Ephemeral });
+    if (!game || game.status !== 'rematch_pending') return interaction.reply(notice('⚠️ **만료된 재대결 신청입니다.**', { ephemeral: true }));
     if (interaction.user.id !== game.challengerId && interaction.user.id !== game.opponentId) {
-      return interaction.reply({ content: '⚠️ **원래 참가자만 응답할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+      return interaction.reply(notice('⚠️ **원래 참가자만 응답할 수 있습니다.**', { ephemeral: true }));
     }
     clearTimeout(game.timeoutId);
     games.delete(game.id);
@@ -1044,7 +1044,7 @@ async function handleOmokButton(interaction) {
   if (customId.startsWith('omok:close:')) {
     const [, , bId, wId] = customId.split(':');
     if (interaction.user.id !== bId && interaction.user.id !== wId) {
-      return interaction.reply({ content: '⚠️ **원래 참가자만 종료할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+      return interaction.reply(notice('⚠️ **원래 참가자만 종료할 수 있습니다.**', { ephemeral: true }));
     }
     return interaction.update(withTopRows(interaction.message, []));
   }
@@ -1068,7 +1068,7 @@ async function handleOmokMessage(message) {
     if (!coord) continue; // 좌표가 아닌 잡담 — 무시(제한 시간은 그대로 흐른다)
 
     if (game.board[cellIdx(coord.x, coord.y)] !== '') {
-      const warn = await message.reply('⚠️ 이미 돌이 있는 자리입니다. 다른 좌표를 입력하세요.').catch(() => null);
+      const warn = await message.reply(notice('⚠️ 이미 돌이 있는 자리입니다. 다른 좌표를 입력하세요.', { allowedMentions: { repliedUser: false } })).catch(() => null);
       if (warn) setTimeout(() => warn.delete().catch(() => {}), 4000);
       return;
     }

@@ -1,6 +1,7 @@
 // 레벨링.js — MEE6과 동일한 방식의 레벨/XP 시스템
 // 메시지 XP는 채널 종류(메인/TTS)별로 쿨다운과 1회 지급량이 다르다. 레벨업 요구치 공식은 MEE6와 동일.
 
+const { card, payload, COLORS } = require('./카드');
 const fs = require('fs');
 const path = require('path');
 const { logSystem, logError, userLabel } = require('./로그');
@@ -432,6 +433,15 @@ function initVoiceStates(client) {
   }
 }
 
+// 레벨업 축하 카드. v2 글자 속 멘션은 알림이 가므로 그 유저만 부른다.
+function buildLevelUpPayload(userId, newLevel) {
+  return payload(card({
+    color: COLORS.gold,
+    header: '🎉 레벨 업!',
+    blocks: [`<@${userId}>님이 **${newLevel}레벨**을 달성했어요.`],
+  }), { allowedMentions: { users: [userId] } });
+}
+
 // 레벨업 축하 메시지를 놀이터(레벨업 안내) 채널에 보낸다. 메시지 XP·통화방 XP·내전/모집 완료
 // 보너스·룰렛·끝말잇기·틱택토가 모두 이 함수를 공유한다(예전엔 각자 복붙한 사본이 흩어져 있었다).
 // 안내 채널이 대상 길드에 속하지 않으면(다른 서버에서 레벨업) 보내지 않는다. 전송 실패는 무시.
@@ -439,10 +449,7 @@ async function announceLevelUp(client, guildId, userId, newLevel) {
   try {
     const channel = await client.channels.fetch(LEVEL_UP_ANNOUNCE_CHANNEL_ID).catch(() => null);
     if (channel?.guildId !== guildId) return;
-    await channel.send({
-      content: `<@${userId}>님이 ${newLevel}레벨을 달성했어요. 🎉`,
-      allowedMentions: { users: [userId] },
-    });
+    await channel.send(buildLevelUpPayload(userId, newLevel));
   } catch (err) {
     console.error('레벨업 축하 메시지 전송 실패:', err);
     logError('레벨업', `레벨업 축하 메시지 전송 실패(Lv.${newLevel})`, err, { 유저: userLabel(userId) });
@@ -497,6 +504,7 @@ function buildProgressBar(current, needed, length = 20) {
 }
 
 module.exports = {
+  buildLevelUpPayload, // 화면 모음·테스트용
   loadLevels,
   saveLevels,
   isLevelsLoaded,

@@ -167,11 +167,11 @@ async function handleTeamButton(interaction) {
       return;
     }
     if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
-      await interaction.reply({ content: '❌ **내전 주최자만 사용할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('❌ **내전 주최자만 사용할 수 있습니다.**', { ephemeral: true }));
       return;
     }
     if (match.participants.length < 2) {
-      await interaction.reply({ content: '⚠️ **팀 만들기는 참가자가 2명 이상이어야 합니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⚠️ **팀 만들기는 참가자가 2명 이상이어야 합니다.**', { ephemeral: true }));
       return;
     }
     await interaction.update(notice('🛠️ **팀 만들기** - 팀 1에 배정할 참가자를 선택하세요.\n(나머지는 자동으로 팀 2가 됩니다.)', { rows: buildSetupBuilderComponents(match, matchMsgId) }));
@@ -187,7 +187,7 @@ async function handleTeamButton(interaction) {
       return;
     }
     if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
-      await interaction.reply({ content: '❌ **내전 주최자만 사용할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('❌ **내전 주최자만 사용할 수 있습니다.**', { ephemeral: true }));
       return;
     }
     const teams = shuffleIntoTeams(match.participants);
@@ -203,15 +203,15 @@ async function handleTeamButton(interaction) {
     const matchMsgId = customId.slice('team:pub_builder:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.reply({ content: `⚠️ **만료된 내전입니다.**`, flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice(`⚠️ **만료된 내전입니다.**`, { ephemeral: true }));
       return;
     }
     if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
-      await interaction.reply({ content: '❌ **내전 주최자만 사용할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('❌ **내전 주최자만 사용할 수 있습니다.**', { ephemeral: true }));
       return;
     }
     if (match.participants.length < 2) {
-      await interaction.reply({ content: '⚠️ **팀 만들기는 참가자가 2명 이상이어야 합니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⚠️ **팀 만들기는 참가자가 2명 이상이어야 합니다.**', { ephemeral: true }));
       return;
     }
     await interaction.update(notice('🛠️ **팀 만들기** - 팀 1에 배정할 참가자를 선택하세요.\n(나머지는 자동으로 팀 2가 됩니다.)', { rows: buildPublicBuilderComponents(match, matchMsgId) }));
@@ -223,15 +223,15 @@ async function handleTeamButton(interaction) {
     const matchMsgId = customId.slice('team:pub_shuffle:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.reply({ content: `⚠️ **만료된 내전입니다.**`, flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice(`⚠️ **만료된 내전입니다.**`, { ephemeral: true }));
       return;
     }
     if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
-      await interaction.reply({ content: '❌ **내전 주최자만 사용할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('❌ **내전 주최자만 사용할 수 있습니다.**', { ephemeral: true }));
       return;
     }
     if (match.participants.length < 2) {
-      await interaction.reply({ content: '⚠️ **팀을 나누려면 참가자가 2명 이상이어야 합니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⚠️ **팀을 나누려면 참가자가 2명 이상이어야 합니다.**', { ephemeral: true }));
       return;
     }
     const teams = shuffleIntoTeams(match.participants);
@@ -256,7 +256,7 @@ async function handleTeamAssignSelect(interaction) {
     return;
   }
   if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
-    await interaction.reply({ content: '❌ **내전 주최자만 사용할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.reply(notice('❌ **내전 주최자만 사용할 수 있습니다.**', { ephemeral: true }));
     return;
   }
 

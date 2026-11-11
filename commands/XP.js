@@ -10,7 +10,7 @@ const {
   MessageFlags,
 } = require('discord.js');
 const { ADMIN_IDS } = require('../config');
-const { card, payload, COLORS } = require('../handlers/카드');
+const { card, payload, COLORS, notice: quick } = require('../handlers/카드');
 const {
   getXp,
   levelFromXp,
@@ -40,17 +40,17 @@ const MAX_LEVEL = 1000;
 // allowExcludedGuild: 레벨 데이터를 건드리지 않는 조작(레이드 소환/종료)은 테스트 서버에서도 허용.
 async function denyGuard(interaction, { allowExcludedGuild = false } = {}) {
   if (!ADMIN_IDS.includes(interaction.user.id)) {
-    await interaction.reply({ content: '❌ **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.reply(quick('❌ **권한이 없습니다.**', { ephemeral: true }));
     return true;
   }
   if (allowExcludedGuild && isExcludedGuild(interaction.guildId)) return false;
   if (isExcludedGuild(interaction.guildId)) {
-    await interaction.reply({ content: '⚠️ **이 서버는 레벨 시스템이 비활성화돼 있어 XP를 조정할 수 없습니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.reply(quick('⚠️ **이 서버는 레벨 시스템이 비활성화돼 있어 XP를 조정할 수 없습니다.**', { ephemeral: true }));
     return true;
   }
   if (!isLevelsLoaded()) {
     // 복원 전에는 levels가 빈 객체라, 여기서 조정+저장하면 levels.json이 통째로 비워진다.
-    await interaction.reply({ content: '⚠️ **레벨 데이터를 복원하는 중입니다. 잠시 후 다시 시도하세요.**', flags: MessageFlags.Ephemeral });
+    await interaction.reply(quick('⚠️ **레벨 데이터를 복원하는 중입니다. 잠시 후 다시 시도하세요.**', { ephemeral: true }));
     return true;
   }
   return false;
@@ -110,40 +110,39 @@ function buildMenuView() {
 function buildManageView(notice, guildId) {
   const st = getXpState();
   const raid = getRaidStatus(guildId);
+  const toggle = (id, on, offLabel, onLabel, offEmoji = '⏸️', onEmoji = '▶️') =>
+    new ButtonBuilder().setCustomId(id)
+      .setEmoji(on ? onEmoji : offEmoji)
+      .setLabel(on ? onLabel : offLabel)
+      .setStyle(on ? ButtonStyle.Success : ButtonStyle.Danger);
+  // 중요한 스위치(긴급정지·부스트·레이드)는 각 항목 줄 오른쪽에 따로 둔다. 자주 안 쓰는 조작은 맨 아래 줄.
   return payload(card({
     color: st.farmFrozen || st.minigameFrozen ? COLORS.err : COLORS.ok,
     header: '🛠️ XP 관리',
     blocks: [
       notice || null,
-      `**일반 파밍 XP** ${st.farmFrozen ? '🔴 정지됨' : '🟢 작동 중'}\n-# 메인·TTS 채팅 · 통화방 체류 · 내전/모집 완료 보너스`,
-      `**미니게임 XP** ${st.minigameFrozen ? '🔴 정지됨' : '🟢 작동 중'}\n-# 오목 · 룰렛 · 틱택토 · 끝말잇기 · 퀴즈`,
-      `**뉴비부스트(×2)** ${st.newbieBoostEnabled ? '🟢 ON' : '⚪ OFF'}\n-# 뉴비부스트 역할의 메인·TTS·통화방 체류 XP 2배`,
-      `**레이드 자동 출현** ${raid.autoSpawn ? '🟢 가동 중' : '🔴 중지됨'}\n-# 하루~사흘마다(무작위) 놀이터에 출현 · 진행 중엔 채팅·통화방·미니게임 XP 정지`,
-      raidStatusText(raid),
+      {
+        text: `**일반 파밍 XP**　${st.farmFrozen ? '🔴 정지됨' : '🟢 작동 중'}\n-# 메인·TTS 채팅 · 통화방 체류 · 내전/모집 완료 보너스`,
+        button: toggle('xp:mng:farm', st.farmFrozen, '긴급정지', '재개'),
+      },
+      {
+        text: `**미니게임 XP**　${st.minigameFrozen ? '🔴 정지됨' : '🟢 작동 중'}\n-# 오목 · 룰렛 · 틱택토 · 끝말잇기 · 퀴즈`,
+        button: toggle('xp:mng:game', st.minigameFrozen, '긴급정지', '재개'),
+      },
+      {
+        text: `**뉴비부스트(×2)**　${st.newbieBoostEnabled ? '🟢 ON' : '⚪ OFF'}\n-# 뉴비부스트 역할의 메인·TTS·통화방 체류 XP 2배`,
+        button: new ButtonBuilder().setCustomId('xp:mng:boost').setEmoji('✨')
+          .setLabel(st.newbieBoostEnabled ? '끄기' : '켜기')
+          .setStyle(st.newbieBoostEnabled ? ButtonStyle.Secondary : ButtonStyle.Primary),
+      },
+      {
+        text: `**레이드 자동 출현**　${raid.autoSpawn ? '🟢 가동 중' : '🔴 중지됨'}\n-# 하루~사흘마다(무작위) 놀이터에 출현 · 진행 중엔 채팅·통화방·미니게임 XP 정지`,
+        button: toggle('xp:mng:raidauto', !raid.autoSpawn, '중지', '가동'),
+      },
+      { text: raidStatusText(raid), button: raidButton(raid) },
     ],
     rows: [
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('xp:mng:farm')
-          .setEmoji(st.farmFrozen ? '▶️' : '⏸️')
-          .setLabel(st.farmFrozen ? '일반파밍 재개' : '일반파밍 긴급정지')
-          .setStyle(st.farmFrozen ? ButtonStyle.Success : ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId('xp:mng:game')
-          .setEmoji(st.minigameFrozen ? '▶️' : '⏸️')
-          .setLabel(st.minigameFrozen ? '미니게임 재개' : '미니게임 긴급정지')
-          .setStyle(st.minigameFrozen ? ButtonStyle.Success : ButtonStyle.Danger),
-      ),
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('xp:mng:boost')
-          .setEmoji('✨')
-          .setLabel(st.newbieBoostEnabled ? '뉴비부스트 끄기' : '뉴비부스트 켜기')
-          .setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('xp:menu:home').setEmoji('↩️').setLabel('메뉴로').setStyle(ButtonStyle.Secondary),
-      ),
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('xp:mng:raidauto')
-          .setEmoji(raid.autoSpawn ? '⏸️' : '▶️')
-          .setLabel(raid.autoSpawn ? '레이드 자동 출현 중지' : '레이드 자동 출현 가동')
-          .setStyle(raid.autoSpawn ? ButtonStyle.Danger : ButtonStyle.Success),
         new ButtonBuilder().setCustomId('xp:mng:raidtime')
           .setEmoji('🕒')
           .setLabel('출현 시각 변경')
@@ -154,7 +153,7 @@ function buildManageView(notice, guildId) {
           .setLabel('몬스터 변경')
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(!raid.autoSpawn),
-        raidButton(raid),
+        new ButtonBuilder().setCustomId('xp:menu:home').setEmoji('↩️').setLabel('메뉴로').setStyle(ButtonStyle.Secondary),
       ),
     ],
   }));
@@ -521,7 +520,7 @@ async function handleXpModal(interaction) {
       ? '시각을 알아볼 수 없어요. `2026-11-07 20:00`처럼 적어 주세요.'
       : setNextSpawnAt(ms);
     if (error) {
-      await interaction.reply({ content: `⚠️ **${error}**`, flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick(`⚠️ **${error}**`, { ephemeral: true }));
       return;
     }
     logAction(interaction, 'XP 관리', `레이드 다음 출현 시각 변경 → ${kstDateTimeString(ms)} (KST)`);
@@ -533,10 +532,7 @@ async function handleXpModal(interaction) {
     const raw = interaction.fields.getTextInputValue('amount').trim().replace(/,/g, '');
     const n = Number(raw);
     if (!Number.isInteger(n) || n <= 0 || n > MAX_ABS) {
-      await interaction.reply({
-        content: `⚠️ **1 ~ ${MAX_ABS.toLocaleString()} 사이의 정수를 입력하세요.**`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await interaction.reply(quick(`⚠️ **1 ~ ${MAX_ABS.toLocaleString()} 사이의 정수를 입력하세요.**`, { ephemeral: true }));
       return;
     }
     const delta = kind === 'addModal' ? n : -n;
@@ -552,10 +548,7 @@ async function handleXpModal(interaction) {
     const raw = interaction.fields.getTextInputValue('level').trim();
     const lv = Number(raw);
     if (!Number.isInteger(lv) || lv < 0 || lv > MAX_LEVEL) {
-      await interaction.reply({
-        content: `⚠️ **0 ~ ${MAX_LEVEL} 사이의 정수를 입력하세요.**`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await interaction.reply(quick(`⚠️ **0 ~ ${MAX_LEVEL} 사이의 정수를 입력하세요.**`, { ephemeral: true }));
       return;
     }
     const result = setXp(interaction.guildId, targetId, xpForLevelStart(lv));

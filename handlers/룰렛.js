@@ -226,25 +226,19 @@ async function startRouletteCommand(interaction) {
   const userId = interaction.user.id;
 
   if (isExcludedGuild(guildId)) {
-    await interaction.reply({ content: '⚠️ **이 서버에서는 룰렛을 이용할 수 없습니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.reply(notice('⚠️ **이 서버에서는 룰렛을 이용할 수 없습니다.**', { ephemeral: true }));
     return;
   }
 
   if (hasPlayedToday(guildId, userId)) {
     logAction(interaction, '룰렛', '일일 1회 제한으로 거부됨');
-    await interaction.reply({
-      content: `⏳ **오늘은 이미 룰렛을 돌렸습니다.**\n다음 판까지 약 ${timeUntilKstMidnight()} 남았어요.`,
-      flags: MessageFlags.Ephemeral,
-    });
+    await interaction.reply(notice(`⏳ **오늘은 이미 룰렛을 돌렸습니다.**\n다음 판까지 약 ${timeUntilKstMidnight()} 남았어요.`, { ephemeral: true }));
     return;
   }
 
   const currentLevelXp = levelFromXp(getXp(guildId, userId)).currentLevelXp;
   if (currentLevelXp < MIN_BET) {
-    await interaction.reply({
-      content: `⚠️ **베팅 가능한 XP가 부족합니다.**\n(최소 ${MIN_BET} XP 필요, 현재 레벨 안 보유 XP: ${currentLevelXp})`,
-      flags: MessageFlags.Ephemeral,
-    });
+    await interaction.reply(notice(`⚠️ **베팅 가능한 XP가 부족합니다.**\n(최소 ${MIN_BET} XP 필요, 현재 레벨 안 보유 XP: ${currentLevelXp})`, { ephemeral: true }));
     return;
   }
 
@@ -377,18 +371,18 @@ async function handleRouletteButton(interaction) {
   const lobby = lobbies.get(lobbyId);
 
   if (!lobby) {
-    await interaction.reply({ content: '⚠️ **만료된 룰렛입니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.reply(notice('⚠️ **만료된 룰렛입니다.**', { ephemeral: true }));
     return;
   }
   if (interaction.user.id !== lobby.userId) {
-    await interaction.reply({ content: '⚠️ **본인이 시작한 룰렛만 조작할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.reply(notice('⚠️ **본인이 시작한 룰렛만 조작할 수 있습니다.**', { ephemeral: true }));
     return;
   }
 
   if (action === 'bet') {
     const amount = parseInt(parts[3], 10);
     if (amount > lobby.maxAvailable) {
-      await interaction.reply({ content: '⚠️ **베팅 가능한 XP를 초과했습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⚠️ **베팅 가능한 XP를 초과했습니다.**', { ephemeral: true }));
       return;
     }
     lobby.bet = amount;
@@ -404,7 +398,7 @@ async function handleRouletteButton(interaction) {
 
   if (action === 'spin') {
     if (!lobby.bet) {
-      await interaction.reply({ content: '⚠️ **먼저 베팅 XP를 선택하세요.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⚠️ **먼저 베팅 XP를 선택하세요.**', { ephemeral: true }));
       return;
     }
     await spinLobby(interaction, lobby, lobbies);

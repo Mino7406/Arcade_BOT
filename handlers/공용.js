@@ -803,6 +803,52 @@ function buildMatchMessagePayload({ label, match, rows }) {
   return payload(components, { allowedMentions: { parse: [] } });
 }
 
+// 주최자 관리 메뉴(나만 보이는 임시 메시지). 게임 색 띠 + 제목/상태 + 방금 한 조작 결과 + 버튼.
+// 중요한 버튼은 따로 뺀다: 마감하기/마감 해제는 상태 줄 오른쪽, 취소는 맨 아래 위험 줄 오른쪽.
+// 나머지 버튼은 가운데 버튼 줄에 그대로 둔다.
+function buildManagePayload({ label, match, note, rows, ephemeral }) {
+  const { gameInfo, title, players } = match.data;
+  const max = parseInt(players) || 0;
+  const isFull = match.participants.length >= max;
+  const status = match.closed ? '🔒 마감됨' : isFull ? '✅ 모집 완료' : '🟢 모집 중';
+
+  const pulled = { toggle: null, cancel: null };
+  const restRows = [];
+  for (const row of [].concat(rows || [])) {
+    const keep = [];
+    for (const btn of row.components) {
+      const id = btn.data?.custom_id || '';
+      if (/:match_(close|reopen):/.test(id)) pulled.toggle = btn;
+      else if (/:match_cancel:/.test(id)) pulled.cancel = btn;
+      else keep.push(btn);
+    }
+    if (keep.length > 0) restRows.push(new ActionRowBuilder().addComponents(...keep));
+  }
+
+  return payload(card({
+    color: gameInfo.color,
+    header: '⚙️ 주최자 관리 메뉴',
+    sub: [`${label} · ${title}`],
+    thumb: gameThumb(gameInfo),
+    thumbAlt: gameInfo.name,
+    blocks: [
+      note || null,
+      { text: `**${label} 상태**　${status}\n-# 참가 ${match.participants.length} / ${max}명`, ...(pulled.toggle ? { button: pulled.toggle } : {}) },
+      { rows: restRows },
+      pulled.cancel ? { text: `**${label} 취소**\n-# 취소하면 게시글이 취소 처리돼요`, button: pulled.cancel } : null,
+    ],
+  }), { ephemeral });
+}
+
+// 참가자 전원을 부르는 공개 안내(수동 멘션 버튼). v2 글자 속 멘션은 allowedMentions 로 알림이 간다.
+function buildMentionPayload({ title, mentionText, headline, tail }) {
+  return payload(card({
+    color: COLORS.info,
+    header: headline ?? `📣 ${title}`,
+    blocks: [mentionText, tail || null],
+  }), { allowedMentions: { parse: ['users'] } });
+}
+
 function buildCancelComponents(type) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`${type}:cancel_confirm`).setLabel('✅ 확인').setStyle(ButtonStyle.Danger),
@@ -921,6 +967,8 @@ module.exports = {
   buildMatchCard,
   buildPreviewCard,
   buildPreviewPayload,
+  buildManagePayload,
+  buildMentionPayload,
   buildMatchMessagePayload,
   buildCancelledCard,
   buildTeamResultCard,

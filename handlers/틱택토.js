@@ -644,12 +644,12 @@ async function startRematch(interaction, prevXId, prevOId, infinite) {
   const prevIds = isBot ? [prevXId] : [prevXId, prevOId];
 
   if (!prevIds.includes(interaction.user.id)) {
-    await interaction.reply({ content: '⚠️ **원래 참가자만 재대결할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.reply(notice('⚠️ **원래 참가자만 재대결할 수 있습니다.**', { ephemeral: true }));
     return;
   }
 
   if (hasRematchFrom(games, interaction.message.id)) {
-    await interaction.reply({ content: '⚠️ **이미 재대결 신청이 진행 중입니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.reply(notice('⚠️ **이미 재대결 신청이 진행 중입니다.**', { ephemeral: true }));
     return;
   }
 
@@ -703,15 +703,15 @@ async function handleTttButton(interaction) {
     const gameId = customId.slice('ttt:join:'.length);
     const game = games.get(gameId);
     if (!game || game.status !== 'waiting') {
-      await interaction.reply({ content: '⚠️ **참가할 수 없는 게임입니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⚠️ **참가할 수 없는 게임입니다.**', { ephemeral: true }));
       return;
     }
     if (game.lobbyPlayers.some(p => p.id === interaction.user.id)) {
-      await interaction.reply({ content: '⚠️ **이미 참가 중입니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⚠️ **이미 참가 중입니다.**', { ephemeral: true }));
       return;
     }
     if (game.lobbyPlayers.length >= 2) {
-      await interaction.reply({ content: '⚠️ **정원(2명)이 이미 찼습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⚠️ **정원(2명)이 이미 찼습니다.**', { ephemeral: true }));
       return;
     }
     game.lobbyPlayers.push({ id: interaction.user.id, name: displayNameFromInteraction(interaction) });
@@ -724,15 +724,15 @@ async function handleTttButton(interaction) {
     const gameId = customId.slice('ttt:start:'.length);
     const game = games.get(gameId);
     if (!game || game.status !== 'waiting') {
-      await interaction.reply({ content: '⚠️ **게임을 시작할 수 없습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⚠️ **게임을 시작할 수 없습니다.**', { ephemeral: true }));
       return;
     }
     if (interaction.user.id !== game.hostId) {
-      await interaction.reply({ content: '⚠️ **방장만 게임을 시작할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⚠️ **방장만 게임을 시작할 수 있습니다.**', { ephemeral: true }));
       return;
     }
     if (game.lobbyPlayers.length < 2) {
-      await interaction.reply({ content: '⚠️ **최소 2명이 필요합니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⚠️ **최소 2명이 필요합니다.**', { ephemeral: true }));
       return;
     }
     await beginGame(interaction, game, games);
@@ -744,19 +744,19 @@ async function handleTttButton(interaction) {
     const gameId = customId.slice('ttt:bot_start:'.length);
     const game = games.get(gameId);
     if (!game || game.status !== 'waiting') {
-      await interaction.reply({ content: '⚠️ **게임을 시작할 수 없습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⚠️ **게임을 시작할 수 없습니다.**', { ephemeral: true }));
       return;
     }
     if (interaction.user.id !== game.hostId) {
-      await interaction.reply({ content: '⚠️ **방장만 사용할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⚠️ **방장만 사용할 수 있습니다.**', { ephemeral: true }));
       return;
     }
     if (game.lobbyPlayers.some(p => p.id === 'BOT')) {
-      await interaction.reply({ content: '⚠️ **봇은 이미 참가 중입니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⚠️ **봇은 이미 참가 중입니다.**', { ephemeral: true }));
       return;
     }
     if (game.lobbyPlayers.length !== 1) {
-      await interaction.reply({ content: '⚠️ **참가자가 1명일 때만 봇과 시작할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⚠️ **참가자가 1명일 때만 봇과 시작할 수 있습니다.**', { ephemeral: true }));
       return;
     }
     game.lobbyPlayers.push({ id: 'BOT', name: '봇' });
@@ -769,11 +769,11 @@ async function handleTttButton(interaction) {
     const gameId = customId.slice('ttt:cancel:'.length);
     const game = games.get(gameId);
     if (!game) {
-      await interaction.reply({ content: '⚠️ **게임을 찾을 수 없습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⚠️ **게임을 찾을 수 없습니다.**', { ephemeral: true }));
       return;
     }
     if (interaction.user.id !== game.hostId) {
-      await interaction.reply({ content: '⚠️ **방장만 취소할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⚠️ **방장만 취소할 수 있습니다.**', { ephemeral: true }));
       return;
     }
     clearTimeout(game.timeoutId);
@@ -788,11 +788,11 @@ async function handleTttButton(interaction) {
     const gameId = customId.slice('ttt:toggleinf:'.length);
     const game = games.get(gameId);
     if (!game || game.status !== 'waiting') {
-      await interaction.reply({ content: '⚠️ **만료된 게임입니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⚠️ **만료된 게임입니다.**', { ephemeral: true }));
       return;
     }
     if (!game.lobbyPlayers.some(p => p.id === interaction.user.id)) {
-      await interaction.reply({ content: '⚠️ **게임 참가자만 사용할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⚠️ **게임 참가자만 사용할 수 있습니다.**', { ephemeral: true }));
       return;
     }
     game.infinite = !game.infinite;
@@ -808,18 +808,18 @@ async function handleTttButton(interaction) {
     const game = games.get(gameId);
 
     if (!game || game.status !== 'playing') {
-      await interaction.reply({ content: '⚠️ **진행 중인 게임이 아닙니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⚠️ **진행 중인 게임이 아닙니다.**', { ephemeral: true }));
       return;
     }
 
     const currentPlayerId = game.players[game.currentTurn];
     if (interaction.user.id !== currentPlayerId) {
       const turnEmoji = game.currentTurn === 'X' ? '❌' : '⭕';
-      await interaction.reply({ content: `⚠️ **지금은 ${turnEmoji} 플레이어의 차례입니다.**`, flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice(`⚠️ **지금은 ${turnEmoji} 플레이어의 차례입니다.**`, { ephemeral: true }));
       return;
     }
     if (game.board[cellIdx] !== '') {
-      await interaction.reply({ content: '⚠️ **이미 놓인 칸입니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⚠️ **이미 놓인 칸입니다.**', { ephemeral: true }));
       return;
     }
 
@@ -860,7 +860,7 @@ async function handleTttButton(interaction) {
     const xId = parts[2];
     const oId = parts[3];
     if (interaction.user.id !== xId && interaction.user.id !== oId) {
-      await interaction.reply({ content: '⚠️ **원래 참가자만 종료할 수 있습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⚠️ **원래 참가자만 종료할 수 있습니다.**', { ephemeral: true }));
       return;
     }
     await interaction.update(withTopRows(interaction.message, []));

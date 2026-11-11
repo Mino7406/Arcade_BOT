@@ -13,7 +13,7 @@ const {
 const { ADMIN_IDS, AUTO_CLOSE_DELAY_MS, disarmAutoEnd, clearNotifyTimer, deleteMentionMessage, announceMatchCompletionXp, getCancelledDeletions } = require('../handlers/공용');
 // 끝말잇기/틱택토/레벨/랭킹은 이 채널(놀이터)에서만 사용 가능.
 const { PLAYGROUND_CHANNEL_ID } = require('../config');
-const { card, payload, COLORS } = require('../handlers/카드');
+const { card, payload, menu, COLORS, notice: quick } = require('../handlers/카드');
 const { buildRealmPanelPayload } = require('../forms/마크');
 const { buildCobblemonPanelPayload, rememberCobblemonPanel } = require('../forms/코블몬');
 
@@ -56,17 +56,13 @@ function buildPanelSelectPayload() {
     ),
   );
 
-  return {
-    content: '**게시할 패널을 선택하십시오.**',
-    components: [row],
-    flags: MessageFlags.Ephemeral,
-  };
+  return quick('**게시할 패널을 선택하십시오.**', { rows: [row], ephemeral: true });
 }
 
 // ── 선택 메뉴 버튼('form:publish:<종류>') → 고른 패널을 현재 채널에 게시 ──
 async function handlePanelSelectButton(interaction) {
   if (!ADMIN_IDS.includes(interaction.user.id)) {
-    await interaction.reply({ content: '<:Barrier:1544331503448625233> **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.reply(quick('<:Barrier:1544331503448625233> **권한이 없습니다.**', { ephemeral: true }));
     return;
   }
 
@@ -76,7 +72,7 @@ async function handlePanelSelectButton(interaction) {
 
   const message = await interaction.channel.send(panel.build(interaction));
   panel.posted?.(message);
-  await interaction.update({ content: panel.done, components: [] });
+  await interaction.update(quick(panel.done));
 }
 
 // 안내 패널의 "명령어 보기" 버튼(index.js)에서 재사용.
@@ -163,9 +159,11 @@ function buildSetupPanelPayload(interaction) {
 // 이 페이로드는 최초 노출(reply)뿐 아니라 update/editReply로도 재사용되는데, 뒤의 둘은 Ephemeral
 // flag를 받지 않는다(이미 비공개 메시지라 붙일 필요가 없다). 그래서 flags는 여기 두지 않고 reply 호출부에서만 붙인다.
 function buildAdminMenuPayload(panelMessageId, notice) {
-  return {
-    content: (notice ? `${notice}\n\n` : '') + '⚙️ **패널 관리**',
-    components: [
+  return menu({
+    header: '⚙️ 패널 관리',
+    sub: '새로고침 · 채널 청소 · 삭제',
+    note: notice,
+    rows: [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`panel:refresh:${panelMessageId}`).setLabel('🔄 새로고침').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`panel:purge:${panelMessageId}`).setLabel('🧹 채널 청소').setStyle(ButtonStyle.Success),
@@ -175,7 +173,7 @@ function buildAdminMenuPayload(panelMessageId, notice) {
         new ButtonBuilder().setCustomId(`panel:bot_msg_delete:${panelMessageId}`).setLabel('🤖 봇 메시지 삭제').setStyle(ButtonStyle.Secondary),
       ),
     ],
-  };
+  });
 }
 
 function buildBackRow(panelMessageId) {
@@ -314,12 +312,14 @@ async function buildMatchDeleteListPayload(interaction, panelMessageId) {
   const entries = await collectGuildMatchEntries(interaction);
 
   if (entries.length === 0) {
-    return { content: '⚠️ **삭제할 수 있는 내전/모집이 없습니다.**', components: [buildBackRow(panelMessageId)] };
+    return menu({ color: 'warn', header: '🗑️ 내전/모집 삭제', note: '⚠️ **삭제할 수 있는 내전/모집이 없습니다.**', rows: [buildBackRow(panelMessageId)] });
   }
 
-  return {
-    content: '🗑️ **삭제할 내전/모집을 선택하거나, 아래에서 전체를 삭제하세요.**',
-    components: [
+  return menu({
+    color: 'err',
+    header: '🗑️ 내전/모집 삭제',
+    note: '삭제할 내전/모집을 선택하거나, 아래에서 전체를 삭제하세요.',
+    rows: [
       new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
           .setCustomId(`panel:match_delete_select:${panelMessageId}`)
@@ -331,31 +331,35 @@ async function buildMatchDeleteListPayload(interaction, panelMessageId) {
         new ButtonBuilder().setCustomId(`panel:menu:${panelMessageId}`).setLabel('↩️ 돌아가기').setStyle(ButtonStyle.Secondary),
       ),
     ],
-  };
+  });
 }
 
 function buildMatchDeleteConfirmPayload(panelMessageId, type, msgId, confirmText) {
-  return {
-    content: `⚠️ **${confirmText}을 삭제하시겠습니까?**`,
-    components: [
+  return menu({
+    color: 'warn',
+    header: '⚠️ 삭제 확인',
+    note: `**${confirmText}**을 삭제하시겠습니까?`,
+    rows: [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`panel:match_delete_confirm:${panelMessageId}:${type}:${msgId}`).setLabel('✅ 삭제').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`panel:menu:${panelMessageId}`).setLabel('↩️ 취소').setStyle(ButtonStyle.Secondary),
       ),
     ],
-  };
+  });
 }
 
 function buildMatchDeleteAllConfirmPayload(panelMessageId, count) {
-  return {
-    content: `⚠️ **현재 서버의 내전/모집 ${count}건을 전부 삭제하시겠습니까?**`,
-    components: [
+  return menu({
+    color: 'warn',
+    header: '⚠️ 전체 삭제 확인',
+    note: `현재 서버의 내전/모집 **${count}건**을 전부 삭제하시겠습니까?`,
+    rows: [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`panel:match_delete_all_confirm:${panelMessageId}`).setLabel('✅ 전체 삭제').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`panel:menu:${panelMessageId}`).setLabel('↩️ 취소').setStyle(ButtonStyle.Secondary),
       ),
     ],
-  };
+  });
 }
 
 // 메시지 ID 또는 디스코드 메시지 링크에서 { channelId, messageId }를 추출한다.
@@ -417,7 +421,7 @@ module.exports = {
 
   async execute(interaction) {
     if (!ADMIN_IDS.includes(interaction.user.id)) {
-      await interaction.reply({ content: '❌ **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick('❌ **권한이 없습니다.**', { ephemeral: true }));
       return;
     }
 
@@ -428,12 +432,13 @@ module.exports = {
   buildSetupPanelPayload,
   buildCommandListPayload,
   buildAdminMenuPayload,
+  buildMatchDeleteConfirmPayload, // 화면 모음·테스트용
 };
 
 // ── 관리 메뉴 버튼 처리 ('panel:' 프리픽스) ─────────────────────────
 async function handlePanelButton(interaction) {
   if (!ADMIN_IDS.includes(interaction.user.id)) {
-    await interaction.reply({ content: '❌ **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.reply(quick('❌ **권한이 없습니다.**', { ephemeral: true }));
     return;
   }
 
@@ -503,14 +508,14 @@ async function handlePanelButton(interaction) {
 // ── 관리 메뉴 모달 처리 ("🤖 봇 메시지 삭제") ────────────────────────
 async function handlePanelBotMessageDeleteModal(interaction) {
   if (!ADMIN_IDS.includes(interaction.user.id)) {
-    await interaction.reply({ content: '❌ **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.reply(quick('❌ **권한이 없습니다.**', { ephemeral: true }));
     return;
   }
 
   const raw = interaction.fields.getTextInputValue('message_ref').trim();
   const ref = parseMessageRef(raw);
   if (!ref) {
-    await interaction.reply({ content: '⚠️ **올바른 메시지 ID 또는 링크가 아닙니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.reply(quick('⚠️ **올바른 메시지 ID 또는 링크가 아닙니다.**', { ephemeral: true }));
     return;
   }
 
@@ -519,27 +524,27 @@ async function handlePanelBotMessageDeleteModal(interaction) {
   const message = await findBotMessage(interaction, ref);
 
   if (!message) {
-    await interaction.editReply('⚠️ **메시지를 찾을 수 없습니다.** 봇이 볼 수 있는 채널의 메시지여야 합니다 — 확실하지 않으면 메시지 **링크**를 붙여넣어 보세요.');
+    await interaction.editReply(quick('⚠️ **메시지를 찾을 수 없습니다.** 봇이 볼 수 있는 채널의 메시지여야 합니다 — 확실하지 않으면 메시지 **링크**를 붙여넣어 보세요.'));
     return;
   }
   if (message.author.id !== interaction.client.user.id) {
-    await interaction.editReply('⚠️ **봇이 보낸 메시지만 삭제할 수 있습니다.**');
+    await interaction.editReply(quick('⚠️ **봇이 보낸 메시지만 삭제할 수 있습니다.**'));
     return;
   }
 
   try {
     await message.delete();
   } catch (err) {
-    await interaction.editReply(`⚠️ **삭제에 실패했습니다.** <#${message.channelId}> 채널에서 봇에게 '메시지 관리' 권한이 있는지 확인하세요.\n-# ${err?.message ?? err}`);
+    await interaction.editReply(quick(`⚠️ **삭제에 실패했습니다.** <#${message.channelId}> 채널에서 봇에게 '메시지 관리' 권한이 있는지 확인하세요.\n-# ${err?.message ?? err}`));
     return;
   }
-  await interaction.editReply('✅ **메시지를 삭제했습니다.**');
+  await interaction.editReply(quick('✅ **메시지를 삭제했습니다.**'));
 }
 
 // ── 관리 메뉴 셀렉트 메뉴 처리 ("🗑️ 내전/모집 삭제" 목록) ────────────
 async function handlePanelMatchDeleteSelect(interaction) {
   if (!ADMIN_IDS.includes(interaction.user.id)) {
-    await interaction.reply({ content: '❌ **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.reply(quick('❌ **권한이 없습니다.**', { ephemeral: true }));
     return;
   }
 

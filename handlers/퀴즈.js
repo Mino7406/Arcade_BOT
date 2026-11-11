@@ -87,6 +87,16 @@ function badgeLine(grade, xpReward) {
     : `💰 **${xpReward} XP**`;
 }
 
+// 정답 안내 카드. 답장이지만 작성자에게 알림이 가지 않게(repliedUser:false) 하고, 레벨업했을 때만 그 유저를 부른다.
+function buildCorrectPayload({ word, xpReward, frozen = false, levelUpLine = '', mentionUserId = null }) {
+  const body = frozen
+    ? `**${word}**\n-# ⚙️ 현재 XP 지급이 일시 중지되어 이번 정답은 XP가 지급되지 않았습니다.`
+    : `**${word}**　💰 **+${xpReward} XP**${levelUpLine}`;
+  return payload(card({ color: COLORS.ok, header: '⭕ 정답입니다!', blocks: [body] }), {
+    allowedMentions: { repliedUser: false, users: mentionUserId ? [mentionUserId] : [] },
+  });
+}
+
 function buildQuizCard({ word, hint, grade, xpReward }) {
   return card({
     color: 0xFFD700, // 오목·틱택토 결과(승리) 카드와 같은 노란색
@@ -225,7 +235,7 @@ async function voidQuiz(client, state, slotKey) {
   state[slotKey] = null;
   try {
     const channel = await client.channels.fetch(quiz.channelId).catch(() => null);
-    await channel?.send(`⌛ **지난 ${QUIZ_LABEL} 정답은 ${quiz.word} 였습니다.**\n아무도 맞히지 못해 보상 없이 마감되었습니다.`);
+    await channel?.send(payload(card({ color: COLORS.muted, header: '⌛ 퀴즈 마감', blocks: [`지난 ${QUIZ_LABEL} 정답은 **${quiz.word}** 였습니다.\n아무도 맞히지 못해 보상 없이 마감되었습니다.`] })));
     logSystem({ 유형: '퀴즈', 내용: `${slotKey === 'activeQuiz' ? '자동' : '관리자'} 출제 문제 무효 처리 — 정답 '${quiz.word}'(${quiz.grade ?? '-'}), 새 문제가 올라와 미해결로 마감` });
   } catch (err) {
     console.error('퀴즈 무효 처리 중 오류:', err);
@@ -459,7 +469,7 @@ function armManualQuizTimeout(client, quiz, delayMs = MANUAL_QUIZ_TIME_LIMIT_MS)
     }
     try {
       const channel = await client.channels.fetch(quiz.channelId).catch(() => null);
-      await channel?.send(`⌛ **1시간이 지나 관리자가 낸 ${QUIZ_LABEL}가 마감되었습니다.**\n정답은 **${quiz.word}** 였습니다.`);
+      await channel?.send(payload(card({ color: COLORS.muted, header: '⌛ 퀴즈 마감', blocks: [`1시간이 지나 관리자가 낸 ${QUIZ_LABEL}가 마감되었습니다.\n정답은 **${quiz.word}** 였습니다.`] })));
       logSystem({ 유형: '퀴즈', 내용: `관리자 출제 문제 1시간 경과로 마감 — 정답 '${quiz.word}'(${quiz.grade ?? '-'}), 정답자 없음` });
     } catch (err) {
       console.error('관리자 출제 문제 시간 초과 처리 중 오류:', err);
@@ -517,19 +527,13 @@ async function handleQuizMessage(message) {
     if (isMinigameXpFrozen()) {
       // 관리자 긴급정지 중(미니게임) — 정답 처리는 하되 XP는 지급하지 않는다.
       logSystem({ 유형: '퀴즈', 유저: userLabel(message.author.id), 채널: `#${message.channel?.name ?? message.channelId}`, 내용: `정답 '${quiz.word}'(${quiz.grade ?? '-'}) — 미니게임 XP 긴급정지 중이라 XP 미지급` });
-      await message.reply({
-        content: `⭕ 정답입니다! **${quiz.word}**\n-# ⚙️ 현재 XP 지급이 일시 중지되어 이번 정답은 XP가 지급되지 않았습니다.`,
-        allowedMentions: { repliedUser: false, users: [] },
-      }).catch(() => {});
+      await message.reply(buildCorrectPayload({ word: quiz.word, frozen: true })).catch(() => {});
       return;
     }
 
     const result = applyXp(quiz.guildId, message.author.id, quiz.xpReward, `퀴즈 정답 '${quiz.word}'(${quiz.grade ?? '-'}, ${slotKey === 'activeQuiz' ? '자동' : '관리자'} 출제)`);
     const levelUpLine = result.leveledUp ? `\n<@${message.author.id}>님이 ${result.newLevel}레벨을 달성했어요. 🎉` : '';
-    await message.reply({
-      content: `⭕ 정답입니다! **${quiz.word}** (+${quiz.xpReward} XP)${levelUpLine}`,
-      allowedMentions: { repliedUser: false, users: result.leveledUp ? [message.author.id] : [] },
-    }).catch(() => {});
+    await message.reply(buildCorrectPayload({ word: quiz.word, xpReward: quiz.xpReward, levelUpLine, mentionUserId: result.leveledUp ? message.author.id : null })).catch(() => {});
     return; // 한 메시지는 한 슬롯만 채점
   }
 }
@@ -537,5 +541,5 @@ async function handleQuizMessage(message) {
 module.exports = {
   startQuizScheduler, handleQuizMessage, QUIZ_CHANNEL_ID,
   pauseQuiz, resumeQuiz, postCustomQuiz, getQuizStatus,
-  buildQuizCard, // 화면 모음·테스트용
+  buildQuizCard, buildCorrectPayload, // 화면 모음·테스트용
 };

@@ -9,7 +9,7 @@ const {
 } = require('discord.js');
 const { writeJsonIfChanged } = require('../../handlers/저장');
 const { logSystem, logError } = require('../../handlers/로그');
-const { card, payload, messageText } = require('../../handlers/카드');
+const { card, payload, messageText, notice } = require('../../handlers/카드');
 
 const COBBLEMON_COLOR = 0xE8344E;
 // 패널 제목. 재시작 시 저장 목록이 비어 있으면 이 제목(또는 예전 제목)으로 게시된 패널을 찾는다.
@@ -173,7 +173,7 @@ async function handleCobblemonButton(interaction) {
   const sub = interaction.customId.split(':')[1];
   if (sub === 'installer') {
     if (!INSTALLER_URL) {
-      await interaction.reply({ content: '**아직 준비 중입니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('**아직 준비 중입니다.**', { ephemeral: true }));
       return;
     }
     if (!isInstallerOpen()) {
@@ -181,20 +181,14 @@ async function handleCobblemonButton(interaction) {
       // 남은 시간은 분 단위 올림 — 오픈 직전에도 '0h 0m'이 뜨지 않게.
       const leftMin = Math.ceil((INSTALLER_OPEN_AT.getTime() - Date.now()) / 60000);
       const leftText = `${Math.floor(leftMin / 60)}h ${leftMin % 60}m 후 OPEN`;
-      await interaction.reply({
-        content: `🔒 **설치기는 <t:${openAtUnix}:F>에 열립니다.** (${leftText})`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await interaction.reply(notice(`🔒 **설치기는 <t:${openAtUnix}:F>에 열립니다.** (${leftText})`, { ephemeral: true }));
       return;
     }
     // 오픈 시각이 지났는데 아직 일반 버튼인 패널(갱신 전)을 누른 경우 — 이 패널을 바로 링크 버튼으로 바꾼다.
     await interaction.update(buildCobblemonPanelPayload(interaction.client)); // v2는 components가 메시지 전체라 카드째 다시 그린다
-    await interaction.followUp({
-      content: '**설치기가 열렸습니다.** 버튼을 한 번 더 누르면 다운로드됩니다.',
-      flags: MessageFlags.Ephemeral,
-    });
+    await interaction.followUp(notice('**설치기가 열렸습니다.** 버튼을 한 번 더 누르면 다운로드됩니다.', { ephemeral: true }));
   } else if (sub === 'guide') {
-    await interaction.reply({ content: '**아직 준비 중입니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.reply(notice('**아직 준비 중입니다.**', { ephemeral: true }));
   }
 }
 

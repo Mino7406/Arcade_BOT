@@ -3,6 +3,7 @@ const {
   ModalBuilder, TextInputBuilder, TextInputStyle,
   MessageFlags,
 } = require('discord.js');
+const { menu, asEphemeral, notice: quick } = require('../handlers/카드');
 const { ADMIN_IDS } = require('../handlers/공용');
 const { OWNER_IDS } = require('../config');
 const { pauseQuiz, resumeQuiz, postCustomQuiz, getQuizStatus } = require('../handlers/퀴즈');
@@ -25,36 +26,49 @@ function buildQuizPanelPayload(viewerId, notice) {
   const state = getQuizStatus();
 
   if (!state) {
-    return {
-      content: (notice ? `${notice}\n\n` : '') + '🛠️ **퀴즈 관리**\n아직 출제 기록이 없습니다. 봇이 막 시작됐다면 잠시 후 다시 확인해주세요.',
-      components: [buildMainRow(false)],
-    };
+    return menu({
+      header: '🛠️ 퀴즈 관리',
+      note: notice,
+      blocks: ['아직 출제 기록이 없습니다. 봇이 막 시작됐다면 잠시 후 다시 확인해주세요.'],
+      rows: [buildMainRow()],
+    });
   }
 
-  const lines = [
-    '🛠️ **퀴즈 관리**',
-    `상태 : ${state.paused ? '⏸️ 중지됨' : '▶️ 자동 출제 중'}`,
-    `오늘 출제 여부 : ${state.posted ? '✅ 출제됨' : '⏳ 대기 중'}`,
+  // 중요한 버튼(중지/재개)은 상태 줄 오른쪽에 따로 둔다. 나머지 조작은 아래 줄.
+  const blocks = [
+    {
+      text: [
+        `**자동 출제**　${state.paused ? '⏸️ 중지됨' : '▶️ 작동 중'}`,
+        `-# 오늘 출제 ${state.posted ? '✅ 출제됨' : '⏳ 대기 중'}`,
+      ].join('\n'),
+      button: buildPauseButton(state.paused),
+    },
   ];
   if (OWNER_IDS.includes(viewerId)) {
-    lines.push(
-      `출제 예정 시각 : ${state.posted ? '-' : formatKst(state.scheduledAt)} (KST)`,
-      `자동 출제 미해결 문제 : ${state.activeQuiz ? `\`${state.activeQuiz.word}\`` : '없음'}`,
-      `관리자 출제 미해결 문제 : ${state.activeManualQuiz ? `\`${state.activeManualQuiz.word}\` (1시간 후 자동 마감)` : '없음'}`,
-    );
+    blocks.push([
+      `**출제 예정 시각**　${state.posted ? '-' : formatKst(state.scheduledAt)} (KST)`,
+      `**자동 출제 미해결 문제**　${state.activeQuiz ? '`' + state.activeQuiz.word + '`' : '없음'}`,
+      `**관리자 출제 미해결 문제**　${state.activeManualQuiz ? '`' + state.activeManualQuiz.word + '` (1시간 후 자동 마감)' : '없음'}`,
+    ].join('\n'));
   }
 
-  return {
-    content: (notice ? `${notice}\n\n` : '') + lines.join('\n'),
-    components: [buildMainRow(state.paused)],
-  };
+  return menu({
+    color: state.paused ? 'muted' : 'ok',
+    header: '🛠️ 퀴즈 관리',
+    note: notice,
+    blocks,
+    rows: [buildMainRow()],
+  });
 }
 
-function buildMainRow(paused) {
+function buildPauseButton(paused) {
+  return paused
+    ? new ButtonBuilder().setCustomId('quiz:resume').setLabel('▶️ 재개').setStyle(ButtonStyle.Success)
+    : new ButtonBuilder().setCustomId('quiz:pause').setLabel('⏸️ 일시정지').setStyle(ButtonStyle.Danger);
+}
+
+function buildMainRow() {
   return new ActionRowBuilder().addComponents(
-    paused
-      ? new ButtonBuilder().setCustomId('quiz:resume').setLabel('▶️ 재개').setStyle(ButtonStyle.Success)
-      : new ButtonBuilder().setCustomId('quiz:pause').setLabel('⏸️ 중지').setStyle(ButtonStyle.Danger),
     new ButtonBuilder().setCustomId('quiz:create').setLabel('✍️ 문제 만들기').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('quiz:refresh').setLabel('🔄 새로고침').setStyle(ButtonStyle.Secondary),
   );
@@ -89,23 +103,24 @@ function buildCreateModal() {
 }
 
 module.exports = {
+  buildQuizPanelPayload, // 화면 모음·테스트용
   data: new SlashCommandBuilder()
     .setName('퀴즈')
     .setDescription('[관리자 전용] 상식퀴즈 자동 출제를 버튼으로 직접 제어합니다.'),
 
   async execute(interaction) {
     if (!ADMIN_IDS.includes(interaction.user.id)) {
-      await interaction.reply({ content: '❌ **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
+      await interaction.reply(quick('❌ **권한이 없습니다.**', { ephemeral: true }));
       return;
     }
-    await interaction.reply({ ...buildQuizPanelPayload(interaction.user.id), flags: MessageFlags.Ephemeral });
+    await interaction.reply(asEphemeral(buildQuizPanelPayload(interaction.user.id)));
   },
 };
 
 // ── 버튼 처리 ────────────────────────────────────────────────────
 async function handleQuizAdminButton(interaction) {
   if (!ADMIN_IDS.includes(interaction.user.id)) {
-    await interaction.reply({ content: '❌ **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.reply(quick('❌ **권한이 없습니다.**', { ephemeral: true }));
     return;
   }
 
@@ -136,7 +151,7 @@ async function handleQuizAdminButton(interaction) {
 // ── 모달(직접 문제 입력) 처리 ──────────────────────────────────────
 async function handleQuizCreateModal(interaction) {
   if (!ADMIN_IDS.includes(interaction.user.id)) {
-    await interaction.reply({ content: '❌ **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
+    await interaction.reply(quick('❌ **권한이 없습니다.**', { ephemeral: true }));
     return;
   }
 
@@ -144,11 +159,11 @@ async function handleQuizCreateModal(interaction) {
   const hint = interaction.fields.getTextInputValue('hint').trim();
 
   if (!WORD_ONLY.test(word)) {
-    await interaction.reply({ content: '⚠️ **단어는 공백·특수문자 없이 한글 2~10자로 입력해주세요.**', flags: MessageFlags.Ephemeral });
+    await interaction.reply(quick('⚠️ **단어는 공백·특수문자 없이 한글 2~10자로 입력해주세요.**', { ephemeral: true }));
     return;
   }
   if (!hint) {
-    await interaction.reply({ content: '⚠️ **힌트를 입력해주세요.**', flags: MessageFlags.Ephemeral });
+    await interaction.reply(quick('⚠️ **힌트를 입력해주세요.**', { ephemeral: true }));
     return;
   }
 

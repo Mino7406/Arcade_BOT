@@ -1,4 +1,5 @@
 const { SlashCommandBuilder, ActionRowBuilder, StringSelectMenuBuilder, MessageFlags } = require('discord.js');
+const { menu, notice } = require('../handlers/카드');
 
 const { GAME_EMOJIS, OWNER_IDS } = require('../config');
 
@@ -19,11 +20,7 @@ function buildGameSelectPayload(userId) {
     selectMenu.addOptions({ label: '코블몬 토너먼트', value: 'cobblemon', emoji: { id: GAME_EMOJIS.cobblemon } });
   }
 
-  return {
-    content: '🎮 **내전 생성**\n어떤 게임의 내전을 만들까요?',
-    components: [new ActionRowBuilder().addComponents(selectMenu)],
-    flags: MessageFlags.Ephemeral,
-  };
+  return menu({ header: '⚔️ 내전 생성', note: '어떤 게임의 내전을 만들까요?', rows: [new ActionRowBuilder().addComponents(selectMenu)], ephemeral: true });
 }
 
 module.exports = {

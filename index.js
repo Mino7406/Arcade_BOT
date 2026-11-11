@@ -3,6 +3,7 @@ const path = require('path');
 // 토큰을 놓치지 않게. (파일명이 '.env'가 아니라 'env'인 것은 의도된 것)
 require('dotenv').config({ path: path.join(__dirname, 'env') });
 const { Client, GatewayIntentBits, Partials, Collection, MessageFlags, Events, Options } = require('discord.js');
+const { notice, asEphemeral } = require('./handlers/카드');
 const fs = require('fs');
 
 // 예전 위치(루트)에 남아있던 JSON 저장 파일이 있다면 DB/ 폴더로 옮긴다(내용은 그대로, 위치만
@@ -404,7 +405,7 @@ client.on('interactionCreate', async (interaction) => {
     if (isWordchainOrRanking && !skipChannelLimits && interaction.channelId !== WORDCHAIN_RANKING_CHANNEL_ID) {
       logBlocked(interaction, '게임/랭킹 전용 채널이 아니라서 거부');
       if (interaction.isRepliable()) {
-        await interaction.reply({ content: '❌ 이 채널에서는 사용할 수 없습니다.', flags: MessageFlags.Ephemeral });
+        await interaction.reply(notice('❌ 이 채널에서는 사용할 수 없습니다.', { ephemeral: true }));
       }
       return;
     }
@@ -413,7 +414,7 @@ client.on('interactionCreate', async (interaction) => {
     // 이미 진행 중이던 판은 그대로 끝까지 둔다(XP는 어차피 멈춤).
     if (interaction.isChatInputCommand() && RAID_PAUSED_COMMANDS[interaction.commandName] && isPlaygroundPaused(interaction.guildId)) {
       logBlocked(interaction, '레이드 진행 중이라 놀이터 일시 정지');
-      await interaction.reply({ content: `👾 **몬스터 때문에 XP 시스템이 고장 나 ${RAID_PAUSED_COMMANDS[interaction.commandName]} 수 없습니다.**`, flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice(`👾 **몬스터 때문에 XP 시스템이 고장 나 ${RAID_PAUSED_COMMANDS[interaction.commandName]} 수 없습니다.**`, { ephemeral: true }));
       return;
     }
 
@@ -427,7 +428,7 @@ client.on('interactionCreate', async (interaction) => {
     if (isReload && !skipChannelLimits && interaction.channelId !== MATCH_BONUS_CHANNEL_ID) {
       logBlocked(interaction, '불러오기 허용 채널이 아니라서 거부');
       if (interaction.isRepliable()) {
-        await interaction.reply({ content: '❌ 이 채널에서는 사용할 수 없습니다.', flags: MessageFlags.Ephemeral });
+        await interaction.reply(notice('❌ 이 채널에서는 사용할 수 없습니다.', { ephemeral: true }));
       }
       return;
     }
@@ -447,7 +448,7 @@ client.on('interactionCreate', async (interaction) => {
       if (allowedChannels.length > 0 && !allowedChannels.includes(interaction.channelId)) {
         logBlocked(interaction, '허용 채널 목록에 없어서 거부');
         if (interaction.isRepliable()) {
-          await interaction.reply({ content: '❌ 이 채널에서는 사용할 수 없습니다.', flags: MessageFlags.Ephemeral });
+          await interaction.reply(notice('❌ 이 채널에서는 사용할 수 없습니다.', { ephemeral: true }));
         }
         return;
       }
@@ -559,9 +560,9 @@ client.on('interactionCreate', async (interaction) => {
       } else if (interaction.customId === 'recruit:관리') {
         if (!ADMIN_IDS.includes(interaction.user.id)) {
           logBlocked(interaction, '관리자 권한 없음');
-          await interaction.reply({ content: '❌ **권한이 없습니다.**', flags: MessageFlags.Ephemeral });
+          await interaction.reply(notice('❌ **권한이 없습니다.**', { ephemeral: true }));
         } else {
-          await interaction.reply({ ...buildAdminMenuPayload(interaction.message.id), flags: MessageFlags.Ephemeral });
+          await interaction.reply(asEphemeral(buildAdminMenuPayload(interaction.message.id)));
         }
       } else if (interaction.customId.startsWith('panel:')) {
         await handlePanelButton(interaction);
@@ -588,7 +589,7 @@ client.on('interactionCreate', async (interaction) => {
       유저: interaction.user ? userLabel(interaction.user.id) : '-',
       채널: interaction.guildId ? `#${interaction.channel?.name ?? interaction.channelId}` : 'DM',
     });
-    const msg = { content: '❌ 처리 중 오류가 발생했습니다.', flags: MessageFlags.Ephemeral };
+    const msg = notice('❌ 처리 중 오류가 발생했습니다.', { ephemeral: true });
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp(msg).catch(() => {});
     } else {

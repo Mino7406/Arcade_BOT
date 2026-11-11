@@ -1,4 +1,5 @@
 const { SlashCommandBuilder, ActionRowBuilder, StringSelectMenuBuilder, MessageFlags } = require('discord.js');
+const { menu } = require('../handlers/카드');
 
 const { GAME_EMOJIS } = require('../config');
 
@@ -15,11 +16,7 @@ function buildGameSelectPayload() {
       { label: '직접 입력',        value: 'custom',    emoji: '✏️' },
     ]);
 
-  return {
-    content: '🎮 **게임 모집 생성**\n어떤 게임의 모집을 만들까요?',
-    components: [new ActionRowBuilder().addComponents(selectMenu)],
-    flags: MessageFlags.Ephemeral,
-  };
+  return menu({ header: '📋 모집 생성', note: '어떤 게임의 모집을 만들까요?', rows: [new ActionRowBuilder().addComponents(selectMenu)], ephemeral: true });
 }
 
 module.exports = {

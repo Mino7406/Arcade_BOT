@@ -106,7 +106,9 @@ function toneOf(content) {
  * @param {string} [o.thumb]         오른쪽 위 작은 그림 URL (제목+부제와 같은 섹션에 붙음)
  * @param {string} [o.thumbAlt]
  * @param {Array<string|object|null>} [o.blocks]  본문 덩어리. 문자열 = 구분선 + 글,
- *                                   {text, noDivider:true} = 구분선 없이 이어 붙임, null = 건너뜀
+ *                                   {text, noDivider:true} = 구분선 없이 이어 붙임, null = 건너뜀,
+ *                                   {text, button} = 글 오른쪽에 버튼 하나가 붙는 줄(일시정지 같은 중요 버튼용),
+ *                                   {rows} = 본문 중간에 들어가는 버튼 줄
  * @param {string} [o.image]         본문 아래 큰 그림 URL(attachment://파일명 가능)
  * @param {string} [o.footer]        맨 아래 작은 회색 줄(`-# ` 자동)
  * @param {Array} [o.rows]           카드 안(맨 아래)에 넣을 ActionRow 목록
@@ -135,10 +137,24 @@ function card(o = {}) {
   for (const block of o.blocks || []) {
     if (block === null || block === undefined || block === false) continue;
     const spec = typeof block === 'string' ? { text: block } : block;
+    if (spec.rows) {
+      // 본문 중간에 들어가는 버튼 줄
+      const mid = [].concat(spec.rows).filter(Boolean);
+      if (mid.length > 0) {
+        if (!first) container.addSeparatorComponents(gap());
+        container.addActionRowComponents(...mid);
+        first = false;
+      }
+      continue;
+    }
     if (!spec.text) continue;
     if (!first && !spec.noDivider) container.addSeparatorComponents(divider());
     else if (!first && spec.noDivider) container.addSeparatorComponents(gap());
-    container.addTextDisplayComponents(text(spec.text));
+    if (spec.button) {
+      container.addSectionComponents(new SectionBuilder().addTextDisplayComponents(text(spec.text)).setButtonAccessory(spec.button));
+    } else {
+      container.addTextDisplayComponents(text(spec.text));
+    }
     first = false;
   }
 
@@ -235,6 +251,19 @@ function withTopRows(message, rows = []) {
 }
 
 /**
+ * 제목이 있는 메뉴형 카드(관리 메뉴·선택 메뉴 등)를 메시지로 만든다.
+ * note: 방금 한 조작의 결과 한 줄(맨 위), lines: 상태 줄들, rows: 카드 안 버튼/메뉴 줄.
+ */
+function menu({ header, sub, color = 'info', note, blocks = [], rows = [], footer, ephemeral, ...rest }) {
+  return payload(card({ color, header, sub, blocks: [note || null, ...blocks], rows, footer }), { ephemeral, ...rest });
+}
+
+// 나만 보이는 메시지로 보낼 때: 이미 만든 payload 에 Ephemeral 플래그를 더한다(v2 플래그는 그대로 유지).
+function asEphemeral(p) {
+  return { ...p, flags: (p.flags || 0) | EPHEMERAL_FLAG };
+}
+
+/**
  * 짧은 안내 한 줄(만료·취소·완료 등)을 카드로 만든다. 예전의
  *   { content: '⚠️ **만료된 내전입니다.**', embeds: [], attachments: [], components: [] }
  * 를 그대로 대체한다. 톤(띠 색)은 문장 앞 이모지로 자동 결정.
@@ -265,6 +294,8 @@ module.exports = {
   toneOf,
   card,
   payload,
+  menu,
+  asEphemeral,
   withTopRows,
   hasCustomId,
   messageText,
