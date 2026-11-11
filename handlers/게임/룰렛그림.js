@@ -51,41 +51,42 @@ const mirror = (cx, pts) => { // x 를 cx 기준으로 뒤집은 점 목록(좌�
 const scalePts = (pts, cx, cy, k) => pts.map((v, i) => (i % 2 ? cy + (v - cy) * k : cx + (v - cx) * k));
 // 윤곽선(어두운 바깥) → 음영 → 바탕 → 빛 반사 순으로 그리는 공
 function ball(p, x, y, r, { outline, base, shade, light }) {
-  p.circle(x, y, r + 3, outline);
+  p.circle(x, y, r + 1.6, outline);
   p.circle(x, y, r, shade);
   p.circle(x - 2, y - 3, r - 4, base);
   p.circle(x - r * 0.38, y - r * 0.42, r * 0.28, light);
 }
-// 잎: (x, y)에서 deg 방향(도, 화면 좌표 기준 — 210이면 왼쪽 위)으로 뻗는 끝이 뾰족한 잎.
-// 윤곽 → 잎 바탕 → 위쪽 밝은 면 → 잎맥 순으로 그린다.
-function leafShape(x, y, deg, len, wid, grow = 0) {
+// 잎 한 장: (x, y)에서 deg 방향(도, 화면 좌표 기준 — 330이면 오른쪽 위)으로 뻗는 끝이 뾰족한 잎.
+// bend 가 음수면 잎 끝이 위로, 양수면 아래로 살짝 휜다. 윤곽 → 바탕 → 한쪽 밝은 면 → 잎맥 순으로 그린다.
+function leafShape(x, y, deg, len, wid, bend, grow = 0) {
   const a = (deg * Math.PI) / 180;
   const dx = Math.cos(a), dy = Math.sin(a);
-  const nx = -dy, ny = dx; // 잎 방향에 수직(옆) 벡터
-  const upper = [], lower = [];
-  for (let k = 0; k <= 10; k++) {
-    const t = k / 10;
-    const w = Math.sin(Math.PI * Math.pow(t, 0.8)) * (wid / 2 + grow); // 잎 폭: 밑동에서 불룩해졌다가 끝에서 뾰족하게
-    const bx = x + dx * (len + grow * 2) * t - dx * grow, by = y + dy * (len + grow * 2) * t - dy * grow;
-    upper.push(bx + nx * w, by + ny * w);
-    lower.push(bx - nx * w, by - ny * w);
+  const nx = -dy, ny = dx;
+  const center = [], upper = [], lower = [];
+  for (let k = 0; k <= 12; k++) {
+    const t = k / 12;
+    const half = Math.sin(Math.PI * Math.pow(t, 0.9)) * (wid / 2 + grow);
+    const off = bend * Math.sin(Math.PI * t);
+    const cx = x + dx * len * t + nx * off - dx * grow;
+    const cy = y + dy * len * t + ny * off - dy * grow;
+    center.push(cx, cy);
+    upper.push(cx + nx * half, cy + ny * half);
+    lower.push(cx - nx * half, cy - ny * half);
   }
   const rev = [];
   for (let k = lower.length - 2; k >= 0; k -= 2) rev.push(lower[k], lower[k + 1]);
-  return { outline: [...upper, ...rev], upper, dx, dy, nx, ny };
+  const centerRev = [];
+  for (let k = center.length - 2; k >= 0; k -= 2) centerRev.push(center[k], center[k + 1]);
+  return { outline: [...upper, ...rev], upper, center, centerRev };
 }
-function leaf(p, x, y, deg, len = 30, wid = 15) {
-  const big = leafShape(x, y, deg, len, wid, 2);
-  p.poly(big.outline, '#25531c');
-  const base = leafShape(x, y, deg, len, wid);
-  p.poly(base.outline, '#3f9f35');
-  // 한쪽 면을 밝게(잎맥을 경계로)
-  const mid = [];
-  for (let k = 0; k <= 10; k++) { const t = k / 10; mid.push(x + base.dx * len * t, y + base.dy * len * t); }
-  const midRev = [];
-  for (let k = mid.length - 2; k >= 0; k -= 2) midRev.push(mid[k], mid[k + 1]);
-  p.poly([...base.upper, ...midRev], '#62c24f');
-  p.line(x, y, x + base.dx * len * 0.92, y + base.dy * len * 0.92, 2, '#2f7d28'); // 잎맥
+function leaf(p, x, y, deg, len = 36, wid = 17, bend = -5) {
+  p.poly(leafShape(x, y, deg, len, wid, bend, 1.6).outline, '#2d6a24');
+  const base = leafShape(x, y, deg, len, wid, bend);
+  p.poly(base.outline, '#47ad3a');
+  p.poly([...base.upper, ...base.centerRev], '#74cf5c');                    // 위쪽 밝은 면
+  for (let k = 0; k < base.center.length - 2; k += 2) {                      // 잎맥(휜 가운데선)
+    p.line(base.center[k], base.center[k + 1], base.center[k + 2], base.center[k + 3], 1.8, '#2f7d28');
+  }
 }
 // 살짝 휘어진 줄기: 시작점 → 끝점(control 은 휘는 정도를 정하는 기준점)
 function curvedStem(p, a, b, ctrl, width, color) {
@@ -100,27 +101,34 @@ function curvedStem(p, a, b, ctrl, width, color) {
 
 // ── 심볼(중심 cx, cy 기준 약 ±55) ───────────────────────────────
 function cherry(p, cx, cy) {
-  const top = [cx, cy - 38];
-  // 줄기: 두 체리에서 위 한 점으로 모이며 바깥쪽으로 살짝 휜다(좌우 대칭)
-  for (const sx of [-1, 1]) curvedStem(p, [cx + sx * 24, cy + 8], top, [cx + sx * 20, cy - 22], 9, '#25531c');
-  for (const sx of [-1, 1]) curvedStem(p, [cx + sx * 24, cy + 8], top, [cx + sx * 20, cy - 22], 5, '#3f8f2e');
-  // 잎은 줄기 끝에서 양옆 위로 한 장씩(대칭)
-  leaf(p, top[0], top[1] + 2, 215, 32, 15);
-  leaf(p, top[0], top[1] + 2, 325, 32, 15);
+  // 두 알에서 가는 줄기가 위로 모여 V 모양(좌우 대칭). 줄기는 가늘게, 알은 크게.
+  const top = [cx + 2, cy - 36];
   for (const sx of [-1, 1]) {
-    ball(p, cx + sx * 24, cy + 26, 24, { outline: '#6e0c1a', base: '#e8263c', shade: '#b01228', light: '#ffb3bb' });
+    const from = [cx + sx * 25, cy + 12];
+    curvedStem(p, from, top, [cx + sx * 16, cy - 20], 6, '#3d2a14');
+    curvedStem(p, from, top, [cx + sx * 16, cy - 20], 3, '#6aa84a');
+  }
+  p.circle(top[0], top[1], 4, '#3d2a14');
+  p.circle(top[0], top[1], 2.2, '#6aa84a');
+  for (const sx of [-1, 1]) {
+    ball(p, cx + sx * 25, cy + 28, 23, { outline: '#a01a2e', base: '#ee3248', shade: '#c81c34', light: '#ffc8ce' });
   }
 }
 
 function grapes(p, cx, cy) {
-  p.line(cx, cy - 22, cx, cy - 44, 9, '#4a3418');
-  p.line(cx, cy - 22, cx, cy - 44, 5, '#7a5a2e');
-  leaf(p, cx, cy - 38, 215, 30, 14);
-  leaf(p, cx, cy - 38, 325, 30, 14);
-  // 위가 넓은 삼각형 송이(3-2-1) — 뒤쪽(아래 줄)부터 그려 겹침이 자연스럽다
-  const rows = [[0, 40], [-16, 17], [16, 17], [-32, -4], [0, -4], [32, -4]];
-  for (const [dx, dy] of rows) {
-    ball(p, cx + dx, cy + dy, 15, { outline: '#3d1a66', base: '#8a46c8', shade: '#5f2a96', light: '#d9b5f5' });
+  // 짧은 줄기
+  p.line(cx, cy - 30, cx, cy - 46, 8, '#5a4220');
+  p.line(cx, cy - 30, cx, cy - 46, 4.5, '#8a6a38');
+  // 알 6개(3-2-1): 크고 서로 살짝만 겹쳐 알 하나하나가 또렷하다. 아래 줄부터 그린다.
+  const rows = [
+    [[0, 44]],
+    [[-17, 15], [17, 15]],
+    [[-34, -14], [0, -14], [34, -14]],
+  ];
+  for (const row of rows) {
+    for (const [dx, dy] of row) {
+      ball(p, cx + dx, cy + dy, 17.5, { outline: '#5a2d90', base: '#9657d6', shade: '#6a34a4', light: '#e2c8f8' });
+    }
   }
 }
 
@@ -134,8 +142,8 @@ function lemon(p, cx, cy) {
     return pts;
   };
   const nub = (x, r, color) => { const [nx, ny] = rot(x, 0); p.circle(nx, ny, r, color); };
-  p.poly(ell(46, 36), '#c99a14');
-  nub(-46, 8, '#c99a14'); nub(46, 8, '#c99a14');
+  p.poly(ell(44.5, 34.5), '#d9b01c');
+  nub(-46, 7.5, '#d9b01c'); nub(46, 7.5, '#d9b01c');
   p.poly(ell(42, 32), '#e0ac18');
   p.poly(ell(40, 28, 0, -3), '#f7d12c');
   nub(-46, 5, '#eab920'); nub(46, 5, '#eab920');
@@ -151,14 +159,14 @@ function bell(p, cx, cy) {
   const rightRev = [];
   for (let k = rightPts.length - 2; k >= 2; k -= 2) rightRev.push(rightPts[k], rightPts[k + 1]);
   const body = [...left, ...rightRev];
-  p.poly(scalePts(body, cx, cy, 1.09), '#8a5a00');           // 테두리
+  p.poly(scalePts(body, cx, cy, 1.05), '#b07a10');           // 테두리
   p.poly(body, '#f5b82e');                                   // 바탕
   p.poly([cx + 8, cy - 32, cx + 30, cy - 12, cx + 38, cy + 16, cx + 52, cy + 34, cx + 24, cy + 34, cx + 22, cy + 8], '#dc9a1c'); // 오른쪽 음영
   p.poly([cx - 28, cy - 12, cx - 20, cy - 28, cx - 13, cy - 26, cx - 19, cy + 12], '#ffe9a0');  // 왼쪽 빛 반사
-  p.roundRect(cx - 55, cy + 28, 110, 13, 6, '#8a5a00');      // 아랫단 테두리
+  p.roundRect(cx - 54, cy + 28, 108, 12, 6, '#b07a10');      // 아랫단 테두리
   p.roundRect(cx - 52, cy + 30, 104, 9, 4, '#e0a020');        // 아랫단
-  ball(p, cx, cy + 47, 7, { outline: '#8a5a00', base: '#e0a020', shade: '#b87a10', light: '#ffe08a' }); // 추
-  ball(p, cx, cy - 46, 6, { outline: '#8a5a00', base: '#e0a020', shade: '#b87a10', light: '#ffe08a' }); // 꼭지 고리
+  ball(p, cx, cy + 47, 7, { outline: '#b07a10', base: '#e0a020', shade: '#b87a10', light: '#ffe08a' }); // 추
+  ball(p, cx, cy - 46, 6, { outline: '#b07a10', base: '#e0a020', shade: '#b87a10', light: '#ffe08a' }); // 꼭지 고리
 }
 
 function sparkle(p, x, y, r, color) { // 네 갈래 반짝이(좌우 대칭)
@@ -166,7 +174,7 @@ function sparkle(p, x, y, r, color) { // 네 갈래 반짝이(좌우 대칭)
 }
 function diamond(p, cx, cy) {
   const outer = [cx - 26, cy - 30, cx + 26, cy - 30, cx + 48, cy - 6, cx, cy + 46, cx - 48, cy - 6];
-  p.poly(scalePts(outer, cx, cy + 4, 1.09), '#0f5f86');        // 테두리
+  p.poly(scalePts(outer, cx, cy + 4, 1.05), '#2a86b0');        // 테두리
   p.poly(outer, '#47d4ff');
   p.poly([cx - 26, cy - 30, cx, cy - 6, cx - 48, cy - 6], '#8ae8ff');
   p.poly([cx + 26, cy - 30, cx + 48, cy - 6, cx, cy - 6], '#2fb3e0');
@@ -183,16 +191,17 @@ function seven(p, cx, cy) {
   // 테두리: 8방향으로 어두운 글자를 겹쳐 둘러싼다 → 아래 음영 → 밝은 윗면 → 본 글자
   for (let k = 0; k < 8; k++) {
     const a = (k / 8) * Math.PI * 2;
-    p.text(f, '7', cx + Math.cos(a) * 4.5, cy + 3 + Math.sin(a) * 4.5, { size, color: '#5a0a16' });
+    p.text(f, '7', cx + Math.cos(a) * 3, cy + 3 + Math.sin(a) * 3, { size, color: '#7a1020' });
   }
   p.text(f, '7', cx, cy + 6, { size, color: '#8f1226' });
   p.text(f, '7', cx - 1.5, cy + 2, { size, color: '#ff7686' });
   p.text(f, '7', cx, cy + 3.5, { size, color: '#ff3347' });
 }
 const SYMBOL_DRAW = { '🍒': cherry, '🍋': lemon, '🍇': grapes, '🔔': bell, '💎': diamond, '7️⃣': seven };
+const SYMBOLS = Object.keys(SYMBOL_DRAW);
 
 // 칸(높이 124) 안에 위아래 여유(약 12px)가 생기도록 심볼마다 크기를 줄여 그린다. 1 = 원래 크기.
-const SYMBOL_SCALE = { '🍒': 0.88, '🍋': 1.05, '🍇': 0.88, '🔔': 0.88, '💎': 1.0, '7️⃣': 0.95 };
+const SYMBOL_SCALE = { '🍒': 0.95, '🍋': 1.05, '🍇': 0.86, '🔔': 0.88, '💎': 1.0, '7️⃣': 0.95 };
 
 // (cx, cy)를 기준으로 모든 좌표·반지름·굵기·글자 크기를 k배로 줄여 그리는 그림판 대리자.
 function scaled(p, cx, cy, k) {
@@ -206,19 +215,19 @@ function scaled(p, cx, cy, k) {
     text: (f, str, x, y, o = {}) => p.text(f, str, X(x), Y(y), { ...o, size: (o.size || 16) * k }),
   };
 }
-function drawSymbol(p, key, cx, cy) {
+function drawSymbol(p, key, cx, cy, extra = 1) {
   const draw = SYMBOL_DRAW[key];
   if (!draw) return;
-  draw(scaled(p, cx, cy, SYMBOL_SCALE[key] ?? 1), cx, cy);
+  draw(scaled(p, cx, cy, (SYMBOL_SCALE[key] ?? 1) * extra), cx, cy);
 }
 
 // 칸 안에서 위아래·좌우 가운데에 오도록 측정해 둔 보정값(설계 좌표). 값은 symbolBounds()로 다시 잴 수 있다.
 const SYMBOL_OFFSET = {
-  '🍒': [0, 1],
+  '🍒': [0, -6.5],
   '🍋': [0, 0],
-  '🍇': [0, -0.5],
+  '🍇': [0, -5.5],
   '🔔': [0, -0.5],
-  '💎': [0, -9],
+  '💎': [0, -8],
   '7️⃣': [0, -1.5],
 };
 
@@ -255,14 +264,26 @@ function getBg() {
 }
 
 // ── 변하는 부분 ────────────────────────────────────────────────
-function drawSpinningWindow(p, x, phase) {
-  // 돌아가는 릴: 가로 줄무늬가 위아래로 흘러가는 것처럼 보이게(프레임마다 위치가 달라진다)
-  const colors = ['#e8d49a', '#f0e0b0', '#dcc283'];
-  for (let k = 0; k < 6; k++) {
-    const y = WIN_Y + 8 + ((k * 26 + phase * 11) % (WIN_H - 20));
-    p.roundRect(x + 10, y, WIN_W - 20, 10, 5, colors[k % 3]);
+function drawSpinningWindow(p, x, phase, reel) {
+  // 도는 릴: 칸 전체를 살짝 어둡게 칠하고, 심볼이 위에서 아래로 흘러가는 모습(작게 + 세로 속도선)을 그린다.
+  const cx = x + WIN_W / 2;
+  p.roundRect(x, WIN_Y, WIN_W, WIN_H, 10, '#efe2bc');
+  for (const lx of [x + 14, x + WIN_W - 14]) { // 속도선
+    for (let k = 0; k < 3; k++) {
+      const ly = WIN_Y + 12 + ((k * 40 + phase * 17) % (WIN_H - 40));
+      p.roundRect(lx - 1.5, ly, 3, 22, 1.5, '#d9c48c');
+    }
   }
-  p.text(getFont(), '?', x + WIN_W / 2, WIN_CY, { size: 64, color: '#d1b36a' });
+  p.roundRect(x, WIN_Y, WIN_W, 12, 10, '#e0d0a0'); // 위아래 그늘(깊이감)
+  p.roundRect(x, WIN_Y + WIN_H - 12, WIN_W, 12, 10, '#e0d0a0');
+  const STEP = 56, shift = (phase * 23) % STEP;
+  for (let k = -2; k <= 2; k++) {
+    const y = WIN_CY + shift + k * STEP - STEP / 2;
+    if (Math.abs(y - WIN_CY) > 31) continue; // 칸 밖으로 삐져나오는 심볼은 그리지 않는다
+    const key = SYMBOLS[(((reel * 2 + phase - k) % SYMBOLS.length) + SYMBOLS.length) % SYMBOLS.length];
+    const [ox, oy] = SYMBOL_OFFSET[key] || [0, 0];
+    drawSymbol(p, key, cx + ox * 0.4, y + oy * 0.4, 0.4);
+  }
 }
 
 // 전구: 위 판·아래 판 양옆에 같은 모양으로 그려 상하 대칭을 맞춘다(프레임마다 번갈아 켜진다).
@@ -298,7 +319,7 @@ function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = 
 
   for (let i = 0; i < 3; i++) {
     const x = WIN_X[i];
-    if (reels[i] === null) { drawSpinningWindow(p, x, phase + i * 2); continue; }
+    if (reels[i] === null) { drawSpinningWindow(p, x, phase, i); continue; }
     const [ox, oy] = SYMBOL_OFFSET[reels[i]] || [0, 0];
     drawSymbol(p, reels[i], x + WIN_W / 2 + ox, WIN_CY + oy);
   }
@@ -359,4 +380,4 @@ function symbolBounds(key) {
   return { ...box, dx: (box.left + box.right) / 2 - cx, dy: (box.top + box.bottom) / 2 - cy };
 }
 
-module.exports = { renderSlot, idleImage, warmUp, symbolBounds, SYMBOLS: Object.keys(SYMBOL_DRAW) };
+module.exports = { renderSlot, idleImage, warmUp, symbolBounds, drawSymbol, SYMBOLS };
