@@ -67,7 +67,7 @@ function buildAdminHome({ guildId, note } = {}) {
       note || null,
       ...buildPatchBlocks(patch),
       {
-        text: `### ✨ XP\n${xpLine}`,
+        text: `### ✨ XP 시스템\n${xpLine}`,
         button: new ButtonBuilder().setCustomId('xp:menu:manage').setLabel('XP 관리').setEmoji('🛠️').setStyle(ButtonStyle.Primary),
       },
       {
