@@ -26,6 +26,7 @@ const { applyXp, deductXpFromAll, isExcludedGuild, announceLevelUp, setRaidXpFro
 const { KST_OFFSET_MS } = require('../공통/시간');
 const { GUILD_ID, PLAYGROUND_CHANNEL_ID, ADMIN_IDS } = require('../../config');
 const { logSystem, logError, userLabel } = require('../공통/로그');
+const { card, payload: cardPayload } = require('../공통/카드');
 const { writeJsonIfChanged } = require('../공통/저장');
 const { displayNameFromInteraction } = require('../공통/이름');
 const {
@@ -52,7 +53,6 @@ const FAIL_PENALTY_XP_MIN = 50;
 const FAIL_PENALTY_XP_MAX = 150;
 const PENALTY_OUTCOMES = new Set(['wipe', 'timeout', 'noshow']);
 const rollPenaltyXp = () => FAIL_PENALTY_XP_MIN + Math.floor(Math.random() * (FAIL_PENALTY_XP_MAX - FAIL_PENALTY_XP_MIN + 1));
-const penaltyText = xp => `☠️ 모든 유저의 **${xp}XP**를 잃어버렸습니다...`;
 const SCHEDULER_TICK_MS = 60 * 1000;
 // 남은 시간 표시(00:52:30)를 글자만 고쳐 갱신하는 주기. 디스코드는 채널당 메시지 수정이 대략 5초에 5번까지라
 // 1초마다는 불가능하고 버튼 반응까지 밀린다 — 모집(최대 1시간)은 10초, 전투 턴(60초)은 5초마다.
@@ -389,7 +389,15 @@ function endNoticeDetail(r, deducted) {
   const parts = [];
   if (deducted?.affected) parts.push(`${deducted.affected.toLocaleString()}명 · 합계 : -${deducted.total.toLocaleString()} XP`);
   if (r.frozenAt) parts.push(`중단 시간 : ${formatDuration(r.endedAt - r.frozenAt)} (${kstHourMinute(r.frozenAt)}~${kstHourMinute(r.endedAt)})`);
-  return parts.map(p => `\n-# ${p}`).join(''); // 한 줄에 하나씩(합계 밑에 중단 시간 — 사용자 요청)
+  return parts; // 한 줄에 하나씩(합계 밑에 중단 시간 — 사용자 요청)
+}
+
+// 레이드 결과 메시지 아래 답장으로 올라오는 카드. kind: 'recover'(토벌 성공, XP 복구) | 'penalty'(토벌 실패, 모든 유저 XP 차감)
+function buildEndNoticePayload({ kind, xp, details = [] }) {
+  const footer = details.join('\n-# ') || undefined; // footer 는 첫 줄에만 '-# '가 붙으므로 줄마다 직접 붙인다
+  return kind === 'penalty'
+    ? cardPayload(card({ color: 'err', header: '☠️ XP를 잃어버렸습니다', blocks: [`모든 유저의 **${xp} XP**를 잃어버렸습니다...`], footer }))
+    : cardPayload(card({ color: 'ok', header: '🔧 XP 시스템 복구 완료', footer }));
 }
 // 이름 끝 글자 받침에 따라 '이'/'가'를 고른다(한글이 아니면 '이(가)')
 function subjectJosa(name) {
@@ -555,7 +563,7 @@ function sendEndNotice(r) {
   if (!content || !channel) return;
   setTimeout(() => {
     channel.send({
-      content,
+      ...buildEndNoticePayload(content),
       ...(replyTo ? { reply: { messageReference: replyTo, failIfNotExists: false } } : {}),
       allowedMentions: { parse: [], repliedUser: false },
     }).catch(() => {});
@@ -856,7 +864,7 @@ function finishRaid(r, outcome) {
   // 토벌 실패(벌칙)면 복구 안내 대신 XP를 잃었다는 안내를 올린다.
   // 바로 보내면 결과 화면(그림 그리기·전송)보다 먼저 떠서, 결과 화면을 올린 뒤 조금 있다가 보낸다(flush).
   if (r.freezesXp && r.message?.channel) {
-    r.endNotice = (penalty ? penaltyText(penaltyXp) : '🔧 **XP 시스템 복구 완료.**') + endNoticeDetail(r, deducted);
+    r.endNotice = { kind: penalty ? 'penalty' : 'recover', xp: penaltyXp, details: endNoticeDetail(r, deducted) };
   }
   r.rewards = rewards;
   requestRender(r, { image: true, immediate: true });
@@ -1267,5 +1275,5 @@ module.exports = {
   forceSpawnRaid,
   forceEndRaid,
   effectLines, // 테스트용(전투 화면 상태 줄)
-  recruitView, battleView, endView, buildHelpView, // 테스트용(예시 페이지가 화면을 그릴 때)
+  recruitView, battleView, endView, buildHelpView, buildEndNoticePayload, // 테스트용(예시 페이지가 화면을 그릴 때)
 };

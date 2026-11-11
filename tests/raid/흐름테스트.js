@@ -21,6 +21,7 @@ async function flushRender() {
 const runTimers = async () => { const due = timers.filter(t => !t.cancelled && t.ms > 1000); for (const t of due) { timers.splice(timers.indexOf(t), 1); await t.fn(); } await flushRender(); };
 
 const raidMod = require(path.join(root, 'handlers/레이드/index.js'));
+const noteText = (p) => require(path.join(root, 'handlers/공통/카드.js')).messageText({ components: (p.components ?? []).map(c => c.toJSON?.() ?? c) }); // 종료 안내 카드의 글자
 const origHandle = raidMod.handleRaidButton, origEnd = raidMod.forceEndRaid, origSpawn = raidMod.forceSpawnRaid;
 raidMod.handleRaidButton = async (it) => { await origHandle(it); await flushRender(); };
 raidMod.forceEndRaid = async (g = 'gMain') => { const v = await origEnd(g); await flushRender(); return v; };
@@ -32,7 +33,7 @@ const sent = [];
 let current = null; // 레이드 메시지 최신 payload
 let lastEdit = null; const editTurns = [];
 const message = { id: 'msg1', channel: null, edit: async (p) => { current = p; lastEdit = p; if (p.files) images.push(p.files[0].attachment); const m = desc().match(/TURN (\d+)/); if (m) editTurns.push(+m[1]); return message; } };
-const channel = { id: 'ch1', guildId: 'gMain', name: '놀이터', send: async (p) => { sent.push(p); if (!message.channel || p.components) { message.channel = channel; current = p; if (p.files) images.push(p.files[0].attachment); return message; } return { id: 'x', delete: async () => {} }; } };
+const channel = { id: 'ch1', guildId: 'gMain', name: '놀이터', send: async (p) => { sent.push(p); if (!message.channel || (p.components && !p.reply)) { message.channel = channel; current = p; if (p.files) images.push(p.files[0].attachment); return message; } return { id: 'x', delete: async () => {} }; } };
 const client = { channels: { fetch: async () => channel }, guilds: { cache: new Map() } };
 const parts = () => current.components.map(c => c.toJSON()).flatMap(c => (c.type === 17 ? c.components : [c]));
 const desc = () => parts().filter(c => c.type === 10).map(c => c.content).join('\n');
@@ -123,10 +124,10 @@ let ok4;
   assert(buttons().length === 0, '전투 종료 후 버튼 제거');
   assert(!lv.isRaidXpFrozen(), '종료 후 XP 정지 해제');
   // 테스트 전투는 가끔 지므로(무작위) 지면 복구 안내 대신 XP 손실 안내를 확인한다
-  assert(end.includes('RAID CLEAR') ? sent.some(p => p.content?.includes('XP 시스템 복구 완료')) : sent.some(p => p.content?.includes('XP**를 잃어버렸습니다')), '종료 안내 메시지 전송(클리어면 복구 완료, 지면 XP 손실)');
-  { const notice = sent.find(p => p.content?.includes('XP 시스템 복구 완료') || p.content?.includes('잃어버렸습니다'));
+  assert(end.includes('RAID CLEAR') ? sent.some(p => noteText(p).includes('XP 시스템 복구 완료')) : sent.some(p => noteText(p).includes('XP**를 잃어버렸습니다')), '종료 안내 메시지 전송(클리어면 복구 완료, 지면 XP 손실)');
+  { const notice = sent.find(p => noteText(p).includes('XP 시스템 복구 완료') || noteText(p).includes('잃어버렸습니다'));
     assert(notice?.reply?.messageReference === message.id && notice.reply.failIfNotExists === false && notice.allowedMentions?.repliedUser === false, '종료 안내는 레이드 메시지에 답장(따로 보이게, 알림 없음)');
-    assert(/\n-# 중단 시간 : \d.* \(\d\d:\d\d~\d\d:\d\d\)$/.test(notice?.content ?? ''), '종료 안내 마지막 줄 작은 글씨: 중단 시간 : N분 N초 (시각~시각)'); }
+    assert(/\n-# 중단 시간 : \d.* \(\d\d:\d\d~\d\d:\d\d\)$/.test(notice ? noteText(notice) : ''), '종료 안내 마지막 줄 작은 글씨: 중단 시간 : N분 N초 (시각~시각)'); }
   if (end.includes('RAID CLEAR')) {
     assert(lv.getXp('gMain', '1') >= 300 && lv.getXp('gMain', '2') >= 300, '토벌 보상 XP 지급');
   }
@@ -139,7 +140,7 @@ let ok4;
   await raidMod.forceSpawnRaid({ guildId: 'other', channel: { ...channel, send: async (p) => { current = p; return message; } }, client });
   await runTimers();
   assert(desc().includes('RAID FAILED') && desc().includes('도망쳤다') && !lv.isRaidXpFrozen(), '무참가 시 도주(RAID FAILED) + XP 해제');
-  { const amt = Number(sent.map(p => p.content?.match(/^☠️ 모든 유저의 [*]{2}([0-9]+)XP[*]{2}를 잃어버렸습니다[.]{3}/)?.[1]).filter(Boolean).pop());
+  { const amt = Number(sent.map(p => noteText(p).match(/모든 유저의 [*]{2}([0-9]+) XP[*]{2}를 잃어버렸습니다[.]{3}/)?.[1]).filter(Boolean).pop());
     assert(amt >= 50 && amt <= 150 && lv.getXp('gMain', 'n1') === noshowBefore - amt, `무참가 도주도 모든 유저 -${amt} XP(50~150) + 채널 안내(숫자만 굵게)`); }
   assert(!desc().includes('XP를 잃어') && !desc().includes('XP 시스템 복구됨'), '종료 화면 작은 글씨엔 벌칙·복구 문구 없음');
 
@@ -980,9 +981,9 @@ let ok4;
     const allBefore = lv.getLeaderboard('gMain', 1e9).map(x => x.xp).filter(xp => xp > 0);
     await press(mod, mC, '5', 'raid:act:attack');
     console.log('--- 전멸 결과 글자 ---\n' + textOf(mC));
-    const chNotes = [...chC.msgs.values()].map(m => m.last?.content).filter(Boolean);
+    const chNotes = [...chC.msgs.values()].map(m => (m.last ? noteText(m.last) : '')).filter(Boolean);
     assert(!textOf(mC).includes('XP를 잃어') && !textOf(mC).includes('XP 시스템 복구됨'), '전멸 화면 작은 글씨엔 벌칙·복구 문구 없음');
-    const amt = Number(chNotes.map(c => c.match(/^☠️ 모든 유저의 [*]{2}([0-9]+)XP[*]{2}를 잃어버렸습니다[.]{3}/)?.[1]).find(Boolean));
+    const amt = Number(chNotes.map(c => c.match(/모든 유저의 [*]{2}([0-9]+) XP[*]{2}를 잃어버렸습니다[.]{3}/)?.[1]).find(Boolean));
     assert(amt >= 50 && amt <= 150 && !chNotes.some(c => c.includes('복구 완료')), `전멸 시 채널 안내: 복구 완료 대신 XP 손실(${amt}, 50~150)`);
     assert(lv.getXp('gMain', 'p1') === before.p1 - amt && lv.getXp('gMain', 'p2') === Math.max(0, before.p2 - amt), `전멸하면 서버 모든 유저 -${amt} XP(0 밑으로는 안 내려감)`);
     { // 안내의 인원·합계는 실제로 깎인 값이어야 한다(0에서 잘린 만큼은 합계에서 빠짐)

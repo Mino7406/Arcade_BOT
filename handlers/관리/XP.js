@@ -343,7 +343,7 @@ async function handleXpUserSelect(interaction) {
 // ── 버튼 라우팅: 메뉴 분기 / XP 관리 토글 / ➕➖🔄 모달 오픈 ────
 async function handleXpButton(interaction) {
   const [, action, targetId] = interaction.customId.split(':');
-  const isRaidAction = (action === 'mng' && ['raid', 'raidend', 'raidback'].includes(targetId)) || action === 'summon';
+  const isRaidAction = (action === 'mng' && ['raid', 'raidend', 'raidback'].includes(targetId)) || action === 'summon' || (action === 'menu' && ['manage', 'home'].includes(targetId)); // 테스트 서버에서도 /관리 → XP 관리(레이드 테스트 화면)는 열린다
   if (await denyGuard(interaction, { allowExcludedGuild: isRaidAction })) return;
 
   // 첫 화면 분기
@@ -351,7 +351,7 @@ async function handleXpButton(interaction) {
     if (targetId === 'adjust') {
       await interaction.update(payload(card({ color: COLORS.info, header: '⚙️ XP 조정', blocks: ['조정할 유저를 선택하세요.'], rows: [buildPickRow()] })));
     } else if (targetId === 'manage') {
-      await interaction.update(buildManageView(undefined, interaction.guildId));
+      await interaction.update(raidResultView(interaction)); // 테스트 서버면 레이드 테스트 화면, 아니면 XP 관리
     } else if (targetId === 'home') {
       await interaction.update(buildAdminHome({ guildId: interaction.guildId })); // XP 콘솔은 /관리 홈으로 합쳐졌다
     }
