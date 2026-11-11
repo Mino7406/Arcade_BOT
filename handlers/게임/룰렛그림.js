@@ -10,16 +10,16 @@
 const path = require('path');
 const { Painter, loadFont } = require('../레이드/그림판');
 
-const W = 640;
+const W = 600;
 const H = 252;
-const SCALE = 0.8; // 설계 크기 640×252 → 실제 512×202 (디스코드가 채팅 폭으로 줄여 보여 주므로 글자 크기는 그대로)
+const SCALE = 0.8; // 설계 크기 600×252 → 실제 480×202 (디스코드가 채팅 폭으로 줄여 보여 주므로 글자 크기는 그대로)
 const FONT_PATH = path.join(__dirname, '..', '..', 'assets', 'fonts', 'NanumGothic-Bold.ttf');
 
 // 화면 배치(설계 좌표)
 const WIN_W = 140;
 const WIN_H = 124;
 const WIN_Y = 52;
-const WIN_X = [66, 220, 374];
+const WIN_X = [76, 230, 384]; // 가운데(300) 기준 대칭: 140폭 3칸 + 간격 14
 const WIN_CY = WIN_Y + WIN_H / 2; // 릴 가운데 높이
 
 let font = null;
@@ -47,7 +47,7 @@ function cherry(p, cx, cy) {
   p.circle(cx + 13, cy + 21, 6, '#ff8a96');
 }
 function lemon(p, cx, cy) {
-  // 진짜 레몬처럼 약간 기울어진 타원(-26도) + 양 끝의 뾰족한 꼭지. 납작하게 눌려 보이지 않게 가로:세로를 1.35:1로 둔다.
+  // 약간 기울어진 타원(-26도) + 양 끝의 둥근 꼭지. 잎 없이 깔끔하게, 아래쪽 음영과 위쪽 빛 반사로 입체감을 준다.
   const ang = -0.45, ca = Math.cos(ang), sa = Math.sin(ang);
   const rot = (x, y) => [cx + x * ca - y * sa, cy + x * sa + y * ca];
   const ell = (rx, ry, ox = 0, oy = 0) => {
@@ -55,12 +55,14 @@ function lemon(p, cx, cy) {
     for (let k = 0; k < 32; k++) { const t = (k / 32) * Math.PI * 2; pts.push(...rot(ox + Math.cos(t) * rx, oy + Math.sin(t) * ry)); }
     return pts;
   };
-  p.poly(ell(46, 36), '#d9a820');                                   // 테두리
-  p.poly([...rot(42, -9), ...rot(62, 0), ...rot(42, 9)], '#d9a820'); // 오른쪽 꼭지
-  p.poly([...rot(-42, -9), ...rot(-62, 0), ...rot(-42, 9)], '#d9a820'); // 왼쪽 꼭지
-  p.poly(ell(42, 32), '#f7d12c');                                   // 몸
-  p.poly(ell(22, 8, -8, -14), '#fff2a6');                           // 빛 반사
-  p.poly([...rot(10, -30), ...rot(30, -52), ...rot(40, -26)], '#4caf3d'); // 잎
+  const nub = (x) => { const [nx, ny] = rot(x, 0); p.circle(nx, ny, 8, '#d9a820'); };
+  p.poly(ell(46, 36), '#d9a820');            // 테두리
+  nub(-46); nub(46);                          // 양 끝 꼭지(바깥)
+  p.poly(ell(42, 32), '#e9b820');            // 몸(음영색)
+  p.poly(ell(40, 28, 0, -3), '#f7d12c');     // 몸(밝은 면 — 아래만 음영이 남는다)
+  { const [nx, ny] = rot(-46, 0); p.circle(nx, ny, 5, '#f0c424'); }
+  { const [nx, ny] = rot(46, 0); p.circle(nx, ny, 5, '#f0c424'); }
+  p.poly(ell(20, 6, -8, -14), '#fff2a6');    // 빛 반사
 }
 function grapes(p, cx, cy) {
   p.line(cx, cy - 20, cx, cy - 42, 6, '#6b4a2a');
@@ -102,19 +104,16 @@ function drawStaticBg(p) {
   p.roundRect(20, 8, 560, 236, 26, '#a81e2c');
   p.strokeRoundRect(20, 8, 560, 236, 26, 6, '#f5c542');
   // 릴 판
-  p.roundRect(40, 44, 500, 140, 16, '#2b0f1f');
+  p.roundRect(50, 44, 500, 140, 16, '#2b0f1f');
   for (const x of WIN_X) {
     p.roundRect(x - 4, WIN_Y - 4, WIN_W + 8, WIN_H + 8, 14, '#d9b24c');
     p.roundRect(x, WIN_Y, WIN_W, WIN_H, 10, '#fff6dc');
   }
   // 당첨선 화살표
-  p.poly([44, WIN_CY - 10, 62, WIN_CY, 44, WIN_CY + 10], '#ff3347');
-  p.poly([536, WIN_CY - 10, 518, WIN_CY, 536, WIN_CY + 10], '#ff3347');
+  p.poly([54, WIN_CY - 10, 72, WIN_CY, 54, WIN_CY + 10], '#ff3347');
+  p.poly([546, WIN_CY - 10, 528, WIN_CY, 546, WIN_CY + 10], '#ff3347');
   // 아래 표시판
-  p.roundRect(40, 192, 500, 42, 12, '#150a14');
-  // 레버 받침
-  p.circle(596, 208, 12, '#7a7f8c');
-  p.roundRect(584, 208, 24, 26, 6, '#5a5f6c');
+  p.roundRect(50, 192, 500, 42, 12, '#150a14');
 }
 
 function getBg() {
@@ -158,15 +157,8 @@ function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = 
   // 위쪽 전구 줄(프레임마다 번갈아 켜진다)
   for (let k = 0; k < 14; k++) {
     const lit = (k + phase) % 2 === 0;
-    p.circle(66 + k * 36.5, 26, 6, lit ? '#ffe45c' : '#7a5a20');
+    p.circle(63 + k * 36.5, 26, 6, lit ? '#ffe45c' : '#7a5a20');
   }
-
-  // 레버: 돌리는 중이면 아래로 당겨진 모양
-  const pulled = reels.some(r => r === null);
-  const topY = pulled ? 168 : 108;
-  p.line(596, 208, 596, topY + 14, 9, '#b8bcc6');
-  p.circle(596, topY, 16, '#e0243a');
-  p.circle(590, topY - 5, 5, '#ff8a96');
 
   // 릴
   for (let i = 0; i < 3; i++) {
@@ -182,8 +174,8 @@ function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = 
   }
 
   // 아래 표시판
-  if (bet != null) p.text(f, `베팅 ${bet} XP`, 58, 213, { size: 22, color: '#ffe9a8', align: 'left' });
-  let rightX = 522;
+  if (bet != null) p.text(f, `베팅 ${bet} XP`, 68, 213, { size: 22, color: '#ffe9a8', align: 'left' });
+  let rightX = 532;
   if (right) {
     p.text(f, right, rightX, 213, { size: 24, color: rightColor, align: 'right' });
     rightX -= p.textWidth(f, right, 24) + 14;
