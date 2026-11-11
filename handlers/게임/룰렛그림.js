@@ -56,16 +56,57 @@ function ball(p, x, y, r, { outline, base, shade, light }) {
   p.circle(x - 2, y - 3, r - 4, base);
   p.circle(x - r * 0.38, y - r * 0.42, r * 0.28, light);
 }
-const leaf = (p, pts, outline, fill) => { p.poly(scalePts(pts, pts[0], pts[1], 1.25), outline); p.poly(pts, fill); };
+// 잎: (x, y)에서 deg 방향(도, 화면 좌표 기준 — 210이면 왼쪽 위)으로 뻗는 끝이 뾰족한 잎.
+// 윤곽 → 잎 바탕 → 위쪽 밝은 면 → 잎맥 순으로 그린다.
+function leafShape(x, y, deg, len, wid, grow = 0) {
+  const a = (deg * Math.PI) / 180;
+  const dx = Math.cos(a), dy = Math.sin(a);
+  const nx = -dy, ny = dx; // 잎 방향에 수직(옆) 벡터
+  const upper = [], lower = [];
+  for (let k = 0; k <= 10; k++) {
+    const t = k / 10;
+    const w = Math.sin(Math.PI * Math.pow(t, 0.8)) * (wid / 2 + grow); // 잎 폭: 밑동에서 불룩해졌다가 끝에서 뾰족하게
+    const bx = x + dx * (len + grow * 2) * t - dx * grow, by = y + dy * (len + grow * 2) * t - dy * grow;
+    upper.push(bx + nx * w, by + ny * w);
+    lower.push(bx - nx * w, by - ny * w);
+  }
+  const rev = [];
+  for (let k = lower.length - 2; k >= 0; k -= 2) rev.push(lower[k], lower[k + 1]);
+  return { outline: [...upper, ...rev], upper, dx, dy, nx, ny };
+}
+function leaf(p, x, y, deg, len = 30, wid = 15) {
+  const big = leafShape(x, y, deg, len, wid, 2);
+  p.poly(big.outline, '#25531c');
+  const base = leafShape(x, y, deg, len, wid);
+  p.poly(base.outline, '#3f9f35');
+  // 한쪽 면을 밝게(잎맥을 경계로)
+  const mid = [];
+  for (let k = 0; k <= 10; k++) { const t = k / 10; mid.push(x + base.dx * len * t, y + base.dy * len * t); }
+  const midRev = [];
+  for (let k = mid.length - 2; k >= 0; k -= 2) midRev.push(mid[k], mid[k + 1]);
+  p.poly([...base.upper, ...midRev], '#62c24f');
+  p.line(x, y, x + base.dx * len * 0.92, y + base.dy * len * 0.92, 2, '#2f7d28'); // 잎맥
+}
+// 살짝 휘어진 줄기: 시작점 → 끝점(control 은 휘는 정도를 정하는 기준점)
+function curvedStem(p, a, b, ctrl, width, color) {
+  let prev = a;
+  for (let k = 1; k <= 8; k++) {
+    const t = k / 8, u = 1 - t;
+    const pt = [u * u * a[0] + 2 * u * t * ctrl[0] + t * t * b[0], u * u * a[1] + 2 * u * t * ctrl[1] + t * t * b[1]];
+    p.line(prev[0], prev[1], pt[0], pt[1], width, color);
+    prev = pt;
+  }
+}
 
 // ── 심볼(중심 cx, cy 기준 약 ±55) ───────────────────────────────
 function cherry(p, cx, cy) {
-  const top = [cx, cy - 40];
-  for (const sx of [-1, 1]) p.line(cx + sx * 24, cy + 6, top[0], top[1], 9, '#25531c');
-  for (const sx of [-1, 1]) p.line(cx + sx * 24, cy + 6, top[0], top[1], 5, '#3f8f2e');
-  // 잎은 줄기 끝 양옆에 대칭으로 한 장씩
-  leaf(p, [cx, cy - 40, cx - 36, cy - 54, cx - 30, cy - 30], '#25531c', '#4caf3d');
-  leaf(p, [cx, cy - 40, cx + 36, cy - 54, cx + 30, cy - 30], '#25531c', '#4caf3d');
+  const top = [cx, cy - 38];
+  // 줄기: 두 체리에서 위 한 점으로 모이며 바깥쪽으로 살짝 휜다(좌우 대칭)
+  for (const sx of [-1, 1]) curvedStem(p, [cx + sx * 24, cy + 8], top, [cx + sx * 20, cy - 22], 9, '#25531c');
+  for (const sx of [-1, 1]) curvedStem(p, [cx + sx * 24, cy + 8], top, [cx + sx * 20, cy - 22], 5, '#3f8f2e');
+  // 잎은 줄기 끝에서 양옆 위로 한 장씩(대칭)
+  leaf(p, top[0], top[1] + 2, 215, 32, 15);
+  leaf(p, top[0], top[1] + 2, 325, 32, 15);
   for (const sx of [-1, 1]) {
     ball(p, cx + sx * 24, cy + 26, 24, { outline: '#6e0c1a', base: '#e8263c', shade: '#b01228', light: '#ffb3bb' });
   }
@@ -74,8 +115,8 @@ function cherry(p, cx, cy) {
 function grapes(p, cx, cy) {
   p.line(cx, cy - 22, cx, cy - 44, 9, '#4a3418');
   p.line(cx, cy - 22, cx, cy - 44, 5, '#7a5a2e');
-  leaf(p, [cx, cy - 40, cx - 34, cy - 52, cx - 28, cy - 30], '#25531c', '#4caf3d');
-  leaf(p, [cx, cy - 40, cx + 34, cy - 52, cx + 28, cy - 30], '#25531c', '#4caf3d');
+  leaf(p, cx, cy - 38, 215, 30, 14);
+  leaf(p, cx, cy - 38, 325, 30, 14);
   // 위가 넓은 삼각형 송이(3-2-1) — 뒤쪽(아래 줄)부터 그려 겹침이 자연스럽다
   const rows = [[0, 40], [-16, 17], [16, 17], [-32, -4], [0, -4], [32, -4]];
   for (const [dx, dy] of rows) {
@@ -173,9 +214,9 @@ function drawSymbol(p, key, cx, cy) {
 
 // 칸 안에서 위아래·좌우 가운데에 오도록 측정해 둔 보정값(설계 좌표). 값은 symbolBounds()로 다시 잴 수 있다.
 const SYMBOL_OFFSET = {
-  '🍒': [0, 2],
+  '🍒': [0, 1],
   '🍋': [0, 0],
-  '🍇': [0, -1.5],
+  '🍇': [0, -0.5],
   '🔔': [0, -0.5],
   '💎': [0, -9],
   '7️⃣': [0, -1.5],
