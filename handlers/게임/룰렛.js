@@ -173,7 +173,7 @@ function buildSpinningPayload(lobby, bet, reels, phase = 0) {
   return payload(card({
     color: COLORS.info,
     header: '🎰 룰렛머신',
-    sub: [`<@${lobby.userId}>`, '릴이 돌아가는 중...', `베팅 ${bet} XP`],
+    sub: [`<@${lobby.userId}>`, '릴이 돌아가는 중...'],
     blocks: [{ image: SLOT_URL }],
     footer: '🎰 두근두근... 릴이 하나씩 멈춰요',
   }), { files: [slotFile(png)] });
@@ -192,7 +192,7 @@ function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multi
   return payload(card({
     color: win ? 0xFFD700 : COLORS.muted,
     header: '🎰 룰렛머신',
-    sub: [`<@${lobby.userId}>`, '결과', `베팅 ${bet} XP`],
+    sub: [`<@${lobby.userId}>`, '결과'],
     blocks: [
       { image: SLOT_URL },
       `### ${resultLine}　${netLine}`, // 결과와 손익을 한 줄에
