@@ -80,7 +80,7 @@ async function buildScreens() {
   add('내전 · 모집', '내전 모집 중', '게임 색 띠 + 게임 아이콘 + 진행 막대 + 버튼이 카드 안에', buildPublicMessagePayload({
     data: base('lol', { data: { description: '다이아 이하 환영 · 마이크 필수', notifyAt: nowPlus(2) } }), participants: users(6), closed: false, teams: null, roleContent: '<@&1> ',
   }));
-  add('내전 · 모집', '내전 정원 마감(모집 완료)', '정원이 차면 회색 띠', buildPublicMessagePayload({ data: base('val'), participants: users(10), closed: false, teams: null }));
+  add('내전 · 모집', '내전 정원 차서 자동 마감', '정원이 차면 자동으로 마감됨(초록 띠) — "모집 완료" 상태는 없어졌어요', buildPublicMessagePayload({ data: base('val'), participants: users(10), closed: true, teams: null }));
   add('내전 · 모집', '내전 마감 + 팀 배정', '팀 1 / 팀 2가 위아래로', buildPublicMessagePayload({ data: base('lol'), participants: users(10), closed: true, teams: { team1: users(10).slice(0, 5), team2: users(10).slice(5) } }));
   add('내전 · 모집', '모집 (가벼운 인원 모집)', '', buildMojipMessagePayload({ data: base('custom', { label: '모집', data: { players: '4', description: '렐름 같이 하실 분' } }), participants: users(2), closed: false }));
   add('내전 · 모집', '게시 전 미리보기', '작성자에게만 보이는 임시 메시지', common.buildPreviewPayload('naejeon', base('lol', { data: { description: '메모 예시', notifyAt: nowPlus(3) } }), { ephemeral: true }));

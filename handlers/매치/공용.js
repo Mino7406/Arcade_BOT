@@ -585,8 +585,9 @@ function buildMatchCard({ label, data, participants, closed = false, teams = nul
   const { game, gameInfo, title, players, description } = data;
   const max = parseInt(players) || 0;
   const isFull = participants.length >= max;
-  const statusText = closed ? '🔒 마감됨' : isFull ? '✅ 모집 완료' : '🟢 모집 중';
-  const color = closed ? COLORS.ok : isFull ? COLORS.muted : gameInfo.color;
+  // 정원이 차면 자동으로 마감되므로 상태는 둘뿐이다: 마감됨 / 모집 중. (마감을 해제해 정원이 찬 채 열려 있으면 모집 중에 표시만 덧붙인다)
+  const statusText = closed ? '🔒 마감됨' : isFull ? '🟢 모집 중 (정원 가득)' : '🟢 모집 중';
+  const color = closed ? COLORS.ok : gameInfo.color;
   return card({
     color,
     header: gameHeader(game, gameInfo, title),
@@ -598,7 +599,7 @@ function buildMatchCard({ label, data, participants, closed = false, teams = nul
       matchMemoBlock(description),
       ...(teams ? matchTeamBlocks(participants, teams) : [matchParticipantsBlock(participants, max)]),
     ],
-    footer: closed ? `🔒 마감된 ${label}입니다.` : isFull ? '✅ 모집이 완료되었습니다.' : '✅ 버튼을 눌러 참가하세요!',
+    footer: closed ? (isFull ? `👥 인원이 모두 모여 마감됐어요.` : `🔒 마감된 ${label}입니다.`) : isFull ? '👥 정원이 가득 찼어요.' : '✅ 버튼을 눌러 참가하세요!',
     ...footerSide(rows, /:manage$/), // ⚙️ 관리는 안내 줄 오른쪽으로, 참가하기는 아래 줄에 단독
   });
 }
@@ -812,7 +813,7 @@ function buildManagePayload({ label, match, note, rows, ephemeral }) {
   const { gameInfo, title, players } = match.data;
   const max = parseInt(players) || 0;
   const isFull = match.participants.length >= max;
-  const status = match.closed ? '🔒 마감됨' : isFull ? '✅ 모집 완료' : '🟢 모집 중';
+  const status = match.closed ? '🔒 마감됨' : isFull ? '🟢 모집 중 (정원 가득)' : '🟢 모집 중';
 
   const pulled = { toggle: null, cancel: null };
   const restRows = [];
