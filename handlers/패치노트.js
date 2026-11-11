@@ -42,6 +42,9 @@ const KST_MS = 9 * 60 * 60_000;
 const LOL_BASE = 'https://www.leagueoflegends.com';
 const VALO_BASE = 'https://playvalorant.com';
 const OW_BASE = 'https://overwatch.blizzard.com';
+// 블리자드는 호스팅 서버에서 오는 'Mozilla/5.0'(브라우저인 척하는 짧은 값) 요청에 403을 줬다. 브라우저로 위장하지 않고
+// 봇이라고 밝히는 User-Agent를 보낸다(차단을 피하려고 위장하면 언제든 다시 막힐 수 있음).
+const OW_HEADERS = { 'User-Agent': 'ArcadeBot/1.0 (Discord bot; patch note watcher)' };
 const PUBG_API = 'https://api-foc.krafton.com/content/post/news?lang=ko&displayLocationType=NORMAL&category=patch_notes&size=5&page=1';
 const PUBG_NEWS = 'https://www.pubg.com/ko/news';
 
@@ -174,7 +177,7 @@ async function loadOverwatch(now = Date.now()) {
   const out = [];
   for (let i = 0; i < pages.length; i++) {
     try {
-      out.push(...parseOverwatchPatches(await fetchText(pages[i]), pages[i]));
+      out.push(...parseOverwatchPatches(await fetchText(pages[i], OW_HEADERS), pages[i]));
     } catch (err) {
       if (err.status !== 404) throw err; // 이번 달 페이지가 아직 없으면(월초) 지난달 페이지로 넘어간다
     }
