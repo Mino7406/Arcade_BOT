@@ -136,8 +136,8 @@ function payoutTable() {
 }
 
 function buildLobbyCard(lobby) {
-  // 🎰 돌리기는 베팅 금액 줄 오른쪽으로, ❌ 취소는 아래 안내 줄 오른쪽으로 뺀다. 금액 버튼(10~300 XP·최대)은 따로 한 줄씩 둔다.
-  const withoutSpin = pullButton(buildLobbyComponents(lobby), /^roulette:spin:/);
+  // ❌ 취소는 베팅 금액 줄 오른쪽으로, 🎰 돌리기는 아래 안내 줄 오른쪽으로 뺀다. 금액 버튼(10~300 XP·최대)은 따로 한 줄씩 둔다.
+  const withoutCancel = pullButton(buildLobbyComponents(lobby), /^roulette:cancel:/);
   const bet = lobby.bet;
   const best = Math.max(...Object.values(TRIPLE_PAYOUTS));
   const betText = bet
@@ -150,11 +150,11 @@ function buildLobbyCard(lobby) {
     blocks: [
       `<@${lobby.userId}>님, 베팅 XP를 고른 뒤 **🎰 돌리기**를 누르세요.`,
       { image: SLOT_URL },
-      { text: betText, ...(withoutSpin.button ? { button: withoutSpin.button } : {}) },
+      { text: betText, ...(withoutCancel.button ? { button: withoutCancel.button } : {}) },
       payoutTable(),
     ],
     footer: '⏰ 60초 안에 돌리지 않으면 자동으로 취소됩니다.',
-    ...footerSide(withoutSpin.rows, /^roulette:cancel:/),
+    ...footerSide(withoutCancel.rows, /^roulette:spin:/),
   });
 }
 
