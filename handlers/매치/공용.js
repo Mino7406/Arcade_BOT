@@ -11,9 +11,6 @@ const {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
-  ContainerBuilder,
-  SeparatorBuilder,
-  SeparatorSpacingSize,
   MessageFlags,
 } = require('discord.js');
 const { awardMatchCompletionXp, announceLevelUp } = require('../레벨/레벨링');
@@ -287,15 +284,7 @@ async function sendMatchStartDm(match, label) {
     seen.add(user.id);
     try {
       const target = await client.users.fetch(user.id);
-      const container = new ContainerBuilder()
-        .addTextDisplayComponents(td => td.setContent('# ⏰ 시작 알림'))
-        .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
-        .addTextDisplayComponents(td => td.setContent(`**${match.data.title}** ${label} 시작 시간이에요!\n\n지금 바로 확인해 보세요.`))
-        .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
-        .addTextDisplayComponents(td => td.setContent(`### 🔗 **바로가기**\n[__누르면 바로 이동됩니다.__](${match.message.url})`))
-        .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
-        .addTextDisplayComponents(td => td.setContent('-# 📬 예약된 알림 시각이 되어 참가자에게 자동으로 전송되었습니다.'));
-      await target.send({ components: [container], flags: MessageFlags.IsComponentsV2 });
+      await target.send(buildMatchDmPayload({ kind: 'start', match, label }));
       sent++;
     } catch (err) {
       // DM 차단 등으로 실패해도 다른 수신자 발송에는 영향 없음 — 기록만 남기고 다음 사람으로 넘어간다.
@@ -450,15 +439,7 @@ async function notifyOrganizerOnClose(match, label) {
   try {
     const user = await client.users.fetch(organizer.id);
     const { title } = match.data;
-    const container = new ContainerBuilder()
-      .addTextDisplayComponents(td => td.setContent('# 🔒 마감 알림'))
-      .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
-      .addTextDisplayComponents(td => td.setContent(`**${title}** 이(가) 방금 마감됐어요!\n\n지금 바로 확인해 보세요.`))
-      .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
-      .addTextDisplayComponents(td => td.setContent(`### 🔗 **바로가기**\n[__누르면 바로 이동됩니다.__](${match.message.url})`))
-      .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
-      .addTextDisplayComponents(td => td.setContent('-# 📬 자동 마감 처리되어 주최자에게 알림이 전송되었습니다.'));
-    await user.send({ components: [container], flags: MessageFlags.IsComponentsV2 });
+    await user.send(buildMatchDmPayload({ kind: 'close', match, label }));
   } catch (err) {
     // 상대가 DM을 막아뒀거나(50007) 봇과 공통 서버가 없는(50278) 경우는 흔히 있는 일이라
     // 스택 트레이스까지 남길 필요가 없다. 그 외의 예상 못 한 오류만 전체를 기록한다.
@@ -654,6 +635,26 @@ function buildCancelledCard({ label, data, byOrganizer }) {
     blocks: [matchInfoBlock(data, { withNotify: false })],
     footer: byOrganizer ? `❌ 주최자에 의해 ${label}이 취소되었습니다.` : `⚙️ 관리자에 의해 ${label}이 취소 처리되었습니다.`,
   });
+}
+
+// 참가자·주최자에게 DM으로 가는 알림 카드. 게임 색 띠 + 게임 아이콘 + 바로가기 링크 버튼(줄 오른쪽).
+// kind: 'start'(예약한 시작 알림, 참가자에게) | 'close'(마감 알림, 주최자에게)
+function buildMatchDmPayload({ kind, match, label }) {
+  const { gameInfo, title } = match.data;
+  const isStart = kind === 'start';
+  const link = new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(match.message.url).setLabel('바로가기').setEmoji('🔗');
+  return payload(card({
+    color: gameInfo.color,
+    header: isStart ? '⏰ 시작 알림' : '🔒 마감 알림',
+    sub: [label, title],
+    thumb: gameThumb(gameInfo),
+    thumbAlt: gameInfo.name,
+    blocks: [
+      isStart ? `**${title}** ${label} 시작 시간이에요!\n지금 바로 확인해 보세요.` : `**${title}** 이(가) 방금 마감됐어요!\n지금 바로 확인해 보세요.`,
+      { text: '### 🔗 바로가기\n누르면 해당 게시글로 이동해요.', button: link },
+    ],
+    footer: isStart ? '📬 예약된 알림 시각이 되어 참가자에게 자동으로 전송되었습니다.' : '📬 자동 마감 처리되어 주최자에게 알림이 전송되었습니다.',
+  }));
 }
 
 // 팀이 배정됐다고 채널에 알리는 카드(내전).
@@ -968,6 +969,7 @@ module.exports = {
   buildMatchCard,
   buildPreviewCard,
   buildPreviewPayload,
+  buildMatchDmPayload,
   buildManagePayload,
   buildMentionPayload,
   buildMatchMessagePayload,

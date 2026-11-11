@@ -138,6 +138,13 @@ async function buildScreens() {
   add('레벨 · 랭킹 · 퀴즈', '레벨업 축하', '', req('handlers/레벨/레벨링.js').buildLevelUpPayload('100', 8));
   add('레벨 · 랭킹 · 퀴즈', '퀴즈 정답', '', quizMod.buildCorrectPayload({ word: '고양이', xpReward: 40 }));
 
+  // ── DM 알림 ───────────────────────────────────
+  const dmMatch = { data: base('lol'), participants: users(6), message: { url: 'https://discord.com/channels/1/2/3' } };
+  add('DM 알림', '내전 시작 알림 (참가자에게)', '예약한 시각이 되면 DM으로', common.buildMatchDmPayload({ kind: 'start', match: dmMatch, label: '내전' }));
+  add('DM 알림', '내전 마감 알림 (주최자에게)', '', common.buildMatchDmPayload({ kind: 'close', match: dmMatch, label: '내전' }));
+  add('DM 알림', '렐름 신청 승인 DM', '', mark.buildRealmResultDm('approved', 'Steve_7406', '민호'));
+  add('DM 알림', '렐름 신청 거절 DM', '', mark.buildRealmResultDm('rejected', 'Steve_7406', '민호'));
+
   // ── 관리 · 안내 패널 ──────────────────────────
   const adminHome = req('handlers/관리/홈.js').buildAdminHome;
   add('관리 · 안내 패널', '/관리 홈 — 소식 알림 작동 중', '일시정지 버튼이 줄 오른쪽 · 출처별 마지막 확인', adminHome({ guildId: '1' }));

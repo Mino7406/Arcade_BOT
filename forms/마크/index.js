@@ -7,9 +7,6 @@ const {
   TextInputBuilder,
   TextInputStyle,
   AttachmentBuilder,
-  ContainerBuilder,
-  SeparatorBuilder,
-  SeparatorSpacingSize,
   MessageFlags,
 } = require('discord.js');
 
@@ -436,32 +433,20 @@ async function updateRealmRosterInPlace(client) {
   return 1;
 }
 
-// 승인/거절 결과 DM. handlers/공용.js의 마감·시작 알림 DM(ContainerBuilder + Components V2)과
-// 동일한 형식으로 맞춘다 — 제목 → 구분선 → 본문 → 구분선 → 안내 문구(-# 회색 소문구) 순서.
+// 승인/거절 결과 DM. 다른 알림 카드와 같은 모양(색 띠 → 제목 → 본문 → 안내 문구).
 function buildRealmResultDm(status, nickname, processedByName) {
   const approved = status === 'approved';
-  const container = new ContainerBuilder()
-    .addTextDisplayComponents(td => td.setContent(approved ? '# <:MC:1544570096859742248> 렐름 신청 승인' : '# <:MC:1544570096859742248> 렐름 신청 거절'))
-    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
-    .addTextDisplayComponents(td => td.setContent(
+  return payload(card({
+    color: approved ? REALM_COLOR : REJECTED_COLOR,
+    header: approved ? '<:MC:1544570096859742248> 렐름 신청 승인' : '<:MC:1544570096859742248> 렐름 신청 거절',
+    blocks: [
       approved
         ? '<:Emerald:1544331499976007810> 렐름 참가 신청이 **승인**되었습니다!\n이제 렐름에 접속 가능합니다!'
-        : '<:Barrier:1544331503448625233>렐름 참가 신청이 **거절**되었습니다.',
-    ))
-    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
-    .addTextDisplayComponents(td => td.setContent(
-      approved
-        ? `<:Name_Tag:1544325806803652608> **닉네임**: \`${nickname}\`\n\n<:OP:1544340150585262180> **승인자**: \`${processedByName}\``
-        : `<:Name_Tag:1544325806803652608> **닉네임**: \`${nickname}\`\n\n<:OP:1544340150585262180> **거절자**: \`${processedByName}\``,
-    ))
-    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
-    .addTextDisplayComponents(td => td.setContent(
-      approved
-        ? '-# <:Book:1544331697049305098> 관리자가 승인 처리하여 자동으로 전송되었습니다.'
-        : '-# <:Book:1544331697049305098> 관리자가 거절 처리하여 자동으로 전송되었습니다.',
-    ));
-
-  return { components: [container], flags: MessageFlags.IsComponentsV2 };
+        : '<:Barrier:1544331503448625233> 렐름 참가 신청이 **거절**되었습니다.',
+      `<:Name_Tag:1544325806803652608> **닉네임**　\`${nickname}\`\n<:OP:1544340150585262180> **${approved ? '승인자' : '거절자'}**　\`${processedByName}\``,
+    ],
+    footer: approved ? '<:Book:1544331697049305098> 관리자가 승인 처리하여 자동으로 전송되었습니다.' : '<:Book:1544331697049305098> 관리자가 거절 처리하여 자동으로 전송되었습니다.',
+  }));
 }
 
 // "마크" 신청서 모듈 — /패널(commands/패널.js)의 선택 메뉴에서 이 폼을 고르면
@@ -474,6 +459,7 @@ module.exports = {
   refreshRealmRosterMessage,
   refreshRealmPanelMessage,
   updateRealmRosterInPlace,
+  buildRealmResultDm, // 화면 모음·테스트용
 };
 
 // ── "🏰 신청하기" 버튼 → 신청서 모달 / "<:Emerald:1544331499976007810> 승인"·"❌ 거절" 처리 ('realm:' 프리픽스) ──
