@@ -133,17 +133,16 @@ function matchIndices(reels) {
 // 심볼별 배당표(TRIPLE_PAYOUTS 에서 만든다 — 배당을 바꾸면 화면도 같이 바뀐다)
 function payoutTable() {
   const entries = Object.entries(TRIPLE_PAYOUTS).map(([sym, x]) => `${sym.repeat(3)} **×${x}**`);
-  return `### 💰 배당표\n${entries.slice(0, 3).join('　')}\n${entries.slice(3).join('　')}\n-# 같은 심볼 2개 **×${TWO_MATCH_PAYOUT}** · 모두 다르면 꽝(베팅 전액 손실)`;
+  return `### 💰 배당표\n${entries.slice(0, 3).join('　')}\n${entries.slice(3).join('　')}\n-# 같은 심볼 2개 **×${TWO_MATCH_PAYOUT}** · 모두 다르면 꽝`;
 }
 
 function buildLobbyCard(lobby) {
   // ❌ 취소는 베팅 금액 줄 오른쪽으로, 🎰 돌리기는 아래 안내 줄 오른쪽으로 뺀다. 금액 버튼(10~300 XP·최대)은 따로 한 줄씩 둔다.
   const withoutCancel = pullButton(buildLobbyComponents(lobby), /^roulette:cancel:/);
   const bet = lobby.bet;
-  const best = Math.max(...Object.values(TRIPLE_PAYOUTS));
   const betText = bet
-    ? `### 💰 베팅　**${bet} XP**\n-# 7️⃣ 트리플이면 **+${Math.round(bet * best) - bet} XP** · 꽝이면 **-${bet} XP**`
-    : '### 💰 베팅　*아직 선택 안 함*\n-# 아래에서 금액을 고르세요';
+    ? `### 💰 베팅　**${bet} XP**\n-# 지금 베팅 가능한 XP **${lobby.maxAvailable} XP**`
+    : `### 💰 베팅　*아직 선택 안 함*\n-# 지금 베팅 가능한 XP **${lobby.maxAvailable} XP** · 아래에서 금액을 고르세요`;
   return card({
     color: COLORS.info,
     header: '🎰 룰렛머신',
