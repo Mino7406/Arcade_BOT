@@ -23,6 +23,7 @@ const { loadRoulette, saveRoulette, handleRouletteButton } = require('./handlers
 const { loadBotMatchXp, saveBotMatchXp } = require('./handlers/봇전한도');
 const { loadRealmRoster, saveRealmRoster } = require('./forms/마크/명단');
 const { startQuizScheduler, handleQuizMessage } = require('./handlers/퀴즈');
+const { startPatchNoteWatcher } = require('./handlers/패치노트');
 const { handleRaidButton, startRaidScheduler, isPlaygroundPaused, noteChannelMessage: noteRaidChannelMessage } = require('./handlers/레이드');
 // 레이드 중 막는 명령어 → 안내 문구의 "~수 없습니다" 앞부분(문구는 룰렛 안내와 같은 형식으로 통일)
 const RAID_PAUSED_COMMANDS = {
@@ -345,6 +346,7 @@ async function onReady(c) {
   await reconcileMatchBonusMessages(c); // 봇이 꺼져있던 동안 인증 채널에 올라와 예약이 빠진 메시지 복구
   startQuizScheduler(c); // 놀이터 채널에 하루 한 번 무작위 시각으로 상식퀴즈를 출제
   startRaidScheduler(c); // 하루~이틀마다(무작위) 놀이터에 레이드 몬스터 출현
+  startPatchNoteWatcher(c); // 롤·발로란트·오버워치·배그 공식 홈페이지의 새 패치노트·점검 공지를 지정 채널에 알림
   dataReady = true;
   diagWarn(`📊 시작 직후 메모리 (${runtimeInfo()})`);
   rssPeakMb = process.memoryUsage().rss / 1048576;
