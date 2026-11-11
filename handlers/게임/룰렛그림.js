@@ -142,13 +142,15 @@ function drawSpinningWindow(p, x, phase) {
  * @param {object} o
  * @param {Array<string|null>} o.reels  릴 3개의 심볼(이모지 키). null 이면 아직 돌아가는 중.
  * @param {number} [o.bet]              베팅 XP(아래 표시판 왼쪽)
- * @param {string} [o.right]            아래 표시판 오른쪽 글자(결과 등)
+ * @param {string} [o.right]            아래 표시판 오른쪽 글자(결과 금액 등)
  * @param {string} [o.rightColor]
+ * @param {string} [o.badge]            금액 왼쪽에 붙는 배율 배지 글자(예: '×1.2') — 금액과 색이 달라 한눈에 구분된다
+ * @param {string} [o.badgeColor]       배지 바탕색
  * @param {number[]} [o.winIdx]         당첨 릴 번호(초록/금색 테두리)
  * @param {boolean} [o.jackpot]
  * @param {number} [o.phase]            돌아가는 연출 프레임 번호(0~)
  */
-function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = '#ffe9a8', winIdx = [], jackpot = false, phase = 0 } = {}) {
+function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = '#ffe9a8', badge = '', badgeColor = '#ffd23f', winIdx = [], jackpot = false, phase = 0 } = {}) {
   const p = getPainter();
   getBg().copy(p.buf);
   const f = getFont();
@@ -182,7 +184,17 @@ function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = 
 
   // 아래 표시판
   if (bet != null) p.text(f, `베팅 ${bet} XP`, 58, 271, { size: 22, color: '#ffe9a8', align: 'left' });
-  if (right) p.text(f, right, 522, 271, { size: 24, color: rightColor, align: 'right' });
+  let rightX = 522;
+  if (right) {
+    p.text(f, right, rightX, 271, { size: 24, color: rightColor, align: 'right' });
+    rightX -= p.textWidth(f, right, 24) + 14;
+  }
+  if (badge) {
+    // 배율 배지: 금색 알약 + 어두운 글자
+    const w = p.textWidth(f, badge, 22) + 22;
+    p.roundRect(rightX - w, 258, w, 26, 13, badgeColor);
+    p.text(f, badge, rightX - w / 2, 271, { size: 22, color: '#3a1a00' });
+  }
 
   return p.png();
 }

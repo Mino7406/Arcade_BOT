@@ -131,8 +131,8 @@ function matchIndices(reels) {
 
 // 심볼별 배당표(TRIPLE_PAYOUTS 에서 만든다 — 배당을 바꾸면 화면도 같이 바뀐다)
 function payoutTable() {
-  const entries = Object.entries(TRIPLE_PAYOUTS).map(([sym, x]) => `${sym.repeat(3)} **x${x}**`);
-  return `### 💰 배당표\n${entries.slice(0, 3).join('　')}\n${entries.slice(3).join('　')}\n-# 같은 심볼 2개 **x${TWO_MATCH_PAYOUT}** · 모두 다르면 꽝(베팅 전액 손실)`;
+  const entries = Object.entries(TRIPLE_PAYOUTS).map(([sym, x]) => `${sym.repeat(3)} **×${x}**`);
+  return `### 💰 배당표\n${entries.slice(0, 3).join('　')}\n${entries.slice(3).join('　')}\n-# 같은 심볼 2개 **×${TWO_MATCH_PAYOUT}** · 모두 다르면 꽝(베팅 전액 손실)`;
 }
 
 function buildLobbyCard(lobby) {
@@ -181,8 +181,10 @@ function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multi
   const jackpot = reels[0] === reels[1] && reels[1] === reels[2] && reels[0] === '7️⃣';
   const png = renderSlot({
     reels, bet, jackpot, winIdx: matchIndices(reels),
-    right: win ? `+${net} XP  x${multiplier}` : net === 0 ? '본전  x1' : `${net} XP`,
+    right: net > 0 ? `+${net} XP` : net === 0 ? '본전' : `${net} XP`,
     rightColor: win ? '#7dff9d' : net === 0 ? '#ffe9a8' : '#ff9a9a',
+    badge: multiplier > 0 ? `×${multiplier}` : '',
+    badgeColor: jackpot ? '#ffd700' : win ? '#ffd23f' : '#c9b8a0',
   });
   return payload(card({
     color: win ? 0xFFD700 : COLORS.muted,
@@ -332,10 +334,10 @@ async function spinLobby(interaction, lobby, lobbies) {
   const resultLine =
     kind === 'triple'
       ? symbol === '7️⃣'
-        ? `🎉 **JACKPOT!** (x${multiplier})`
-        : `**${symbolLabel} 트리플 매칭!** (x${multiplier})`
+        ? `🎉 **JACKPOT!** (×${multiplier})`
+        : `**${symbolLabel} 트리플 매칭!** (×${multiplier})`
       : kind === 'two'
-        ? `🙂 **더블 매칭!** (x${multiplier})`
+        ? `🙂 **더블 매칭!** (×${multiplier})`
         : `😢 **꽝**`;
 
   const netLine = net >= 0 ? `📈 **+${net} XP**` : `📉 **${net} XP**`;
