@@ -235,11 +235,11 @@ test('카드: 컴포넌트 v2 컨테이너·썸네일 섹션·링크 버튼, 게
   const btn = c.components[1].components[0];
   assert.strictEqual(btn.style, 5);
   assert.strictEqual(btn.url, 'https://x/p');
-  assert.strictEqual(btn.label, '패치노트 보기');
+  assert.strictEqual(btn.label, '내용 보기');
 
   const m = buildPatchNotePayload({ ...game, kind: 'maintenance' }, { key: 'k', title: '정기 점검', url: 'https://x/s', at: null }).components[0].toJSON();
   assert.ok(m.components[0].components[0].content.includes('점검 공지'));
-  assert.strictEqual(m.components[1].components[0].label, '점검 공지 보기');
+  assert.strictEqual(m.components[1].components[0].label, '내용 보기');
   assert.strictEqual(m.components[0].components.length, 2); // 날짜·표시가 없으면 줄이 없다
 });
 

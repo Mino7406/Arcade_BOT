@@ -217,7 +217,7 @@ function buildPatchNotePayload(game, entry) {
     container.addTextDisplayComponents(...lines);
   }
   container.addActionRowComponents(new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel(game.kind === MAINTENANCE ? '점검 공지 보기' : '패치노트 보기').setEmoji('🔗').setURL(entry.url),
+    new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('내용 보기').setEmoji('🔗').setURL(entry.url),
   ));
   return { components: [container], flags: MessageFlags.IsComponentsV2, allowedMentions: { parse: [] } };
 }
