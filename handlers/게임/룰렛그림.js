@@ -265,24 +265,21 @@ function getBg() {
 
 // ── 변하는 부분 ────────────────────────────────────────────────
 function drawSpinningWindow(p, x, phase, reel) {
-  // 도는 릴: 칸 전체를 살짝 어둡게 칠하고, 심볼이 위에서 아래로 흘러가는 모습(작게 + 세로 속도선)을 그린다.
-  const cx = x + WIN_W / 2;
-  p.roundRect(x, WIN_Y, WIN_W, WIN_H, 10, '#efe2bc');
-  for (const lx of [x + 14, x + WIN_W - 14]) { // 속도선
-    for (let k = 0; k < 3; k++) {
-      const ly = WIN_Y + 12 + ((k * 40 + phase * 17) % (WIN_H - 40));
-      p.roundRect(lx - 1.5, ly, 3, 22, 1.5, '#d9c48c');
+  // 도는 릴: 칸 크기 그대로 심볼이 바뀌며 흐려졌다 나타났다(페이드 아웃·인) 한다. 릴마다 박자가 어긋난다.
+  const FADE = [0.5, 0.8, 0.5, 0.1]; // 프레임별 흐림 정도(0 = 또렷, 1 = 안 보임)
+  const f = FADE[(phase + reel) % FADE.length];
+  const key = SYMBOLS[(reel * 2 + phase * 5 + 1) % SYMBOLS.length];
+  const [ox, oy] = SYMBOL_OFFSET[key] || [0, 0];
+  drawSymbol(p, key, x + WIN_W / 2 + ox, WIN_CY + oy);
+  // 칸 안쪽만 칸 바탕색(크림)과 섞어 흐리게 한다.
+  const sc = p.s, bgc = [0xff, 0xf6, 0xdc];
+  const x0 = Math.round(x * sc), x1 = Math.round((x + WIN_W) * sc);
+  const y0 = Math.round(WIN_Y * sc), y1 = Math.round((WIN_Y + WIN_H) * sc);
+  for (let yy = y0 + 2; yy < y1 - 2; yy++) {
+    let i = (yy * p.w + x0 + 2) * 3;
+    for (let xx = x0 + 2; xx < x1 - 2; xx++, i += 3) {
+      for (let c = 0; c < 3; c++) p.buf[i + c] = Math.round(p.buf[i + c] * (1 - f) + bgc[c] * f);
     }
-  }
-  p.roundRect(x, WIN_Y, WIN_W, 12, 10, '#e0d0a0'); // 위아래 그늘(깊이감)
-  p.roundRect(x, WIN_Y + WIN_H - 12, WIN_W, 12, 10, '#e0d0a0');
-  const STEP = 56, shift = (phase * 23) % STEP;
-  for (let k = -2; k <= 2; k++) {
-    const y = WIN_CY + shift + k * STEP - STEP / 2;
-    if (Math.abs(y - WIN_CY) > 31) continue; // 칸 밖으로 삐져나오는 심볼은 그리지 않는다
-    const key = SYMBOLS[(((reel * 2 + phase - k) % SYMBOLS.length) + SYMBOLS.length) % SYMBOLS.length];
-    const [ox, oy] = SYMBOL_OFFSET[key] || [0, 0];
-    drawSymbol(p, key, cx + ox * 0.4, y + oy * 0.4, 0.4);
   }
 }
 
