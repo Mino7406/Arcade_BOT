@@ -1267,4 +1267,5 @@ module.exports = {
   forceSpawnRaid,
   forceEndRaid,
   effectLines, // 테스트용(전투 화면 상태 줄)
+  recruitView, battleView, endView, buildHelpView, // 테스트용(예시 페이지가 화면을 그릴 때)
 };

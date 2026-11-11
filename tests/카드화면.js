@@ -224,6 +224,52 @@ async function buildScreens() {
   add('관리 · 안내 패널', '렐름 멤버 명단', '', mark.buildRealmRosterMessagePayload([{ discordName: '지수', nickname: 'Steve_7406' }, { discordName: '하늘', nickname: 'Alex_sky' }, { discordName: '도윤', nickname: 'Dream_Yoon' }]));
   add('관리 · 안내 패널', '코블몬 안내 패널', '', cob.buildCobblemonPanelPayload());
 
+  // ── 레이드 (기존 디자인 유지 — 그림 + 글자 + 버튼) ───────────────────────
+  const raidMod = req('handlers/레이드/index.js');
+  const raidBattle = req('handlers/레이드/전투.js');
+  const { MONSTERS: raidMonsters, ROLE_ORDER: raidRoles, createBattle, resolveTurn } = raidBattle;
+  const raidParty = n => raidRoles.slice(0, n).map((role, i) => ({ userId: String(100 + i), name: ['민호', '지수', '하늘', '도윤'][i], role }));
+  const rf = p => ({ files: png(p.files) });
+  const raidState = (monster, partyN, extra = {}) => ({
+    client: null, monster, guildId: '1', channelId: '2', phase: 'recruit', party: raidParty(partyN),
+    recruitEndsAt: Date.now() + 9 * 60e3, battle: null, battleEndsAt: 0, turnEndsAt: 0, freezesXp: true, hasImage: false, ...extra,
+  });
+  for (const m of raidMonsters) {
+    const rr = raidState(m, 2);
+    const pr = await raidMod.recruitView(rr);
+    add('레이드', `${m.name} 출현 (모집 중)`, '파티 모집 — 역할 버튼 · 바로 시작 · 플레이 방법', pr, rf(pr));
+  }
+  const m0 = raidMonsters.find(m => m.id === 'slime') || raidMonsters[0];
+  const startBattle = (monster, n = 4) => {
+    const rr = raidState(monster, n);
+    rr.phase = 'battle';
+    rr.battle = createBattle(monster, rr.party, Math.random, { minParty: 1 });
+    rr.battleStartedAt = Date.now() - 5 * 60e3;
+    rr.battleEndsAt = Date.now() + 15 * 60e3;
+    rr.turnEndsAt = Date.now() + 25e3;
+    return rr;
+  };
+  const rb = startBattle(m0);
+  const pb = await raidMod.battleView(rb);
+  add('레이드', '전투 — 행동 선택', '그림 + 선택 현황 · 행동 버튼', pb, rf(pb));
+  rb.battle.members[0].choice = 'attack'; rb.battle.members[1].choice = 'guard';
+  const pb2 = await raidMod.battleView(rb);
+  add('레이드', '전투 — 일부 선택함', '', pb2, rf(pb2));
+  resolveTurn(rb.battle); rb.showingResult = true;
+  const pb3 = await raidMod.battleView(rb);
+  add('레이드', '전투 — 턴 결과', '버튼이 꺼지고 "TURN N 종료" 띠', pb3, rf(pb3));
+  rb.showingResult = false; rb.battle.hp = Math.floor(rb.battle.maxHp * 0.3); rb.battle.rage = true;
+  const pb4 = await raidMod.battleView(rb);
+  add('레이드', '전투 — 분노 상태', '', pb4, rf(pb4));
+  const endR = (outcome, rewards) => { const rr = startBattle(m0); rr.phase = 'ended'; rr.endedAt = Date.now(); rr.frozenAt = Date.now() - 20 * 60e3; if (outcome === 'clear') rr.battle.hp = 0; return raidMod.endView(rr, outcome, rewards); };
+  const ec = await endR('clear', [{ userId: '100', xp: 150, mvp: true }, { userId: '101', xp: 100, mvp: false }]);
+  add('레이드', '종료 — 토벌 성공', 'MVP · 보상', ec, rf(ec));
+  for (const [oc, label] of [['wipe', '파티 전멸'], ['timeout', '시간 초과'], ['noshow', '아무도 안 옴'], ['admin', '관리자 종료']]) {
+    const pe = await endR(oc, []);
+    add('레이드', `종료 — ${label}`, '', pe, rf(pe));
+  }
+  add('레이드', '❔ 플레이 방법', '본인에게만 보이는 안내', raidMod.buildHelpView(m0));
+
   return screens;
 }
 
