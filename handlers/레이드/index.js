@@ -396,7 +396,7 @@ function endNoticeDetail(r, deducted) {
 function buildEndNoticePayload({ kind, xp, details = [] }) {
   const footer = details.join('\n-# ') || undefined; // footer 는 첫 줄에만 '-# '가 붙으므로 줄마다 직접 붙인다
   return kind === 'penalty'
-    ? cardPayload(card({ color: 'err', header: '☠️ XP를 잃어버렸습니다', blocks: [`모든 유저의 **${xp} XP**를 잃어버렸습니다...`], footer }))
+    ? cardPayload(card({ color: 'err', header: `☠️ 모든 유저의 **${xp} XP**를 잃어버렸습니다...`, footer }))
     : cardPayload(card({ color: 'ok', header: '🔧 XP 시스템 복구 완료', footer }));
 }
 // 이름 끝 글자 받침에 따라 '이'/'가'를 고른다(한글이 아니면 '이(가)')
