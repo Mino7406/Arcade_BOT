@@ -21,6 +21,7 @@ const {
   ThumbnailBuilder,
   MessageFlags,
   ComponentType,
+  ActionRowBuilder,
 } = require('discord.js');
 
 const V2_FLAG = MessageFlags.IsComponentsV2;
@@ -110,6 +111,8 @@ function toneOf(content) {
  *                                   {text, button} = 글 오른쪽에 버튼 하나가 붙는 줄(일시정지 같은 중요 버튼용),
  *                                   {rows} = 본문 중간에 들어가는 버튼 줄
  * @param {string} [o.image]         본문 아래 큰 그림 URL(attachment://파일명 가능)
+ * @param {ButtonBuilder} [o.headerButton] 제목 줄 오른쪽에 붙는 버튼(공유하기 같은 부가 기능). thumb 과 같이 못 씀
+ * @param {ButtonBuilder} [o.footerButton] 맨 아래 안내 줄 오른쪽에 붙는 버튼(취소·포기·관리 같은 보조 기능). footer 가 있어야 함
  * @param {string} [o.footer]        맨 아래 작은 회색 줄(`-# ` 자동)
  * @param {Array} [o.rows]           카드 안(맨 아래)에 넣을 ActionRow 목록
  */
@@ -128,6 +131,8 @@ function card(o = {}) {
       const thumb = new ThumbnailBuilder().setURL(o.thumb);
       if (o.thumbAlt) thumb.setDescription(o.thumbAlt);
       container.addSectionComponents(new SectionBuilder().addTextDisplayComponents(...head).setThumbnailAccessory(thumb));
+    } else if (o.headerButton) {
+      container.addSectionComponents(new SectionBuilder().addTextDisplayComponents(...head).setButtonAccessory(o.headerButton));
     } else {
       container.addTextDisplayComponents(...head);
     }
@@ -165,7 +170,11 @@ function card(o = {}) {
 
   if (o.footer) {
     if (!first) container.addSeparatorComponents(divider());
-    container.addTextDisplayComponents(text(`-# ${o.footer}`));
+    if (o.footerButton) {
+      container.addSectionComponents(new SectionBuilder().addTextDisplayComponents(text(`-# ${o.footer}`)).setButtonAccessory(o.footerButton));
+    } else {
+      container.addTextDisplayComponents(text(`-# ${o.footer}`));
+    }
     first = false;
   }
 
@@ -176,6 +185,38 @@ function card(o = {}) {
   }
 
   return container;
+}
+
+/**
+ * 버튼 줄(ActionRowBuilder 목록)에서 customId 가 re 에 맞는 버튼 하나를 뽑아낸다.
+ * 뽑고 남은 버튼들로 줄을 다시 만들어 돌려준다(빈 줄은 없앰). 줄 오른쪽에 따로 둘 버튼을 고를 때 쓴다.
+ * @returns {{ button: ButtonBuilder|null, rows: ActionRowBuilder[] }}
+ */
+function pullButton(rows, re) {
+  let button = null;
+  const rest = [];
+  for (const row of [].concat(rows || []).filter(Boolean)) {
+    const keep = [];
+    for (const btn of row.components) {
+      const id = btn.data?.custom_id || '';
+      if (!button && re.test(id)) button = btn;
+      else keep.push(btn);
+    }
+    if (keep.length > 0) rest.push(new ActionRowBuilder().addComponents(...keep));
+  }
+  return { button, rows: rest };
+}
+
+// card() 에 펼쳐 넣는 도우미: re 에 맞는 버튼을 맨 아래 안내 줄 오른쪽(footerButton)으로 뺀다.
+function footerSide(rows, re) {
+  const r = pullButton(rows, re);
+  return { footerButton: r.button || undefined, rows: r.rows };
+}
+
+// 같은 방식으로 제목 줄 오른쪽(headerButton)으로 뺀다.
+function headerSide(rows, re) {
+  const r = pullButton(rows, re);
+  return { headerButton: r.button || undefined, rows: r.rows };
 }
 
 /**
@@ -230,6 +271,7 @@ function hasCustomId(components, prefix) {
   for (const c of components || []) {
     if (typeof c.customId === 'string' && c.customId.startsWith(prefix)) return true;
     if (c.components && hasCustomId(c.components, prefix)) return true;
+    if (c.accessory && hasCustomId([c.accessory], prefix)) return true; // 섹션 오른쪽 버튼
   }
   return false;
 }
@@ -297,6 +339,9 @@ module.exports = {
   menu,
   asEphemeral,
   withTopRows,
+  pullButton,
+  footerSide,
+  headerSide,
   hasCustomId,
   messageText,
   notice,

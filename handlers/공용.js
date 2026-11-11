@@ -21,7 +21,7 @@ const { KST_OFFSET_MS } = require('./시간');
 const { ADMIN_IDS, STEAM_EMOJI_ID } = require('../config');
 const { logSystem, logError, userLabel } = require('./로그');
 const { writeJsonIfChanged } = require('./저장');
-const { card, payload, text, messageText, COLORS, clipLines, emojiUrl, customEmojiId } = require('./카드');
+const { card, payload, text, messageText, footerSide, COLORS, clipLines, emojiUrl, customEmojiId } = require('./카드');
 
 // 내전(naejeon)/모집(mojip) 두 시스템이 공유하는 게임 → 역할 이름 매핑.
 // (역할 멘션 대상 채널이 있으면 해당 역할을 핑한다.)
@@ -617,7 +617,7 @@ function buildMatchCard({ label, data, participants, closed = false, teams = nul
       ...(teams ? matchTeamBlocks(participants, teams) : [matchParticipantsBlock(participants, max)]),
     ],
     footer: closed ? `🔒 마감된 ${label}입니다.` : isFull ? '✅ 모집이 완료되었습니다.' : '✅ 버튼을 눌러 참가하세요!',
-    rows,
+    ...footerSide(rows, /:manage$/), // ⚙️ 관리는 안내 줄 오른쪽으로, 참가하기는 아래 줄에 단독
   });
 }
 

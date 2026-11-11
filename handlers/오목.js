@@ -23,7 +23,7 @@ const {
   WAGER_XP, BOT_WIN_XP_MIN, BOT_WIN_XP_MAX, rollBotWinXp,
 } = require('./봇전한도');
 const { displayNameFromInteraction } = require('./이름');
-const { card, payload, notice, text, withTopRows, COLORS } = require('./카드');
+const { card, payload, notice, text, withTopRows, COLORS, footerSide } = require('./카드');
 const { logGameResult, logError, userLabel } = require('./로그');
 
 const N = 15;
@@ -566,7 +566,7 @@ function buildGameCard(game) {
     image: 'attachment://omok.png',
     footer: game.status !== 'finished' ? `⏰ ${TURN_MS / 60000}분 안에 두지 않으면 시간 초과로 종료됩니다.` : undefined,
     // 진행 중에는 포기 버튼이 카드 안에 들어간다. 종료 후 재대결 줄은 카드 밖(withTopRows로 따로 뗄 수 있게).
-    rows: game.status === 'finished' ? [] : buildPlayingComponents(game),
+    ...(game.status === 'finished' ? {} : footerSide(buildPlayingComponents(game), /^omok:resign:/)), // 포기는 안내 줄 오른쪽으로
   });
 }
 
@@ -716,7 +716,7 @@ function buildLobbyCard(game) {
         `• 봇전 보상은 하루 최대 ${DAILY_BOT_MATCH_XP_CAP} XP까지만 받을 수 있습니다.`,
     ],
     footer: '최소 2명이 참가해야 시작할 수 있습니다.',
-    rows: buildLobbyComponents(game),
+    ...footerSide(buildLobbyComponents(game), /^omok:cancel:/),
   });
 }
 

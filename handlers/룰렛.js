@@ -9,7 +9,7 @@ const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp, isMinigam
 const { kstDateString, timeUntilKstMidnight } = require('./시간');
 const { logSystem, logAction, logError, userLabel } = require('./로그');
 const { writeJsonIfChanged } = require('./저장');
-const { card, payload, notice, COLORS } = require('./카드');
+const { card, payload, notice, COLORS, footerSide } = require('./카드');
 
 const ROULETTE_PATH = path.join(__dirname, '..', 'DB', 'roulette.json');
 fs.mkdirSync(path.dirname(ROULETTE_PATH), { recursive: true });
@@ -153,7 +153,7 @@ function buildLobbyCard(lobby) {
       `💰 선택한 베팅　${betLine}\n📊 최대 베팅 가능　**${lobby.maxAvailable} XP**`,
     ],
     footer: '⏰ 60초 안에 돌리지 않으면 자동으로 취소됩니다.',
-    rows: buildLobbyComponents(lobby),
+    ...footerSide(buildLobbyComponents(lobby), /^roulette:cancel:/),
   });
 }
 

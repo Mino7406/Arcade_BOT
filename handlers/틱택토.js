@@ -4,7 +4,7 @@ const {
   ButtonStyle,
   MessageFlags,
 } = require('discord.js');
-const { card, payload, notice, text, withTopRows, COLORS } = require('./카드');
+const { card, payload, notice, text, withTopRows, COLORS, footerSide } = require('./카드');
 const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp, isMinigameXpFrozen, isRaidXpFrozen, isUserXpFrozen } = require('./레벨링');
 const {
   getRemainingBotXp, addBotMatchXp, DAILY_BOT_MATCH_XP_CAP, timeUntilKstMidnight,
@@ -223,7 +223,7 @@ function buildLobbyCard(game) {
         `• 봇전 보상은 하루 최대 ${DAILY_BOT_MATCH_XP_CAP} XP까지만 받을 수 있습니다.`,
     ],
     footer: '최소 2명이 참가해야 시작할 수 있습니다.',
-    rows: buildLobbyComponents(game),
+    ...footerSide(buildLobbyComponents(game), /^ttt:cancel:/), // 취소는 안내 줄 오른쪽으로
   });
 }
 

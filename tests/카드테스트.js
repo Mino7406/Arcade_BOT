@@ -112,6 +112,7 @@ function rowsIn(list, acc = []) {
     const msg = { components: [{ components: [{ components: [{ customId: 'ranking:share:1' }] }] }] };
     assert.strictEqual(card.hasCustomId(msg.components, 'ranking:share:'), true);
     assert.strictEqual(card.hasCustomId(msg.components, 'nope:'), false);
+    assert.strictEqual(card.hasCustomId([{ components: [{ accessory: { customId: 'ranking:share:2' } }] }], 'ranking:share:'), true, '섹션 오른쪽 버튼도 찾아야 함');
   });
 
   console.log(`\n카드 테스트 — 통과 ${pass} · 실패 ${fail}`);

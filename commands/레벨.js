@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const { getXp, levelFromXp, buildProgressBar } = require('../handlers/레벨링');
 const { displayNameFromMember } = require('../handlers/이름');
-const { card, payload, notice, COLORS } = require('../handlers/카드');
+const { card, payload, notice, COLORS, pullButton } = require('../handlers/카드');
 
 // rows: 카드 안에 넣을 버튼 줄(나에게만 보이는 화면에는 공유하기 버튼, 공개 게시에는 없음)
 function buildLevelPayload(guildId, targetUser, displayName, rows = []) {
@@ -9,6 +9,7 @@ function buildLevelPayload(guildId, targetUser, displayName, rows = []) {
   const { level, currentLevelXp, neededXp } = levelFromXp(xp);
   const bar = buildProgressBar(currentLevelXp, neededXp);
 
+  const share = pullButton(rows, /^level:share:/);
   return payload(card({
     color: COLORS.info,
     header: displayName,
@@ -16,9 +17,9 @@ function buildLevelPayload(guildId, targetUser, displayName, rows = []) {
     thumb: targetUser.displayAvatarURL({ size: 256 }),
     thumbAlt: displayName,
     blocks: [
-      `## LEVEL ${level}\n${bar}\n**${currentLevelXp} / ${neededXp}** XP　(누적 \`${xp}\` XP)`,
+      { text: `## LEVEL ${level}\n${bar}\n**${currentLevelXp} / ${neededXp}** XP　(누적 \`${xp}\` XP)`, ...(share.button ? { button: share.button } : {}) },
     ],
-    rows,
+    rows: share.rows,
   }));
 }
 

@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { card, payload, notice, hasCustomId, COLORS } = require('../handlers/카드');
+const { card, payload, notice, hasCustomId, COLORS, headerSide } = require('../handlers/카드');
 const { getLeaderboard, getLeaderboardSize, buildProgressBar } = require('../handlers/레벨링');
 
 const PAGE_SIZE = 5;
@@ -103,7 +103,7 @@ async function buildRankingView(guild, page, includeShare = true) {
     header: '🏆 서버 랭킹',
     sub: [`${clampedPage} / ${totalPages} 페이지`, `전체 ${total}명`],
     blocks,
-    rows: buildComponents(clampedPage, totalPages, includeShare),
+    ...headerSide(buildComponents(clampedPage, totalPages, includeShare), /^ranking:share:/), // 공유하기는 제목 줄 오른쪽으로
   });
 
   return { payload: payload(rankingCard) };

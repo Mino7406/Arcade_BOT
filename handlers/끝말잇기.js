@@ -10,7 +10,7 @@ const {
   WAGER_XP, BOT_WIN_XP_MIN, BOT_WIN_XP_MAX, rollBotWinXp,
 } = require('./봇전한도');
 const { displayNameFromInteraction } = require('./이름');
-const { card, payload, notice, text, withTopRows, COLORS, notice: quick } = require('./카드');
+const { card, payload, notice, text, withTopRows, COLORS, notice: quick, footerSide } = require('./카드');
 const { logGameResult, logError } = require('./로그');
 
 const TURN_MS  = 20_000;
@@ -292,7 +292,7 @@ function buildWaitingCard(game) {
         `• 봇전 보상은 하루 최대 ${DAILY_BOT_MATCH_XP_CAP} XP까지만 받을 수 있습니다.`,
     ],
     footer: '최소 2명이 참가해야 시작할 수 있습니다.',
-    rows: buildWaitingComponents(game),
+    ...footerSide(buildWaitingComponents(game), /^wc:cancel:/),
   });
 }
 
@@ -319,7 +319,7 @@ function buildPlayingCard(game, note) {
       `### 📝 최근 단어\n${recentWords}`,
     ],
     footer: `⏰ ${TURN_SEC}초 안에 입력하지 않으면 시간 초과로 종료됩니다.`,
-    rows: buildPlayingComponents(game),
+    ...footerSide(buildPlayingComponents(game), /^wc:giveup:/), // 포기는 안내 줄 오른쪽으로
   });
 }
 

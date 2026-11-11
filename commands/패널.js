@@ -13,7 +13,7 @@ const {
 const { ADMIN_IDS, AUTO_CLOSE_DELAY_MS, disarmAutoEnd, clearNotifyTimer, deleteMentionMessage, announceMatchCompletionXp, getCancelledDeletions } = require('../handlers/공용');
 // 끝말잇기/틱택토/레벨/랭킹은 이 채널(놀이터)에서만 사용 가능.
 const { PLAYGROUND_CHANNEL_ID } = require('../config');
-const { card, payload, menu, COLORS, notice: quick } = require('../handlers/카드');
+const { card, payload, menu, footerSide, COLORS, notice: quick } = require('../handlers/카드');
 const { buildRealmPanelPayload } = require('../forms/마크');
 const { buildCobblemonPanelPayload, rememberCobblemonPanel } = require('../forms/코블몬');
 
@@ -139,7 +139,7 @@ function buildSetupPanelPayload(interaction) {
       '### 📖 명령어가 궁금하신가요?\n**명령어 보기** 버튼을 누르면 전체 명령어 목록을 바로 확인할 수 있어요.',
     ],
     footer: '버튼 말고도 해당 채널에서 명령어로도 사용 가능합니다.',
-    rows: [row1, row2],
+    ...footerSide([row1, row2], /^recruit:관리$/), // 관리자용 ⚙️ 관리는 안내 줄 오른쪽으로
   });
 
   const playground = card({
