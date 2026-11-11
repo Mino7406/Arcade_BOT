@@ -7,6 +7,7 @@ const path = require('path');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = require('discord.js');
 const { renderSlot, idleImage } = require('./룰렛그림');
 const { applyXp, getXp, levelFromXp, isLevelsLoaded, isExcludedGuild, announceLevelUp, isMinigameXpFrozen, isRaidXpFrozen } = require('../레벨/레벨링');
+const { isTestGuild } = require('../../config');
 const { kstDateString, timeUntilKstMidnight } = require('../공통/시간');
 const { logSystem, logAction, logError, userLabel } = require('../공통/로그');
 const { writeJsonIfChanged } = require('../공통/저장');
@@ -236,16 +237,22 @@ function buildLobbyComponents(lobby) {
   return [buildBetRow(lobby), buildControlRow(lobby)];
 }
 
+// 베팅에 쓸 수 있는 XP: 평소엔 현재 레벨 안 XP, 테스트 서버에서는 항상 최대 베팅 한도.
+function availableXp(guildId, userId) {
+  if (isTestGuild(guildId)) return MAX_BET;
+  return levelFromXp(getXp(guildId, userId)).currentLevelXp;
+}
+
 async function startRouletteCommand(interaction) {
   const guildId = interaction.guildId;
   const userId = interaction.user.id;
 
-  if (isExcludedGuild(guildId)) {
+  if (isExcludedGuild(guildId) && !isTestGuild(guildId)) {
     await interaction.reply(notice('⚠️ **이 서버에서는 룰렛을 이용할 수 없습니다.**', { ephemeral: true }));
     return;
   }
 
-  if (hasPlayedToday(guildId, userId)) {
+  if (!isTestGuild(guildId) && hasPlayedToday(guildId, userId)) {
     logAction(interaction, '룰렛', '일일 1회 제한으로 거부됨');
     await interaction.reply(notice(`⏳ **오늘은 이미 룰렛을 돌렸습니다.**\n다음 판까지 약 ${timeUntilKstMidnight()} 남았어요.`, { ephemeral: true }));
     return;
@@ -258,7 +265,8 @@ async function startRouletteCommand(interaction) {
     return;
   }
 
-  const currentLevelXp = levelFromXp(getXp(guildId, userId)).currentLevelXp;
+  // 테스트 서버에서는 XP 가 없어도, 하루 1회 제한 없이 최대 베팅까지 걸어 볼 수 있다(XP 는 실제로 바뀌지 않는다).
+  const currentLevelXp = availableXp(guildId, userId);
   if (currentLevelXp < MIN_BET) {
     logAction(interaction, '룰렛', `베팅 부족으로 거부됨 — 레벨 안 XP ${currentLevelXp}, 누적 ${getXp(guildId, userId)}, 서버 ${guildId}`);
     // 레벨이 내려가지 않도록 "현재 레벨 안에서 쌓은 XP"만 걸 수 있다. 누적 XP가 많아도(레벨업 직후·레벨 설정 직후) 0일 수 있어 이유를 같이 알려 준다.
@@ -310,25 +318,26 @@ async function spinLobby(interaction, lobby, lobbies) {
   }
 
   // 로비가 열려있던 사이(다른 곳에서) 이미 오늘 플레이했거나 XP가 줄어들었을 수 있으므로 재검증.
-  if (hasPlayedToday(lobby.guildId, lobby.userId)) {
+  if (!isTestGuild(lobby.guildId) && hasPlayedToday(lobby.guildId, lobby.userId)) {
     await interaction.editReply(notice('⏳ **오늘은 이미 룰렛을 돌렸습니다.**'));
     return;
   }
-  const currentLevelXp = levelFromXp(getXp(lobby.guildId, lobby.userId)).currentLevelXp;
+  const currentLevelXp = availableXp(lobby.guildId, lobby.userId);
   const bet = Math.min(lobby.bet, currentLevelXp);
   if (bet < MIN_BET) {
     await interaction.editReply(notice(`⚠️ **베팅 가능한 XP가 부족해졌습니다.**\n-# 현재 레벨 안 XP ${currentLevelXp} · 최소 ${MIN_BET} XP 필요`));
     return;
   }
 
-  markPlayedToday(lobby.guildId, lobby.userId);
+  if (!isTestGuild(lobby.guildId)) markPlayedToday(lobby.guildId, lobby.userId);
 
   const reels = [spinReel(), spinReel(), spinReel()];
   const { multiplier, kind, symbol } = resolvePayout(reels);
   const payout = Math.round(bet * multiplier);
   const net = payout - bet;
 
-  const result = applyXp(lobby.guildId, lobby.userId, net, `룰렛 (베팅 ${bet}, ${kind === 'triple' ? `${symbol} 트리플` : kind === 'two' ? '더블' : '꽝'} x${multiplier}, 지급 ${payout})`);
+  // 테스트 서버는 XP 시스템이 꺼져 있으므로 정산하지 않고 연출만 보여 준다.
+  const result = isTestGuild(lobby.guildId) ? { leveledUp: false } : applyXp(lobby.guildId, lobby.userId, net, `룰렛 (베팅 ${bet}, ${kind === 'triple' ? `${symbol} 트리플` : kind === 'two' ? '더블' : '꽝'} x${multiplier}, 지급 ${payout})`);
 
   const symbolLabel = symbol ? `${symbol} ${SYMBOL_NAMES[symbol]}` : '';
 
