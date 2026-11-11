@@ -265,20 +265,37 @@ function getBg() {
 
 // ── 변하는 부분 ────────────────────────────────────────────────
 function drawSpinningWindow(p, x, phase, reel) {
-  // 도는 릴: 칸 크기 그대로 심볼이 바뀌며 흐려졌다 나타났다(페이드 아웃·인) 한다. 릴마다 박자가 어긋난다.
-  const FADE = [0.5, 0.8, 0.5, 0.1]; // 프레임별 흐림 정도(0 = 또렷, 1 = 안 보임)
-  const f = FADE[(phase + reel) % FADE.length];
-  const key = SYMBOLS[(reel * 2 + phase * 5 + 1) % SYMBOLS.length];
-  const [ox, oy] = SYMBOL_OFFSET[key] || [0, 0];
-  drawSymbol(p, key, x + WIN_W / 2 + ox, WIN_CY + oy);
-  // 칸 안쪽만 칸 바탕색(크림)과 섞어 흐리게 한다.
-  const sc = p.s, bgc = [0xff, 0xf6, 0xdc];
+  // 도는 릴: 릴 띠(심볼 여러 개가 세로로 이어진 것)를 그리고 세로로 길게 번지게(모션 블러) 해서 빠르게 돌아가는 느낌을 낸다.
+  const sc = p.s;
+  const gap = 104; // 심볼 사이 간격(설계 좌표)
+  const shift = ((phase * 37 + reel * 53) % gap) - gap / 2;
+  for (let k = -2; k <= 2; k++) {
+    const key = SYMBOLS[(((phase * 2 + reel * 3 + k) % SYMBOLS.length) + SYMBOLS.length) % SYMBOLS.length];
+    const [ox, oy] = SYMBOL_OFFSET[key] || [0, 0];
+    drawSymbol(p, key, x + WIN_W / 2 + ox, WIN_CY + oy + shift + k * gap);
+  }
+  // 칸 밖으로 삐져나온 부분은 고정 배경으로 되돌린다(칸 위·아래 + 칸 좌우 틀).
+  const base = getBg(), W2 = p.w;
   const x0 = Math.round(x * sc), x1 = Math.round((x + WIN_W) * sc);
   const y0 = Math.round(WIN_Y * sc), y1 = Math.round((WIN_Y + WIN_H) * sc);
-  for (let yy = y0 + 2; yy < y1 - 2; yy++) {
-    let i = (yy * p.w + x0 + 2) * 3;
-    for (let xx = x0 + 2; xx < x1 - 2; xx++, i += 3) {
-      for (let c = 0; c < 3; c++) p.buf[i + c] = Math.round(p.buf[i + c] * (1 - f) + bgc[c] * f);
+  for (let yy = 0; yy < p.h; yy++) {
+    for (let xx = x0 - Math.round(4 * sc); xx < x1 + Math.round(4 * sc); xx++) {
+      if (xx >= x0 && xx < x1 && yy >= y0 && yy < y1) continue;
+      const i = (yy * W2 + xx) * 3;
+      p.buf[i] = base[i]; p.buf[i + 1] = base[i + 1]; p.buf[i + 2] = base[i + 2];
+    }
+  }
+  // 칸 안쪽을 세로로 번지게: 열마다 앞뒤 R 픽셀 평균(윗·아랫 가장자리는 칸 안 픽셀만 사용).
+  const R = Math.round(26 * sc), h = y1 - y0;
+  const col = new Float32Array(h * 3);
+  for (let xx = x0; xx < x1; xx++) {
+    for (let r = 0; r < h; r++) { const i = ((y0 + r) * W2 + xx) * 3; col[r * 3] = p.buf[i]; col[r * 3 + 1] = p.buf[i + 1]; col[r * 3 + 2] = p.buf[i + 2]; }
+    for (let r = 0; r < h; r++) {
+      const a = Math.max(0, r - R), b = Math.min(h - 1, r + R), n = b - a + 1;
+      let sr = 0, sg = 0, sb = 0;
+      for (let q = a; q <= b; q++) { sr += col[q * 3]; sg += col[q * 3 + 1]; sb += col[q * 3 + 2]; }
+      const i = ((y0 + r) * W2 + xx) * 3;
+      p.buf[i] = sr / n; p.buf[i + 1] = sg / n; p.buf[i + 2] = sb / n;
     }
   }
 }
