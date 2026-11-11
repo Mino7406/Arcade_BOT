@@ -2,7 +2,6 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  MessageFlags,
 } = require('discord.js');
 const { card, payload, notice, text, withTopRows, COLORS, footerSide } = require('../공통/카드');
 const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp, isMinigameXpFrozen, isRaidXpFrozen, isUserXpFrozen } = require('../레벨/레벨링');

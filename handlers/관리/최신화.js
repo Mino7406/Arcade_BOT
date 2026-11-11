@@ -147,4 +147,4 @@ async function refreshPostedMessages(client, { includeCobblemon = false, include
   return { summary, counts };
 }
 
-module.exports = { refreshPostedMessages, rememberRecruitPanel, RECRUIT_TITLE };
+module.exports = { refreshPostedMessages, rememberRecruitPanel, isRecruitPanelMessage, RECRUIT_TITLE };

@@ -1,5 +1,4 @@
 const {
-  SlashCommandBuilder,
   ActionRowBuilder,
   UserSelectMenuBuilder,
   ButtonBuilder,
@@ -7,7 +6,6 @@ const {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
-  MessageFlags,
 } = require('discord.js');
 const { ADMIN_IDS } = require('../../config');
 const { buildAdminHome, backRow: adminBackRow } = require('./홈');

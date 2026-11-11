@@ -5,7 +5,6 @@ const {
   ButtonBuilder,
   ButtonStyle,
   AttachmentBuilder,
-  MessageFlags,
 } = require('discord.js');
 const { writeJsonIfChanged } = require('../../handlers/공통/저장');
 const { logSystem, logError } = require('../../handlers/공통/로그');

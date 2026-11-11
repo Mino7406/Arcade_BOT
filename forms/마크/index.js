@@ -54,7 +54,7 @@ function logRealmDmFailure(err, applicant) {
   }
 }
 
-const { card, payload, menu, asEphemeral, messageText, COLORS, notice: quick } = require('../../handlers/공통/카드');
+const { card, payload, menu, asEphemeral, messageText, notice: quick } = require('../../handlers/공통/카드');
 
 const REALM_COLOR = 0x57F287;
 const PENDING_COLOR = 0xF0B232;
@@ -460,6 +460,7 @@ module.exports = {
   refreshRealmPanelMessage,
   updateRealmRosterInPlace,
   buildRealmResultDm, // 화면 모음·테스트용
+  readRealmReview,
 };
 
 // ── "🏰 신청하기" 버튼 → 신청서 모달 / "<:Emerald:1544331499976007810> 승인"·"❌ 거절" 처리 ('realm:' 프리픽스) ──

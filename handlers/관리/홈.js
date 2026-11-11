@@ -2,7 +2,7 @@
 // 예전에는 /xp, /퀴즈, /패널이 따로 있었다. 이제 /관리 하나로 열고, 각 기능 화면은 "↩️ 메뉴로"로 이 홈에 돌아온다.
 // 홈에서 자주 쓰는 스위치(소식 알림 일시정지 등)는 줄 오른쪽 버튼으로 바로 누를 수 있다.
 
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { ADMIN_IDS } = require('../../config');
 const { card, payload, asEphemeral, notice, COLORS } = require('../공통/카드');
 const { getXpState } = require('../레벨/레벨링');

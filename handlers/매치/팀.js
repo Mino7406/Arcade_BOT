@@ -3,7 +3,6 @@ const {
   ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
-  MessageFlags,
 } = require('discord.js');
 const { buildPublicMessagePayload } = require('./내전');
 const {
@@ -11,10 +10,9 @@ const {
   getNaejeonMatches: getMatches,
   shuffleIntoTeams,
   buildTeamResultCard,
-  buildCancelledCard,
   gameHeader,
 } = require('./공용');
-const { card, notice, payload, COLORS } = require('../공통/카드');
+const { card, notice, payload } = require('../공통/카드');
 
 function buildMatchSelectMenu(matches) {
   const options = matches.map(([id, m]) => {

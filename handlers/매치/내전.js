@@ -4,7 +4,6 @@ const {
   ButtonStyle,
   StringSelectMenuBuilder,
   UserSelectMenuBuilder,
-  MessageFlags,
 } = require('discord.js');
 
 const {

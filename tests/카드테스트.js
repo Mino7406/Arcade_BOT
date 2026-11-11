@@ -115,6 +115,47 @@ function rowsIn(list, acc = []) {
     assert.strictEqual(card.hasCustomId([{ components: [{ accessory: { customId: 'ranking:share:2' } }] }], 'ranking:share:'), true, '섹션 오른쪽 버튼도 찾아야 함');
   });
 
+  // ── 옛 메시지·카드 메시지 읽기(봇이 꺼진 사이 올라간 것, 재시작 복구용) ──
+  const asMsg = (p, extra = {}) => ({ components: p.components.map(c => (c.toJSON ? c.toJSON() : c)), embeds: [], ...extra });
+  check('취소된 카드와 옛 임베드 둘 다 "🔴 취소됨"을 읽는다', () => {
+    const common = require('../handlers/매치/공용');
+    const gi = { name: '롤', emoji: '<:Lol:1510933684750913626>', color: 1 };
+    const data = { game: 'lol', gameInfo: gi, title: '롤 내전', datetime: 'x', organizer: { id: '1', displayName: 'a' } };
+    const cancelled = asMsg(card.payload(common.buildCancelledCard({ label: '내전', data, byOrganizer: true })));
+    assert.ok(card.messageText(cancelled).includes('🔴 취소됨'));
+    assert.ok(card.messageText(cancelled).split('\n').includes('# 롤 내전'), '제목 줄(# 제목)을 찾을 수 있어야 함');
+    const legacy = { components: [], embeds: [{ title: null, description: '## 롤 내전\n📊 **상태**　　🔴 취소됨', fields: [] }] };
+    assert.ok(card.messageText(legacy).includes('🔴 취소됨'));
+  });
+  check('렐름 검토: 카드·옛 임베드에서 닉네임과 신청 시각을 읽는다', () => {
+    const mark = require('../forms/마크');
+    const applicant = { id: '5', displayAvatarURL: () => 'https://x/a.png' };
+    const msg = asMsg(mark.buildRealmReviewPayload({ applicant, displayName: '지수', nickname: 'Steve_7406', appliedAt: 1_700_000_000_000, status: 'pending' }));
+    const r = mark.readRealmReview(msg);
+    assert.strictEqual(r.nickname, 'Steve_7406');
+    assert.strictEqual(r.appliedAtText, '<t:1700000000:f>');
+    const legacy = { components: [], embeds: [{ fields: [{ name: '<:Name_Tag:1544325806803652608> 닉네임', value: 'Alex' }, { name: '<:Watch:1544331505101439066> 신청 일시', value: '<t:1700000000:f>' }] }] };
+    assert.strictEqual(mark.readRealmReview(legacy).nickname, 'Alex');
+  });
+  check('게임모집 안내 패널을 카드와 옛 임베드 모두에서 알아본다', () => {
+    const { isRecruitPanelMessage, RECRUIT_TITLE } = require('../handlers/관리/최신화');
+    const panel = require('../handlers/관리/패널');
+    const msg = { author: { id: 'bot' }, ...asMsg(panel.buildSetupPanelPayload({ client: { user: { displayAvatarURL: () => 'https://x/a.png', username: 'b' } }, guild: { id: '1' } })) };
+    assert.strictEqual(isRecruitPanelMessage(msg, 'bot'), true);
+    assert.strictEqual(isRecruitPanelMessage(msg, 'other'), false, '다른 봇 메시지는 제외');
+    assert.strictEqual(isRecruitPanelMessage({ author: { id: 'bot' }, components: [], embeds: [{ title: RECRUIT_TITLE }] }, 'bot'), true);
+  });
+  check('큰 내전(참가자 60명)도 모든 화면이 한도 안', () => {
+    const { buildPublicMessagePayload } = require('../handlers/매치/내전');
+    const users = Array.from({ length: 60 }, (_, i) => ({ id: String(i), displayName: `참가자${i}` }));
+    const gameInfo = { name: '롤', emoji: '<:Lol:1510933684750913626>', color: 1 };
+    const data = { game: 'lol', gameInfo, title: 't', datetime: 'x', players: '60', description: '메모'.repeat(100), organizer: { id: '1', displayName: 'a' } };
+    for (const teams of [null, { team1: users.slice(0, 30), team2: users.slice(30) }]) {
+      const json = buildPublicMessagePayload({ data, participants: users, closed: true, teams }).components.map(c => c.toJSON());
+      assert.ok(totalText(json) <= 4000, `${totalText(json)}자`);
+    }
+  });
+
   console.log(`\n카드 테스트 — 통과 ${pass} · 실패 ${fail}`);
   process.exit(fail ? 1 : 0);
 })().catch(err => { console.error(err); process.exit(1); });

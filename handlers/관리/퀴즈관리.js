@@ -1,9 +1,13 @@
 const {
-  SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
-  ModalBuilder, TextInputBuilder, TextInputStyle,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
   MessageFlags,
 } = require('discord.js');
-const { menu, asEphemeral, notice: quick } = require('../공통/카드');
+const { menu, notice: quick } = require('../공통/카드');
 const { ADMIN_IDS } = require('../매치/공용');
 const { OWNER_IDS } = require('../../config');
 const { pauseQuiz, resumeQuiz, postCustomQuiz, getQuizStatus } = require('../게임/퀴즈');

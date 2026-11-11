@@ -1,5 +1,4 @@
 const {
-  SlashCommandBuilder,
   ActionRowBuilder,
   StringSelectMenuBuilder,
   ButtonBuilder,

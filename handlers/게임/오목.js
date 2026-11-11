@@ -15,7 +15,6 @@ const {
   ButtonBuilder,
   ButtonStyle,
   AttachmentBuilder,
-  MessageFlags,
 } = require('discord.js');
 const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp, isMinigameXpFrozen, isRaidXpFrozen, isUserXpFrozen } = require('../레벨/레벨링');
 const {

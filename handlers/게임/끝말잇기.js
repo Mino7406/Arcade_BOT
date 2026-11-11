@@ -2,7 +2,6 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  MessageFlags,
 } = require('discord.js');
 const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp, isMinigameXpFrozen, isRaidXpFrozen, isUserXpFrozen } = require('../레벨/레벨링');
 const {
@@ -10,7 +9,7 @@ const {
   WAGER_XP, BOT_WIN_XP_MIN, BOT_WIN_XP_MAX, rollBotWinXp,
 } = require('./봇전한도');
 const { displayNameFromInteraction } = require('../공통/이름');
-const { card, payload, notice, text, withTopRows, COLORS, notice: quick, footerSide } = require('../공통/카드');
+const { card, payload, notice, withTopRows, COLORS, notice: quick, footerSide } = require('../공통/카드');
 const { logGameResult, logError } = require('../공통/로그');
 
 const TURN_MS  = 20_000;

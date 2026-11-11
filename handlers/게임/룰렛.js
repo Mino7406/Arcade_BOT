@@ -4,7 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp, isMinigameXpFrozen, isRaidXpFrozen } = require('../레벨/레벨링');
 const { kstDateString, timeUntilKstMidnight } = require('../공통/시간');
 const { logSystem, logAction, logError, userLabel } = require('../공통/로그');

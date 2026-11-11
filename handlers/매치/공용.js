@@ -11,12 +11,11 @@ const {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
-  MessageFlags,
 } = require('discord.js');
 const { awardMatchCompletionXp, announceLevelUp } = require('../레벨/레벨링');
 const { KST_OFFSET_MS } = require('../공통/시간');
 const { ADMIN_IDS, STEAM_EMOJI_ID } = require('../../config');
-const { logSystem, logError, userLabel } = require('../공통/로그');
+const { logSystem, logError } = require('../공통/로그');
 const { writeJsonIfChanged } = require('../공통/저장');
 const { card, payload, text, messageText, footerSide, COLORS, clipLines, emojiUrl, customEmojiId } = require('../공통/카드');
 
