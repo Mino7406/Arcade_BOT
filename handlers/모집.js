@@ -1,6 +1,5 @@
 const {
   ActionRowBuilder,
-  EmbedBuilder,
   ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
@@ -9,12 +8,13 @@ const {
 } = require('discord.js');
 
 const {
-  ADMIN_IDS, titleHeader, markClosed, markReopened, toggleAutoCloseWhileClosed, announceMatchCompletionXp,
-  ROLE_NAMES, buildPreviewEmbed, scheduleCancelledDelete, deleteMentionMessage, AUTO_CLOSE_DELAY_MS, saveNow,
+  ADMIN_IDS, buildCancelledCard, buildMatchCard, buildMatchMessagePayload, buildPreviewPayload, markClosed, markReopened, toggleAutoCloseWhileClosed, announceMatchCompletionXp,
+  ROLE_NAMES, scheduleCancelledDelete, deleteMentionMessage, AUTO_CLOSE_DELAY_MS, saveNow,
   getClientMap, getMojipMatches: getMojips,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
   buildNotifyModal: buildNotifyModalBase, parseNotifyTime, formatNotifyTimeSmart, isNotify12HourInput, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
 } = require('./공용');
+const { notice, payload, text } = require('./카드');
 const { displayNameFromInteraction } = require('./이름');
 const { logAction, logError } = require('./로그');
 
@@ -39,38 +39,6 @@ function buildNotifyModal(msgId, notifyAt, is12h) {
   return buildNotifyModalBase('mojip', msgId, notifyAt, is12h);
 }
 
-function buildPublicEmbed(data, participants, closed = false) {
-  const { game, gameInfo, title, datetime, players, description, organizer } = data;
-  const max = parseInt(players) || 0;
-  const isFull = participants.length >= max;
-
-  const statusText = closed ? '🔒 마감됨' : isFull ? '✅ 모집 완료' : '🟢 모집 중';
-  const color = closed ? 0x57F287 : isFull ? 0x808080 : gameInfo.color;
-
-  const lines = [
-    `🎮 **게임**　　${gameInfo.name}`,
-    `📅 **일시**　　${datetime}`,
-    `👑 **주최자**　**\`${organizer.displayName}\`**`,
-    `📊 **상태**　　${statusText}`,
-  ];
-  if (data.notifyAt) lines.push(`🔔 **알림**　　${formatNotifyTimeSmart(data.notifyAt, data.notify12h)}`);
-
-  const participantText = participants.length > 0
-    ? `\`\`\`\n${participants.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n')}\n\`\`\``
-    : '*아직 참가자가 없습니다.*';
-
-  const embed = new EmbedBuilder()
-    .setColor(color)
-    .setDescription(`${titleHeader(game, gameInfo, title)}\n${lines.join('\n')}`);
-
-  if (description) embed.addFields({ name: '📝 메모', value: description });
-
-  return embed
-    .addFields({ name: `👥 참가자  ${participants.length} / ${max}명`, value: participantText })
-    .setFooter({ text: closed ? '🔒 마감된 모집입니다.' : isFull ? '✅ 모집이 완료되었습니다.' : '✅ 버튼을 눌러 참가하세요!' })
-    .setTimestamp();
-}
-
 function buildPublicComponents(participants, maxPlayers, closed = false) {
   const buttons = [
     new ButtonBuilder()
@@ -85,14 +53,14 @@ function buildPublicComponents(participants, maxPlayers, closed = false) {
   return [new ActionRowBuilder().addComponents(...buttons)];
 }
 
+// 공개 게시 메시지: 카드 한 장. 버튼은 카드 안에 들어간다.
 function buildMojipMessagePayload(match) {
   const maxPlayers = parseInt(match.data.players) || 0;
-  return {
-    embeds: [buildPublicEmbed(match.data, match.participants, match.closed)],
-    components: buildPublicComponents(match.participants, maxPlayers, match.closed),
-    allowedMentions: { parse: [] },
-    attachments: [], // 예전 썸네일 기능 시절 붙었던 첨부파일이 남아있는 메시지를 정리
-  };
+  return buildMatchMessagePayload({
+    label: '모집',
+    match,
+    rows: buildPublicComponents(match.participants, maxPlayers, match.closed),
+  });
 }
 
 function buildLeaveButton(msgId) {
@@ -231,13 +199,7 @@ async function handleMojipModal(interaction) {
   const data = { game, gameInfo, title, datetime, players, description, autoClose: true, organizer: { id: interaction.user.id, displayName: displayNameFromInteraction(interaction) } };
   getPending(interaction.client).set(interaction.user.id, data);
 
-  await interaction.reply({
-    content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
-    embeds: [buildPreviewEmbed(data)],
-    components: buildPreviewComponents(data),
-    attachments: [],
-    flags: MessageFlags.Ephemeral,
-  });
+  await interaction.reply(buildPreviewPayload('mojip', data, { ephemeral: true }));
 }
 
 async function handleMojipEditModal(interaction) {
@@ -267,12 +229,7 @@ async function handleMojipEditModal(interaction) {
   // 미리보기의 [수정] 버튼에서 연 모달이라 update()로 그 미리보기 메시지를 바로 고친다.
   // (예전엔 처음 미리보기를 띄운 인터랙션을 보관해 editReply했는데, 토큰이 15분이면 만료돼
   //  미리보기를 오래 띄워두고 수정하면 Invalid Webhook Token(50027)으로 실패했다.)
-  await interaction.update({
-    content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
-    embeds: [buildPreviewEmbed(data)],
-    components: buildPreviewComponents(data),
-    attachments: [],
-  });
+  await interaction.update(buildPreviewPayload('mojip', data));
 }
 
 async function handleMojipButton(interaction) {
@@ -292,20 +249,18 @@ async function handleMojipButton(interaction) {
       ? interaction.guild.roles.cache.find(r => r.name === roleName)
       : null;
     getPending(interaction.client).delete(interaction.user.id);
-    const msg = await interaction.channel.send({
-      content: role ? `<@&${role.id}>` : '',
-      embeds: [buildPublicEmbed(data, participants)],
-      components: buildPublicComponents(participants, maxPlayers),
-      attachments: [],
+    const roleContent = role ? `<@&${role.id}>` : '';
+    const publishCard = buildMatchCard({ label: '모집', data, participants, rows: buildPublicComponents(participants, maxPlayers) });
+    const msg = await interaction.channel.send(payload(roleContent ? [text(roleContent), publishCard] : [publishCard], {
       allowedMentions: { roles: role ? [role.id] : [], users: [] },
-    });
+    }));
     const match = { data, participants, message: msg, closed: false, closedAt: null, mentionSent: false, guildId: interaction.guildId };
     getMojips(interaction.client).set(msg.id, match);
     saveNow(interaction.client);
     logAction(interaction, '매치 생성', `모집 '${data.title}'(${msg.id}) 공개 게시 — ${data.gameInfo?.name ?? data.game}`);
     // 게시 전 미리보기 단계에서 이미 알림 예약을 해뒀다면, 그때는 매치가 없어 타이머를 못 걸었으므로 지금 건다.
     if (data.notifyAt) armNotifyReminder(getMojips(interaction.client), msg.id, match, '모집');
-    await interaction.update({ content: '✅ **채널에 공개 게시되었습니다!**', embeds: [], attachments: [], components: [] });
+    await interaction.update(notice('✅ **채널에 공개 게시되었습니다!**'));
     return;
   }
 
@@ -362,12 +317,12 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:leave:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, components: [] });
+      await interaction.update(notice(`⚠️ **만료된 모집입니다.**`));
       return;
     }
     const idx = match.participants.findIndex(u => u.id === interaction.user.id);
     if (idx === -1) {
-      await interaction.update({ content: '⚠️ **이미 참가 취소된 상태입니다.**', components: [] });
+      await interaction.update(notice('⚠️ **이미 참가 취소된 상태입니다.**'));
       return;
     }
     match.participants.splice(idx, 1);
@@ -375,7 +330,7 @@ async function handleMojipButton(interaction) {
     const reopened = match.closed && match.participants.length < maxPlayers;
     if (reopened) markReopened(match);
     await match.message.edit(buildMojipMessagePayload(match));
-    await interaction.update({ content: '❌ **참가가 취소되었습니다.**', components: [] });
+    await interaction.update(notice('❌ **참가가 취소되었습니다.**'));
     return;
   }
 
@@ -404,7 +359,7 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:match_close:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, components: [] });
+      await interaction.update(notice(`⚠️ **만료된 모집입니다.**`));
       return;
     }
     const maxPlayers = parseInt(match.data.players) || 0;
@@ -419,20 +374,13 @@ async function handleMojipButton(interaction) {
           .setLabel('↩️ 돌아가기')
           .setStyle(ButtonStyle.Secondary),
       );
-      await interaction.update({
-        content: `⚠️ **참가자가 미달입니다.** (${match.participants.length}/${maxPlayers}명)\n그래도 마감하시겠습니까?`,
-        embeds: [], attachments: [],
-        components: [confirmRow],
-      });
+      await interaction.update(notice(`⚠️ **참가자가 미달입니다.** (${match.participants.length}/${maxPlayers}명)\n그래도 마감하시겠습니까?`, { rows: [confirmRow] }));
       return;
     }
     markClosed(getMojips(interaction.client), msgId, match, '모집', false);
     await match.message.edit(buildMojipMessagePayload(match));
     await announceMatchCompletionXp(match);
-    await interaction.update({
-      content: '✅ **모집이 마감되었습니다.**',
-      components: buildManageMenu(match, msgId),
-    });
+    await interaction.update(notice('✅ **모집이 마감되었습니다.**', { rows: buildManageMenu(match, msgId) }));
     return;
   }
 
@@ -441,16 +389,13 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:match_close_confirm:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, components: [] });
+      await interaction.update(notice(`⚠️ **만료된 모집입니다.**`));
       return;
     }
     markClosed(getMojips(interaction.client), msgId, match, '모집', false);
     await match.message.edit(buildMojipMessagePayload(match));
     await announceMatchCompletionXp(match);
-    await interaction.update({
-      content: '✅ **모집이 마감되었습니다.**',
-      components: buildManageMenu(match, msgId),
-    });
+    await interaction.update(notice('✅ **모집이 마감되었습니다.**', { rows: buildManageMenu(match, msgId) }));
     return;
   }
 
@@ -459,15 +404,12 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:match_reopen:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, components: [] });
+      await interaction.update(notice(`⚠️ **만료된 모집입니다.**`));
       return;
     }
     markReopened(match);
     await match.message.edit(buildMojipMessagePayload(match));
-    await interaction.update({
-      content: '🔓 **모집 마감이 해제되었습니다.**',
-      components: buildManageMenu(match, msgId),
-    });
+    await interaction.update(notice('🔓 **모집 마감이 해제되었습니다.**', { rows: buildManageMenu(match, msgId) }));
     return;
   }
 
@@ -476,19 +418,16 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:toggle_match_autoclose:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, components: [] });
+      await interaction.update(notice(`⚠️ **만료된 모집입니다.**`));
       return;
     }
     const enabled = isAutoDeleteExpired(match) ? true : !match.data.autoClose;
     await toggleAutoCloseWhileClosed(getMojips(interaction.client), msgId, match, '모집', enabled);
     if (!getMojips(interaction.client).has(msgId)) {
-      await interaction.update({ content: '✅ **자동 삭제 시간이 지나 모집이 삭제되었습니다.**', components: [] });
+      await interaction.update(notice('✅ **자동 삭제 시간이 지나 모집이 삭제되었습니다.**'));
       return;
     }
-    await interaction.update({
-      content: `⏰ **자동 삭제가 ${match.data.autoClose ? 'ON' : 'OFF'}으로 변경되었습니다.**`,
-      components: buildManageMenu(match, msgId),
-    });
+    await interaction.update(notice(`⏰ **자동 삭제가 ${match.data.autoClose ? 'ON' : 'OFF'}으로 변경되었습니다.**`, { rows: buildManageMenu(match, msgId) }));
     return;
   }
 
@@ -497,7 +436,7 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:match_mention:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, components: [] });
+      await interaction.update(notice(`⚠️ **만료된 모집입니다.**`));
       return;
     }
     if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
@@ -505,15 +444,15 @@ async function handleMojipButton(interaction) {
       return;
     }
     if (!match.closed) {
-      await interaction.update({ content: '⚠️ **마감된 모집에서만 사용할 수 있습니다.**', components: buildManageMenu(match, msgId) });
+      await interaction.update(notice('⚠️ **마감된 모집에서만 사용할 수 있습니다.**', { rows: buildManageMenu(match, msgId) }));
       return;
     }
     if (match.mentionSent) {
-      await interaction.update({ content: '⚠️ **이미 멘션을 보냈습니다.**', components: buildManageMenu(match, msgId) });
+      await interaction.update(notice('⚠️ **이미 멘션을 보냈습니다.**', { rows: buildManageMenu(match, msgId) }));
       return;
     }
     if (match.participants.length === 0) {
-      await interaction.update({ content: '⚠️ **참가자가 없습니다.**', components: buildManageMenu(match, msgId) });
+      await interaction.update(notice('⚠️ **참가자가 없습니다.**', { rows: buildManageMenu(match, msgId) }));
       return;
     }
     match.mentionSent = true;
@@ -526,10 +465,7 @@ async function handleMojipButton(interaction) {
       allowedMentions: { parse: ['users'] },
     });
     match.mentionMessageId = mentionMsg.id;
-    await interaction.editReply({
-      content: '📣 **참가자에게 멘션을 보냈습니다.**',
-      components: buildManageMenu(match, msgId),
-    });
+    await interaction.editReply(notice('📣 **참가자에게 멘션을 보냈습니다.**', { rows: buildManageMenu(match, msgId) }));
     return;
   }
 
@@ -538,14 +474,10 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:manage_back:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, embeds: [], attachments: [], components: [] });
+      await interaction.update(notice(`⚠️ **만료된 모집입니다.**`));
       return;
     }
-    await interaction.update({
-      content: '⚙️ **주최자 관리 메뉴**',
-      embeds: [], attachments: [],
-      components: buildManageMenu(match, msgId),
-    });
+    await interaction.update(notice('⚙️ **주최자 관리 메뉴**', { rows: buildManageMenu(match, msgId) }));
     return;
   }
 
@@ -554,7 +486,7 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:notify_set:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, components: [] });
+      await interaction.update(notice(`⚠️ **만료된 모집입니다.**`));
       return;
     }
     if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
@@ -576,11 +508,7 @@ async function handleMojipButton(interaction) {
           .setLabel('↩️ 돌아가기')
           .setStyle(ButtonStyle.Secondary),
       );
-      await interaction.update({
-        content: `🔔 **이미 알림이 예약되어 있습니다.** (${formatNotifyTimeSmart(match.data.notifyAt, match.data.notify12h)})\n수정하시겠습니까?`,
-        embeds: [], attachments: [],
-        components: [confirmRow],
-      });
+      await interaction.update(notice(`🔔 **이미 알림이 예약되어 있습니다.** (${formatNotifyTimeSmart(match.data.notifyAt, match.data.notify12h)})\n수정하시겠습니까?`, { rows: [confirmRow] }));
       return;
     }
     await interaction.showModal(buildNotifyModal(msgId, match.data.notifyAt, match.data.notify12h));
@@ -592,7 +520,7 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:notify_edit:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, components: [] });
+      await interaction.update(notice(`⚠️ **만료된 모집입니다.**`));
       return;
     }
     if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
@@ -612,7 +540,7 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:match_edit:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, components: [] });
+      await interaction.update(notice(`⚠️ **만료된 모집입니다.**`));
       return;
     }
     const editModal = buildModal(match.data.game, match.data);
@@ -626,7 +554,7 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:match_cancel:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, components: [] });
+      await interaction.update(notice(`⚠️ **만료된 모집입니다.**`));
       return;
     }
     const confirmRow = new ActionRowBuilder().addComponents(
@@ -639,11 +567,7 @@ async function handleMojipButton(interaction) {
         .setLabel('↩️ 돌아가기')
         .setStyle(ButtonStyle.Secondary),
     );
-    await interaction.update({
-      content: '⚠️ **모집을 취소하시겠습니까?**\n참가자 명단이 모두 사라지고 모집이 종료됩니다.',
-      embeds: [], attachments: [],
-      components: [confirmRow],
-    });
+    await interaction.update(notice('⚠️ **모집을 취소하시겠습니까?**\n참가자 명단이 모두 사라지고 모집이 종료됩니다.', { rows: [confirmRow] }));
     return;
   }
 
@@ -652,29 +576,19 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:match_cancel_confirm:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: '⚠️ **이미 취소된 모집입니다.**', components: [] });
+      await interaction.update(notice('⚠️ **이미 취소된 모집입니다.**'));
       return;
     }
     const cancelledByOrganizer = match.data.organizer.id === interaction.user.id;
-    const cancelledEmbed = new EmbedBuilder()
-      .setColor(0xED4245)
-      .setDescription([
-        titleHeader(match.data.game, match.data.gameInfo, match.data.title),
-        `🎮 **게임**　　${match.data.gameInfo.name}`,
-        `📅 **일시**　　${match.data.datetime}`,
-        `👑 **주최자**　**\`${match.data.organizer.displayName}\`**`,
-        `📊 **상태**　　🔴 취소됨`,
-      ].join('\n'))
-      .setFooter({ text: cancelledByOrganizer ? '❌ 주최자에 의해 모집이 취소되었습니다.' : '⚙️ 관리자에 의해 모집이 취소 처리되었습니다.' })
-      .setTimestamp();
+    const cancelledCard = buildCancelledCard({ label: '모집', data: match.data, byOrganizer: cancelledByOrganizer });
 
     logAction(interaction, '매치 취소', `모집 '${match.data.title}'(${msgId}) ${cancelledByOrganizer ? '주최자' : '관리자'}가 취소 (참가자 ${match.participants.length}명)`);
     clearNotifyTimer(match); // 취소된 매치는 알림을 보내지 않으므로 남은 예약 타이머를 취소한다.
-    await match.message.edit({ content: '', embeds: [cancelledEmbed], components: [], attachments: [], allowedMentions: { parse: [] } });
+    await match.message.edit(payload(cancelledCard, { allowedMentions: { parse: [] } }));
     getMojips(interaction.client).delete(msgId);
     await deleteMentionMessage(interaction.client, match);
     scheduleCancelledDelete(interaction.client, msgId, match.message.channelId, Date.now(), match.data.title);
-    await interaction.update({ content: '✅ **모집이 취소되었습니다.**', components: [] });
+    await interaction.update(notice('✅ **모집이 취소되었습니다.**'));
     return;
   }
 
@@ -683,7 +597,7 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:add_member:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, embeds: [], attachments: [], components: [] });
+      await interaction.update(notice(`⚠️ **만료된 모집입니다.**`));
       return;
     }
     const sel = new UserSelectMenuBuilder()
@@ -691,10 +605,7 @@ async function handleMojipButton(interaction) {
       .setPlaceholder('참가자 선택')
       .setMinValues(1)
       .setMaxValues(10);
-    await interaction.update({
-      content: '➕ **참가자 추가** - 추가할 멤버를 선택하세요.',
-      embeds: [], attachments: [],
-      components: [
+    await interaction.update(notice('➕ **참가자 추가** - 추가할 멤버를 선택하세요.', { rows: [
         new ActionRowBuilder().addComponents(sel),
         new ActionRowBuilder().addComponents(
           new ButtonBuilder()
@@ -702,8 +613,7 @@ async function handleMojipButton(interaction) {
             .setLabel('↩️ 관리로')
             .setStyle(ButtonStyle.Secondary),
         ),
-      ],
-    });
+      ] }));
     return;
   }
 
@@ -712,11 +622,11 @@ async function handleMojipButton(interaction) {
     const msgId = customId.slice('mojip:remove_member:'.length);
     const match = getMojips(interaction.client).get(msgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, embeds: [], attachments: [], components: [] });
+      await interaction.update(notice(`⚠️ **만료된 모집입니다.**`));
       return;
     }
     if (match.participants.length === 0) {
-      await interaction.update({ content: '⚠️ **참가자가 없습니다.**', embeds: [], attachments: [], components: buildManageMenu(match, msgId) });
+      await interaction.update(notice('⚠️ **참가자가 없습니다.**', { rows: buildManageMenu(match, msgId) }));
       return;
     }
     const sel = new StringSelectMenuBuilder()
@@ -725,10 +635,7 @@ async function handleMojipButton(interaction) {
       .setMinValues(1)
       .setMaxValues(Math.min(match.participants.length, 25))
       .addOptions(match.participants.slice(0, 25).map(u => ({ label: u.displayName, value: u.id })));
-    await interaction.update({
-      content: '➖ **참가자 제거** - 제거할 멤버를 선택하세요.',
-      embeds: [], attachments: [],
-      components: [
+    await interaction.update(notice('➖ **참가자 제거** - 제거할 멤버를 선택하세요.', { rows: [
         new ActionRowBuilder().addComponents(sel),
         new ActionRowBuilder().addComponents(
           new ButtonBuilder()
@@ -736,8 +643,7 @@ async function handleMojipButton(interaction) {
             .setLabel('↩️ 관리로')
             .setStyle(ButtonStyle.Secondary),
         ),
-      ],
-    });
+      ] }));
     return;
   }
 
@@ -749,12 +655,7 @@ async function handleMojipButton(interaction) {
       return;
     }
     data.autoClose = !data.autoClose;
-    await interaction.update({
-      content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
-      embeds: [buildPreviewEmbed(data)],
-      components: buildPreviewComponents(data),
-      attachments: [],
-    });
+    await interaction.update(buildPreviewPayload('mojip', data));
     return;
   }
 
@@ -766,12 +667,7 @@ async function handleMojipButton(interaction) {
       return;
     }
     data.mentionSteam = !data.mentionSteam;
-    await interaction.update({
-      content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
-      embeds: [buildPreviewEmbed(data)],
-      components: buildPreviewComponents(data),
-      attachments: [],
-    });
+    await interaction.update(buildPreviewPayload('mojip', data));
     return;
   }
 
@@ -801,18 +697,14 @@ async function handleMojipButton(interaction) {
 
   // ── 취소 → 확인 탭 ────────────────────────────────────────────
   if (customId === 'mojip:cancel') {
-    await interaction.update({
-      content: '⚠️ **모집 생성을 취소하시겠습니까?**\n입력한 내용이 모두 사라집니다.',
-      embeds: [], attachments: [],
-      components: [buildCancelComponents()],
-    });
+    await interaction.update(notice('⚠️ **모집 생성을 취소하시겠습니까?**\n입력한 내용이 모두 사라집니다.', { rows: [buildCancelComponents()] }));
     return;
   }
 
   // ── 취소 확인 ─────────────────────────────────────────────────
   if (customId === 'mojip:cancel_confirm') {
     getPending(interaction.client).delete(interaction.user.id);
-    await interaction.update({ content: '❌ **모집 생성이 취소되었습니다.**', embeds: [], attachments: [], components: [] });
+    await interaction.update(notice('❌ **모집 생성이 취소되었습니다.**'));
     return;
   }
 
@@ -820,15 +712,10 @@ async function handleMojipButton(interaction) {
   if (customId === 'mojip:cancel_back') {
     const data = getPending(interaction.client).get(interaction.user.id);
     if (!data) {
-      await interaction.update({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/모집\`을 실행해주세요.`, embeds: [], attachments: [], components: [] });
+      await interaction.update(notice(`⚠️ **데이터가 만료되었습니다.**\n다시 \`/모집\`을 실행해주세요.`));
       return;
     }
-    await interaction.update({
-      content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
-      embeds: [buildPreviewEmbed(data)],
-      components: buildPreviewComponents(data),
-      attachments: [],
-    });
+    await interaction.update(buildPreviewPayload('mojip', data));
     return;
   }
 }
@@ -894,12 +781,7 @@ async function handleMojipNotifyModal(interaction) {
       data.notifyAt = null;
       data.notify12h = false;
     }
-    await interaction.update({
-      content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
-      embeds: [buildPreviewEmbed(data)],
-      components: buildPreviewComponents(data),
-      attachments: [],
-    });
+    await interaction.update(buildPreviewPayload('mojip', data));
     return;
   }
 
@@ -944,17 +826,13 @@ async function handleMojipMemberAdd(interaction) {
   const msgId = interaction.customId.slice('mojip:member_add_select:'.length);
   const match = getMojips(interaction.client).get(msgId);
   if (!match) {
-    await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, embeds: [], attachments: [], components: [] });
+    await interaction.update(notice(`⚠️ **만료된 모집입니다.**`));
     return;
   }
   const maxPlayers = parseInt(match.data.players) || 0;
   const newUserIds = interaction.values.filter(id => !match.participants.some(u => u.id === id));
   if (match.participants.length + newUserIds.length > maxPlayers) {
-    await interaction.update({
-      content: `⚠️ **참가자 초과로 추가할 수 없습니다.**\n(모집 수정을 통해 인원을 수정해주세요.)`,
-      embeds: [], attachments: [],
-      components: buildManageMenu(match, msgId),
-    });
+    await interaction.update(notice(`⚠️ **참가자 초과로 추가할 수 없습니다.**\n(모집 수정을 통해 인원을 수정해주세요.)`, { rows: buildManageMenu(match, msgId) }));
     return;
   }
   const added = [];
@@ -978,14 +856,14 @@ async function handleMojipMemberAdd(interaction) {
   const lines = [];
   if (added.length > 0)   lines.push(`✅ 추가됨: ${added.map(n => `**${n}**`).join(', ')}`);
   if (skipped.length > 0) lines.push(`⚠️ 이미 참가 중: ${skipped.map(n => `**${n}**`).join(', ')}`);
-  await interaction.update({ content: lines.join('\n') || '완료', embeds: [], attachments: [], components: buildManageMenu(match, msgId) });
+  await interaction.update(notice(lines.join('\n') || '완료', { rows: buildManageMenu(match, msgId) }));
 }
 
 async function handleMojipMemberRemove(interaction) {
   const msgId = interaction.customId.slice('mojip:member_remove_select:'.length);
   const match = getMojips(interaction.client).get(msgId);
   if (!match) {
-    await interaction.update({ content: `⚠️ **만료된 모집입니다.**`, embeds: [], attachments: [], components: [] });
+    await interaction.update(notice(`⚠️ **만료된 모집입니다.**`));
     return;
   }
   const removeIds = new Set(interaction.values);
@@ -997,11 +875,7 @@ async function handleMojipMemberRemove(interaction) {
   await match.message.edit(buildMojipMessagePayload(match));
   const resultLines = [`➖ 제거됨: ${removed.map(n => `**${n}**`).join(', ')}`];
   if (reopened) resultLines.push('🔓 **참가자 미달로 마감이 자동 해제되었습니다.**');
-  await interaction.update({
-    content: resultLines.join('\n'),
-    embeds: [], attachments: [],
-    components: buildManageMenu(match, msgId),
-  });
+  await interaction.update(notice(resultLines.join('\n'), { rows: buildManageMenu(match, msgId) }));
 }
 
 module.exports = { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipNotifyModal, handleMojipMemberAdd, handleMojipMemberRemove, buildMojipMessagePayload };

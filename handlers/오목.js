@@ -11,7 +11,6 @@
 
 const zlib = require('zlib');
 const {
-  EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -24,6 +23,7 @@ const {
   WAGER_XP, BOT_WIN_XP_MIN, BOT_WIN_XP_MAX, rollBotWinXp,
 } = require('./봇전한도');
 const { displayNameFromInteraction } = require('./이름');
+const { card, payload, notice, text, withTopRows, COLORS } = require('./카드');
 const { logGameResult, logError, userLabel } = require('./로그');
 
 const N = 15;
@@ -511,60 +511,63 @@ async function boardFile(game) {
   return new AttachmentBuilder(await renderBoard(game.board, game.lastMove), { name: 'omok.png' });
 }
 
-function buildEmbed(game) {
+function buildGameCard(game) {
   const bName = game.players.B === 'BOT' ? '🤖 봇' : `<@${game.players.B}>`;
   const wName = game.players.W === 'BOT' ? '🤖 봇' : `<@${game.players.W}>`;
-  let desc = `## ⚫ 오목\n⚫ ${bName}  **vs**  ⚪ ${wName}\n\n`;
+  const blocks = [`⚫ ${bName}  **vs**  ⚪ ${wName}`];
 
   if (game.status === 'finished') {
     if (game.winner === 'DRAW') {
-      desc += game.endReason === 'timeout'
-        ? '**⏰ 시간 초과로 종료되었습니다.**'
-        : '**🤝 무승부!**';
+      blocks.push(game.endReason === 'timeout' ? '### ⏰ 시간 초과로 종료되었습니다.' : '### 🤝 무승부!');
     } else {
       const winName = game.winner === 'B' ? bName : wName;
       const winEmoji = game.winner === 'B' ? '⚫' : '⚪';
-      desc += `**🏆 ${winEmoji} ${winName} 승리!**`;
-      if (game.endReason === 'resign' && game.resignedBy) desc += `\n🏳️ <@${game.resignedBy}>님이 포기했습니다.`;
-      if (game.lastMove) desc += `  \n-# 마지막 수: ${coordLabel(game.lastMove.x, game.lastMove.y)} · 총 ${game.moveCount}수`;
+      let result = `### 🏆 ${winEmoji} ${winName} 승리!`;
+      if (game.endReason === 'resign' && game.resignedBy) result += `\n🏳️ <@${game.resignedBy}>님이 포기했습니다.`;
+      if (game.lastMove) result += `\n-# 마지막 수: ${coordLabel(game.lastMove.x, game.lastMove.y)} · 총 ${game.moveCount}수`;
+      blocks.push(result);
 
+      let xp = '';
       if (game.xpResult?.type === 'wager') {
         const { wager, winnerId, loserId } = game.xpResult;
-        desc += `\n🎲 **내기 결과**\n📉 <@${loserId}> **−${wager} XP**\n📈 <@${winnerId}> **+${wager} XP**`;
+        xp = `🎲 **내기 결과**\n📉 <@${loserId}> **−${wager} XP**\n📈 <@${winnerId}> **+${wager} XP**`;
       } else if (game.xpResult?.type === 'bot_win') {
-        desc += `\n🎉 <@${game.xpResult.winnerId}>님 **+${game.xpResult.amount} XP** 획득!`;
-        if (game.xpResult.capped) desc += `\n-# 하루 봇전 XP 한도(${DAILY_BOT_MATCH_XP_CAP})에 걸려 일부만 지급됐습니다.`;
+        xp = `🎉 <@${game.xpResult.winnerId}>님 **+${game.xpResult.amount} XP** 획득!`;
+        if (game.xpResult.capped) xp += `\n-# 하루 봇전 XP 한도(${DAILY_BOT_MATCH_XP_CAP})에 걸려 일부만 지급됐습니다.`;
       } else if (game.xpResult?.type === 'bot_daily_cap') {
-        desc += `\n🚫 오늘 봇전 XP 한도(하루 ${DAILY_BOT_MATCH_XP_CAP})를 모두 채워\n 이번 판은 지급되지 않았습니다.\n-# (약 ${timeUntilKstMidnight()} 후 초기화)`;
+        xp = `🚫 오늘 봇전 XP 한도(하루 ${DAILY_BOT_MATCH_XP_CAP})를 모두 채워\n이번 판은 지급되지 않았습니다.\n-# (약 ${timeUntilKstMidnight()} 후 초기화)`;
       } else if (game.xpResult?.type === 'cooldown') {
         const cooldownMin = Math.ceil((game.xpResult.cooldownMs ?? BOT_SETTLE_COOLDOWN_MS) / 60000);
-        desc += `\n⏳ 연속 대결 쿨다운 중이라\n 이번 판은 XP 정산이 생략됐습니다.\n-# (직전 정산 후 ${cooldownMin}분 이내)`;
+        xp = `⏳ 연속 대결 쿨다운 중이라\n이번 판은 XP 정산이 생략됐습니다.\n-# (직전 정산 후 ${cooldownMin}분 이내)`;
       } else if (game.xpResult?.type === 'frozen') {
-        desc += game.xpResult.raid ? `\n-# 👾 몬스터 때문에 XP 시스템이 고장 나 XP를 받을 수 없습니다.` : `\n-# ⚙️ 관리자가 미니게임 XP 정산을 일시 중지했습니다.`;
+        xp = game.xpResult.raid ? '-# 👾 몬스터 때문에 XP 시스템이 고장 나 XP를 받을 수 없습니다.' : '-# ⚙️ 관리자가 미니게임 XP 정산을 일시 중지했습니다.';
       } else if (game.xpResult?.type === 'user_frozen') {
-        desc += `\n-# 🚫 승자가 XP 지급 정지 상태라 이번 판은 XP 정산이 생략됐습니다.`;
+        xp = '-# 🚫 승자가 XP 지급 정지 상태라 이번 판은 XP 정산이 생략됐습니다.';
       }
+      if (xp) blocks.push(xp);
     }
   } else {
     const turnName = game.turn === 'B' ? bName : wName;
     const turnEmoji = game.turn === 'B' ? '⚫' : '⚪';
-    desc += `${turnEmoji} **${turnName}의 차례** — 좌표를 채팅으로 입력하세요 (예: \`H8\`)`;
-    if (game.lastMove) desc += `\n-# 마지막 수: ${coordLabel(game.lastMove.x, game.lastMove.y)} · ${game.moveCount}수`;
+    let turn = `### ${turnEmoji} ${turnName}의 차례\n좌표를 채팅으로 입력하세요 (예: \`H8\`)`;
+    if (game.lastMove) turn += `\n-# 마지막 수: ${coordLabel(game.lastMove.x, game.lastMove.y)} · ${game.moveCount}수`;
+    blocks.push(turn);
   }
 
   const color = game.status === 'finished'
-    ? (game.winner === 'DRAW' ? 0x808080 : 0xFFD700)
-    : 0x5865F2;
+    ? (game.winner === 'DRAW' ? COLORS.muted : 0xFFD700)
+    : COLORS.info;
 
-  const embed = new EmbedBuilder()
-    .setColor(color)
-    .setDescription(desc)
-    .setImage('attachment://omok.png')
-    .setTimestamp();
-  if (game.status !== 'finished') {
-    embed.setFooter({ text: `⏰ ${TURN_MS / 60000}분 안에 두지 않으면 시간 초과로 종료됩니다.` });
-  }
-  return embed;
+  return card({
+    color,
+    header: '⚫ 오목',
+    sub: game.status === 'finished' ? '게임 종료' : '진행 중',
+    blocks,
+    image: 'attachment://omok.png',
+    footer: game.status !== 'finished' ? `⏰ ${TURN_MS / 60000}분 안에 두지 않으면 시간 초과로 종료됩니다.` : undefined,
+    // 진행 중에는 포기 버튼이 카드 안에 들어간다. 종료 후 재대결 줄은 카드 밖(withTopRows로 따로 뗄 수 있게).
+    rows: game.status === 'finished' ? [] : buildPlayingComponents(game),
+  });
 }
 
 // 진행 중 보드에 붙는 버튼 — 자기 차례가 아니어도 참가자면 누를 수 있는 포기.
@@ -585,23 +588,11 @@ function buildFinishedRow(bId, wId) {
 }
 
 async function playingPayload(game) {
-  return {
-    content: '',
-    embeds: [buildEmbed(game)],
-    files: [await boardFile(game)],
-    components: buildPlayingComponents(game),
-    attachments: [],
-  };
+  return payload(buildGameCard(game), { files: [await boardFile(game)] });
 }
 
 async function finishedPayload(game) {
-  return {
-    content: '',
-    embeds: [buildEmbed(game)],
-    files: [await boardFile(game)],
-    components: [buildFinishedRow(game.players.B, game.players.W)],
-    attachments: [],
-  };
+  return payload([buildGameCard(game), buildFinishedRow(game.players.B, game.players.W)], { files: [await boardFile(game)] });
 }
 
 // ── 보드를 항상 맨 아래에 유지 (끝말잇기 moveBoardDown과 동일) ──────────
@@ -703,36 +694,35 @@ function finishGame(game, games, winner, endReason, extra = {}) {
 }
 
 // ── 대기 로비 (틱택토와 동일한 형태, 무한모드 토글만 없음) ──────────
-function buildLobbyEmbed(game) {
+function buildLobbyCard(game) {
   const playerList = game.lobbyPlayers.length > 0
     ? '```\n' + game.lobbyPlayers.map((p, i) => `${i + 1}. ${p.name}${p.id === game.hostId ? ' 👑' : ''}`).join('\n') + '\n```'
     : '*아직 참가자가 없습니다.*';
 
-  return new EmbedBuilder()
-    .setColor(0x5865F2)
-    .setDescription(
-      '## ⚫ 오목\n참가자를 기다리는 중입니다.\n' +
-      `-# (${LOBBY_MS / 60_000}분 내 시작하지 않으면 자동 취소됩니다)`,
-    )
-    .addFields(
-      { name: `👥 참가자  ${game.lobbyPlayers.length}명`, value: playerList },
-      {
-        name: '📋 규칙',
-        value:
-          '• 15×15 판에서 번갈아 돌을 놓아 가로·세로·대각선으로 **5개**를 먼저 이으면 승리합니다.\n' +
-          '• 자기 차례에 **좌표를 채팅으로 입력**해 돌을 놓습니다. (예: `H8`, `8H`)\n' +
-          '• 선공(⚫ 흑)이 먼저 둡니다. 봇과 대결하면 사람이 흑입니다.\n' +
-          '• 한 수도 두지 않고 5분이 지나면 시간 초과로 종료됩니다.',
-      },
-      {
-        name: '🎲 XP 내기',
-        value:
-          `• 사람끼리 대결하면 진 사람이 최대 ${WAGER_XP} XP를 잃고(강등보호 작동) 이긴 사람이 받습니다.\n` +
-          `• 봇과 대결하면 내기 대신, 봇을 이겼을 때 ${BOT_WIN_XP_MIN}~${BOT_WIN_XP_MAX} XP가 지급됩니다.\n` +
-          `• 봇전 보상은 하루 최대 ${DAILY_BOT_MATCH_XP_CAP} XP까지만 받을 수 있습니다.`,
-      },
-    )
-    .setFooter({ text: '최소 2명이 참가해야 시작할 수 있습니다.' });
+  return card({
+    color: COLORS.info,
+    header: '⚫ 오목',
+    sub: ['대기 중', `${LOBBY_MS / 60_000}분 내 시작하지 않으면 자동 취소`],
+    blocks: [
+      `### 👥 참가자　${game.lobbyPlayers.length}명\n${playerList}`,
+      '### 📋 규칙\n' +
+        '• 15×15 판에서 번갈아 돌을 놓아 가로·세로·대각선으로 **5개**를 먼저 이으면 승리합니다.\n' +
+        '• 자기 차례에 **좌표를 채팅으로 입력**해 돌을 놓습니다. (예: `H8`, `8H`)\n' +
+        '• 선공(⚫ 흑)이 먼저 둡니다. 봇과 대결하면 사람이 흑입니다.\n' +
+        '• 한 수도 두지 않고 5분이 지나면 시간 초과로 종료됩니다.',
+      '### 🎲 XP 내기\n' +
+        `• 사람끼리 대결하면 진 사람이 최대 ${WAGER_XP} XP를 잃고(강등보호 작동) 이긴 사람이 받습니다.\n` +
+        `• 봇과 대결하면 내기 대신, 봇을 이겼을 때 ${BOT_WIN_XP_MIN}~${BOT_WIN_XP_MAX} XP가 지급됩니다.\n` +
+        `• 봇전 보상은 하루 최대 ${DAILY_BOT_MATCH_XP_CAP} XP까지만 받을 수 있습니다.`,
+    ],
+    footer: '최소 2명이 참가해야 시작할 수 있습니다.',
+    rows: buildLobbyComponents(game),
+  });
+}
+
+// 로비 메시지 전체(버튼은 카드 안).
+function buildLobbyPayload(game, extra) {
+  return payload(buildLobbyCard(game), extra);
 }
 
 function buildLobbyComponents(game) {
@@ -837,29 +827,29 @@ async function startOmokCommand(interaction) {
   const game = newGame(interaction, gameId);
   games.set(gameId, game);
 
-  await interaction.reply({ embeds: [buildLobbyEmbed(game)], components: buildLobbyComponents(game) });
+  await interaction.reply(buildLobbyPayload(game));
   game.message = await interaction.fetchReply();
 
   game.timeoutId = setTimeout(async () => {
     const g = games.get(gameId);
     if (!g || g.status !== 'waiting') return;
     games.delete(gameId);
-    await interaction.editReply({ content: '⏰ **참가자가 없어 게임이 취소되었습니다.**', embeds: [], components: [] }).catch(() => {});
+    await interaction.editReply(notice('⏰ **참가자가 없어 게임이 취소되었습니다.**')).catch(() => {});
   }, LOBBY_MS);
 }
 
 // ── 재대결 (끝말잇기와 같은 승낙/거절 흐름) ──────────────────────
-function buildRematchRequestEmbed(game) {
-  return new EmbedBuilder()
-    .setColor(0x5865F2)
-    .setDescription(
-      '## 🔄 오목 재대결 신청\n' +
-      `<@${game.opponentId}>님이 수락하면 바로 시작됩니다.\n\n` +
-      `✅ <@${game.challengerId}>  (신청)\n` +
-      `${game.accepted.has(game.opponentId) ? '✅' : '⌛'} <@${game.opponentId}>`,
-    )
-    .setFooter({ text: '1분 내 수락하지 않으면 자동 만료됩니다.' })
-    .setTimestamp();
+function buildRematchRequestCard(game) {
+  return card({
+    color: COLORS.info,
+    header: '🔄 오목 재대결 신청',
+    blocks: [
+      `<@${game.opponentId}>님이 수락하면 바로 시작됩니다.`,
+      `✅ <@${game.challengerId}>  (신청)\n${game.accepted.has(game.opponentId) ? '✅' : '⌛'} <@${game.opponentId}>`,
+    ],
+    footer: '1분 내 수락하지 않으면 자동 만료됩니다.',
+    rows: buildRematchRequestComponents(game),
+  });
 }
 
 function buildRematchRequestComponents(game) {
@@ -873,7 +863,7 @@ function buildRematchRequestComponents(game) {
 
 // 거절·만료 시 지난 판 결과 메시지에 재대결/종료 버튼을 되살린다.
 async function restoreRematchButton(game) {
-  await game.sourceMessage?.edit({ components: [buildFinishedRow(game.prevBId, game.prevWId)] }).catch(() => {});
+  await game.sourceMessage?.edit(withTopRows(game.sourceMessage, [buildFinishedRow(game.prevBId, game.prevWId)])).catch(() => {});
 }
 
 // 봇전 재대결은 승낙이 필요 없으니 새 메시지로 바로 시작한다.
@@ -887,7 +877,7 @@ async function startRematchVsBot(interaction, humanId) {
   game.messagesSinceBoard = 0;
   games.set(game.id, game);
 
-  await interaction.update({ components: [] }); // 지난 결과 메시지의 버튼 제거
+  await interaction.update(withTopRows(interaction.message, [])); // 지난 결과 메시지의 재대결 버튼만 제거(카드는 그대로)
   game.message = await interaction.channel.send(await playingPayload(game));
   resetTimeout(game, games);
 }
@@ -913,18 +903,18 @@ async function startRematchRequest(interaction, challengerId, opponentId, prevBI
   };
   games.set(gameId, game);
 
-  await interaction.update({ components: [] });
-  game.message = await interaction.channel.send({
-    content: `🔄 <@${opponentId}>님, <@${challengerId}>님이 재대결을 신청했습니다!`,
-    embeds: [buildRematchRequestEmbed(game)],
-    components: buildRematchRequestComponents(game),
-  });
+  await interaction.update(withTopRows(interaction.message, []));
+  // 상대를 부르는 한 줄은 v2에서 content를 못 쓰므로 카드 위 글자로 올리고, 그 사람만 알림이 가게 한다.
+  game.message = await interaction.channel.send(payload(
+    [text(`🔄 <@${opponentId}>님, <@${challengerId}>님이 재대결을 신청했습니다!`), buildRematchRequestCard(game)],
+    { allowedMentions: { users: [opponentId] } },
+  ));
 
   game.timeoutId = setTimeout(async () => {
     const g = games.get(gameId);
     if (!g || g.status !== 'rematch_pending') return;
     games.delete(gameId);
-    await g.message?.edit({ content: '⏰ **재대결 신청이 만료되었습니다.**', embeds: [], components: [] }).catch(() => {});
+    await g.message?.edit(notice('⏰ **재대결 신청이 만료되었습니다.**')).catch(() => {});
     await restoreRematchButton(g);
   }, 60_000);
 }
@@ -984,7 +974,7 @@ async function handleOmokButton(interaction) {
     if (game.lobbyPlayers.some(p => p.id === interaction.user.id)) return interaction.reply({ content: '⚠️ **이미 참가 중입니다.**', flags: MessageFlags.Ephemeral });
     if (game.lobbyPlayers.length >= 2) return interaction.reply({ content: '⚠️ **정원(2명)이 이미 찼습니다.**', flags: MessageFlags.Ephemeral });
     game.lobbyPlayers.push({ id: interaction.user.id, name: displayNameFromInteraction(interaction) });
-    return interaction.update({ embeds: [buildLobbyEmbed(game)], components: buildLobbyComponents(game) });
+    return interaction.update(buildLobbyPayload(game));
   }
 
   if (customId.startsWith('omok:start:')) {
@@ -1011,7 +1001,7 @@ async function handleOmokButton(interaction) {
     if (interaction.user.id !== game.hostId) return interaction.reply({ content: '⚠️ **방장만 취소할 수 있습니다.**', flags: MessageFlags.Ephemeral });
     clearTimeout(game.timeoutId);
     games.delete(game.id);
-    return interaction.update({ content: '❌ **게임이 취소되었습니다.**', embeds: [], components: [] });
+    return interaction.update(notice('❌ **게임이 취소되었습니다.**'));
   }
 
   if (customId.startsWith('omok:resign:')) {
@@ -1046,7 +1036,7 @@ async function handleOmokButton(interaction) {
     }
     clearTimeout(game.timeoutId);
     games.delete(game.id);
-    await interaction.update({ content: `❌ **<@${interaction.user.id}>님이 재대결을 거절했습니다.**`, embeds: [], components: [] });
+    await interaction.update(notice(`❌ **<@${interaction.user.id}>님이 재대결을 거절했습니다.**`));
     await restoreRematchButton(game);
     return;
   }
@@ -1056,7 +1046,7 @@ async function handleOmokButton(interaction) {
     if (interaction.user.id !== bId && interaction.user.id !== wId) {
       return interaction.reply({ content: '⚠️ **원래 참가자만 종료할 수 있습니다.**', flags: MessageFlags.Ephemeral });
     }
-    return interaction.update({ components: [] });
+    return interaction.update(withTopRows(interaction.message, []));
   }
 }
 
@@ -1100,4 +1090,5 @@ async function handleOmokMessage(message) {
   }
 }
 
-module.exports = { startOmokCommand, handleOmokButton, handleOmokMessage };
+// 화면 모음·테스트에서 직접 그려 보려고 카드 빌더도 함께 내보낸다.
+module.exports = { startOmokCommand, handleOmokButton, handleOmokMessage, buildLobbyPayload, playingPayload, finishedPayload, buildRematchRequestCard };

@@ -1,10 +1,10 @@
 const {
-  EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
   MessageFlags,
 } = require('discord.js');
+const { card, payload, notice, text, withTopRows, COLORS } = require('./카드');
 const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp, isMinigameXpFrozen, isRaidXpFrozen, isUserXpFrozen } = require('./레벨링');
 const {
   getRemainingBotXp, addBotMatchXp, DAILY_BOT_MATCH_XP_CAP, timeUntilKstMidnight,
@@ -201,37 +201,35 @@ function getBotMoveInfinite(board, marks) {
 // /틱택토 → 참가 버튼으로 대기열에 합류(최대 2명), 방장이 시작하거나 혼자면 봇과 시작.
 // 무한모드 토글은 틱택토 고유 기능이라 로비 아래 줄에 그대로 둔다.
 
-function buildLobbyEmbed(game) {
+function buildLobbyCard(game) {
   const playerList = game.lobbyPlayers.length > 0
     ? '```\n' + game.lobbyPlayers.map((p, i) => `${i + 1}. ${p.name}${p.id === game.hostId ? ' 👑' : ''}`).join('\n') + '\n```'
     : '*아직 참가자가 없습니다.*';
 
-  const embed = new EmbedBuilder()
-    .setColor(0x5865F2)
-    .setDescription(
-      `## ${game.infinite ? '⭕❌ 틱택토 (♾️ 무한모드)' : '⭕❌ 틱택토'}\n` +
-      `참가자를 기다리는 중입니다.\n-# (${LOBBY_MS / 60_000}분 내 시작하지 않으면 자동 취소됩니다)`,
-    );
-  return embed
-    .addFields(
-      { name: `👥 참가자  ${game.lobbyPlayers.length}명`, value: playerList },
-      {
-        name: '📋 규칙',
-        value:
-          '• 3×3 판에서 번갈아 ❌/⭕를 놓아 가로·세로·대각선으로 3칸을 먼저 이으면 승리합니다.\n' +
-          '• 자기 차례에 빈 칸 버튼을 눌러 표시합니다.\n' +
-          '• 한 수도 두지 않고 5분이 지나면 시간 초과로 무승부 처리됩니다.\n' +
-          '• ♾️ **무한모드**를 켜면 각자 최대 3개까지만 남고, 4번째를 두면 가장 오래된 조각이 사라집니다.',
-      },
-      {
-        name: '🎲 XP 내기',
-        value:
-          `• 사람끼리 대결하면 진 사람이 최대 ${WAGER_XP} XP를 잃고(강등보호 작동) 이긴 사람이 받습니다.\n` +
-          `• 봇과 대결하면 내기 대신, 봇을 이겼을 때 ${BOT_WIN_XP_MIN}~${BOT_WIN_XP_MAX} XP가 지급됩니다.\n` +
-          `• 봇전 보상은 하루 최대 ${DAILY_BOT_MATCH_XP_CAP} XP까지만 받을 수 있습니다.`,
-      },
-    )
-    .setFooter({ text: '최소 2명이 참가해야 시작할 수 있습니다.' });
+  return card({
+    color: COLORS.info,
+    header: game.infinite ? '⭕❌ 틱택토 (♾️ 무한모드)' : '⭕❌ 틱택토',
+    sub: ['대기 중', `${LOBBY_MS / 60_000}분 내 시작하지 않으면 자동 취소`],
+    blocks: [
+      `### 👥 참가자　${game.lobbyPlayers.length}명\n${playerList}`,
+      '### 📋 규칙\n' +
+        '• 3×3 판에서 번갈아 ❌/⭕를 놓아 가로·세로·대각선으로 3칸을 먼저 이으면 승리합니다.\n' +
+        '• 자기 차례에 빈 칸 버튼을 눌러 표시합니다.\n' +
+        '• 한 수도 두지 않고 5분이 지나면 시간 초과로 무승부 처리됩니다.\n' +
+        '• ♾️ **무한모드**를 켜면 각자 최대 3개까지만 남고, 4번째를 두면 가장 오래된 조각이 사라집니다.',
+      '### 🎲 XP 내기\n' +
+        `• 사람끼리 대결하면 진 사람이 최대 ${WAGER_XP} XP를 잃고(강등보호 작동) 이긴 사람이 받습니다.\n` +
+        `• 봇과 대결하면 내기 대신, 봇을 이겼을 때 ${BOT_WIN_XP_MIN}~${BOT_WIN_XP_MAX} XP가 지급됩니다.\n` +
+        `• 봇전 보상은 하루 최대 ${DAILY_BOT_MATCH_XP_CAP} XP까지만 받을 수 있습니다.`,
+    ],
+    footer: '최소 2명이 참가해야 시작할 수 있습니다.',
+    rows: buildLobbyComponents(game),
+  });
+}
+
+// 로비 메시지 전체(버튼은 카드 안). reply/update/send/edit 어디에나 그대로 쓴다.
+function buildLobbyPayload(game, extra) {
+  return payload(buildLobbyCard(game), extra);
 }
 
 function buildLobbyComponents(game) {
@@ -262,61 +260,72 @@ function buildLobbyComponents(game) {
   ];
 }
 
-function buildEmbed(game) {
+// note: 카드 맨 위에 붙일 안내 한 줄(시간 초과 등). 판이 끝나면 board가 비활성 상태로 남는다.
+function buildGameCard(game, note) {
   const xName = game.players.X === 'BOT' ? '🤖 봇' : `<@${game.players.X}>`;
   const oName = game.players.O === 'BOT' ? '🤖 봇' : `<@${game.players.O}>`;
 
-  let desc = `## ${game.infinite ? '⭕❌ 틱택토 (♾️ 무한모드)' : '⭕❌ 틱택토'}\n❌ ${xName}  **vs**  ⭕ ${oName}\n\n`;
+  const blocks = [`❌ ${xName}  **vs**  ⭕ ${oName}`];
+  if (note) blocks.push(note);
 
+  let result = '';
   if (game.status === 'finished') {
     if (game.winner === 'DRAW') {
-      desc += '**🤝 무승부!**';
+      result = '### 🤝 무승부!';
     } else {
       const winName = game.winner === 'X' ? xName : oName;
       const winEmoji = game.winner === 'X' ? '❌' : '⭕';
-      desc += `**🏆 ${winEmoji} ${winName} 승리!**`;
+      result = `### 🏆 ${winEmoji} ${winName} 승리!`;
+    }
+    blocks.push(result);
 
+    let xp = '';
+    if (game.winner !== 'DRAW') {
       if (game.xpResult?.type === 'wager') {
         const { wager, winnerId, loserId } = game.xpResult;
-        desc += `\n🎲 **내기 결과**\n📉 <@${loserId}> **−${wager} XP**\n📈 <@${winnerId}> **+${wager} XP**`;
+        xp = `🎲 **내기 결과**\n📉 <@${loserId}> **−${wager} XP**\n📈 <@${winnerId}> **+${wager} XP**`;
       } else if (game.xpResult?.type === 'bot_win') {
-        desc += `\n🎉 <@${game.xpResult.winnerId}>님 **+${game.xpResult.amount} XP** 획득!`;
-        if (game.xpResult.capped) desc += `\n-# 하루 봇전 XP 한도(${DAILY_BOT_MATCH_XP_CAP})에 걸려 일부만 지급됐습니다.`;
+        xp = `🎉 <@${game.xpResult.winnerId}>님 **+${game.xpResult.amount} XP** 획득!`;
+        if (game.xpResult.capped) xp += `\n-# 하루 봇전 XP 한도(${DAILY_BOT_MATCH_XP_CAP})에 걸려 일부만 지급됐습니다.`;
       } else if (game.xpResult?.type === 'bot_daily_cap') {
-        desc += `\n🚫 오늘 봇전 XP 한도(하루 ${DAILY_BOT_MATCH_XP_CAP})를 모두 채워\n 이번 판은 지급되지 않았습니다.\n-# (약 ${timeUntilKstMidnight()} 후 초기화)`;
+        xp = `🚫 오늘 봇전 XP 한도(하루 ${DAILY_BOT_MATCH_XP_CAP})를 모두 채워\n이번 판은 지급되지 않았습니다.\n-# (약 ${timeUntilKstMidnight()} 후 초기화)`;
       } else if (game.xpResult?.type === 'cooldown') {
         const cooldownMin = Math.ceil((game.xpResult.cooldownMs ?? BOT_SETTLE_COOLDOWN_MS) / 60000);
-        desc += `\n⏳ 연속 대결 쿨다운 중이라\n 이번 판은 XP 정산이 생략됐습니다.\n-# (직전 정산 후 ${cooldownMin}분 이내)`;
+        xp = `⏳ 연속 대결 쿨다운 중이라\n이번 판은 XP 정산이 생략됐습니다.\n-# (직전 정산 후 ${cooldownMin}분 이내)`;
       } else if (game.xpResult?.type === 'frozen') {
-        desc += game.xpResult.raid ? `\n-# 👾 몬스터 때문에 XP 시스템이 고장 나 XP를 받을 수 없습니다.` : `\n-# ⚙️ 관리자가 미니게임 XP 정산을 일시 중지했습니다.`;
+        xp = game.xpResult.raid ? '-# 👾 몬스터 때문에 XP 시스템이 고장 나 XP를 받을 수 없습니다.' : '-# ⚙️ 관리자가 미니게임 XP 정산을 일시 중지했습니다.';
       } else if (game.xpResult?.type === 'user_frozen') {
-        desc += `\n-# 🚫 승자가 XP 지급 정지 상태라 이번 판은 XP 정산이 생략됐습니다.`;
+        xp = '-# 🚫 승자가 XP 지급 정지 상태라 이번 판은 XP 정산이 생략됐습니다.';
       }
     }
+    if (xp) blocks.push(xp);
   } else {
     const turnName = game.currentTurn === 'X' ? xName : oName;
     const turnEmoji = game.currentTurn === 'X' ? '❌' : '⭕';
-    desc += `${turnEmoji} **${turnName}의 차례**`;
-    if (game.infinite) {
-      desc += '\n-# 각자 최대 3개까지만 유지되며, 4번째를 두면 가장 오래된 조각이 사라집니다.';
-    }
+    blocks.push(`### ${turnEmoji} ${turnName}의 차례${game.infinite ? '\n-# 각자 최대 3개까지만 유지되며, 4번째를 두면 가장 오래된 조각이 사라집니다.' : ''}`);
   }
 
   const color =
     game.status === 'finished'
-      ? game.winner === 'DRAW' ? 0x808080 : 0xFFD700
-      : 0x5865F2;
+      ? game.winner === 'DRAW' ? COLORS.muted : 0xFFD700
+      : COLORS.info;
 
-  const embed = new EmbedBuilder()
-    .setColor(color)
-    .setDescription(desc)
-    .setTimestamp();
+  return card({
+    color,
+    header: game.infinite ? '⭕❌ 틱택토 (♾️ 무한모드)' : '⭕❌ 틱택토',
+    sub: game.status === 'finished' ? '게임 종료' : '진행 중',
+    blocks,
+    footer: game.status !== 'finished' ? `⏰ ${TIMEOUT_MS / 60000}분 안에 두지 않으면 시간 초과로 종료됩니다.` : undefined,
+    rows: buildBoard(game),
+  });
+}
 
-  if (game.status !== 'finished') {
-    embed.setFooter({ text: `⏰ ${TIMEOUT_MS / 60000}분 안에 두지 않으면 시간 초과로 종료됩니다.` });
-  }
-
-  return embed;
+// 대국 메시지 전체: 카드(판 버튼은 카드 안) + 끝났으면 맨 아래에 재대결/종료 버튼.
+// 재대결·종료 줄은 카드 밖에 둬서, 나중에 그 줄만 떼어도 카드가 남는다(withTopRows).
+function buildGamePayload(game, note) {
+  const parts = [buildGameCard(game, note)];
+  if (game.status === 'finished') parts.push(buildFinishedRow(game));
+  return payload(parts);
 }
 
 // 무한모드에서 각 마크가 이미 3개를 채워, 다음 그 마크가 하나 더 놓이면 사라질 "가장 오래된"
@@ -360,10 +369,6 @@ function buildBoard(game) {
       btns.push(btn);
     }
     rows.push(new ActionRowBuilder().addComponents(...btns));
-  }
-
-  if (game.status === 'finished') {
-    rows.push(buildFinishedRow(game));
   }
 
   return rows;
@@ -549,7 +554,7 @@ function resetTimeout(game, games) {
     g.winner = 'DRAW';
     games.delete(g.id);
     logTttResult(g, '시간 초과');
-    await g.message.edit({ content: '⏰ **시간 초과로 게임이 종료되었습니다.**', embeds: [buildEmbed(g)], components: buildBoard(g) }).catch(() => {});
+    await g.message.edit(buildGamePayload(g, '⏰ **시간 초과로 게임이 종료되었습니다.**')).catch(() => {});
   }, TIMEOUT_MS);
 }
 
@@ -562,7 +567,7 @@ async function beginGame(interaction, game, games) {
   game.board = Array(9).fill('');
   game.marks = { X: [], O: [] };
 
-  await interaction.update({ content: '', embeds: [buildEmbed(game)], components: buildBoard(game) });
+  await interaction.update(buildGamePayload(game));
   resetTimeout(game, games);
 }
 
@@ -587,7 +592,7 @@ async function startTttCommand(interaction) {
   };
   games.set(gameId, game);
 
-  await interaction.reply({ embeds: [buildLobbyEmbed(game)], components: buildLobbyComponents(game) });
+  await interaction.reply(buildLobbyPayload(game));
   game.message = await interaction.fetchReply();
 
   // 2분 내로 시작하지 않으면 자동 취소
@@ -595,16 +600,16 @@ async function startTttCommand(interaction) {
     const g = games.get(gameId);
     if (!g || g.status !== 'waiting') return;
     games.delete(gameId);
-    await interaction.editReply({ content: '⏰ **참가자가 없어 게임이 취소되었습니다.**', embeds: [], components: [] }).catch(() => {});
+    await interaction.editReply(notice('⏰ **참가자가 없어 게임이 취소되었습니다.**')).catch(() => {});
   }, LOBBY_MS);
 }
 
 // 지난 판 결과 보드는 그대로 남겨두고, 재대결은 새 메시지로 시작한다 — 예전엔 결과 보드를
 // 통째로 덮어써서 방금 끝난 판의 최종 보드와 XP 정산 내역이 사라졌다.
 // 다 쓴 '재대결 / 종료' 버튼만 떼어낸다.
-async function postRematchMessage(interaction, payload) {
-  await interaction.update({ components: [] });
-  return interaction.channel.send(payload);
+async function postRematchMessage(interaction, messagePayload) {
+  await interaction.update(withTopRows(interaction.message, []));
+  return interaction.channel.send(messagePayload);
 }
 
 // 재대결이 성사되지 못하면(취소·만료) 지난 판 결과 보드에 재대결 버튼을 되살려
@@ -613,9 +618,9 @@ async function postRematchMessage(interaction, payload) {
 async function restoreRematchButton(game) {
   const source = game?.rematchSource;
   if (!source?.message) return;
-  await source.message.edit({
-    components: [buildFinishedRow({ players: { X: source.xId, O: source.oId }, infinite: source.infinite })],
-  }).catch(() => {});
+  await source.message.edit(
+    withTopRows(source.message, [buildFinishedRow({ players: { X: source.xId, O: source.oId }, infinite: source.infinite })]),
+  ).catch(() => {});
 }
 
 // 참가자 둘이 거의 동시에 '재대결'을 누르면 신청이 두 개 만들어지고 둘 다 같은 메시지를
@@ -669,22 +674,22 @@ async function startRematch(interaction, prevXId, prevOId, infinite) {
   };
   games.set(gameId, game);
 
-  const content = invitedId
-    ? `🔄 <@${invitedId}>님, <@${interaction.user.id}>님이 재대결을 신청했습니다! 참가하려면 **✋ 참가**를 누르세요.`
-    : undefined;
+  // 상대를 부르는 한 줄은 v2에서 content를 못 쓰므로 카드 위 글자로 올리고, 그 사람만 알림이 가게 한다.
+  const invite = invitedId
+    ? text(`🔄 <@${invitedId}>님, <@${interaction.user.id}>님이 재대결을 신청했습니다! 참가하려면 **✋ 참가**를 누르세요.`)
+    : null;
 
-  game.message = await postRematchMessage(interaction, {
-    content,
-    embeds: [buildLobbyEmbed(game)],
-    components: buildLobbyComponents(game),
-  });
+  game.message = await postRematchMessage(
+    interaction,
+    payload(invite ? [invite, buildLobbyCard(game)] : [buildLobbyCard(game)], { allowedMentions: invitedId ? { users: [invitedId] } : { parse: [] } }),
+  );
 
   // 2분 내로 시작하지 않으면 만료 — 지난 판에 재대결 버튼을 되살린다.
   game.timeoutId = setTimeout(async () => {
     const g = games.get(gameId);
     if (!g || g.status !== 'waiting') return;
     games.delete(gameId);
-    await g.message.edit({ content: '⏰ **재대결 신청이 만료되었습니다.**', embeds: [], components: [] }).catch(() => {});
+    await g.message.edit(notice('⏰ **재대결 신청이 만료되었습니다.**')).catch(() => {});
     await restoreRematchButton(g);
   }, LOBBY_MS);
 }
@@ -710,7 +715,7 @@ async function handleTttButton(interaction) {
       return;
     }
     game.lobbyPlayers.push({ id: interaction.user.id, name: displayNameFromInteraction(interaction) });
-    await interaction.update({ embeds: [buildLobbyEmbed(game)], components: buildLobbyComponents(game) });
+    await interaction.update(buildLobbyPayload(game));
     return;
   }
 
@@ -773,7 +778,7 @@ async function handleTttButton(interaction) {
     }
     clearTimeout(game.timeoutId);
     games.delete(gameId);
-    await interaction.update({ content: '❌ **게임이 취소되었습니다.**', embeds: [], components: [] });
+    await interaction.update(notice('❌ **게임이 취소되었습니다.**'));
     await restoreRematchButton(game);
     return;
   }
@@ -791,7 +796,7 @@ async function handleTttButton(interaction) {
       return;
     }
     game.infinite = !game.infinite;
-    await interaction.update({ embeds: [buildLobbyEmbed(game)], components: buildLobbyComponents(game) });
+    await interaction.update(buildLobbyPayload(game));
     return;
   }
 
@@ -819,7 +824,7 @@ async function handleTttButton(interaction) {
     }
 
     applyMove(game, games, cellIdx, game.currentTurn === 'X' ? 'X' : 'O');
-    await interaction.update({ content: '', embeds: [buildEmbed(game)], components: buildBoard(game) });
+    await interaction.update(buildGamePayload(game));
 
     if (game.status === 'finished') return;
 
@@ -827,7 +832,7 @@ async function handleTttButton(interaction) {
     if (game.players[game.currentTurn] === 'BOT') {
       const botIdx = pickBotMove(game);
       applyMove(game, games, botIdx, 'O');
-      await editWithRetry(game.message, () => ({ content: '', embeds: [buildEmbed(game)], components: buildBoard(game) }));
+      await editWithRetry(game.message, () => buildGamePayload(game));
       // 봇이 두고 나면 다시 사람 차례 — 이 턴에도 5분 타이머를 새로 걸어야 한다.
       // (안 걸면 beginGame 때 건 타이머 하나로 온 게임을 재는 꼴이 돼, 봇전은 판 시작 후
       //  5분이 지나면 사람 차례에 무승부로 끝나버린다. 사람 vs 사람은 아래에서 매 턴 갱신됨)
@@ -858,8 +863,9 @@ async function handleTttButton(interaction) {
       await interaction.reply({ content: '⚠️ **원래 참가자만 종료할 수 있습니다.**', flags: MessageFlags.Ephemeral });
       return;
     }
-    await interaction.update({ components: [] });
+    await interaction.update(withTopRows(interaction.message, []));
   }
 }
 
-module.exports = { startTttCommand, handleTttButton };
+// buildLobbyPayload/buildGamePayload는 화면 모음·테스트에서 직접 그려 보려고 함께 내보낸다.
+module.exports = { startTttCommand, handleTttButton, buildLobbyPayload, buildGamePayload };

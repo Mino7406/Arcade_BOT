@@ -1,6 +1,5 @@
 const {
   ActionRowBuilder,
-  EmbedBuilder,
   ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
@@ -9,11 +8,12 @@ const {
 } = require('discord.js');
 
 const {
-  ADMIN_IDS, getClientMap, getNaejeonMatches: getMatches, shuffleIntoTeams, buildTeamResultEmbed, titleHeader, markClosed, markReopened, toggleAutoCloseWhileClosed, announceMatchCompletionXp,
-  ROLE_NAMES, buildPreviewEmbed, scheduleCancelledDelete, deleteMentionMessage, AUTO_CLOSE_DELAY_MS, saveNow,
+  ADMIN_IDS, getClientMap, getNaejeonMatches: getMatches, shuffleIntoTeams, buildTeamResultCard, buildCancelledCard, buildMatchCard, buildMatchMessagePayload, buildPreviewPayload, markClosed, markReopened, toggleAutoCloseWhileClosed, announceMatchCompletionXp,
+  ROLE_NAMES, scheduleCancelledDelete, deleteMentionMessage, AUTO_CLOSE_DELAY_MS, saveNow,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
   buildNotifyModal: buildNotifyModalBase, parseNotifyTime, formatNotifyTimeSmart, isNotify12HourInput, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
 } = require('./공용');
+const { notice, payload, text } = require('./카드');
 const { displayNameFromInteraction } = require('./이름');
 const { logAction, logError } = require('./로그');
 const { OWNER_IDS } = require('../config');
@@ -40,70 +40,6 @@ function buildNotifyModal(matchMsgId, notifyAt, is12h) {
   return buildNotifyModalBase('naejeon', matchMsgId, notifyAt, is12h);
 }
 
-// teams: null | { team1: User[], team2: User[] }
-function buildPublicEmbed(data, participants, closed = false, teams = null) {
-  const { game, gameInfo, title, datetime, players, description, organizer } = data;
-  const max = parseInt(players) || 0;
-  const isFull = participants.length >= max;
-
-  const statusText = closed ? '🔒 마감됨' : isFull ? '✅ 모집 완료' : '🟢 모집 중';
-  const color = closed ? 0x57F287 : isFull ? 0x808080 : gameInfo.color;
-
-  const lines = [
-    `🎮 **게임**　　${gameInfo.name}`,
-    `📅 **일시**　　${datetime}`,
-    `👑 **주최자**　**\`${organizer.displayName}\`**`,
-    `📊 **상태**　　${statusText}`,
-  ];
-  if (data.notifyAt) lines.push(`🔔 **알림**　　${formatNotifyTimeSmart(data.notifyAt, data.notify12h)}`);
-
-  const embed = new EmbedBuilder()
-    .setColor(color)
-    .setDescription(`${titleHeader(game, gameInfo, title)}\n${lines.join('\n')}`)
-    .setFooter({ text: closed ? '🔒 마감된 내전입니다.' : isFull ? '✅ 모집이 완료되었습니다.' : '✅ 버튼을 눌러 참가하세요!' })
-    .setTimestamp();
-
-  if (description) embed.addFields({ name: '📝 메모', value: description });
-
-  if (teams) {
-    const assignedIds = new Set([
-      ...teams.team1.map(u => u.id),
-      ...teams.team2.map(u => u.id),
-    ]);
-    const unassigned = participants.filter(u => !assignedIds.has(u.id));
-
-    if (unassigned.length > 0) {
-      embed.addFields({
-        name: `👤 미배정 (${unassigned.length}명)`,
-        value: `\`\`\`\n${unassigned.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n')}\n\`\`\``,
-      });
-    }
-
-    embed.addFields(
-      {
-        name: `🔵 팀 1 - ${teams.team1.length}명`,
-        value: teams.team1.length > 0 ? `\`\`\`\n${teams.team1.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n')}\n\`\`\`` : '없음',
-        inline: true,
-      },
-      {
-        name: `🔴 팀 2 - ${teams.team2.length}명`,
-        value: teams.team2.length > 0 ? `\`\`\`\n${teams.team2.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n')}\n\`\`\`` : '없음',
-        inline: true,
-      },
-    );
-  } else {
-    const participantText = participants.length > 0
-      ? `\`\`\`\n${participants.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n')}\n\`\`\``
-      : '*아직 참가자가 없습니다.*';
-    embed.addFields({
-      name: `👥 참가자  ${participants.length} / ${max}명`,
-      value: participantText,
-    });
-  }
-
-  return embed;
-}
-
 function buildPublicComponents(participants, maxPlayers, closed = false) {
   const buttons = [
     new ButtonBuilder()
@@ -118,15 +54,14 @@ function buildPublicComponents(participants, maxPlayers, closed = false) {
   return [new ActionRowBuilder().addComponents(...buttons)];
 }
 
+// 공개 게시 메시지: 카드 한 장(+역할 멘션 줄). 버튼은 카드 안에 들어간다.
 function buildPublicMessagePayload(match) {
   const maxPlayers = parseInt(match.data.players) || 0;
-  return {
-    content: match.roleContent || '',
-    embeds: [buildPublicEmbed(match.data, match.participants, match.closed, match.teams)],
-    components: buildPublicComponents(match.participants, maxPlayers, match.closed),
-    allowedMentions: { parse: [] },
-    attachments: [], // 예전 썸네일 기능 시절 붙었던 첨부파일이 남아있는 메시지를 정리
-  };
+  return buildMatchMessagePayload({
+    label: '내전',
+    match,
+    rows: buildPublicComponents(match.participants, maxPlayers, match.closed),
+  });
 }
 
 function buildLeaveButton(matchMsgId) {
@@ -341,13 +276,7 @@ async function handleNaejeonModal(interaction) {
   const data = { game, gameInfo, title, datetime, players, description, autoClose: true, organizer: { id: interaction.user.id, displayName: displayNameFromInteraction(interaction) } };
   getPending(interaction.client).set(interaction.user.id, data);
 
-  await interaction.reply({
-    content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
-    embeds: [buildPreviewEmbed(data)],
-    components: buildPreviewComponents(data),
-    attachments: [],
-    flags: MessageFlags.Ephemeral,
-  });
+  await interaction.reply(buildPreviewPayload('naejeon', data, { ephemeral: true }));
 }
 
 async function handleNaejeonEditModal(interaction) {
@@ -378,12 +307,7 @@ async function handleNaejeonEditModal(interaction) {
   // 미리보기의 [수정] 버튼에서 연 모달이라 update()로 그 미리보기 메시지를 바로 고친다.
   // (예전엔 처음 미리보기를 띄운 인터랙션을 보관해 editReply했는데, 토큰이 15분이면 만료돼
   //  미리보기를 오래 띄워두고 수정하면 Invalid Webhook Token(50027)으로 실패했다.)
-  await interaction.update({
-    content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
-    embeds: [buildPreviewEmbed(data)],
-    components: buildPreviewComponents(data),
-    attachments: [],
-  });
+  await interaction.update(buildPreviewPayload('naejeon', data));
 }
 
 // 팀 선택 드롭다운 제출 핸들러
@@ -391,7 +315,7 @@ async function handleTeamAssign(interaction) {
   const matchMsgId = interaction.customId.slice('naejeon:team_assign:'.length);
   const match = getMatches(interaction.client).get(matchMsgId);
   if (!match) {
-    await interaction.update({ content: `⚠️ **만료된 내전입니다.**`, embeds: [], attachments: [], components: [] });
+    await interaction.update(notice(`⚠️ **만료된 내전입니다.**`));
     return;
   }
 
@@ -402,8 +326,8 @@ async function handleTeamAssign(interaction) {
   match.teams = { team1, team2 };
 
   await match.message.edit(buildPublicMessagePayload(match));
-  await interaction.update({ content: '✅ **팀 배정이 완료되었습니다.**', embeds: [], attachments: [], components: [buildTeamDoneRow(matchMsgId)] });
-  await interaction.channel.send({ embeds: [buildTeamResultEmbed(match.data, match.teams)], attachments: [], allowedMentions: { parse: [] } });
+  await interaction.update(notice('✅ **팀 배정이 완료되었습니다.**', { rows: [buildTeamDoneRow(matchMsgId)] }));
+  await interaction.channel.send(payload(buildTeamResultCard(match.data, match.teams), { allowedMentions: { parse: [] } }));
 }
 
 async function handleNaejeonButton(interaction) {
@@ -424,20 +348,17 @@ async function handleNaejeonButton(interaction) {
       : null;
     getPending(interaction.client).delete(interaction.user.id);
     const roleContent = role ? `<@&${role.id}>` : '';
-    const msg = await interaction.channel.send({
-      content: roleContent,
-      embeds: [buildPublicEmbed(data, participants)],
-      components: buildPublicComponents(participants, maxPlayers),
-      attachments: [],
+    const publishCard = buildMatchCard({ label: '내전', data, participants, rows: buildPublicComponents(participants, maxPlayers) });
+    const msg = await interaction.channel.send(payload(roleContent ? [text(roleContent), publishCard] : [publishCard], {
       allowedMentions: { roles: role ? [role.id] : [], users: [] },
-    });
+    }));
     const match = { data, participants, message: msg, closed: false, closedAt: null, teams: null, mentionSent: false, roleContent, guildId: interaction.guildId };
     getMatches(interaction.client).set(msg.id, match);
     saveNow(interaction.client);
     logAction(interaction, '매치 생성', `내전 '${data.title}'(${msg.id}) 공개 게시 — ${data.gameInfo?.name ?? data.game}, 정원 ${maxPlayers}명`);
     // 게시 전 미리보기 단계에서 이미 알림 예약을 해뒀다면, 그때는 매치가 없어 타이머를 못 걸었으므로 지금 건다.
     if (data.notifyAt) armNotifyReminder(getMatches(interaction.client), msg.id, match, '내전');
-    await interaction.update({ content: '✅ **채널에 공개 게시되었습니다!**', embeds: [], attachments: [], components: [] });
+    await interaction.update(notice('✅ **채널에 공개 게시되었습니다!**'));
     return;
   }
 
@@ -495,12 +416,12 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:leave:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 내전입니다.**`, components: [] });
+      await interaction.update(notice(`⚠️ **만료된 내전입니다.**`));
       return;
     }
     const idx = match.participants.findIndex(u => u.id === interaction.user.id);
     if (idx === -1) {
-      await interaction.update({ content: '⚠️ **이미 참가 취소된 상태입니다.**', components: [] });
+      await interaction.update(notice('⚠️ **이미 참가 취소된 상태입니다.**'));
       return;
     }
     match.participants.splice(idx, 1);
@@ -516,7 +437,7 @@ async function handleNaejeonButton(interaction) {
     const reopened = match.closed && match.participants.length < maxPlayers;
     if (reopened) markReopened(match);
     await match.message.edit(buildPublicMessagePayload(match));
-    await interaction.update({ content: '❌ **참가가 취소되었습니다.**', components: [] });
+    await interaction.update(notice('❌ **참가가 취소되었습니다.**'));
     return;
   }
 
@@ -545,7 +466,7 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:match_close:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 내전입니다.**`, components: [] });
+      await interaction.update(notice(`⚠️ **만료된 내전입니다.**`));
       return;
     }
     const maxPlayers = parseInt(match.data.players) || 0;
@@ -560,20 +481,13 @@ async function handleNaejeonButton(interaction) {
           .setLabel('↩️ 돌아가기')
           .setStyle(ButtonStyle.Secondary),
       );
-      await interaction.update({
-        content: `⚠️ **참가자가 미달입니다.** (${match.participants.length}/${maxPlayers}명)\n그래도 마감하시겠습니까?`,
-        embeds: [], attachments: [],
-        components: [confirmRow],
-      });
+      await interaction.update(notice(`⚠️ **참가자가 미달입니다.** (${match.participants.length}/${maxPlayers}명)\n그래도 마감하시겠습니까?`, { rows: [confirmRow] }));
       return;
     }
     markClosed(getMatches(interaction.client), matchMsgId, match, '내전', false);
     await match.message.edit(buildPublicMessagePayload(match));
     await announceMatchCompletionXp(match);
-    await interaction.update({
-      content: '✅ **내전이 마감되었습니다.**',
-      components: buildManageMenu(match, matchMsgId),
-    });
+    await interaction.update(notice('✅ **내전이 마감되었습니다.**', { rows: buildManageMenu(match, matchMsgId) }));
     return;
   }
 
@@ -582,16 +496,13 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:match_close_confirm:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 내전입니다.**`, components: [] });
+      await interaction.update(notice(`⚠️ **만료된 내전입니다.**`));
       return;
     }
     markClosed(getMatches(interaction.client), matchMsgId, match, '내전', false);
     await match.message.edit(buildPublicMessagePayload(match));
     await announceMatchCompletionXp(match);
-    await interaction.update({
-      content: '✅ **내전이 마감되었습니다.**',
-      components: buildManageMenu(match, matchMsgId),
-    });
+    await interaction.update(notice('✅ **내전이 마감되었습니다.**', { rows: buildManageMenu(match, matchMsgId) }));
     return;
   }
 
@@ -600,15 +511,12 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:match_reopen:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 내전입니다.**`, components: [] });
+      await interaction.update(notice(`⚠️ **만료된 내전입니다.**`));
       return;
     }
     markReopened(match);
     await match.message.edit(buildPublicMessagePayload(match));
-    await interaction.update({
-      content: '🔓 **내전 마감이 해제되었습니다.**',
-      components: buildManageMenu(match, matchMsgId),
-    });
+    await interaction.update(notice('🔓 **내전 마감이 해제되었습니다.**', { rows: buildManageMenu(match, matchMsgId) }));
     return;
   }
 
@@ -617,19 +525,16 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:toggle_match_autoclose:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 내전입니다.**`, components: [] });
+      await interaction.update(notice(`⚠️ **만료된 내전입니다.**`));
       return;
     }
     const enabled = isAutoDeleteExpired(match) ? true : !match.data.autoClose;
     await toggleAutoCloseWhileClosed(getMatches(interaction.client), matchMsgId, match, '내전', enabled);
     if (!getMatches(interaction.client).has(matchMsgId)) {
-      await interaction.update({ content: '✅ **자동 삭제 시간이 지나 내전이 삭제되었습니다.**', components: [] });
+      await interaction.update(notice('✅ **자동 삭제 시간이 지나 내전이 삭제되었습니다.**'));
       return;
     }
-    await interaction.update({
-      content: `⏰ **자동 삭제가 ${match.data.autoClose ? 'ON' : 'OFF'}으로 변경되었습니다.**`,
-      components: buildManageMenu(match, matchMsgId),
-    });
+    await interaction.update(notice(`⏰ **자동 삭제가 ${match.data.autoClose ? 'ON' : 'OFF'}으로 변경되었습니다.**`, { rows: buildManageMenu(match, matchMsgId) }));
     return;
   }
 
@@ -638,22 +543,14 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:team_builder:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 내전입니다.**`, embeds: [], attachments: [], components: [] });
+      await interaction.update(notice(`⚠️ **만료된 내전입니다.**`));
       return;
     }
     if (match.participants.length < 2) {
-      await interaction.update({
-        content: '⚠️ **팀 만들기는 참가자가 2명 이상이어야 합니다.**',
-        embeds: [], attachments: [],
-        components: buildManageMenu(match, matchMsgId),
-      });
+      await interaction.update(notice('⚠️ **팀 만들기는 참가자가 2명 이상이어야 합니다.**', { rows: buildManageMenu(match, matchMsgId) }));
       return;
     }
-    await interaction.update({
-      content: '🛠️ **팀 만들기** - 팀 1에 배정할 참가자를 선택하세요. \n(나머지는 자동으로 팀 2가 됩니다.)',
-      embeds: [], attachments: [],
-      components: buildTeamBuilderComponents(match, matchMsgId),
-    });
+    await interaction.update(notice('🛠️ **팀 만들기** - 팀 1에 배정할 참가자를 선택하세요. \n(나머지는 자동으로 팀 2가 됩니다.)', { rows: buildTeamBuilderComponents(match, matchMsgId) }));
     return;
   }
 
@@ -662,21 +559,17 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:team_shuffle:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 내전입니다.**`, embeds: [], attachments: [], components: [] });
+      await interaction.update(notice(`⚠️ **만료된 내전입니다.**`));
       return;
     }
     if (match.participants.length < 2) {
-      await interaction.update({
-        content: '⚠️ **팀을 나누려면 참가자가 2명 이상이어야 합니다.**',
-        embeds: [], attachments: [],
-        components: buildManageMenu(match, matchMsgId),
-      });
+      await interaction.update(notice('⚠️ **팀을 나누려면 참가자가 2명 이상이어야 합니다.**', { rows: buildManageMenu(match, matchMsgId) }));
       return;
     }
     match.teams = shuffleIntoTeams(match.participants);
     await match.message.edit(buildPublicMessagePayload(match));
-    await interaction.update({ content: '✅ **자동 팀 배정이 완료되었습니다.**', embeds: [], attachments: [], components: [buildTeamDoneRow(matchMsgId)] });
-    await interaction.channel.send({ embeds: [buildTeamResultEmbed(match.data, match.teams)], attachments: [], allowedMentions: { parse: [] } });
+    await interaction.update(notice('✅ **자동 팀 배정이 완료되었습니다.**', { rows: [buildTeamDoneRow(matchMsgId)] }));
+    await interaction.channel.send(payload(buildTeamResultCard(match.data, match.teams), { allowedMentions: { parse: [] } }));
     return;
   }
 
@@ -685,14 +578,10 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:manage_back:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 내전입니다.**`, embeds: [], attachments: [], components: [] });
+      await interaction.update(notice(`⚠️ **만료된 내전입니다.**`));
       return;
     }
-    await interaction.update({
-      content: '⚙️ **주최자 관리 메뉴**',
-      embeds: [], attachments: [],
-      components: buildManageMenu(match, matchMsgId),
-    });
+    await interaction.update(notice('⚙️ **주최자 관리 메뉴**', { rows: buildManageMenu(match, matchMsgId) }));
     return;
   }
 
@@ -701,7 +590,7 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:match_mention:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 내전입니다.**`, components: [] });
+      await interaction.update(notice(`⚠️ **만료된 내전입니다.**`));
       return;
     }
     if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
@@ -709,15 +598,15 @@ async function handleNaejeonButton(interaction) {
       return;
     }
     if (!match.closed) {
-      await interaction.update({ content: '⚠️ **마감된 내전에서만 사용할 수 있습니다.**', components: buildManageMenu(match, matchMsgId) });
+      await interaction.update(notice('⚠️ **마감된 내전에서만 사용할 수 있습니다.**', { rows: buildManageMenu(match, matchMsgId) }));
       return;
     }
     if (match.mentionSent) {
-      await interaction.update({ content: '⚠️ **이미 멘션을 보냈습니다.**', components: buildManageMenu(match, matchMsgId) });
+      await interaction.update(notice('⚠️ **이미 멘션을 보냈습니다.**', { rows: buildManageMenu(match, matchMsgId) }));
       return;
     }
     if (match.participants.length === 0) {
-      await interaction.update({ content: '⚠️ **참가자가 없습니다.**', components: buildManageMenu(match, matchMsgId) });
+      await interaction.update(notice('⚠️ **참가자가 없습니다.**', { rows: buildManageMenu(match, matchMsgId) }));
       return;
     }
     match.mentionSent = true;
@@ -730,10 +619,7 @@ async function handleNaejeonButton(interaction) {
       allowedMentions: { parse: ['users'] },
     });
     match.mentionMessageId = mentionMsg.id;
-    await interaction.editReply({
-      content: '📣 **참가자에게 멘션을 보냈습니다.**',
-      components: buildManageMenu(match, matchMsgId),
-    });
+    await interaction.editReply(notice('📣 **참가자에게 멘션을 보냈습니다.**', { rows: buildManageMenu(match, matchMsgId) }));
     return;
   }
 
@@ -742,7 +628,7 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:notify_set:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 내전입니다.**`, components: [] });
+      await interaction.update(notice(`⚠️ **만료된 내전입니다.**`));
       return;
     }
     if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
@@ -764,11 +650,7 @@ async function handleNaejeonButton(interaction) {
           .setLabel('↩️ 돌아가기')
           .setStyle(ButtonStyle.Secondary),
       );
-      await interaction.update({
-        content: `🔔 **이미 알림이 예약되어 있습니다.** (${formatNotifyTimeSmart(match.data.notifyAt, match.data.notify12h)})\n수정하시겠습니까?`,
-        embeds: [], attachments: [],
-        components: [confirmRow],
-      });
+      await interaction.update(notice(`🔔 **이미 알림이 예약되어 있습니다.** (${formatNotifyTimeSmart(match.data.notifyAt, match.data.notify12h)})\n수정하시겠습니까?`, { rows: [confirmRow] }));
       return;
     }
     await interaction.showModal(buildNotifyModal(matchMsgId, match.data.notifyAt, match.data.notify12h));
@@ -780,7 +662,7 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:notify_edit:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 내전입니다.**`, components: [] });
+      await interaction.update(notice(`⚠️ **만료된 내전입니다.**`));
       return;
     }
     if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
@@ -800,7 +682,7 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:match_edit:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 내전입니다.**`, components: [] });
+      await interaction.update(notice(`⚠️ **만료된 내전입니다.**`));
       return;
     }
     const editModal = buildModal(match.data.game, match.data);
@@ -814,7 +696,7 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:match_cancel:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 내전입니다.**`, components: [] });
+      await interaction.update(notice(`⚠️ **만료된 내전입니다.**`));
       return;
     }
     const confirmRow = new ActionRowBuilder().addComponents(
@@ -827,11 +709,7 @@ async function handleNaejeonButton(interaction) {
         .setLabel('↩️ 돌아가기')
         .setStyle(ButtonStyle.Secondary),
     );
-    await interaction.update({
-      content: '⚠️ **내전을 취소하시겠습니까?**\n참가자 명단이 모두 사라지고 모집이 종료됩니다.',
-      embeds: [], attachments: [],
-      components: [confirmRow],
-    });
+    await interaction.update(notice('⚠️ **내전을 취소하시겠습니까?**\n참가자 명단이 모두 사라지고 모집이 종료됩니다.', { rows: [confirmRow] }));
     return;
   }
 
@@ -840,29 +718,19 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:match_cancel_confirm:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: '⚠️ **이미 취소된 내전입니다.**', components: [] });
+      await interaction.update(notice('⚠️ **이미 취소된 내전입니다.**'));
       return;
     }
     const cancelledByOrganizer = match.data.organizer.id === interaction.user.id;
-    const cancelledEmbed = new EmbedBuilder()
-      .setColor(0xED4245)
-      .setDescription([
-        titleHeader(match.data.game, match.data.gameInfo, match.data.title),
-        `🎮 **게임**　　${match.data.gameInfo.name}`,
-        `📅 **일시**　　${match.data.datetime}`,
-        `👑 **주최자**　**\`${match.data.organizer.displayName}\`**`,
-        `📊 **상태**　　🔴 취소됨`,
-      ].join('\n'))
-      .setFooter({ text: cancelledByOrganizer ? '❌ 주최자에 의해 내전이 취소되었습니다.' : '⚙️ 관리자에 의해 내전이 취소 처리되었습니다.' })
-      .setTimestamp();
+    const cancelledCard = buildCancelledCard({ label: '내전', data: match.data, byOrganizer: cancelledByOrganizer });
 
     logAction(interaction, '매치 취소', `내전 '${match.data.title}'(${matchMsgId}) ${cancelledByOrganizer ? '주최자' : '관리자'}가 취소 (참가자 ${match.participants.length}명)`);
     clearNotifyTimer(match); // 취소된 매치는 알림을 보내지 않으므로 남은 예약 타이머를 취소한다.
-    await match.message.edit({ content: '', embeds: [cancelledEmbed], components: [], attachments: [], allowedMentions: { parse: [] } });
+    await match.message.edit(payload(cancelledCard, { allowedMentions: { parse: [] } }));
     getMatches(interaction.client).delete(matchMsgId);
     await deleteMentionMessage(interaction.client, match);
     scheduleCancelledDelete(interaction.client, matchMsgId, match.message.channelId, Date.now(), match.data.title);
-    await interaction.update({ content: '✅ **내전이 취소되었습니다.**', components: [] });
+    await interaction.update(notice('✅ **내전이 취소되었습니다.**'));
     return;
   }
 
@@ -871,7 +739,7 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:add_member:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 내전입니다.**`, embeds: [], attachments: [], components: [] });
+      await interaction.update(notice(`⚠️ **만료된 내전입니다.**`));
       return;
     }
     const sel = new UserSelectMenuBuilder()
@@ -879,10 +747,7 @@ async function handleNaejeonButton(interaction) {
       .setPlaceholder('참가자 선택')
       .setMinValues(1)
       .setMaxValues(10);
-    await interaction.update({
-      content: '➕ **참가자 추가** - 추가할 멤버를 선택하세요.',
-      embeds: [], attachments: [],
-      components: [
+    await interaction.update(notice('➕ **참가자 추가** - 추가할 멤버를 선택하세요.', { rows: [
         new ActionRowBuilder().addComponents(sel),
         new ActionRowBuilder().addComponents(
           new ButtonBuilder()
@@ -890,8 +755,7 @@ async function handleNaejeonButton(interaction) {
             .setLabel('↩️ 관리로')
             .setStyle(ButtonStyle.Secondary),
         ),
-      ],
-    });
+      ] }));
     return;
   }
 
@@ -900,11 +764,11 @@ async function handleNaejeonButton(interaction) {
     const matchMsgId = customId.slice('naejeon:remove_member:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 내전입니다.**`, embeds: [], attachments: [], components: [] });
+      await interaction.update(notice(`⚠️ **만료된 내전입니다.**`));
       return;
     }
     if (match.participants.length === 0) {
-      await interaction.update({ content: '⚠️ **참가자가 없습니다.**', embeds: [], attachments: [], components: buildManageMenu(match, matchMsgId) });
+      await interaction.update(notice('⚠️ **참가자가 없습니다.**', { rows: buildManageMenu(match, matchMsgId) }));
       return;
     }
     const sel = new StringSelectMenuBuilder()
@@ -913,10 +777,7 @@ async function handleNaejeonButton(interaction) {
       .setMinValues(1)
       .setMaxValues(Math.min(match.participants.length, 25))
       .addOptions(match.participants.slice(0, 25).map(u => ({ label: u.displayName, value: u.id })));
-    await interaction.update({
-      content: '➖ **참가자 제거** - 제거할 멤버를 선택하세요.',
-      embeds: [], attachments: [],
-      components: [
+    await interaction.update(notice('➖ **참가자 제거** - 제거할 멤버를 선택하세요.', { rows: [
         new ActionRowBuilder().addComponents(sel),
         new ActionRowBuilder().addComponents(
           new ButtonBuilder()
@@ -924,8 +785,7 @@ async function handleNaejeonButton(interaction) {
             .setLabel('↩️ 관리로')
             .setStyle(ButtonStyle.Secondary),
         ),
-      ],
-    });
+      ] }));
     return;
   }
 
@@ -937,12 +797,7 @@ async function handleNaejeonButton(interaction) {
       return;
     }
     data.autoClose = !data.autoClose;
-    await interaction.update({
-      content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
-      embeds: [buildPreviewEmbed(data)],
-      components: buildPreviewComponents(data),
-      attachments: [],
-    });
+    await interaction.update(buildPreviewPayload('naejeon', data));
     return;
   }
 
@@ -954,12 +809,7 @@ async function handleNaejeonButton(interaction) {
       return;
     }
     data.mentionSteam = !data.mentionSteam;
-    await interaction.update({
-      content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
-      embeds: [buildPreviewEmbed(data)],
-      components: buildPreviewComponents(data),
-      attachments: [],
-    });
+    await interaction.update(buildPreviewPayload('naejeon', data));
     return;
   }
 
@@ -989,18 +839,14 @@ async function handleNaejeonButton(interaction) {
 
   // ── 취소 → 확인 탭 ────────────────────────────────────────
   if (customId === 'naejeon:cancel') {
-    await interaction.update({
-      content: '⚠️ **내전 생성을 취소하시겠습니까?**\n입력한 내용이 모두 사라집니다.',
-      embeds: [], attachments: [],
-      components: [buildCancelComponents()],
-    });
+    await interaction.update(notice('⚠️ **내전 생성을 취소하시겠습니까?**\n입력한 내용이 모두 사라집니다.', { rows: [buildCancelComponents()] }));
     return;
   }
 
   // ── 취소 확인 ─────────────────────────────────────────────
   if (customId === 'naejeon:cancel_confirm') {
     getPending(interaction.client).delete(interaction.user.id);
-    await interaction.update({ content: '❌ **내전 생성이 취소되었습니다.**', embeds: [], attachments: [], components: [] });
+    await interaction.update(notice('❌ **내전 생성이 취소되었습니다.**'));
     return;
   }
 
@@ -1008,15 +854,10 @@ async function handleNaejeonButton(interaction) {
   if (customId === 'naejeon:cancel_back') {
     const data = getPending(interaction.client).get(interaction.user.id);
     if (!data) {
-      await interaction.update({ content: `⚠️ **데이터가 만료되었습니다.**\n다시 \`/내전\`을 실행해주세요.`, embeds: [], attachments: [], components: [] });
+      await interaction.update(notice(`⚠️ **데이터가 만료되었습니다.**\n다시 \`/내전\`을 실행해주세요.`));
       return;
     }
-    await interaction.update({
-      content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
-      embeds: [buildPreviewEmbed(data)],
-      components: buildPreviewComponents(data),
-      attachments: [],
-    });
+    await interaction.update(buildPreviewPayload('naejeon', data));
     return;
   }
 }
@@ -1082,12 +923,7 @@ async function handleNaejeonNotifyModal(interaction) {
       data.notifyAt = null;
       data.notify12h = false;
     }
-    await interaction.update({
-      content: '**미리보기** - 이 내용이 채널에 게시됩니다.',
-      embeds: [buildPreviewEmbed(data)],
-      components: buildPreviewComponents(data),
-      attachments: [],
-    });
+    await interaction.update(buildPreviewPayload('naejeon', data));
     return;
   }
 
@@ -1132,17 +968,13 @@ async function handleNaejeonMemberAdd(interaction) {
   const matchMsgId = interaction.customId.slice('naejeon:member_add_select:'.length);
   const match = getMatches(interaction.client).get(matchMsgId);
   if (!match) {
-    await interaction.update({ content: `⚠️ **만료된 내전입니다.**`, embeds: [], attachments: [], components: [] });
+    await interaction.update(notice(`⚠️ **만료된 내전입니다.**`));
     return;
   }
   const maxPlayers = parseInt(match.data.players) || 0;
   const newUserIds = interaction.values.filter(id => !match.participants.some(u => u.id === id));
   if (match.participants.length + newUserIds.length > maxPlayers) {
-    await interaction.update({
-      content: `⚠️ **참가자 초과로 추가할 수 없습니다.**\n(내전 수정을 통해 인원을 수정해주세요.)`,
-      embeds: [], attachments: [],
-      components: buildManageMenu(match, matchMsgId),
-    });
+    await interaction.update(notice(`⚠️ **참가자 초과로 추가할 수 없습니다.**\n(내전 수정을 통해 인원을 수정해주세요.)`, { rows: buildManageMenu(match, matchMsgId) }));
     return;
   }
   const added = [];
@@ -1167,14 +999,14 @@ async function handleNaejeonMemberAdd(interaction) {
   const lines = [];
   if (added.length > 0)   lines.push(`✅ 추가됨: ${added.map(n => `**${n}**`).join(', ')}`);
   if (skipped.length > 0) lines.push(`⚠️ 이미 참가 중: ${skipped.map(n => `**${n}**`).join(', ')}`);
-  await interaction.update({ content: lines.join('\n') || '완료', embeds: [], attachments: [], components: buildManageMenu(match, matchMsgId) });
+  await interaction.update(notice(lines.join('\n') || '완료', { rows: buildManageMenu(match, matchMsgId) }));
 }
 
 async function handleNaejeonMemberRemove(interaction) {
   const matchMsgId = interaction.customId.slice('naejeon:member_remove_select:'.length);
   const match = getMatches(interaction.client).get(matchMsgId);
   if (!match) {
-    await interaction.update({ content: `⚠️ **만료된 내전입니다.**`, embeds: [], attachments: [], components: [] });
+    await interaction.update(notice(`⚠️ **만료된 내전입니다.**`));
     return;
   }
   const removeIds = new Set(interaction.values);
@@ -1191,11 +1023,7 @@ async function handleNaejeonMemberRemove(interaction) {
   await match.message.edit(buildPublicMessagePayload(match));
   const resultLines = [`➖ 제거됨: ${removed.map(n => `**${n}**`).join(', ')}`];
   if (reopened) resultLines.push('🔓 **참가자 미달로 마감이 자동 해제되었습니다.**');
-  await interaction.update({
-    content: resultLines.join('\n'),
-    embeds: [], attachments: [],
-    components: buildManageMenu(match, matchMsgId),
-  });
+  await interaction.update(notice(resultLines.join('\n'), { rows: buildManageMenu(match, matchMsgId) }));
 }
 
 module.exports = { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleNaejeonNotifyModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload };

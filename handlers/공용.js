@@ -22,6 +22,7 @@ const { KST_OFFSET_MS } = require('./시간');
 const { ADMIN_IDS, STEAM_EMOJI_ID } = require('../config');
 const { logSystem, logError, userLabel } = require('./로그');
 const { writeJsonIfChanged } = require('./저장');
+const { card, payload, text, COLORS, clipLines, emojiUrl, customEmojiId } = require('./카드');
 
 // 내전(naejeon)/모집(mojip) 두 시스템이 공유하는 게임 → 역할 이름 매핑.
 // (역할 멘션 대상 채널이 있으면 해당 역할을 핑한다.)
@@ -380,6 +381,20 @@ function scheduleCancelledDelete(client, msgId, channelId, cancelledAt = Date.no
   saveNow(client);
 }
 
+// 메시지의 글자를 모두 이어서 돌려준다. 컴포넌트 v2 카드(컨테이너 안 TextDisplay)와
+// 예전 임베드(description)를 둘 다 읽는다 — 업데이트 전에 올라간 옛 취소 메시지도 찾을 수 있게.
+function messageTextOf(msg) {
+  const parts = [];
+  const walk = (c) => {
+    if (!c) return;
+    if (typeof c.content === 'string') parts.push(c.content);
+    for (const child of c.components ?? []) walk(child);
+  };
+  for (const c of msg.components ?? []) walk(c);
+  for (const e of msg.embeds ?? []) if (e.description) parts.push(e.description);
+  return parts.join('\n');
+}
+
 // 저장 파일에서 빠진 취소 임베드(강제종료 직전 취소분, 자동 삭제 도중 실패분 등)를 메시지 기록에서
 // 직접 찾아 삭제 예약을 다시 건다. 이렇게 하면 관리 메뉴 삭제 목록에도 다시 나타나고, 이미 지연시간이
 // 지난 임베드는 바로 삭제된다. 취소 시각은 취소할 때 임베드에 찍어둔 타임스탬프를 쓴다.
@@ -399,10 +414,11 @@ async function recoverCancelledEmbeds(client, channelIds) {
 
       for (const msg of batch.values()) {
         if (msg.author.id !== client.user.id || tracked.has(msg.id)) continue;
-        const embed = msg.embeds[0];
-        if (!embed?.description?.includes('🔴 취소됨')) continue;
-        const cancelledAt = Date.parse(embed.timestamp) || msg.editedTimestamp || msg.createdTimestamp;
-        const title = embed.description.split('\n')[0].replace(/^## (<a?:\w+:\d+>\s+)?/, '');
+        const body = messageTextOf(msg);
+        if (!body.includes('🔴 취소됨')) continue;
+        const cancelledAt = Date.parse(msg.embeds[0]?.timestamp) || msg.editedTimestamp || msg.createdTimestamp;
+        const headLine = body.split('\n').find(l => /^#{1,2}\s/.test(l)) || '';
+        const title = headLine.replace(/^#{1,2}\s+(<a?:\w+:\d+>\s+)?/, '');
         scheduleCancelledDelete(client, msg.id, msg.channelId, cancelledAt, title);
         recovered++;
       }
@@ -540,32 +556,140 @@ async function announceMatchCompletionXp(match) {
   }
 }
 
-function buildTeamResultEmbed(data, teams) {
-  const { game, gameInfo, title, datetime, organizer } = data;
+// ─── 내전/모집 카드(컴포넌트 v2) ─────────────────────────────────
+// 예전 EmbedBuilder 대신 카드(컨테이너) 한 장으로 그린다. 공개 게시·미리보기·취소·팀 결과가
+// 같은 뼈대(제목 → 정보 → 메모 → 참가자 → 안내 문구 → 버튼)를 써서 어디서 봐도 같은 모양이다.
+// label: '내전' | '모집'
+
+function gameHeader(game, gameInfo, title) {
+  return game === 'custom' ? title : `${gameInfo.emoji}  ${title}`;
+}
+
+// 게임 이모지가 커스텀 이모지면 카드 오른쪽 위 작은 그림으로 쓴다(직접 입력은 그림 없음).
+function gameThumb(gameInfo) {
+  const id = customEmojiId(gameInfo?.emoji);
+  return id ? emojiUrl(id) : undefined;
+}
+
+function numberedBlock(users) {
+  const lines = users.map((u, i) => `${i + 1}. ${u.displayName}`);
+  return `\`\`\`\n${clipLines(lines, 900)}\n\`\`\``;
+}
+
+// ▰▰▰▱▱ 모양 진행 막대. 정원 대비 참가 인원을 한눈에 보여 준다.
+function progressBar(current, max, length = 10) {
+  if (!max || max < 1) return '';
+  const filled = Math.min(length, Math.round((current / max) * length));
+  return '▰'.repeat(filled) + '▱'.repeat(length - filled);
+}
+
+function matchInfoBlock(data, { withNotify = true } = {}) {
+  const { datetime, organizer } = data;
   const lines = [
-    `🎮 **게임**　　${gameInfo.name}`,
-    `📅 **일시**　　${datetime}`,
+    `📅 **일시**　${datetime}`,
     `👑 **주최자**　**\`${organizer.displayName}\`**`,
-    `📊 **상태**　　🔒 마감됨`,
   ];
-  const embed = new EmbedBuilder()
-    .setColor(gameInfo.color)
-    .setDescription(`${titleHeader(game, gameInfo, title)} - 팀 배정\n${lines.join('\n')}`);
-  return embed
-    .addFields(
-      {
-        name: `🔵 팀 1 - ${teams.team1.length}명`,
-        value: teams.team1.length > 0 ? `\`\`\`\n${teams.team1.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n')}\n\`\`\`` : '없음',
-        inline: true,
-      },
-      {
-        name: `🔴 팀 2 - ${teams.team2.length}명`,
-        value: teams.team2.length > 0 ? `\`\`\`\n${teams.team2.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n')}\n\`\`\`` : '없음',
-        inline: true,
-      },
-    )
-    .setFooter({ text: '✅ 팀이 배정되었습니다.' })
-    .setTimestamp();
+  if (withNotify && data.notifyAt) lines.push(`🔔 **알림**　${formatNotifyTimeSmart(data.notifyAt, data.notify12h)}`);
+  return lines.join('\n');
+}
+
+function matchMemoBlock(description) {
+  return description ? `### 📝 메모\n${description}` : null;
+}
+
+function matchParticipantsBlock(participants, max) {
+  const bar = progressBar(participants.length, max);
+  const head = `### 👥 참가자　${participants.length} / ${max}명${bar ? `\n${bar}` : ''}`;
+  const body = participants.length > 0 ? numberedBlock(participants) : '*아직 참가자가 없습니다.*';
+  return `${head}\n${body}`;
+}
+
+function teamBlock(icon, no, list) {
+  return `### ${icon} 팀 ${no}　${list.length}명\n${list.length > 0 ? numberedBlock(list) : '없음'}`;
+}
+
+function matchTeamBlocks(participants, teams, { withUnassigned = true } = {}) {
+  const assignedIds = new Set([...teams.team1.map(u => u.id), ...teams.team2.map(u => u.id)]);
+  const unassigned = withUnassigned ? participants.filter(u => !assignedIds.has(u.id)) : [];
+  return [
+    unassigned.length > 0 ? `### 👤 미배정　${unassigned.length}명\n${numberedBlock(unassigned)}` : null,
+    teamBlock('🔵', 1, teams.team1),
+    teamBlock('🔴', 2, teams.team2),
+  ];
+}
+
+// 공개 게시 카드. teams가 있으면 참가자 목록 대신 팀 구성을 보여 준다(내전 전용).
+function buildMatchCard({ label, data, participants, closed = false, teams = null, rows = [] }) {
+  const { game, gameInfo, title, players, description } = data;
+  const max = parseInt(players) || 0;
+  const isFull = participants.length >= max;
+  const statusText = closed ? '🔒 마감됨' : isFull ? '✅ 모집 완료' : '🟢 모집 중';
+  const color = closed ? COLORS.ok : isFull ? COLORS.muted : gameInfo.color;
+  return card({
+    color,
+    header: gameHeader(game, gameInfo, title),
+    sub: [label, gameInfo.name, statusText],
+    thumb: gameThumb(gameInfo),
+    thumbAlt: gameInfo.name,
+    blocks: [
+      matchInfoBlock(data),
+      matchMemoBlock(description),
+      ...(teams ? matchTeamBlocks(participants, teams) : [matchParticipantsBlock(participants, max)]),
+    ],
+    footer: closed ? `🔒 마감된 ${label}입니다.` : isFull ? '✅ 모집이 완료되었습니다.' : '✅ 버튼을 눌러 참가하세요!',
+    rows,
+  });
+}
+
+// 게시 전 미리보기(작성자에게만 보이는 임시 메시지). 버튼 줄은 카드 안에 넣는다.
+function buildPreviewCard({ data, rows = [] }) {
+  const { game, gameInfo, title, players, description } = data;
+  const max = parseInt(players) || 0;
+  return card({
+    color: gameInfo.color,
+    header: gameHeader(game, gameInfo, title),
+    sub: ['미리보기', gameInfo.name, '⏳ 게시 전'],
+    thumb: gameThumb(gameInfo),
+    thumbAlt: gameInfo.name,
+    blocks: [
+      matchInfoBlock(data),
+      matchMemoBlock(description),
+      matchParticipantsBlock([], max),
+    ],
+    footer: '🔎 게시하기 전에 내용을 다시 확인해 주세요. 이 내용이 채널에 게시됩니다.',
+    rows,
+  });
+}
+
+// 취소된 내전/모집 카드. "🔴 취소됨" 문구는 recoverCancelledEmbeds가 찾는 표식이다.
+function buildCancelledCard({ label, data, byOrganizer }) {
+  const { game, gameInfo, title } = data;
+  return card({
+    color: COLORS.err,
+    header: gameHeader(game, gameInfo, title),
+    sub: [label, gameInfo.name, '🔴 취소됨'],
+    thumb: gameThumb(gameInfo),
+    thumbAlt: gameInfo.name,
+    blocks: [matchInfoBlock(data, { withNotify: false })],
+    footer: byOrganizer ? `❌ 주최자에 의해 ${label}이 취소되었습니다.` : `⚙️ 관리자에 의해 ${label}이 취소 처리되었습니다.`,
+  });
+}
+
+// 팀이 배정됐다고 채널에 알리는 카드(내전).
+function buildTeamResultCard(data, teams) {
+  const { game, gameInfo, title } = data;
+  return card({
+    color: gameInfo.color,
+    header: gameHeader(game, gameInfo, title),
+    sub: ['내전', gameInfo.name, '⚔️ 팀 배정'],
+    thumb: gameThumb(gameInfo),
+    thumbAlt: gameInfo.name,
+    blocks: [
+      matchInfoBlock(data, { withNotify: false }),
+      ...matchTeamBlocks([], teams, { withUnassigned: false }),
+    ],
+    footer: '✅ 팀이 배정되었습니다.',
+  });
 }
 
 // ─── 내전(naejeon) / 모집(mojip) 공통 빌더 ──────────────────────
@@ -573,28 +697,6 @@ function buildTeamResultEmbed(data, teams) {
 // 라벨 문구(label: '내전' | '모집')만 다르고 로직은 완전히 동일한
 // 부분만 여기로 모았다. 팀 배정/역할 멘션 유지처럼 실제 동작이
 // 다른 부분(buildPublicEmbed 등)은 각 핸들러 파일에 그대로 둔다.
-
-function buildPreviewEmbed({ game, gameInfo, title, datetime, players, description, organizer }) {
-  const max = parseInt(players) || 0;
-
-  const lines = [
-    `🎮 **게임**　　${gameInfo.name}`,
-    `📅 **일시**　　${datetime}`,
-    `👑 **주최자**　**\`${organizer.displayName}\`**`,
-    `📊 **상태**　　⏳ 게시 전`,
-  ];
-
-  const embed = new EmbedBuilder()
-    .setColor(gameInfo.color)
-    .setDescription(`${titleHeader(game, gameInfo, title)}\n${lines.join('\n')}`);
-
-  if (description) embed.addFields({ name: '📝 메모', value: description });
-
-  return embed
-    .addFields({ name: `👥 참가자  0 / ${max}명`, value: '*아직 참가자가 없습니다.*' })
-    .setFooter({ text: '🔎 게시하기 전에 내용을 다시 확인해 주세요.' })
-    .setTimestamp();
-}
 
 function buildModal(type, label, GAMES, game, data = {}) {
   const gameInfo = GAMES[game];
@@ -707,6 +809,18 @@ function buildPreviewComponents(type, data = null) {
     return [row1, new ActionRowBuilder().addComponents(autoCloseToggle, notifyButton, steamToggle)];
   }
   return [row1, new ActionRowBuilder().addComponents(autoCloseToggle, notifyButton)];
+}
+
+// 미리보기 메시지 전체(카드 + 버튼 줄)를 한 번에 만든다. 작성자에게만 보이는 임시 메시지(ephemeral)로 쓴다.
+function buildPreviewPayload(type, data, extra = {}) {
+  return payload(buildPreviewCard({ data, rows: buildPreviewComponents(type, data) }), extra);
+}
+
+// 공개 게시 메시지(카드 + 필요하면 역할 멘션 줄). v2는 content를 못 쓰므로 멘션은 카드 위 글자로 올린다.
+function buildMatchMessagePayload({ label, match, rows }) {
+  const cardMsg = buildMatchCard({ label, data: match.data, participants: match.participants, closed: match.closed, teams: match.teams, rows });
+  const components = match.roleContent ? [text(match.roleContent), cardMsg] : [cardMsg];
+  return payload(components, { allowedMentions: { parse: [] } });
 }
 
 function buildCancelComponents(type) {
@@ -824,8 +938,13 @@ module.exports = {
   scheduleMessageDelete,
   deleteMentionMessage,
   shuffleIntoTeams,
-  buildTeamResultEmbed,
-  buildPreviewEmbed,
+  buildMatchCard,
+  buildPreviewCard,
+  buildPreviewPayload,
+  buildMatchMessagePayload,
+  buildCancelledCard,
+  buildTeamResultCard,
+  gameHeader,
   buildModal,
   buildLeaveButton,
   buildPreviewComponents,

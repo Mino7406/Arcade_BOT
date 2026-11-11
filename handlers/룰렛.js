@@ -4,11 +4,12 @@
 
 const fs = require('fs');
 const path = require('path');
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const { applyXp, getXp, levelFromXp, isExcludedGuild, announceLevelUp, isMinigameXpFrozen, isRaidXpFrozen } = require('./레벨링');
 const { kstDateString, timeUntilKstMidnight } = require('./시간');
 const { logSystem, logAction, logError, userLabel } = require('./로그');
 const { writeJsonIfChanged } = require('./저장');
+const { card, payload, notice, COLORS } = require('./카드');
 
 const ROULETTE_PATH = path.join(__dirname, '..', 'DB', 'roulette.json');
 fs.mkdirSync(path.dirname(ROULETTE_PATH), { recursive: true });
@@ -126,13 +127,13 @@ const REEL_STOP_AT = [2, 4, 5]; // 각 릴이 최종값에 고정되는 틱(순�
 
 // 실제 슬롯머신처럼 릴이 하나씩 순서대로 멈추는 애니메이션. finalReels는 이미 정해진 결과이고,
 // 여기서는 그 결과가 드러나기 전까지 버튼 라벨을 무작위 심볼로 계속 바꿔가며 "돌아가는" 연출만 한다.
-async function animateSpin(message, lobbyId, finalReels) {
+async function animateSpin(message, lobby, bet, finalReels) {
   const display = ['🎰', '🎰', '🎰'];
   for (let tick = 0; tick < SPIN_TICKS; tick++) {
     for (let i = 0; i < 3; i++) {
       display[i] = tick >= REEL_STOP_AT[i] ? finalReels[i] : spinReel();
     }
-    await message.edit({ components: [buildReelRow(lobbyId, display)] }).catch(() => {});
+    await message.edit(buildSpinningPayload(lobby, bet, display)).catch(() => {});
     await sleep(SPIN_TICK_MS);
   }
 }
@@ -142,18 +143,46 @@ function getLobbies(client) {
   return client.rouletteLobbies;
 }
 
-function buildLobbyEmbed(lobby) {
+function buildLobbyCard(lobby) {
   const betLine = lobby.bet ? `**${lobby.bet} XP**` : '*아직 선택 안 함*';
-  return new EmbedBuilder()
-    .setColor(0x5865F2)
-    .setTitle('🎰 룰렛머신')
-    .setDescription(
-      `<@${lobby.userId}>님, 베팅 XP를 고른 뒤 **🎰 돌리기**를 누르세요.\n\n` +
-      `💰 선택한 베팅: ${betLine}\n` +
-      `📊 최대 베팅 가능: **${lobby.maxAvailable} XP**`,
-    )
-    .setFooter({ text: '⏰ 60초 안에 돌리지 않으면 자동으로 취소됩니다.' })
-    .setTimestamp();
+  return card({
+    color: COLORS.info,
+    header: '🎰 룰렛머신',
+    blocks: [
+      `<@${lobby.userId}>님, 베팅 XP를 고른 뒤 **🎰 돌리기**를 누르세요.`,
+      `💰 선택한 베팅　${betLine}\n📊 최대 베팅 가능　**${lobby.maxAvailable} XP**`,
+    ],
+    footer: '⏰ 60초 안에 돌리지 않으면 자동으로 취소됩니다.',
+    rows: buildLobbyComponents(lobby),
+  });
+}
+
+// 로비 메시지 전체(본인에게만 보이는 임시 메시지). 버튼은 카드 안에 들어간다.
+function buildLobbyPayload(lobby, extra) {
+  return payload(buildLobbyCard(lobby), extra);
+}
+
+// 릴이 도는 중 / 결과 화면. 릴 버튼 3개가 카드 안에서 슬롯머신처럼 보인다.
+function buildSpinningPayload(lobby, bet, display) {
+  return payload(card({
+    color: COLORS.info,
+    header: '🎰 룰렛머신',
+    blocks: [`<@${lobby.userId}>님이 **${bet} XP**를 걸고 돌립니다...\n\n🎰 릴이 돌아가는 중...`],
+    rows: [buildReelRow(lobby.id, display)],
+  }));
+}
+
+function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels }) {
+  return payload(card({
+    color: net > 0 ? 0xFFD700 : COLORS.muted,
+    header: '🎰 룰렛머신',
+    blocks: [
+      `<@${lobby.userId}>님이 **${bet} XP**를 걸었습니다.`,
+      `${resultLine}\n${netLine}`,
+    ],
+    footer: '⏰ 하루에 한 번만 돌릴 수 있어요.',
+    rows: [buildReelRow(lobby.id, reels, getMatchIndices(reels))],
+  }));
 }
 
 function buildBetRow(lobby) {
@@ -232,13 +261,13 @@ async function startRouletteCommand(interaction) {
   lobbies.set(lobby.id, lobby);
 
   // 로비는 본인에게만 보이게(ephemeral) 띄우고, 결과는 스핀 시점에 채널에 공개 메시지로 따로 보낸다.
-  await interaction.reply({ embeds: [buildLobbyEmbed(lobby)], components: buildLobbyComponents(lobby), flags: MessageFlags.Ephemeral });
+  await interaction.reply(buildLobbyPayload(lobby, { ephemeral: true }));
 
   lobby.timeoutId = setTimeout(async () => {
     const l = lobbies.get(lobby.id);
     if (!l) return;
     lobbies.delete(lobby.id);
-    await l.interaction.editReply({ content: '⏰ **시간 초과로 룰렛이 취소되었습니다.**', embeds: [], components: [] }).catch(() => {});
+    await l.interaction.editReply(notice('⏰ **시간 초과로 룰렛이 취소되었습니다.**')).catch(() => {});
   }, LOBBY_TIMEOUT_MS);
 }
 
@@ -257,19 +286,19 @@ async function spinLobby(interaction, lobby, lobbies) {
     const content = isRaidXpFrozen()
       ? '👾 **몬스터 때문에 XP 시스템이 고장 나 룰렛을 돌릴 수 없습니다.**'
       : '⚙️ **현재 관리자가 미니게임 XP를 일시 중지해 룰렛을 돌릴 수 없습니다.**';
-    await interaction.editReply({ content, embeds: [], components: [] });
+    await interaction.editReply(notice(content));
     return;
   }
 
   // 로비가 열려있던 사이(다른 곳에서) 이미 오늘 플레이했거나 XP가 줄어들었을 수 있으므로 재검증.
   if (hasPlayedToday(lobby.guildId, lobby.userId)) {
-    await interaction.editReply({ content: '⏳ **오늘은 이미 룰렛을 돌렸습니다.**', embeds: [], components: [] });
+    await interaction.editReply(notice('⏳ **오늘은 이미 룰렛을 돌렸습니다.**'));
     return;
   }
   const currentLevelXp = levelFromXp(getXp(lobby.guildId, lobby.userId)).currentLevelXp;
   const bet = Math.min(lobby.bet, currentLevelXp);
   if (bet < MIN_BET) {
-    await interaction.editReply({ content: '⚠️ **베팅 가능한 XP가 부족해졌습니다.**', embeds: [], components: [] });
+    await interaction.editReply(notice('⚠️ **베팅 가능한 XP가 부족해졌습니다.**'));
     return;
   }
 
@@ -295,22 +324,6 @@ async function spinLobby(interaction, lobby, lobbies) {
 
   const netLine = net >= 0 ? `📈 **+${net} XP**` : `📉 **${net} XP**`;
 
-  const spinningEmbed = new EmbedBuilder()
-    .setColor(0x5865F2)
-    .setTitle('🎰 룰렛머신')
-    .setDescription(`<@${lobby.userId}>님이 **${bet} XP**를 걸고 돌립니다...\n\n🎰 릴이 돌아가는 중...`)
-    .setTimestamp();
-
-  const resultEmbed = new EmbedBuilder()
-    .setColor(net > 0 ? 0xFFD700 : 0x808080)
-    .setTitle('🎰 룰렛머신')
-    .setDescription(
-      `<@${lobby.userId}>님이 **${bet} XP**를 걸었습니다.\n\n` +
-      `${resultLine}\n\n${netLine}`,
-    )
-    .setFooter({ text: '⏰ 하루에 한 번만 돌릴 수 있어요.' })
-    .setTimestamp();
-
   // 베팅 과정은 본인에게만 보였지만, 결과는 채널 전체에 공개 메시지로 실제 슬롯머신처럼
   // 릴이 하나씩 순서대로 멈추는 연출과 함께 알린다. XP 정산은 이미 끝났으므로, 채널 공개
   // 과정에서 오류가 나더라도(권한 문제 등) 최소한 본인에게는 결과를 보여준다.
@@ -320,16 +333,13 @@ async function spinLobby(interaction, lobby, lobbies) {
     await interaction.deleteReply();
     // interaction.channel은 캐시에 없으면 null일 수 있으므로(재시작 직후 등) fetch로 안전하게 가져온다.
     const channel = interaction.channel ?? await interaction.client.channels.fetch(interaction.channelId);
-    const spinMessage = await channel.send({
-      embeds: [spinningEmbed],
-      components: [buildReelRow(lobby.id, ['🎰', '🎰', '🎰'])],
-    });
+    const spinMessage = await channel.send(buildSpinningPayload(lobby, bet, ['🎰', '🎰', '🎰']));
 
-    await animateSpin(spinMessage, lobby.id, reels);
+    await animateSpin(spinMessage, lobby, bet, reels);
 
     // 결과 수정이 일시적 오류(네트워크/레이트리밋)로 한 번 실패하면 메시지가 "릴이 돌아가는 중..."에
     // 영영 멈춰 보였다. 몇 번 재시도하고, 그래도 안 되면 결과를 새 메시지로 보낸다.
-    const finalPayload = { embeds: [resultEmbed], components: [buildReelRow(lobby.id, reels, getMatchIndices(reels))] };
+    const finalPayload = buildResultPayload(lobby, { bet, resultLine, netLine, net, reels });
     let edited = false;
     for (let attempt = 0; attempt < 3 && !edited; attempt++) {
       try {
@@ -350,7 +360,7 @@ async function spinLobby(interaction, lobby, lobbies) {
   } catch (err) {
     console.error('룰렛 결과 공개 실패:', err);
     logError('게임 오류', `룰렛 결과 채널 공개 실패 — ${userLabel(lobby.userId)}에게만 결과 표시`, err);
-    await interaction.editReply({ content: '', embeds: [resultEmbed], components: [] }).catch(() => {});
+    await interaction.editReply(buildResultPayload(lobby, { bet, resultLine, netLine, net, reels })).catch(() => {});
   }
 
   if (result.leveledUp) {
@@ -382,13 +392,13 @@ async function handleRouletteButton(interaction) {
       return;
     }
     lobby.bet = amount;
-    await interaction.update({ embeds: [buildLobbyEmbed(lobby)], components: buildLobbyComponents(lobby) });
+    await interaction.update(buildLobbyPayload(lobby));
     return;
   }
 
   if (action === 'max') {
     lobby.bet = lobby.maxAvailable;
-    await interaction.update({ embeds: [buildLobbyEmbed(lobby)], components: buildLobbyComponents(lobby) });
+    await interaction.update(buildLobbyPayload(lobby));
     return;
   }
 
@@ -404,9 +414,10 @@ async function handleRouletteButton(interaction) {
   if (action === 'cancel') {
     clearTimeout(lobby.timeoutId);
     lobbies.delete(lobby.id);
-    await interaction.update({ content: '❌ **룰렛이 취소되었습니다.**', embeds: [], components: [] });
+    await interaction.update(notice('❌ **룰렛이 취소되었습니다.**'));
     return;
   }
 }
 
-module.exports = { startRouletteCommand, handleRouletteButton, loadRoulette, saveRoulette, MIN_BET, MAX_BET };
+// buildLobbyPayload/buildResultPayload는 화면 모음·테스트에서 직접 그려 보려고 함께 내보낸다.
+module.exports = { buildLobbyPayload, buildSpinningPayload, buildResultPayload, startRouletteCommand, handleRouletteButton, loadRoulette, saveRoulette, MIN_BET, MAX_BET };

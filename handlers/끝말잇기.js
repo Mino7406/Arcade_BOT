@@ -1,5 +1,4 @@
 const {
-  EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -11,6 +10,7 @@ const {
   WAGER_XP, BOT_WIN_XP_MIN, BOT_WIN_XP_MAX, rollBotWinXp,
 } = require('./봇전한도');
 const { displayNameFromInteraction } = require('./이름');
+const { card, payload, notice, text, withTopRows, COLORS } = require('./카드');
 const { logGameResult, logError } = require('./로그');
 
 const TURN_MS  = 20_000;
@@ -267,40 +267,37 @@ function getGames(client) {
 
 // ── 임베드 빌더 ────────────────────────────────────────────────
 
-function buildWaitingEmbed(game) {
+function buildWaitingCard(game) {
   const participantText = game.players.length > 0
     ? `\`\`\`\n${game.players.map((p, i) => `${i + 1}. ${p.name}${p.id === game.hostId ? ' 👑' : ''}`).join('\n')}\n\`\`\``
     : '*아직 참가자가 없습니다.*';
 
-  const embed = new EmbedBuilder()
-    .setColor(0x5865F2)
-    .setDescription(`## 🔤 끝말잇기\n참가자를 기다리는 중입니다.\n-# (${JOIN_MS / 60_000}분 내 시작하지 않으면 자동 취소됩니다)`);
-  return embed
-    .addFields(
-      { name: `👥 참가자  ${game.players.length}명`, value: participantText },
-      {
-        name: '📋 규칙',
-        value:
-          '• 이전 단어의 **마지막 글자**로 시작하는 단어를 입력하세요.\n' +
-          '• 두음법칙으로 통하는 글자(력↔역, 로↔노)도 인정됩니다.\n' +
-          '• 한글 2글자 이상만 단어로 인정되며, 그 외 잡담 메시지는 무시됩니다.\n' +
-          '• 실제 사전에 있는 단어만 인정됩니다.\n' +
-          '• 이미 사용된 단어는 사용할 수 없습니다.\n' +
-          '• 다음 사람이 이을 단어가 없는 **한방단어**는 인정되지 않으며, 다시 시도할 수 있습니다.\n' +
-          `• **${TURN_SEC}초** 내에 입력하지 않으면 탈락합니다.`,
-      },
-      {
-        name: '🎲 XP 내기',
-        value:
-          `• 참가자가 전부 사람이면 탈락자가 최대 ${WAGER_XP} XP를 잃고(강등보호 작동) 생존자들이 나눠 받습니다.\n` +
-          `• 봇이 참가하면 내기 대신, 봇을 이겼을 때 생존자에게 ${BOT_WIN_XP_MIN}~${BOT_WIN_XP_MAX} XP가 지급됩니다.\n` +
-          `• 봇전 보상은 하루 최대 ${DAILY_BOT_MATCH_XP_CAP} XP까지만 받을 수 있습니다.`,
-      },
-    )
-    .setFooter({ text: '최소 2명이 참가해야 시작할 수 있습니다.' });
+  return card({
+    color: COLORS.info,
+    header: '🔤 끝말잇기',
+    sub: ['대기 중', `${JOIN_MS / 60_000}분 내 시작하지 않으면 자동 취소`],
+    blocks: [
+      `### 👥 참가자　${game.players.length}명\n${participantText}`,
+      '### 📋 규칙\n' +
+        '• 이전 단어의 **마지막 글자**로 시작하는 단어를 입력하세요.\n' +
+        '• 두음법칙으로 통하는 글자(력↔역, 로↔노)도 인정됩니다.\n' +
+        '• 한글 2글자 이상만 단어로 인정되며, 그 외 잡담 메시지는 무시됩니다.\n' +
+        '• 실제 사전에 있는 단어만 인정됩니다.\n' +
+        '• 이미 사용된 단어는 사용할 수 없습니다.\n' +
+        '• 다음 사람이 이을 단어가 없는 **한방단어**는 인정되지 않으며, 다시 시도할 수 있습니다.\n' +
+        `• **${TURN_SEC}초** 내에 입력하지 않으면 탈락합니다.`,
+      '### 🎲 XP 내기\n' +
+        `• 참가자가 전부 사람이면 탈락자가 최대 ${WAGER_XP} XP를 잃고(강등보호 작동) 생존자들이 나눠 받습니다.\n` +
+        `• 봇이 참가하면 내기 대신, 봇을 이겼을 때 생존자에게 ${BOT_WIN_XP_MIN}~${BOT_WIN_XP_MAX} XP가 지급됩니다.\n` +
+        `• 봇전 보상은 하루 최대 ${DAILY_BOT_MATCH_XP_CAP} XP까지만 받을 수 있습니다.`,
+    ],
+    footer: '최소 2명이 참가해야 시작할 수 있습니다.',
+    rows: buildWaitingComponents(game),
+  });
 }
 
-function buildPlayingEmbed(game) {
+// note: 카드 맨 위에 붙일 안내 한 줄(재대결 시작 등)
+function buildPlayingCard(game, note) {
   const currentPlayer = game.players[game.currentIdx];
   const recentWords = game.history.slice(-8).join(' → ') || '(없음)';
 
@@ -310,16 +307,20 @@ function buildPlayingEmbed(game) {
 
   const participantText = `\`\`\`\n${game.players.map((p, i) => `${i + 1}. ${p.name}${i === game.currentIdx ? ' ▶️' : ''}`).join('\n')}\n\`\`\``;
 
-  const embed = new EmbedBuilder()
-    .setColor(0x57F287)
-    .setDescription(`## 🔤 끝말잇기 진행 중\n${wordLine}\n\n💬 **\`${currentPlayer.name}\`의 차례** — 채팅에 단어를 입력하세요! (${currentPlayer.id === 'BOT' ? '자동' : `${TURN_SEC}초`})`);
-  return embed
-    .addFields(
-      { name: `👥 참가자  ${game.players.length}명`, value: participantText, inline: true },
-      { name: '📝 최근 단어', value: recentWords, inline: true },
-    )
-    .setFooter({ text: `⏰ ${TURN_SEC}초 안에 입력하지 않으면 시간 초과로 종료됩니다.` })
-    .setTimestamp();
+  return card({
+    color: COLORS.ok,
+    header: '🔤 끝말잇기',
+    sub: '진행 중',
+    blocks: [
+      note || null,
+      wordLine,
+      `💬 **\`${currentPlayer.name}\`의 차례** — 채팅에 단어를 입력하세요! (${currentPlayer.id === 'BOT' ? '자동' : `${TURN_SEC}초`})`,
+      `### 👥 참가자　${game.players.length}명\n${participantText}`,
+      `### 📝 최근 단어\n${recentWords}`,
+    ],
+    footer: `⏰ ${TURN_SEC}초 안에 입력하지 않으면 시간 초과로 종료됩니다.`,
+    rows: buildPlayingComponents(game),
+  });
 }
 
 // 종료 사유 문구. 예전엔 객체 리터럴이라 모든 사유가 한꺼번에 평가됐는데, wrong_start 문구가
@@ -346,21 +347,21 @@ function describeEndReason(game) {
   }
 }
 
-function buildFinishedEmbed(game) {
+function buildFinishedCard(game) {
   const loserPlayer = game.players.find(p => p.id === game.loser);
   const loserName = loserPlayer?.name ?? '알 수 없음';
   const recent = game.history.slice(-10).join(' → ') || '(없음)';
 
-  const embed = new EmbedBuilder()
-    .setColor(0xED4245)
-    .setDescription(
-      `## 🔤 끝말잇기 종료\n${game.endReason === 'cancelled' ? '' : `**탈락** : \`${loserName}\`\n`}**이유** : ${describeEndReason(game)}\n\n` +
-      `총 **${game.history.length}개** 단어 사용` +
-      formatXpResultLine(game),
-    );
-  return embed
-    .addFields({ name: '📝 마지막 단어들', value: recent })
-    .setTimestamp();
+  const summary = (game.endReason === 'cancelled' ? '' : `**탈락** : \`${loserName}\`\n`) +
+    `**이유** : ${describeEndReason(game)}\n총 **${game.history.length}개** 단어 사용`;
+  const xp = formatXpResultLine(game).replace(/^\n/, '');
+
+  return card({
+    color: COLORS.err,
+    header: '🔤 끝말잇기',
+    sub: '게임 종료',
+    blocks: [summary, xp || null, `### 📝 마지막 단어들\n${recent}`],
+  });
 }
 
 function formatXpResultLine(game) {
@@ -391,6 +392,12 @@ function formatXpResultLine(game) {
   const capNote = result.capped ? `\n-# 하루 봇전 XP 한도(${DAILY_BOT_MATCH_XP_CAP})에 걸려 일부만 지급됐습니다.` : '';
   return `\n🎉 **봇을 이겨서 XP 획득**\n${winnerLines}${capNote}`;
 }
+
+// 상황별 메시지 전체. 재대결·종료 줄은 카드 밖(맨 아래)에 둬서 withTopRows로 그 줄만 뗄 수 있다.
+function waitingPayload(game) { return payload(buildWaitingCard(game)); }
+function playingPayload(game, note) { return payload(buildPlayingCard(game, note)); }
+function finishedPayload(game) { return payload([buildFinishedCard(game), ...buildFinishedComponents(game)]); }
+function rematchRequestPayload(game) { return payload(buildRematchRequestCard(game)); }
 
 // ── 컴포넌트 빌더 ──────────────────────────────────────────────
 
@@ -446,17 +453,19 @@ function buildFinishedComponents(game) {
 // 참가자가 여럿일 수 있으므로, 재대결을 신청하면 신청자를 제외한 이전 참가자 전원이
 // 각자 수락/거절해야 한다. 사람 상대가 없었던(봇하고만 했던) 게임은 승낙받을 상대가
 // 없으므로 이 단계 없이 바로 시작한다(startRematchGame으로 직행).
-function buildRematchRequestEmbed(game) {
+function buildRematchRequestCard(game) {
   const lines = game.humanPlayers
     .map(p => `${game.accepted.has(p.id) ? '✅ 수락' : '⌛ 대기 중'}  <@${p.id}>`)
     .join('\n');
-  let desc = `# 🔁 끝말잇기 재대결 신청\n모두 수락하면 바로 시작됩니다.\n\n${lines}`;
-  if (game.hadBot) desc += '\n\n🤖 봇도 함께 참가합니다.';
-
-  return new EmbedBuilder()
-    .setColor(0x5865F2)
-    .setDescription(desc)
-    .setTimestamp();
+  return card({
+    color: COLORS.info,
+    header: '🔁 끝말잇기 재대결 신청',
+    blocks: [
+      '모두 수락하면 바로 시작됩니다.',
+      lines + (game.hadBot ? '\n\n🤖 봇도 함께 참가합니다.' : ''),
+    ],
+    rows: buildRematchRequestComponents(game),
+  });
 }
 
 function buildRematchRequestComponents(game) {
@@ -474,15 +483,15 @@ function buildRematchRequestComponents(game) {
 async function restoreRematchButton(games, game) {
   if (!game || !games.has(game.id)) return;
   game.rematchStarted = false;
-  await game.message?.edit({ components: buildFinishedComponents(game) }).catch(() => {});
+  await game.message?.edit(withTopRows(game.message, buildFinishedComponents(game))).catch(() => {});
 }
 
 // 지난 판 결과는 그대로 남겨두고, 재대결은 새 메시지로 시작한다 — 예전엔 결과 메시지를
 // 통째로 덮어써서 방금 한 판의 기록이 사라졌다. 다 쓴 '재대결' 버튼만 떼어낸다.
 // 성공하면 true, 메시지를 못 올려 시작하지 못했으면 false를 돌려준다(호출한 쪽이 잠금 해제).
-async function postRematchMessage(interaction, payload) {
-  await interaction.update({ components: [] });
-  return interaction.channel.send(payload);
+async function postRematchMessage(interaction, messagePayload) {
+  await interaction.update(withTopRows(interaction.message, []));
+  return interaction.channel.send(messagePayload);
 }
 
 async function startRematchRequest(interaction, oldGame, humanPlayers, hadBot) {
@@ -504,10 +513,7 @@ async function startRematchRequest(interaction, oldGame, humanPlayers, hadBot) {
   games.set(gameId, game);
 
   try {
-    game.message = await postRematchMessage(interaction, {
-      embeds: [buildRematchRequestEmbed(game)],
-      components: buildRematchRequestComponents(game),
-    });
+    game.message = await postRematchMessage(interaction, rematchRequestPayload(game));
   } catch (err) {
     console.error('끝말잇기 재대결 신청 메시지 전송 실패:', err);
     logError('게임 오류', '끝말잇기 재대결 신청 메시지 전송 실패', err);
@@ -521,7 +527,7 @@ async function startRematchRequest(interaction, oldGame, humanPlayers, hadBot) {
     const g = games.get(gameId);
     if (!g || g.status !== 'rematch_pending') return;
     games.delete(gameId);
-    await g.message?.edit({ content: '⏰ **재대결 신청이 만료되었습니다.**', embeds: [], components: [], attachments: [] }).catch(() => {});
+    await g.message?.edit(notice('⏰ **재대결 신청이 만료되었습니다.**')).catch(() => {});
     await restoreRematchButton(games, g.sourceGame);
   }, 60_000);
   return true;
@@ -565,18 +571,14 @@ async function startRematchGame(interaction, gameId, humanPlayers, hadBot, { rep
   };
   games.set(gameId, game);
 
-  const payload = {
-    content: '🔄 **재대결이 시작됐습니다!**',
-    embeds: [buildPlayingEmbed(game)],
-    components: buildPlayingComponents(game),
-  };
+  const startPayload = playingPayload(game, '🔄 **재대결이 시작됐습니다!**');
 
   try {
     if (replaceMessage) {
-      await interaction.update({ ...payload, attachments: [] });
+      await interaction.update(startPayload);
       game.message = await interaction.fetchReply();
     } else {
-      game.message = await postRematchMessage(interaction, payload);
+      game.message = await postRematchMessage(interaction, startPayload);
     }
   } catch (err) {
     console.error('끝말잇기 재대결 시작 실패:', err);
@@ -754,14 +756,10 @@ async function moveBoardDown(game, payload) {
 const REFRESH_RETRY_DELAYS_MS = [2_000, 6_000];
 
 async function refreshBoard(game, delays = REFRESH_RETRY_DELAYS_MS) {
-  const payload = {
-    embeds: [buildPlayingEmbed(game)],
-    components: buildPlayingComponents(game),
-    attachments: [],
-  };
-  if (game.messagesSinceBoard && await moveBoardDown(game, payload)) return;
+  const boardPayload = playingPayload(game);
+  if (game.messagesSinceBoard && await moveBoardDown(game, boardPayload)) return;
   try {
-    await game.message?.edit(payload);
+    await game.message?.edit(boardPayload);
   } catch (err) {
     if (!delays.length) {
       console.error('끝말잇기 상황판 갱신 최종 실패:', err);
@@ -818,11 +816,11 @@ function endGame(game, games, loserId, reason, failWord = null) {
 
   let payload;
   try {
-    payload = { embeds: [buildFinishedEmbed(game)], components: buildFinishedComponents(game), attachments: [] };
+    payload = finishedPayload(game);
   } catch (err) {
     console.error('끝말잇기 종료 임베드 생성 실패:', err);
     logError('게임 오류', '끝말잇기 종료 임베드 생성 실패', err);
-    payload = { content: '🔤 **끝말잇기가 종료되었습니다.**', embeds: [], components: [], attachments: [] };
+    payload = notice('🔤 **끝말잇기가 종료되었습니다.**');
   }
   finishBoard(game, payload);
 }
@@ -919,11 +917,7 @@ async function createLobby(interaction, initialPlayers, hostId) {
   };
   games.set(gameId, game);
 
-  await interaction.reply({
-    embeds: [buildWaitingEmbed(game)],
-    components: buildWaitingComponents(game),
-    attachments: [],
-  });
+  await interaction.reply(waitingPayload(game));
   try {
     game.message = await interaction.fetchReply();
   } catch {
@@ -935,7 +929,7 @@ async function createLobby(interaction, initialPlayers, hostId) {
     const g = games.get(gameId);
     if (!g || g.status !== 'waiting') return;
     games.delete(gameId);
-    await game.message?.edit({ content: '⏰ **참가자가 없어 게임이 취소되었습니다.**', embeds: [], components: [], attachments: [] }).catch(() => {});
+    await game.message?.edit(notice('⏰ **참가자가 없어 게임이 취소되었습니다.**')).catch(() => {});
   }, JOIN_MS);
 }
 
@@ -966,7 +960,7 @@ async function handleWcButton(interaction) {
       return;
     }
     game.players.push({ id: interaction.user.id, name: displayNameFromInteraction(interaction) });
-    await interaction.update({ embeds: [buildWaitingEmbed(game)], components: buildWaitingComponents(game), attachments: [] });
+    await interaction.update(waitingPayload(game));
     return;
   }
 
@@ -993,7 +987,7 @@ async function handleWcButton(interaction) {
     }
     game.status = 'playing';
     game.currentIdx = 0;
-    await interaction.update({ embeds: [buildPlayingEmbed(game)], components: buildPlayingComponents(game), attachments: [] });
+    await interaction.update(playingPayload(game));
     startTurn(game, games);
     return;
   }
@@ -1026,7 +1020,7 @@ async function handleWcButton(interaction) {
     }
     game.status = 'playing';
     game.currentIdx = 0;
-    await interaction.update({ embeds: [buildPlayingEmbed(game)], components: buildPlayingComponents(game), attachments: [] });
+    await interaction.update(playingPayload(game));
     startTurn(game, games);
     return;
   }
@@ -1049,7 +1043,7 @@ async function handleWcButton(interaction) {
       await interaction.deferUpdate();
     } else {
       games.delete(gameId);
-      await interaction.update({ content: '❌ **게임이 취소되었습니다.**', embeds: [], components: [], attachments: [] });
+      await interaction.update(notice('❌ **게임이 취소되었습니다.**'));
     }
     return;
   }
@@ -1128,7 +1122,7 @@ async function handleWcButton(interaction) {
       return;
     }
 
-    await interaction.update({ embeds: [buildRematchRequestEmbed(game)], components: buildRematchRequestComponents(game) });
+    await interaction.update(rematchRequestPayload(game));
     return;
   }
 
@@ -1146,7 +1140,7 @@ async function handleWcButton(interaction) {
     }
     clearTimeout(game.timeoutId);
     games.delete(gameId);
-    await interaction.update({ content: `❌ **<@${interaction.user.id}>님이 재대결을 거절했습니다.**`, embeds: [], components: [], attachments: [] });
+    await interaction.update(notice(`❌ **<@${interaction.user.id}>님이 재대결을 거절했습니다.**`));
     await restoreRematchButton(games, game.sourceGame);
     return;
   }
@@ -1239,4 +1233,5 @@ async function handleWcMessage(message) {
   }
 }
 
-module.exports = { startWcCommand, handleWcButton, handleWcMessage };
+// 화면 모음·테스트에서 직접 그려 보려고 메시지 빌더도 함께 내보낸다.
+module.exports = { startWcCommand, handleWcButton, handleWcMessage, waitingPayload, playingPayload, finishedPayload, rematchRequestPayload };

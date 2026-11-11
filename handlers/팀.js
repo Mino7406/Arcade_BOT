@@ -1,5 +1,4 @@
 const {
-  EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -11,9 +10,11 @@ const {
   ADMIN_IDS,
   getNaejeonMatches: getMatches,
   shuffleIntoTeams,
-  buildTeamResultEmbed: buildTeamEmbed,
-  titleHeader,
+  buildTeamResultCard,
+  buildCancelledCard,
+  gameHeader,
 } = require('./공용');
+const { card, notice, payload, COLORS } = require('./카드');
 
 function buildMatchSelectMenu(matches) {
   const options = matches.map(([id, m]) => {
@@ -105,6 +106,28 @@ function buildPublicDoneRow(matchMsgId) {
   );
 }
 
+// 팀 관리 안내 카드(주최자에게만 보이는 임시 메시지): 내전 정보 + 지금 팀 상태 + 방식 선택 버튼.
+function buildTeamManagePayload(match, matchMsgId, hint) {
+  const { game, gameInfo, title, datetime, organizer } = match.data;
+  const teams = match.teams;
+  const blocks = [
+    `📅 **일시**　${datetime}\n👑 **주최자**　**\`${organizer.displayName}\`**\n📊 **상태**　${match.closed ? '🔒 마감됨' : '🟢 모집 중'}`,
+    `### 👥 참가자　${match.participants.length}명`,
+  ];
+  if (teams) {
+    const list = users => (users.length ? users.map((u, i) => `${i + 1}. ${u.displayName}`).join('\n') : '없음');
+    blocks.push(`### 🔵 팀 1　${teams.team1.length}명\n\`\`\`\n${list(teams.team1)}\n\`\`\``);
+    blocks.push(`### 🔴 팀 2　${teams.team2.length}명\n\`\`\`\n${list(teams.team2)}\n\`\`\``);
+  }
+  return payload(card({
+    color: gameInfo.color,
+    header: gameHeader(game, gameInfo, title),
+    sub: ['🎮 팀 관리', hint],
+    blocks,
+    rows: [buildManageRow(matchMsgId)],
+  }));
+}
+
 // ── 핸들러 ─────────────────────────────────────────────────────
 
 async function handleTeamMatchSelect(interaction) {
@@ -112,47 +135,24 @@ async function handleTeamMatchSelect(interaction) {
   const match = getMatches(interaction.client).get(matchMsgId);
 
   if (!match || match.guildId !== interaction.guildId) {
-    await interaction.update({ content: `⚠️ **만료된 내전입니다.**`, embeds: [], attachments: [], components: [] });
+    await interaction.update(notice(`⚠️ **만료된 내전입니다.**`));
     return;
   }
   if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
-    await interaction.update({ content: '❌ **내전 주최자만 팀을 관리할 수 있습니다.**', embeds: [], attachments: [], components: [] });
+    await interaction.update(notice('❌ **내전 주최자만 팀을 관리할 수 있습니다.**'));
     return;
   }
   if (match.participants.length < 2) {
-    await interaction.update({ content: '⚠️ **팀을 나누려면 참가자가 2명 이상이어야 합니다.**', embeds: [], attachments: [], components: [] });
+    await interaction.update(notice('⚠️ **팀을 나누려면 참가자가 2명 이상이어야 합니다.**'));
     return;
   }
 
   if (match.teams) {
-    await interaction.update({
-      content: '🎮 **팀 관리** - 이미 배정된 팀이 있습니다.',
-      embeds: [buildTeamEmbed(match.data, match.teams)],
-      components: [buildManageRow(matchMsgId)],
-      attachments: [],
-    });
+    await interaction.update(buildTeamManagePayload(match, matchMsgId, '이미 배정된 팀이 있습니다.'));
     return;
   }
 
-  const { game, gameInfo, title, datetime, organizer } = match.data;
-  const statusText = match.closed ? '🔒 마감됨' : '🟢 모집 중';
-  const lines = [
-    `🎮 **게임**　　${gameInfo.name}`,
-    `📅 **일시**　　${datetime}`,
-    `👑 **주최자**　**\`${organizer.displayName}\`**`,
-    `📊 **상태**　　${statusText}`,
-  ];
-  const infoEmbed = new EmbedBuilder()
-    .setColor(gameInfo.color)
-    .setDescription(`${titleHeader(game, gameInfo, title)}\n${lines.join('\n')}`)
-    .addFields({ name: '👥 참가자', value: `${match.participants.length}명` });
-
-  await interaction.update({
-    content: '🎮 **팀 관리** - 방식을 선택하세요.',
-    embeds: [infoEmbed],
-    components: [buildManageRow(matchMsgId)],
-    attachments: [],
-  });
+  await interaction.update(buildTeamManagePayload(match, matchMsgId, '방식을 선택하세요.'));
 }
 
 async function handleTeamButton(interaction) {
@@ -163,7 +163,7 @@ async function handleTeamButton(interaction) {
     const matchMsgId = customId.slice('team:builder:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 내전입니다.**`, embeds: [], attachments: [], components: [] });
+      await interaction.update(notice(`⚠️ **만료된 내전입니다.**`));
       return;
     }
     if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
@@ -174,11 +174,7 @@ async function handleTeamButton(interaction) {
       await interaction.reply({ content: '⚠️ **팀 만들기는 참가자가 2명 이상이어야 합니다.**', flags: MessageFlags.Ephemeral });
       return;
     }
-    await interaction.update({
-      content: '🛠️ **팀 만들기** - 팀 1에 배정할 참가자를 선택하세요.\n(나머지는 자동으로 팀 2가 됩니다.)',
-      embeds: [], attachments: [],
-      components: buildSetupBuilderComponents(match, matchMsgId),
-    });
+    await interaction.update(notice('🛠️ **팀 만들기** - 팀 1에 배정할 참가자를 선택하세요.\n(나머지는 자동으로 팀 2가 됩니다.)', { rows: buildSetupBuilderComponents(match, matchMsgId) }));
     return;
   }
 
@@ -187,7 +183,7 @@ async function handleTeamButton(interaction) {
     const matchMsgId = customId.slice('team:shuffle_start:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) {
-      await interaction.update({ content: `⚠️ **만료된 내전입니다.**`, embeds: [], attachments: [], components: [] });
+      await interaction.update(notice(`⚠️ **만료된 내전입니다.**`));
       return;
     }
     if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
@@ -197,8 +193,8 @@ async function handleTeamButton(interaction) {
     const teams = shuffleIntoTeams(match.participants);
     match.teams = teams;
     await match.message.edit(buildPublicMessagePayload(match));
-    await interaction.update({ content: '✅ **자동 팀 배정이 완료되었습니다.**', embeds: [], attachments: [], components: [buildManageRow(matchMsgId)] });
-    await interaction.channel.send({ embeds: [buildTeamEmbed(match.data, teams)], attachments: [], allowedMentions: { parse: [] } });
+    await interaction.update(notice('✅ **자동 팀 배정이 완료되었습니다.**', { rows: [buildManageRow(matchMsgId)] }));
+    await interaction.channel.send(payload(buildTeamResultCard(match.data, teams), { allowedMentions: { parse: [] } }));
     return;
   }
 
@@ -218,11 +214,7 @@ async function handleTeamButton(interaction) {
       await interaction.reply({ content: '⚠️ **팀 만들기는 참가자가 2명 이상이어야 합니다.**', flags: MessageFlags.Ephemeral });
       return;
     }
-    await interaction.update({
-      content: '🛠️ **팀 만들기** - 팀 1에 배정할 참가자를 선택하세요.\n(나머지는 자동으로 팀 2가 됩니다.)',
-      embeds: [], attachments: [],
-      components: buildPublicBuilderComponents(match, matchMsgId),
-    });
+    await interaction.update(notice('🛠️ **팀 만들기** - 팀 1에 배정할 참가자를 선택하세요.\n(나머지는 자동으로 팀 2가 됩니다.)', { rows: buildPublicBuilderComponents(match, matchMsgId) }));
     return;
   }
 
@@ -245,8 +237,8 @@ async function handleTeamButton(interaction) {
     const teams = shuffleIntoTeams(match.participants);
     match.teams = teams;
     await match.message.edit(buildPublicMessagePayload(match));
-    await interaction.update({ content: '✅ **자동 팀 배정이 완료되었습니다.**', embeds: [], attachments: [], components: [buildPublicDoneRow(matchMsgId)] });
-    await interaction.channel.send({ embeds: [buildTeamEmbed(match.data, teams)], attachments: [], allowedMentions: { parse: [] } });
+    await interaction.update(notice('✅ **자동 팀 배정이 완료되었습니다.**', { rows: [buildPublicDoneRow(matchMsgId)] }));
+    await interaction.channel.send(payload(buildTeamResultCard(match.data, teams), { allowedMentions: { parse: [] } }));
     return;
   }
 }
@@ -260,7 +252,7 @@ async function handleTeamAssignSelect(interaction) {
 
   const match = getMatches(interaction.client).get(matchMsgId);
   if (!match || match.guildId !== interaction.guildId) {
-    await interaction.update({ content: `⚠️ **만료된 내전입니다.**`, embeds: [], attachments: [], components: [] });
+    await interaction.update(notice(`⚠️ **만료된 내전입니다.**`));
     return;
   }
   if (match.data.organizer.id !== interaction.user.id && !ADMIN_IDS.includes(interaction.user.id)) {
@@ -274,8 +266,8 @@ async function handleTeamAssignSelect(interaction) {
   const teams = { team1, team2 };
   match.teams = teams;
   await match.message.edit(buildPublicMessagePayload(match));
-  await interaction.update({ content: '✅ **팀 배정이 완료되었습니다.**', embeds: [], attachments: [], components: [isSetup ? buildManageRow(matchMsgId) : buildPublicDoneRow(matchMsgId)] });
-  await interaction.channel.send({ embeds: [buildTeamEmbed(match.data, teams)], attachments: [], allowedMentions: { parse: [] } });
+  await interaction.update(notice('✅ **팀 배정이 완료되었습니다.**', { rows: [isSetup ? buildManageRow(matchMsgId) : buildPublicDoneRow(matchMsgId)] }));
+  await interaction.channel.send(payload(buildTeamResultCard(match.data, teams), { allowedMentions: { parse: [] } }));
 }
 
 module.exports = {

@@ -1,5 +1,6 @@
 const { buildPublicMessagePayload } = require('./내전');
 const { buildMojipMessagePayload } = require('./모집');
+const { notice } = require('./카드');
 const { armAutoEnd, AUTO_CLOSE_DELAY_MS, armNotifyReminder, saveNow } = require('./공용');
 
 async function handleRMatchSelect(interaction) {
@@ -12,14 +13,15 @@ async function handleRMatchSelect(interaction) {
   const matches = type === 'naejeon' ? interaction.client.naejeonMatches : interaction.client.mojipMatches;
   const match = matches && matches.get(msgId);
   if (!match || match.guildId !== interaction.guildId) {
-    await interaction.update({ content: `⚠️ **만료된 ${label}입니다.**`, embeds: [], attachments: [], components: [] });
+    await interaction.update(notice(`⚠️ **만료된 ${label}입니다.**`));
     return;
   }
 
-  const payload = type === 'naejeon' ? buildPublicMessagePayload(match) : buildMojipMessagePayload(match);
-  const newMsg = await interaction.channel.send({ ...payload, content: '' });
-  match.message.delete().catch(() => {});
+  // 다시 올릴 때는 역할 멘션 줄을 빼고(핑 중복 방지) 카드만 올린다.
   if (type === 'naejeon') match.roleContent = '';
+  const payload = type === 'naejeon' ? buildPublicMessagePayload(match) : buildMojipMessagePayload(match);
+  const newMsg = await interaction.channel.send(payload);
+  match.message.delete().catch(() => {});
   matches.delete(msgId);
   match.message = newMsg;
   matches.set(newMsg.id, match);
@@ -34,7 +36,7 @@ async function handleRMatchSelect(interaction) {
   if (match.data?.notifyAt) {
     armNotifyReminder(matches, newMsg.id, match, label);
   }
-  await interaction.update({ content: `✅ **${label} 임베드가 다시 게시되었습니다.**`, embeds: [], attachments: [], components: [] });
+  await interaction.update(notice(`✅ **${label} 임베드가 다시 게시되었습니다.**`));
 }
 
 module.exports = { handleRMatchSelect };
