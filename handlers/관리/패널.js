@@ -11,7 +11,7 @@ const {
 
 const { ADMIN_IDS, AUTO_CLOSE_DELAY_MS, disarmAutoEnd, clearNotifyTimer, deleteMentionMessage, announceMatchCompletionXp, getCancelledDeletions } = require('../매치/공용');
 // 끝말잇기/틱택토/레벨/랭킹은 이 채널(놀이터)에서만 사용 가능.
-const { PLAYGROUND_CHANNEL_ID } = require('../../config');
+const { PLAYGROUND_CHANNEL_ID, RECRUIT_CHANNEL_ID, isTestGuild } = require('../../config');
 const { card, payload, menu, footerSide, COLORS, notice: quick } = require('../공통/카드');
 const { buildRealmPanelPayload } = require('../../forms/마크');
 const { rememberRecruitPanel } = require('./최신화');
@@ -169,7 +169,7 @@ function buildAdminMenuPayload(panelMessageId, notice) {
   const blocks = [
     notice || null,
     fromAdmin ? null : { text: '### 🔄 새로고침\n-# 이 안내 패널을 지금 코드의 디자인으로 다시 그려요', button: btn('refresh', '새로고침', ButtonStyle.Primary) },
-    { text: '### 🧹 채널 청소\n-# 이 채널의 유저 메시지를 한꺼번에 지워요(봇 메시지는 그대로)', button: btn('purge', '청소', ButtonStyle.Danger) },
+    { text: '### 🧹 채널 청소\n-# 게임모집 채널의 유저 메시지를 한꺼번에 지워요(봇 메시지는 그대로) · 다른 채널에서는 쓸 수 없어요', button: btn('purge', '청소', ButtonStyle.Danger) },
     { text: '### 🗑️ 내전/모집 삭제\n-# 목록에서 골라 지우거나 전부 지워요', button: btn('match_delete', '삭제', ButtonStyle.Danger) },
     { text: '### 🤖 봇 메시지 삭제\n-# 메시지 ID나 링크로 봇이 보낸 메시지를 지워요', button: btn('bot_msg_delete', '삭제', ButtonStyle.Secondary) },
   ];
@@ -455,6 +455,11 @@ async function handlePanelButton(interaction) {
   }
 
   if (action === 'purge') {
+    // 채널 청소는 게임모집 채널에서만 — 다른 채널(놀이터 등)의 대화를 실수로 지우지 않게 막는다(테스트 서버는 예외).
+    if (interaction.channelId !== RECRUIT_CHANNEL_ID && !isTestGuild(interaction.guildId)) {
+      await interaction.update(buildAdminMenuPayload(panelMessageId, `⚠️ **채널 청소는 게임모집 채널(<#${RECRUIT_CHANNEL_ID}>)에서만 쓸 수 있어요.**`));
+      return;
+    }
     await interaction.deferUpdate();
     await purgeUserMessages(interaction.channel);
     await interaction.editReply(buildAdminMenuPayload(panelMessageId, '🧹 **채널의 모든 유저 메시지를 삭제하였습니다.**'));

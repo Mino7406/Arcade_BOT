@@ -337,6 +337,28 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await home.handleAdminButton(deny2);
   });
 
+  await flow('채널 청소: 게임모집 채널에서만 실행, 다른 채널은 거부', async () => {
+    const config = require(path.join(root, 'config.js'));
+    const menuMsg = new FakeMsg(require(path.join(root, 'handlers/공통/카드.js')).notice('메뉴'), channel);
+    // 다른 채널(놀이터)
+    channel.id = 'c-playground';
+    let cleaned = false;
+    channel.bulkDelete = async () => { cleaned = true; return new Map(); };
+    channel.messages.fetch = async () => new Map();
+    const denied = mkInteraction({ user: ADMIN, customId: 'panel:purge:admin', message: menuMsg });
+    denied.channelId = channel.id;
+    await panel.handlePanelButton(denied);
+    assert(!cleaned, '게임모집 채널이 아닌데 청소가 실행됨');
+    assert(JSON.stringify(menuMsg.components).includes('게임모집 채널'), '거부 안내가 화면에 안 보임');
+    // 게임모집 채널
+    channel.id = config.RECRUIT_CHANNEL_ID;
+    const ok = mkInteraction({ user: ADMIN, customId: 'panel:purge:admin', message: menuMsg });
+    ok.channelId = channel.id;
+    await panel.handlePanelButton(ok);
+    assert(JSON.stringify(menuMsg.components).includes('삭제하였습니다'), '게임모집 채널에서 청소 완료 안내가 안 보임');
+    channel.id = 'c1';
+  });
+
   await flow('안내 패널·명령어 목록·알림 DM 카드', async () => {
     lint('안내 패널', panel.buildSetupPanelPayload({ client, guild: { id: 'g1' } }));
     lint('명령어 목록', panel.buildCommandListPayload());
