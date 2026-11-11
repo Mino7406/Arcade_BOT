@@ -345,7 +345,7 @@ function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = 
 
   // 아래 판
   const py = BOTTOM_PLATE_Y + PLATE_H / 2 - 1;
-  if (bet != null) p.text(f, `베팅 ${bet} XP`, 108, py, { size: 20, color: '#ffe9a8', align: 'left' });
+  if (bet != null) p.text(f, `베팅 : ${bet} XP`, 108, py, { size: 20, color: '#ffe9a8', align: 'left' });
   let rightX = 492;
   if (right) {
     p.text(f, right, rightX, py, { size: 22, color: rightColor, align: 'right' });
