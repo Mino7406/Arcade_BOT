@@ -238,7 +238,9 @@ async function startRouletteCommand(interaction) {
 
   const currentLevelXp = levelFromXp(getXp(guildId, userId)).currentLevelXp;
   if (currentLevelXp < MIN_BET) {
-    await interaction.reply(notice(`⚠️ **베팅 가능한 XP가 부족합니다.**\n(최소 ${MIN_BET} XP 필요, 현재 레벨 안 보유 XP: ${currentLevelXp})`, { ephemeral: true }));
+    // 레벨이 내려가지 않도록 "현재 레벨 안에서 쌓은 XP"만 걸 수 있다. 누적 XP가 많아도(레벨업 직후·레벨 설정 직후) 0일 수 있어 이유를 같이 알려 준다.
+    const totalXp = getXp(guildId, userId);
+    await interaction.reply(notice(`⚠️ **베팅 가능한 XP가 부족합니다.**\n레벨이 내려가지 않도록 **현재 레벨 안에서 쌓은 XP**만 걸 수 있어요.\n-# 최소 ${MIN_BET} XP 필요 · 지금 레벨 안 XP: ${currentLevelXp} · 누적 XP: ${totalXp}`, { ephemeral: true }));
     return;
   }
 
@@ -292,7 +294,7 @@ async function spinLobby(interaction, lobby, lobbies) {
   const currentLevelXp = levelFromXp(getXp(lobby.guildId, lobby.userId)).currentLevelXp;
   const bet = Math.min(lobby.bet, currentLevelXp);
   if (bet < MIN_BET) {
-    await interaction.editReply(notice('⚠️ **베팅 가능한 XP가 부족해졌습니다.**'));
+    await interaction.editReply(notice(`⚠️ **베팅 가능한 XP가 부족해졌습니다.**\n-# 현재 레벨 안 XP ${currentLevelXp} · 최소 ${MIN_BET} XP 필요`));
     return;
   }
 
