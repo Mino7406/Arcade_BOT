@@ -6,7 +6,7 @@ const os = require('os');
 const path = require('path');
 const {
   createWatcher, buildPatchNotePayload, parseRiotPatches, parseOverwatchPatches, parsePubgPatches,
-  parseRiotMaintenances, POLL_MS, MAX_BACKOFF,
+  parseRiotMaintenances, POLL_MS, MAX_BACKOFF, describeFetchError,
 } = require('../handlers/패치노트');
 
 let passed = 0;
@@ -213,6 +213,35 @@ test('tick: 연속 실패하면 간격이 1→2→4배…최대 배수로 늘고
   t += 1;
   await w.tick();
   assert.strictEqual(calls, before + 1);
+});
+
+test('tick: 한 번 실패는 로그 없이 넘기고, 연달아 실패하면 남기고, 회복되면 알린다', async () => {
+  let t = 1_000_000;
+  let ok = false;
+  const fails = [], infos = [];
+  const game = { id: 'g', kind: 'maintenance', allowEmpty: true, name: 'G', load: async () => { if (!ok) throw new Error('fetch failed'); return []; } };
+  const w = createWatcher({ games: [game], send: async () => {}, storePath: newStore(), now: () => t,
+    logFail: (_g, _e, n) => fails.push(n), logInfo: m => infos.push(m) });
+  await w.tick();
+  assert.deepStrictEqual(fails, [], '1회 실패는 남기지 않음');
+  t += POLL_MS; await w.tick();
+  assert.deepStrictEqual(fails, [2], '2회 연속이면 남김(연속 횟수 함께)');
+  ok = true;
+  t += 2 * POLL_MS; await w.tick();
+  assert.deepStrictEqual(infos, ['G 점검 공지 확인 다시 정상(연속 실패 2회 뒤)']);
+  ok = false;
+  t += POLL_MS; await w.tick();
+  ok = true;
+  t += POLL_MS; await w.tick();
+  assert.deepStrictEqual(fails, [2], '한 번 실패 뒤 바로 회복하면 실패·회복 로그 둘 다 없음');
+  assert.strictEqual(infos.length, 1);
+});
+
+test('fetch 실패 문구: cause 코드와 시간 초과를 보여준다', () => {
+  const e = Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error('getaddrinfo ENOTFOUND x'), { code: 'ENOTFOUND' }) });
+  assert.strictEqual(describeFetchError(e, 'https://x'), 'fetch failed [ENOTFOUND] (https://x)');
+  const to = Object.assign(new Error('aborted'), { name: 'TimeoutError' });
+  assert.strictEqual(describeFetchError(to, 'https://x'), '응답 시간 초과(15초) (https://x)');
 });
 
 // ── 카드 ──

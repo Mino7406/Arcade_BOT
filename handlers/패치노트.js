@@ -31,6 +31,8 @@ const POLL_MS = 10 * 60_000;          // 게임마다 이 간격으로 확인(�
 const TICK_MS = 60_000;               // 어느 게임이 확인할 차례인지 보는 주기(비교만 해서 거의 공짜)
 const STAGGER_MS = 30_000;            // 시작 직후 게임 간 확인 시각 간격
 const MAX_BACKOFF = 6;                // 연속 실패 시 간격 최대 배수
+// 한 번 실패는 호스팅 쪽 순간 접속 끊김(fetch failed)인 경우가 많아 남기지 않고, 이만큼 연달아 실패해야 로그에 남긴다.
+const FAIL_LOG_AFTER = 2;
 const REQUEST_TIMEOUT_MS = 15_000;
 const MAX_BODY_CHARS = 3_000_000;     // 이보다 큰 응답은 읽지 않는다(메모리 보호)
 const MAX_SEEN = 300;                 // 게임당 기억할 '이미 알린 글' 키 개수
@@ -46,12 +48,26 @@ const PUBG_NEWS = 'https://www.pubg.com/ko/news';
 class EmptyListError extends Error {}
 
 // ── 가져오기 ───────────────────────────────────────────────────
+// fetch는 접속 단계 실패를 전부 'fetch failed' 한 마디로 던지고 진짜 이유는 err.cause에 둔다
+// (ENOTFOUND=DNS 실패, ECONNRESET=연결 끊김, UND_ERR_CONNECT_TIMEOUT=접속 시간 초과 등). 로그에 이유가 보이게 붙인다.
+function describeFetchError(err, url) {
+  if (err?.name === 'TimeoutError') return `응답 시간 초과(${REQUEST_TIMEOUT_MS / 1000}초) (${url})`;
+  const c = err?.cause;
+  const why = c ? (c.code || c.message || String(c)) : null;
+  return `${err?.message ?? err}${why ? ` [${why}]` : ''} (${url})`;
+}
+
 async function fetchText(url, headers = {}) {
-  const res = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'ko-KR,ko;q=0.9', ...headers },
-    redirect: 'follow',
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
+  let res;
+  try {
+    res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'ko-KR,ko;q=0.9', ...headers },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch (err) {
+    throw new Error(describeFetchError(err, url));
+  }
   if (!res.ok) {
     const err = new Error(`HTTP ${res.status} (${url})`);
     err.status = res.status;
@@ -224,7 +240,10 @@ function buildPatchNotePayload(game, entry) {
 
 // ── 감시 ───────────────────────────────────────────────────────
 // deps: games(로더 목록), send(game, entry), storePath, now(), logFail(game, err) — 테스트에서 바꿔 끼운다.
-function createWatcher({ games, send, storePath = STORE_PATH, now = Date.now, logFail = () => {}, logInfo = () => {} }) {
+// 로그 문구용: "오버워치 패치노트" / "배틀그라운드 점검 공지"
+const gameLabel = (game) => `${game.name} ${game.kind === MAINTENANCE ? '점검 공지' : '패치노트'}`;
+
+function createWatcher({ games, send, storePath = STORE_PATH, now = Date.now, logFail = () => {}, logInfo = () => {}, failLogAfter = FAIL_LOG_AFTER }) {
   let state = {};
   try {
     if (fs.existsSync(storePath)) state = JSON.parse(fs.readFileSync(storePath, 'utf8')) || {};
@@ -281,10 +300,11 @@ function createWatcher({ games, send, storePath = STORE_PATH, now = Date.now, lo
         if (now() < rt.nextAt) continue;
         try {
           await checkGame(game);
+          if (rt.fails >= failLogAfter) logInfo(`${gameLabel(game)} 확인 다시 정상(연속 실패 ${rt.fails}회 뒤)`);
           rt.fails = 0;
         } catch (err) {
           rt.fails++;
-          logFail(game, err);
+          if (rt.fails >= failLogAfter) logFail(game, err, rt.fails); // 한 번 실패는 남기지 않는다(FAIL_LOG_AFTER 참고)
         }
         // 연속 실패하면 1배 → 2배 → 4배 → 최대 6배까지 간격을 늘린다
         rt.nextAt = now() + (rt.fails ? POLL_MS * Math.min(MAX_BACKOFF, 2 ** (rt.fails - 1)) : POLL_MS);
@@ -309,7 +329,7 @@ function startPatchNoteWatcher(client) {
   const watcher = createWatcher({
     games: GAMES,
     send,
-    logFail: (game, err) => logErrorThrottled(`patchnote-${game.id}`, '패치노트', `${game.name} 패치노트 확인 실패`, err, {}, 60 * 60_000),
+    logFail: (game, err, fails) => logErrorThrottled(`patchnote-${game.id}`, '패치노트', `${gameLabel(game)} 확인 실패(연속 ${fails}회)`, err, {}, 60 * 60_000),
     logInfo: msg => logSystem({ 유형: '패치노트', 내용: msg }),
   });
   timer = setInterval(() => { watcher.tick().catch(err => console.error('패치노트 확인 오류:', err)); }, TICK_MS);
@@ -319,5 +339,5 @@ function startPatchNoteWatcher(client) {
 
 module.exports = {
   startPatchNoteWatcher, createWatcher, buildPatchNotePayload,
-  parseRiotPatches, parseOverwatchPatches, parsePubgPatches, parseRiotMaintenances, GAMES, POLL_MS, MAX_BACKOFF,
+  parseRiotPatches, parseOverwatchPatches, parsePubgPatches, parseRiotMaintenances, GAMES, POLL_MS, MAX_BACKOFF, describeFetchError,
 };
