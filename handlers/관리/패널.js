@@ -164,23 +164,20 @@ function buildSetupPanelPayload(interaction) {
 const FROM_ADMIN = 'admin';
 function buildAdminMenuPayload(panelMessageId, notice) {
   const fromAdmin = panelMessageId === FROM_ADMIN;
-  const clean = new ButtonBuilder().setCustomId(`panel:purge:${panelMessageId}`).setLabel('🧹 채널 청소').setStyle(ButtonStyle.Success);
-  const firstRow = fromAdmin
-    ? new ActionRowBuilder().addComponents(clean)
-    : new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`panel:refresh:${panelMessageId}`).setLabel('🔄 새로고침').setStyle(ButtonStyle.Danger),
-        clean,
-      );
-  const secondRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`panel:match_delete:${panelMessageId}`).setLabel('🗑️ 내전/모집 삭제').setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId(`panel:bot_msg_delete:${panelMessageId}`).setLabel('🤖 봇 메시지 삭제').setStyle(ButtonStyle.Secondary),
-    ...(fromAdmin ? [new ButtonBuilder().setCustomId('admin:home').setLabel('↩️ 메뉴로').setStyle(ButtonStyle.Secondary)] : []),
-  );
+  const btn = (id, label, style) => new ButtonBuilder().setCustomId(`panel:${id}:${panelMessageId}`).setLabel(label).setStyle(style);
+  // 기능마다 한 줄: 설명 + 오른쪽에 실행 버튼. 지우는 기능은 빨강, 나머지는 회색으로 구분한다.
+  const blocks = [
+    notice || null,
+    fromAdmin ? null : { text: '### 🔄 새로고침\n-# 이 안내 패널을 지금 코드의 디자인으로 다시 그려요', button: btn('refresh', '새로고침', ButtonStyle.Primary) },
+    { text: '### 🧹 채널 청소\n-# 이 채널의 유저 메시지를 한꺼번에 지워요(봇 메시지는 그대로)', button: btn('purge', '청소', ButtonStyle.Danger) },
+    { text: '### 🗑️ 내전/모집 삭제\n-# 목록에서 골라 지우거나 전부 지워요', button: btn('match_delete', '삭제', ButtonStyle.Danger) },
+    { text: '### 🤖 봇 메시지 삭제\n-# 메시지 ID나 링크로 봇이 보낸 메시지를 지워요', button: btn('bot_msg_delete', '삭제', ButtonStyle.Secondary) },
+  ];
   return menu({
     header: fromAdmin ? '🧹 채널 관리' : '⚙️ 패널 관리',
-    sub: fromAdmin ? '지금 이 채널 기준 · 채널 청소 · 삭제' : '새로고침 · 채널 청소 · 삭제',
-    note: notice,
-    rows: [firstRow, secondRow],
+    sub: fromAdmin ? '지금 이 채널 기준' : '새로고침 · 채널 청소 · 삭제',
+    blocks,
+    rows: fromAdmin ? [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('admin:home').setLabel('↩️ 메뉴로').setStyle(ButtonStyle.Secondary))] : [],
   });
 }
 

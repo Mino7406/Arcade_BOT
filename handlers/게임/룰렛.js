@@ -4,7 +4,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = require('discord.js');
+const { renderSlot, idleImage } = require('./룰렛그림');
 const { applyXp, getXp, levelFromXp, isLevelsLoaded, isExcludedGuild, announceLevelUp, isMinigameXpFrozen, isRaidXpFrozen } = require('../레벨/레벨링');
 const { kstDateString, timeUntilKstMidnight } = require('../공통/시간');
 const { logSystem, logAction, logError, userLabel } = require('../공통/로그');
@@ -95,21 +96,18 @@ function sleep(ms) {
 }
 
 // 릴 3개 중 어느 인덱스끼리 심볼이 같은지(당첨 조합) 반환 — 결과 버튼을 초록으로 강조하는 데 사용.
-const SPIN_TICKS = 6;
-const SPIN_TICK_MS = 400;
-const REEL_STOP_AT = [2, 4, 5]; // 각 릴이 최종값에 고정되는 틱(순서대로 하나씩 멈춤 — 마지막 틱에 결과 완성)
+const SPIN_STEP_MS = 800; // 릴이 하나씩 멈추는 간격
 
-// 실제 슬롯머신처럼 릴이 하나씩 순서대로 멈추는 애니메이션. finalReels는 이미 정해진 결과이고,
-// 여기서는 그 결과가 드러나기 전까지 버튼 라벨을 무작위 심볼로 계속 바꿔가며 "돌아가는" 연출만 한다.
+// 실제 슬롯머신처럼 릴이 하나씩 순서대로 멈추는 연출. finalReels 는 이미 정해진 결과이고,
+// 첫 그림(전부 돌아감)은 호출하는 쪽에서 보내고, 여기서는 "첫 릴 멈춤 → 둘째 릴 멈춤"까지 고쳐 준다.
+// 마지막 결과 그림은 호출하는 쪽이 이어서 고친다. 수정은 총 3번(예전엔 6번)이라 디스코드 수정 제한에도 여유가 있다.
 async function animateSpin(message, lobby, bet, finalReels) {
-  const display = ['🎰', '🎰', '🎰'];
-  for (let tick = 0; tick < SPIN_TICKS; tick++) {
-    for (let i = 0; i < 3; i++) {
-      display[i] = tick >= REEL_STOP_AT[i] ? finalReels[i] : spinReel();
-    }
-    await message.edit(buildSpinningPayload(lobby, bet, display)).catch(() => {});
-    await sleep(SPIN_TICK_MS);
+  const stages = [[finalReels[0], null, null], [finalReels[0], finalReels[1], null]];
+  for (let i = 0; i < stages.length; i++) {
+    await sleep(SPIN_STEP_MS);
+    await message.edit(buildSpinningPayload(lobby, bet, stages[i], i + 1)).catch(() => {});
   }
+  await sleep(SPIN_STEP_MS);
 }
 
 function getLobbies(client) {
@@ -117,9 +115,18 @@ function getLobbies(client) {
   return client.rouletteLobbies;
 }
 
-// 슬롯머신 화면: 이모지를 큰 제목 글자로 한 줄에 늘어놓아 버튼 릴보다 훨씬 크게 보인다.
-function slotLine(display) {
-  return `# ${display.join('　')}`;
+const SLOT_FILE = 'slot.png';
+const slotFile = (buf) => new AttachmentBuilder(buf, { name: SLOT_FILE });
+const SLOT_URL = `attachment://${SLOT_FILE}`;
+
+// 두 개 이상 같은 릴의 번호(당첨 테두리용)
+function matchIndices(reels) {
+  const [a, b, c] = reels;
+  if (a === b && b === c) return [0, 1, 2];
+  if (a === b) return [0, 1];
+  if (b === c) return [1, 2];
+  if (a === c) return [0, 2];
+  return [];
 }
 
 // 심볼별 배당표(TRIPLE_PAYOUTS 에서 만든다 — 배당을 바꾸면 화면도 같이 바뀐다)
@@ -140,8 +147,8 @@ function buildLobbyCard(lobby) {
     sub: ['하루 1회', `베팅 가능 최대 ${lobby.maxAvailable} XP`],
     blocks: [
       `<@${lobby.userId}>님, 베팅 XP를 고른 뒤 **🎰 돌리기**를 누르세요.`,
+      { image: SLOT_URL },
       betText,
-      slotLine(['🎰', '🎰', '🎰']),
       payoutTable(),
     ],
     footer: '⏰ 60초 안에 돌리지 않으면 자동으로 취소됩니다.',
@@ -149,38 +156,45 @@ function buildLobbyCard(lobby) {
   });
 }
 
-// 로비 메시지 전체(본인에게만 보이는 임시 메시지). 버튼은 카드 안에 들어간다.
-function buildLobbyPayload(lobby, extra) {
-  return payload(buildLobbyCard(lobby), extra);
+// 로비 메시지 전체(본인에게만 보이는 임시 메시지). 처음 보낼 때만 그림 파일을 붙이고,
+// 이후 베팅을 바꿔 고칠 때는 이미 붙어 있는 그림을 그대로 둔다(다시 올리지 않음).
+function buildLobbyPayload(lobby, extra = {}) {
+  const first = !!extra.files || extra.withImage;
+  const { withImage, ...rest } = extra;
+  return payload(buildLobbyCard(lobby), { keepAttachments: !first, ...rest, ...(withImage ? { files: [slotFile(idleImage())] } : {}) });
 }
 
-// 릴이 도는 중: 멈춘 릴부터 심볼이 보이고 나머지는 🎰 가 돈다.
-function buildSpinningPayload(lobby, bet, display) {
+// 릴이 도는 중: reels 에서 null 인 릴은 아직 돌고 있다(stage 가 오를수록 하나씩 멈춘다).
+function buildSpinningPayload(lobby, bet, reels, phase = 0) {
+  const png = renderSlot({ reels, bet, phase, right: '돌리는 중...', rightColor: '#c9b8a0' });
   return payload(card({
     color: COLORS.info,
     header: '🎰 룰렛머신',
     sub: ['릴이 돌아가는 중...', `베팅 ${bet} XP`],
-    blocks: [
-      `<@${lobby.userId}>님이 **${bet} XP**를 걸고 돌립니다...`,
-      slotLine(display),
-    ],
+    blocks: [`<@${lobby.userId}>님이 **${bet} XP**를 걸고 돌립니다...`, { image: SLOT_URL }],
     footer: '🎰 두근두근... 릴이 하나씩 멈춰요',
-  }));
+  }), { files: [slotFile(png)] });
 }
 
-function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels }) {
+function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multiplier = 0 }) {
   const win = net > 0;
+  const jackpot = reels[0] === reels[1] && reels[1] === reels[2] && reels[0] === '7️⃣';
+  const png = renderSlot({
+    reels, bet, jackpot, winIdx: matchIndices(reels),
+    right: win ? `+${net} XP  x${multiplier}` : net === 0 ? '본전  x1' : `${net} XP`,
+    rightColor: win ? '#7dff9d' : net === 0 ? '#ffe9a8' : '#ff9a9a',
+  });
   return payload(card({
     color: win ? 0xFFD700 : COLORS.muted,
     header: '🎰 룰렛머신',
     sub: ['결과', `베팅 ${bet} XP`],
     blocks: [
       `<@${lobby.userId}>님이 **${bet} XP**를 걸었습니다.`,
-      slotLine(reels),
+      { image: SLOT_URL },
       `### ${resultLine}\n## ${netLine}`,
     ],
     footer: '⏰ 하루에 한 번만 돌릴 수 있어요.',
-  }));
+  }), { files: [slotFile(png)] });
 }
 
 function buildBetRow(lobby) {
@@ -263,7 +277,7 @@ async function startRouletteCommand(interaction) {
   lobbies.set(lobby.id, lobby);
 
   // 로비는 본인에게만 보이게(ephemeral) 띄우고, 결과는 스핀 시점에 채널에 공개 메시지로 따로 보낸다.
-  await interaction.reply(buildLobbyPayload(lobby, { ephemeral: true }));
+  await interaction.reply(buildLobbyPayload(lobby, { ephemeral: true, withImage: true }));
 
   lobby.timeoutId = setTimeout(async () => {
     const l = lobbies.get(lobby.id);
@@ -335,13 +349,13 @@ async function spinLobby(interaction, lobby, lobbies) {
     await interaction.deleteReply();
     // interaction.channel은 캐시에 없으면 null일 수 있으므로(재시작 직후 등) fetch로 안전하게 가져온다.
     const channel = interaction.channel ?? await interaction.client.channels.fetch(interaction.channelId);
-    const spinMessage = await channel.send(buildSpinningPayload(lobby, bet, ['🎰', '🎰', '🎰']));
+    const spinMessage = await channel.send(buildSpinningPayload(lobby, bet, [null, null, null], 0));
 
     await animateSpin(spinMessage, lobby, bet, reels);
 
     // 결과 수정이 일시적 오류(네트워크/레이트리밋)로 한 번 실패하면 메시지가 "릴이 돌아가는 중..."에
     // 영영 멈춰 보였다. 몇 번 재시도하고, 그래도 안 되면 결과를 새 메시지로 보낸다.
-    const finalPayload = buildResultPayload(lobby, { bet, resultLine, netLine, net, reels });
+    const finalPayload = buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multiplier });
     let edited = false;
     for (let attempt = 0; attempt < 3 && !edited; attempt++) {
       try {
@@ -362,7 +376,7 @@ async function spinLobby(interaction, lobby, lobbies) {
   } catch (err) {
     console.error('룰렛 결과 공개 실패:', err);
     logError('게임 오류', `룰렛 결과 채널 공개 실패 — ${userLabel(lobby.userId)}에게만 결과 표시`, err);
-    await interaction.editReply(buildResultPayload(lobby, { bet, resultLine, netLine, net, reels })).catch(() => {});
+    await interaction.editReply(buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multiplier })).catch(() => {});
   }
 
   if (result.leveledUp) {

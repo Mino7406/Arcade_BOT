@@ -279,6 +279,36 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await roulette.handleRouletteButton(mkInteraction({ user: 'u2', customId: `roulette:cancel:${s2.id}`, message: s2._reply }));
   });
 
+  // ── 룰렛 동시 사용 부하: 여러 명이 한꺼번에 돌려도 모두 결과를 받고 서버가 버텨야 한다 ──
+  await flow('룰렛: 50명이 동시에 돌려도 전원 결과를 받고 메모리가 늘지 않는다', async () => {
+    const N = 50;
+    const users = Array.from({ length: N }, (_, i) => `bulk${i}`);
+    for (const u of users) lv.applyXp('g1', u, 800, 'test');
+    channel.sent.length = 0;
+    const rssBefore = process.memoryUsage().rss;
+    const t0 = Date.now();
+    await Promise.all(users.map(async (u) => {
+      const s = mkInteraction({ user: u, command: '룰렛' });
+      await roulette.startRouletteCommand(s);
+      // 800 XP 를 받으면 현재 레벨 안 XP 가 30 이라 최소 베팅(10 XP)으로 건다
+      await roulette.handleRouletteButton(mkInteraction({ user: u, customId: `roulette:bet:${s.id}:10`, message: s._reply }));
+      await roulette.handleRouletteButton(mkInteraction({ user: u, customId: `roulette:spin:${s.id}`, message: s._reply }));
+    }));
+    const ms = Date.now() - t0;
+    const probe = mkInteraction({ user: users[0], command: '룰렛' });
+    await roulette.startRouletteCommand(probe);
+    const probeText = JSON.stringify(probe._reply?.components || []).slice(0, 200);
+    const results = channel.sent.filter(m => JSON.stringify(m.components || []).includes('## 🎰') || JSON.stringify(m.components || []).includes('룰렛머신'));
+    assert(results.length === N, `결과 메시지 ${results.length}개(${N} 기대) — 첫 유저 재시도 응답: ${probeText}`);
+    // 모든 결과가 최종 화면(결과 문구 포함)으로 끝났는지 — 마지막 수정이 '결과'를 담고 있어야 한다
+    const done = channel.sent.filter(m => JSON.stringify(m.components || []).includes('결과')).length;
+    assert(done === N, `최종 결과 화면 ${done}개(${N} 기대)`);
+    assert(ms < 15000, `50명 동시 처리에 ${ms}ms(15초 이내 기대)`);
+    const grewMb = (process.memoryUsage().rss - rssBefore) / 1048576;
+    assert(grewMb < 60, `메모리가 ${grewMb.toFixed(1)}MB 늘어남(60MB 이내 기대)`);
+    console.log(`   (50명 동시: ${ms}ms, 메모리 +${grewMb.toFixed(1)}MB)`);
+  });
+
   // ── /관리 ──
   const home = require(path.join(root, 'handlers/관리/홈.js'));
   const panel = require(path.join(root, 'handlers/관리/패널.js'));

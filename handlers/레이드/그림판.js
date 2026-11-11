@@ -25,10 +25,15 @@ function rgb(hex) {
 
 // ── 폰트 ───────────────────────────────────────────────────────
 // lowMemory: 글자 모양을 전부 미리 읽지 않고 쓸 때 읽는다(전체 파싱이면 폰트 하나에 힙 +28MB).
+const fontCache = new Map(); // 파일 경로 → 읽은 폰트(같은 파일을 여러 그림이 써도 메모리는 한 벌)
 function loadFont(filePath) {
+  const cached = fontCache.get(filePath);
+  if (cached) return cached;
   const opentype = require('opentype.js');
   const buf = fs.readFileSync(filePath);
-  return opentype.parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), { lowMemory: true });
+  const font = opentype.parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), { lowMemory: true });
+  fontCache.set(filePath, font);
+  return font;
 }
 
 // 이모지는 폰트에 없어 네모로 나오므로 빼고, 폰트에 없는 글자는 '?'로 바꾼다.

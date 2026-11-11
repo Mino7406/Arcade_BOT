@@ -355,6 +355,7 @@ async function onReady(c) {
   refreshPostedMessages(c, { includeMatches: false })
     .then(r => logSystem({ 유형: '봇 상태', 내용: `게시물 최신화 — ${r.summary}` }))
     .catch(err => console.error('게시물 최신화 실패:', err));
+  try { require('./handlers/게임/룰렛그림').warmUp(); } catch (err) { console.error('룰렛 그림 준비 실패(첫 판이 조금 느릴 수 있음):', err); } // 슬롯머신 배경·글자를 미리 준비
   startPatchNoteWatcher(c); // 롤·발로란트·오버워치·배그 공식 홈페이지의 새 패치노트·점검 공지를 지정 채널에 알림
   dataReady = true;
   diagWarn(`📊 시작 직후 메모리 (${runtimeInfo()})`);

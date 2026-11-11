@@ -155,9 +155,17 @@ async function buildScreens() {
   add('끝말잇기', '재대결 신청', '', wc.rematchRequestPayload(wcBase));
 
   const rlb = { id: '1', userId: '100', bet: 100, maxAvailable: 300 };
-  add('룰렛', '베팅 선택(본인에게만)', '', rl.buildLobbyPayload(rlb, { ephemeral: true }));
-  add('룰렛', '릴 도는 중', '버튼 3개가 슬롯머신 릴', rl.buildSpinningPayload(rlb, 100, ['🍒', '🎰', '🎰']));
-  add('룰렛', '결과 — 잭팟', '', rl.buildResultPayload(rlb, { bet: 100, resultLine: '🎉 **JACKPOT!** (x10)', netLine: '📈 **+900 XP**', net: 900, reels: ['7️⃣', '7️⃣', '7️⃣'] }));
+  const rlWith = (p) => ({ files: png(p.files) });
+  const rlLobby = rl.buildLobbyPayload(rlb, { ephemeral: true, withImage: true });
+  add('룰렛', '베팅 선택(본인에게만)', '그림으로 그린 슬롯머신(대기 화면은 한 번만 그려 재사용)', rlLobby, rlWith(rlLobby));
+  const rlSpin = rl.buildSpinningPayload(rlb, 100, ['🍒', '🍋', null], 2);
+  add('룰렛', '릴 도는 중', '릴이 하나씩 멈춰요(수정 3번)', rlSpin, rlWith(rlSpin));
+  const rlWin = rl.buildResultPayload(rlb, { bet: 100, resultLine: '🙂 **더블 매칭!** (x1.2)', netLine: '📈 **+20 XP**', net: 20, reels: ['🍇', '🍇', '🔔'], multiplier: 1.2 });
+  add('룰렛', '결과 — 더블 매칭', '', rlWin, rlWith(rlWin));
+  const rlJack = rl.buildResultPayload(rlb, { bet: 300, resultLine: '🎉 **JACKPOT!** (x10)', netLine: '📈 **+2700 XP**', net: 2700, reels: ['7️⃣', '7️⃣', '7️⃣'], multiplier: 10 });
+  add('룰렛', '결과 — 잭팟', '', rlJack, rlWith(rlJack));
+  const rlLose = rl.buildResultPayload(rlb, { bet: 300, resultLine: '😢 **꽝**', netLine: '📉 **-300 XP**', net: -300, reels: ['💎', '🍒', '🍋'], multiplier: 0 });
+  add('룰렛', '결과 — 꽝', '', rlLose, rlWith(rlLose));
 
   // ── 레벨 · 랭킹 · 퀴즈 ────────────────────────
   const guild = { id: 'g', members: { fetch: async ({ user }) => new Map(user.map((id, i) => [id, { displayName: ['민호', '지수', '하늘', '도윤', '서연', '준호', '예린', '태양', '나래', '현우', '다온', '시우'][i % 12] }])) } };
