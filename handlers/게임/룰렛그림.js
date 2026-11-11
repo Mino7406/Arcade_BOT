@@ -191,7 +191,7 @@ function drawStaticBg(p) {
   // 위 판(브랜드) / 아래 판(베팅·결과): 같은 크기·모양
   p.roundRect(50, TOP_PLATE_Y, 500, PLATE_H, 12, '#150a14');
   p.roundRect(50, BOTTOM_PLATE_Y, 500, PLATE_H, 12, '#150a14');
-  p.text(f, 'ARCADE  SLOT', 300, TOP_PLATE_Y + PLATE_H / 2, { size: 19, color: '#f5c542' });
+  p.text(f, 'ARCADE  ROULETTE', 300, TOP_PLATE_Y + PLATE_H / 2, { size: 19, color: '#f5c542' });
   // 릴 판
   p.roundRect(50, 58, 500, 140, 16, '#2b0f1f');
   for (const x of WIN_X) {
