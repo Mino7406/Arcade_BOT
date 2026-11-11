@@ -10,7 +10,7 @@ const { applyXp, getXp, levelFromXp, isLevelsLoaded, isExcludedGuild, announceLe
 const { kstDateString, timeUntilKstMidnight } = require('../공통/시간');
 const { logSystem, logAction, logError, userLabel } = require('../공통/로그');
 const { writeJsonIfChanged } = require('../공통/저장');
-const { card, payload, notice, COLORS, footerSide } = require('../공통/카드');
+const { card, payload, notice, COLORS, footerSide, pullButton } = require('../공통/카드');
 
 const ROULETTE_PATH = path.join(__dirname, '..', '..', 'DB', 'roulette.json');
 fs.mkdirSync(path.dirname(ROULETTE_PATH), { recursive: true });
@@ -96,7 +96,7 @@ function sleep(ms) {
 }
 
 // 릴 3개 중 어느 인덱스끼리 심볼이 같은지(당첨 조합) 반환 — 결과 버튼을 초록으로 강조하는 데 사용.
-const SPIN_STEP_MS = 800; // 릴이 하나씩 멈추는 간격
+const SPIN_STEP_MS = 1300; // 릴이 하나씩 멈추는 간격(처음 그림 → 첫 릴 → 둘째 릴 → 결과, 총 약 4초)
 
 // 실제 슬롯머신처럼 릴이 하나씩 순서대로 멈추는 연출. finalReels 는 이미 정해진 결과이고,
 // 첫 그림(전부 돌아감)은 호출하는 쪽에서 보내고, 여기서는 "첫 릴 멈춤 → 둘째 릴 멈춤"까지 고쳐 준다.
@@ -136,6 +136,8 @@ function payoutTable() {
 }
 
 function buildLobbyCard(lobby) {
+  // 🎰 돌리기는 베팅 금액 줄 오른쪽으로, ❌ 취소는 아래 안내 줄 오른쪽으로 뺀다. 금액 버튼(10~300 XP·최대)은 따로 한 줄씩 둔다.
+  const withoutSpin = pullButton(buildLobbyComponents(lobby), /^roulette:spin:/);
   const bet = lobby.bet;
   const best = Math.max(...Object.values(TRIPLE_PAYOUTS));
   const betText = bet
@@ -148,11 +150,11 @@ function buildLobbyCard(lobby) {
     blocks: [
       `<@${lobby.userId}>님, 베팅 XP를 고른 뒤 **🎰 돌리기**를 누르세요.`,
       { image: SLOT_URL },
-      betText,
+      { text: betText, ...(withoutSpin.button ? { button: withoutSpin.button } : {}) },
       payoutTable(),
     ],
     footer: '⏰ 60초 안에 돌리지 않으면 자동으로 취소됩니다.',
-    ...footerSide(buildLobbyComponents(lobby), /^roulette:cancel:/),
+    ...footerSide(withoutSpin.rows, /^roulette:cancel:/),
   });
 }
 

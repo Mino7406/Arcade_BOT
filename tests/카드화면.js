@@ -176,6 +176,17 @@ async function buildScreens() {
   add('레벨 · 랭킹 · 퀴즈', '레벨업 축하', '', req('handlers/레벨/레벨링.js').buildLevelUpPayload('100', 8));
   add('레벨 · 랭킹 · 퀴즈', '퀴즈 정답', '', quizMod.buildCorrectPayload({ word: '고양이', xpReward: 40 }));
 
+  // ── 패치노트·점검 알림(공지 채널에 올라오는 카드) ───────
+  const pnMod = req('handlers/관리/패치노트.js');
+  const pnGame = (id) => pnMod.GAMES.find(g => g.id === id);
+  const day = Date.parse('2026-11-12T03:00:00Z');
+  add('패치노트 알림', '리그 오브 레전드 — 새 패치노트', '공지 채널에 올라오는 카드(게임 색 띠 + 게임 아이콘 + 내용 보기 링크)', pnMod.buildPatchNotePayload(pnGame('lol'), { key: 'k1', title: '리그 오브 레전드 26.22 패치 노트', url: 'https://www.leagueoflegends.com/ko-kr/news/game-updates/patch-26-22-notes/', at: day }));
+  add('패치노트 알림', '발로란트 — 점검 공지', '', pnMod.buildPatchNotePayload(pnGame('valorant-maint'), { key: 'k2', title: '정기 점검 (KST 06:00~10:00)', url: 'https://status.riotgames.com/valorant', at: day }));
+  add('패치노트 알림', '오버워치 — 새 패치노트', '', pnMod.buildPatchNotePayload(pnGame('overwatch'), { key: 'k3', title: '오버워치 패치 노트 - 2026년 11월 12일', url: 'https://overwatch.blizzard.com/ko-kr/news/patch-notes/', at: day }));
+  add('패치노트 알림', '배틀그라운드 — 새 패치노트(PC·콘솔)', '', pnMod.buildPatchNotePayload(pnGame('pubg'), { key: 'k4', title: '41.1 업데이트 안내', url: 'https://www.pubg.com/ko/news', at: day, note: 'PC · 콘솔' }));
+  add('패치노트 알림', '배틀그라운드 — 점검 공지', '', pnMod.buildPatchNotePayload(pnGame('pubg-maint'), { key: 'k5', title: '정기 점검 안내', url: 'https://www.pubg.com/ko/news', at: day }));
+  add('패치노트 알림', '/관리 → 테스트 알림', '테스트 서버 채널에 올라오는 확인용 카드', pnMod.buildPatchNotePayload(pnGame('lol'), { key: 'test', title: '[테스트] 패치노트 알림이 정상적으로 도착했어요', url: 'https://discord.com', at: day, note: '관리자가 보낸 테스트 알림입니다' }));
+
   // ── DM 알림 ───────────────────────────────────
   const dmMatch = { data: base('lol'), participants: users(6), message: { url: 'https://discord.com/channels/1/2/3' } };
   add('DM 알림', '내전 시작 알림 (참가자에게)', '예약한 시각이 되면 DM으로', common.buildMatchDmPayload({ kind: 'start', match: dmMatch, label: '내전' }));
