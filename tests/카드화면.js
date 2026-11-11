@@ -203,6 +203,7 @@ async function buildScreens() {
   // ── 관리 · 안내 패널 ──────────────────────────
   const adminHome = req('handlers/관리/홈.js').buildAdminHome;
   add('관리 · 안내 패널', '/관리 홈 — 소식 알림 작동 중', '일시정지 버튼이 줄 오른쪽 · 출처별 마지막 확인', adminHome({ guildId: '1' }));
+  add('관리 · 안내 패널', '/관리 홈 — 테스트 서버', '테스트 알림 · 레이드 테스트 버튼은 테스트 서버에서만 보여요', adminHome({ guildId: req('config.js').TEST_GUILD_IDS[0] }));
   patchState = { ...patchState, paused: true };
   add('관리 · 안내 패널', '/관리 홈 — 소식 알림 일시정지됨', '일시정지하면 재개 버튼으로 바뀌고 확인도 멈춰요', adminHome({ guildId: '1', note: '⏸️ **소식 알림을 일시정지했어요.** 재개할 때까지 새 글이 올라와도 알리지 않아요.' }));
   patchState = { ...patchState, paused: false };

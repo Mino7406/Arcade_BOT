@@ -3,7 +3,7 @@
 // 홈에서 자주 쓰는 스위치(소식 알림 일시정지 등)는 줄 오른쪽 버튼으로 바로 누를 수 있다.
 
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { ADMIN_IDS } = require('../../config');
+const { ADMIN_IDS, isTestGuild } = require('../../config');
 const { card, payload, asEphemeral, notice, COLORS } = require('../공통/카드');
 const { getXpState } = require('../레벨/레벨링');
 const { getRaidStatus } = require('../레이드');
@@ -85,7 +85,11 @@ function buildAdminHome({ guildId, note } = {}) {
           new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('admin:home').setLabel('새로고침').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId('admin:patch:check').setLabel('지금 확인').setEmoji('📡').setStyle(ButtonStyle.Secondary).setDisabled(!!patch?.paused || !patch),
-            new ButtonBuilder().setCustomId('admin:patch:test').setLabel('테스트 알림').setEmoji('🧪').setStyle(ButtonStyle.Secondary).setDisabled(!patch),
+            // 테스트 전용 버튼은 테스트 서버에서만 보인다(다른 관리자가 본서버에서 잘못 누르지 않도록)
+            ...(isTestGuild(guildId) ? [
+              new ButtonBuilder().setCustomId('admin:patch:test').setLabel('테스트 알림').setEmoji('🧪').setStyle(ButtonStyle.Secondary).setDisabled(!patch),
+              new ButtonBuilder().setCustomId('xp:menu:manage').setLabel('레이드 테스트').setEmoji('👾').setStyle(ButtonStyle.Secondary),
+            ] : []),
           ),
         ],
       },
@@ -134,6 +138,7 @@ async function handleAdminButton(interaction) {
   }
 
   if (sub === 'patch:test') {
+    if (!isTestGuild(guildId)) { await interaction.reply(notice('⚠️ **테스트 알림은 테스트 서버에서만 보낼 수 있어요.**', { ephemeral: true })); return; }
     await interaction.deferUpdate();
     let note;
     try {
