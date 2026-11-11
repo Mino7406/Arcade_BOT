@@ -120,7 +120,7 @@ function buildManageView(notice, guildId) {
       `**뉴비부스트(×2)** ${st.newbieBoostEnabled ? '🟢 ON' : '⚪ OFF'}\n` +
       `-# 뉴비부스트 역할의 메인·TTS·통화방 체류 XP 2배\n\n` +
       `**레이드 자동 출현** ${raid.autoSpawn ? '🟢 가동 중' : '🔴 중지됨'}\n` +
-      `-# 하루~이틀마다(무작위) 놀이터에 출현 · 진행 중엔 채팅·통화방·미니게임 XP 정지\n\n` +
+      `-# 하루~사흘마다(무작위) 놀이터에 출현 · 진행 중엔 채팅·통화방·미니게임 XP 정지\n\n` +
       raidStatusText(raid) +
       (notice ? `\n\n${notice}` : ''),
     )
