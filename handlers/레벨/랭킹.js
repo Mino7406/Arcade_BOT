@@ -41,7 +41,8 @@ function formatEntry(entry, name) {
   const medal = MEDALS[entry.rank - 1];
   const rankText = medal ? `${medal} **${entry.rank}위**` : `**${entry.rank}위**`;
   const bar = buildProgressBar(entry.currentLevelXp, entry.neededXp, BAR_LENGTH);
-  return `${rankText} · **${name}**\n-# Lv.${entry.level} ・ \`${bar}\` ・ ${entry.xp} XP`;
+  // 인용구(>) 두 줄: 순위·이름 / 레벨·막대·XP — 원래 랭킹 모양
+  return `> ${rankText} · **${name}**\n> -# Lv.${entry.level} ・ \`${bar}\` ・ ${entry.xp} XP`;
 }
 
 // includeShare: false면 공유하기 버튼을 뺀다 (이미 공개된 메시지에는 다시 공유할 이유가 없음).
