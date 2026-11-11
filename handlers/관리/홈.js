@@ -139,7 +139,7 @@ async function handleAdminButton(interaction) {
     try {
       await sendPatchNoteTest();
       logAction(interaction, '관리', '소식 알림 테스트 공지 전송');
-      note = '🧪 **테스트 알림을 공지 채널에 보냈어요.**';
+      note = '🧪 **테스트 알림을 테스트 서버 채널에 보냈어요.**';
     } catch (err) {
       note = `⚠️ **테스트 알림 전송 실패:** ${err?.message ?? err}`;
     }
