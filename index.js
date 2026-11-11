@@ -42,6 +42,8 @@ const { handleCobblemonButton, startCobblemonOpenTimer } = require('./forms/코�
 const { handleLevelShareButton } = require('./commands/레벨');
 const { handleRankingPageButton, handleRankingGotoButton, handleRankingGotoModal, handleRankingShareButton } = require('./commands/랭킹');
 const { handleXpUserSelect, handleXpButton, handleXpModal } = require('./commands/XP');
+const { handleAdminButton } = require('./commands/관리');
+const { refreshPostedMessages } = require('./handlers/최신화');
 const { loadLevels, saveLevels, loadXpState, handleMessageXp, trackVoiceStateUpdate, initVoiceStates, startVoiceXpTicker, announceLevelUp, MATCH_BONUS_CHANNEL_ID } = require('./handlers/레벨링');
 const { handleTempVoiceState, reconcileTempChannels } = require('./handlers/음성채널');
 const { logInteraction, logAction, logSystem, logError, logErrorThrottled, setLogClient, userLabel, flushLogsSync } = require('./handlers/로그');
@@ -347,6 +349,10 @@ async function onReady(c) {
   await reconcileMatchBonusMessages(c); // 봇이 꺼져있던 동안 인증 채널에 올라와 예약이 빠진 메시지 복구
   startQuizScheduler(c); // 놀이터 채널에 하루 한 번 무작위 시각으로 상식퀴즈를 출제
   startRaidScheduler(c); // 하루~사흘마다(무작위) 놀이터에 레이드 몬스터 출현
+  // 이미 올라가 있는 안내 패널·렐름 패널·명단을 지금 코드의 디자인으로 자동 갱신(내전/모집은 복원 때, 코블몬은 위에서 이미 함)
+  refreshPostedMessages(c, { includeMatches: false })
+    .then(r => logSystem({ 유형: '봇 상태', 내용: `게시물 최신화 — ${r.summary}` }))
+    .catch(err => console.error('게시물 최신화 실패:', err));
   startPatchNoteWatcher(c); // 롤·발로란트·오버워치·배그 공식 홈페이지의 새 패치노트·점검 공지를 지정 채널에 알림
   dataReady = true;
   diagWarn(`📊 시작 직후 메모리 (${runtimeInfo()})`);
@@ -434,11 +440,12 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     const isChannelExempt =
-      (interaction.isChatInputCommand() && ['패널', '퀴즈', 'xp'].includes(interaction.commandName)) ||
+      (interaction.isChatInputCommand() && ['관리'].includes(interaction.commandName)) ||
       isWordchainOrRanking ||
       isReload ||
       interaction.customId?.startsWith('quiz:') ||
       interaction.customId?.startsWith('xp:') ||
+      interaction.customId?.startsWith('admin:') ||
       interaction.customId?.startsWith('realm:') ||
       interaction.customId?.startsWith('cobblemon:') ||
       interaction.customId?.startsWith('raid:') || // 레이드는 출현한 채널(놀이터·테스트 채널)에서 그대로 진행
@@ -545,6 +552,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleRankingGotoButton(interaction);
       } else if (interaction.customId.startsWith('ranking:share:')) {
         await handleRankingShareButton(interaction);
+      } else if (interaction.customId.startsWith('admin:')) {
+        await handleAdminButton(interaction);
       } else if (interaction.customId.startsWith('xp:')) {
         await handleXpButton(interaction);
       } else if (interaction.customId === 'recruit:내전') {

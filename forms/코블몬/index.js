@@ -195,6 +195,7 @@ async function handleCobblemonButton(interaction) {
 module.exports = {
   buildCobblemonPanelPayload,
   rememberCobblemonPanel,
+  refreshCobblemonPanels,
   startCobblemonOpenTimer,
   handleCobblemonButton,
 };

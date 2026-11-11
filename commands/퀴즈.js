@@ -71,6 +71,7 @@ function buildMainRow() {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('quiz:create').setLabel('✍️ 문제 만들기').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('quiz:refresh').setLabel('🔄 새로고침').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('admin:home').setLabel('↩️ 메뉴로').setStyle(ButtonStyle.Secondary),
   );
 }
 
@@ -104,17 +105,6 @@ function buildCreateModal() {
 
 module.exports = {
   buildQuizPanelPayload, // 화면 모음·테스트용
-  data: new SlashCommandBuilder()
-    .setName('퀴즈')
-    .setDescription('[관리자 전용] 상식퀴즈 자동 출제를 버튼으로 직접 제어합니다.'),
-
-  async execute(interaction) {
-    if (!ADMIN_IDS.includes(interaction.user.id)) {
-      await interaction.reply(quick('❌ **권한이 없습니다.**', { ephemeral: true }));
-      return;
-    }
-    await interaction.reply(asEphemeral(buildQuizPanelPayload(interaction.user.id)));
-  },
 };
 
 // ── 버튼 처리 ────────────────────────────────────────────────────

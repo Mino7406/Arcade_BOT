@@ -15,6 +15,19 @@ const ROOT = path.join(__dirname, '..');
 const req = p => require(path.join(ROOT, p));
 
 async function buildScreens() {
+  // /관리 홈은 실행 중인 패치노트 감시기의 상태를 읽는다 — 그림용으로 가짜 상태를 끼워 넣는다(관리 모듈을 부르기 전에).
+  const now = Date.now();
+  let patchState = {
+    paused: false, today: 2,
+    games: [
+      { id: 'lol', name: '리그 오브 레전드', kind: 'patch', lastAt: now - 60e3, ok: true },
+      { id: 'lol-maint', name: '리그 오브 레전드', kind: 'maintenance', lastAt: now - 60e3, ok: true },
+      { id: 'valorant', name: '발로란트', kind: 'patch', lastAt: now - 90e3, ok: true },
+      { id: 'overwatch', name: '오버워치', kind: 'patch', lastAt: now - 3 * 60e3, ok: false },
+      { id: 'pubg', name: '배틀그라운드', kind: 'patch', lastAt: now - 59e3, ok: true },
+    ],
+  };
+  req('handlers/패치노트.js').getPatchNoteStatus = () => patchState;
   // 랭킹은 레벨링 데이터 대신 가짜 순위를 쓴다(랭킹·레벨 모듈을 부르기 전에 패치).
   const lv = req('handlers/레벨링.js');
   lv.getLeaderboardSize = () => 12;
@@ -126,6 +139,14 @@ async function buildScreens() {
   add('레벨 · 랭킹 · 퀴즈', '퀴즈 정답', '', quizMod.buildCorrectPayload({ word: '고양이', xpReward: 40 }));
 
   // ── 관리 · 안내 패널 ──────────────────────────
+  const adminHome = req('commands/관리.js').buildAdminHome;
+  add('관리 · 안내 패널', '/관리 홈 — 소식 알림 작동 중', '일시정지 버튼이 줄 오른쪽 · 출처별 마지막 확인', adminHome({ guildId: '1' }));
+  patchState = { ...patchState, paused: true };
+  add('관리 · 안내 패널', '/관리 홈 — 소식 알림 일시정지됨', '일시정지하면 재개 버튼으로 바뀌고 확인도 멈춰요', adminHome({ guildId: '1', note: '⏸️ **소식 알림을 일시정지했어요.** 재개할 때까지 새 글이 올라와도 알리지 않아요.' }));
+  patchState = { ...patchState, paused: false };
+  add('관리 · 안내 패널', '패널 게시 선택', '/관리 → 패널 게시', panel.buildPanelSelectPayload({ withBack: true }));
+  add('관리 · 안내 패널', '퀴즈 관리 (메뉴로 버튼)', '', quizCmd.buildQuizPanelPayload('1', '▶️ 자동 출제를 다시 시작했습니다.'));
+
   const fake = { client: { user: { displayAvatarURL: () => 'https://cdn.discordapp.com/embed/avatars/1.png', username: 'ARCADE' } }, guild: { id: '1' }, guildId: '1' };
   const applicant = { id: '5', displayAvatarURL: () => 'https://cdn.discordapp.com/embed/avatars/2.png' };
   add('관리 · 안내 패널', '게임모집 안내 패널', '카드 2장(모집 / 놀이터)', panel.buildSetupPanelPayload(fake));

@@ -419,6 +419,23 @@ async function refreshRealmRosterMessage(client, guildId) {
   if (newMessage) setRosterMessageId(guildId, newMessage.id);
 }
 
+// 명단 메시지를 지우고 다시 올리지 않고 그 자리에서 최신 디자인으로 고쳐 쓴다(봇이 켜질 때·수동 최신화용).
+// 기억해 둔 메시지가 없거나 지워졌으면 새로 한 번 올린다. 고친(올린) 개수를 돌려준다.
+async function updateRealmRosterInPlace(client) {
+  if (!REALM_REVIEW_CHANNEL_ID) return 0;
+  const channel = await client.channels.fetch(REALM_REVIEW_CHANNEL_ID).catch(() => null);
+  if (!channel) return 0;
+  const guildId = channel.guildId;
+  const oldId = getRosterMessageId(guildId);
+  const message = oldId && await channel.messages.fetch(oldId).catch(() => null);
+  if (message) {
+    const ok = await message.edit(buildRealmRosterMessagePayload(getApprovedRoster(guildId))).then(() => true).catch(() => false);
+    if (ok) return 1;
+  }
+  await refreshRealmRosterMessage(client, guildId);
+  return 1;
+}
+
 // 승인/거절 결과 DM. handlers/공용.js의 마감·시작 알림 DM(ContainerBuilder + Components V2)과
 // 동일한 형식으로 맞춘다 — 제목 → 구분선 → 본문 → 구분선 → 안내 문구(-# 회색 소문구) 순서.
 function buildRealmResultDm(status, nickname, processedByName) {
@@ -455,6 +472,8 @@ module.exports = {
   buildRealmReviewPayload,
   buildRealmRosterMessagePayload, buildRealmRosterAdminMenuPayload, // 화면 모음·테스트용
   refreshRealmRosterMessage,
+  refreshRealmPanelMessage,
+  updateRealmRosterInPlace,
 };
 
 // ── "🏰 신청하기" 버튼 → 신청서 모달 / "<:Emerald:1544331499976007810> 승인"·"❌ 거절" 처리 ('realm:' 프리픽스) ──

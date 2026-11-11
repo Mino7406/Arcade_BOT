@@ -15,6 +15,8 @@ const { ADMIN_IDS, AUTO_CLOSE_DELAY_MS, disarmAutoEnd, clearNotifyTimer, deleteM
 const { PLAYGROUND_CHANNEL_ID } = require('../config');
 const { card, payload, menu, footerSide, COLORS, notice: quick } = require('../handlers/카드');
 const { buildRealmPanelPayload } = require('../forms/마크');
+const { rememberRecruitPanel } = require('../handlers/최신화');
+const { backRow: adminBackRow } = require('./관리');
 const { buildCobblemonPanelPayload, rememberCobblemonPanel } = require('../forms/코블몬');
 
 // /패널 실행 시 뜨는 선택 메뉴에서 고를 수 있는 패널 등록표. 각 항목이 버튼 하나('form:publish:<종류>')가 된다.
@@ -28,6 +30,7 @@ const PANELS = {
     label: '게임모집',
     emoji: { name: '🎮' },
     build: (interaction) => buildSetupPanelPayload(interaction),
+    posted: rememberRecruitPanel, // 봇이 켜질 때 새 디자인으로 자동 최신화되도록 위치를 기억한다
     done: '🎮 **게임모집 패널을 게시했습니다.**',
   },
   realm: {
@@ -45,7 +48,7 @@ const PANELS = {
   },
 };
 
-function buildPanelSelectPayload() {
+function buildPanelSelectPayload({ withBack = false } = {}) {
   const row = new ActionRowBuilder().addComponents(
     ...Object.entries(PANELS).map(([type, panel]) =>
       new ButtonBuilder()
@@ -56,7 +59,7 @@ function buildPanelSelectPayload() {
     ),
   );
 
-  return quick('**게시할 패널을 선택하십시오.**', { rows: [row], ephemeral: true });
+  return menu({ header: '📌 패널 게시', note: '게시할 패널을 선택하세요. 현재 채널에 올라가요.', rows: withBack ? [row, adminBackRow()] : [row], ephemeral: true });
 }
 
 // ── 선택 메뉴 버튼('form:publish:<종류>') → 고른 패널을 현재 채널에 게시 ──
@@ -72,7 +75,7 @@ async function handlePanelSelectButton(interaction) {
 
   const message = await interaction.channel.send(panel.build(interaction));
   panel.posted?.(message);
-  await interaction.update(quick(panel.done));
+  await interaction.update(quick(panel.done, { rows: [adminBackRow()] }));
 }
 
 // 안내 패널의 "명령어 보기" 버튼(index.js)에서 재사용.
@@ -415,19 +418,7 @@ function buildBotMessageDeleteModal(panelMessageId) {
 }
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('패널')
-    .setDescription('[관리자 전용] 게시할 패널(게임모집·신청서)을 골라 현재 채널에 게시합니다.'),
-
-  async execute(interaction) {
-    if (!ADMIN_IDS.includes(interaction.user.id)) {
-      await interaction.reply(quick('❌ **권한이 없습니다.**', { ephemeral: true }));
-      return;
-    }
-
-    await interaction.reply(buildPanelSelectPayload());
-  },
-
+  buildPanelSelectPayload,
   handlePanelSelectButton,
   buildSetupPanelPayload,
   buildCommandListPayload,

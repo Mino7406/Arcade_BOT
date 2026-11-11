@@ -258,7 +258,16 @@ function createWatcher({ games, send, storePath = STORE_PATH, now = Date.now, lo
   const save = () => {
     try { writeJsonIfChanged(storePath, state); } catch (err) { logInfo(`패치노트 기록 저장 실패: ${err?.message ?? err}`); }
   };
-  const runtime = new Map(games.map((g, i) => [g.id, { nextAt: now() + i * STAGGER_MS, fails: 0 }]));
+  const runtime = new Map(games.map((g, i) => [g.id, { nextAt: now() + i * STAGGER_MS, fails: 0, lastAt: null, lastOk: null, lastError: null }]));
+
+  // 관리 화면용 메타: 일시정지 여부와 오늘 보낸 알림 수(KST 날짜가 바뀌면 0부터). 게임 키와 겹치지 않게 '_meta'에 둔다.
+  const meta = () => (state._meta ??= { paused: false, day: '', count: 0 });
+  const kstDay = () => new Date(now() + KST_MS).toISOString().slice(0, 10);
+  const countSent = () => {
+    const m = meta();
+    if (m.day !== kstDay()) { m.day = kstDay(); m.count = 0; }
+    m.count++;
+  };
 
   // 한 게임을 한 번 확인한다. 알린 개수를 돌려준다(처음 기억만 한 경우 0).
   async function checkGame(game) {
@@ -286,6 +295,7 @@ function createWatcher({ games, send, storePath = STORE_PATH, now = Date.now, lo
       await send(game, e); // 실패하면 여기서 던져 이 글은 '알림 완료'로 기록되지 않는다
       seen.add(e.key);
       st.seen = [...seen].slice(-MAX_SEEN);
+      countSent();
       save();
       sent++;
     }
@@ -295,7 +305,7 @@ function createWatcher({ games, send, storePath = STORE_PATH, now = Date.now, lo
   let running = false;
   // 차례가 된 게임을 하나씩 확인한다(동시에 읽지 않음).
   async function tick() {
-    if (running) return;
+    if (running || meta().paused) return;
     running = true;
     try {
       for (const game of games) {
@@ -305,8 +315,10 @@ function createWatcher({ games, send, storePath = STORE_PATH, now = Date.now, lo
           await checkGame(game);
           if (rt.fails >= failLogAfter) logInfo(`${gameLabel(game)} 확인 다시 정상(연속 실패 ${rt.fails}회 뒤)`);
           rt.fails = 0;
+          rt.lastAt = now(); rt.lastOk = true; rt.lastError = null;
         } catch (err) {
           rt.fails++;
+          rt.lastAt = now(); rt.lastOk = false; rt.lastError = err?.message ?? String(err);
           if (rt.fails >= failLogAfter) logFail(game, err, rt.fails); // 한 번 실패는 남기지 않는다(FAIL_LOG_AFTER 참고)
         }
         // 연속 실패하면 1배 → 2배 → 4배 → 최대 6배까지 간격을 늘린다
@@ -317,10 +329,39 @@ function createWatcher({ games, send, storePath = STORE_PATH, now = Date.now, lo
     }
   }
 
-  return { checkGame, tick, state: () => state };
+  // ── 관리 화면용 ──
+  function isPaused() { return !!meta().paused; }
+  function setPaused(value) {
+    meta().paused = !!value;
+    if (!value) for (const rt of runtime.values()) rt.nextAt = Math.min(rt.nextAt, now()); // 재개하면 바로 한 번 확인
+    save();
+  }
+  // 게임별 마지막 확인 결과. 같은 게임의 패치노트·점검은 한 줄로 묶어 보여 주려고 name 기준으로 합칠 수도 있게 원본을 그대로 준다.
+  function status() {
+    const m = meta();
+    const today = m.day === kstDay() ? m.count : 0;
+    return {
+      paused: !!m.paused,
+      today,
+      games: games.map(g => {
+        const rt = runtime.get(g.id);
+        return { id: g.id, name: g.name, kind: g.kind, emojiId: g.emojiId, lastAt: rt.lastAt, ok: rt.lastOk, fails: rt.fails, error: rt.lastError, nextAt: rt.nextAt };
+      }),
+    };
+  }
+  // 모든 게임을 지금 바로 한 번씩 확인한다(일시정지 중에는 하지 않음).
+  async function checkNow() {
+    if (meta().paused) return false;
+    for (const rt of runtime.values()) rt.nextAt = 0;
+    await tick();
+    return true;
+  }
+
+  return { checkGame, tick, state: () => state, isPaused, setPaused, status, checkNow };
 }
 
 let timer = null;
+let active = null; // 실행 중인 { watcher, send } — 관리 명령(/관리)이 상태를 보거나 조작할 때 쓴다
 function startPatchNoteWatcher(client) {
   if (timer) return;
   const send = async (_game, entry) => {
@@ -335,12 +376,25 @@ function startPatchNoteWatcher(client) {
     logFail: (game, err, fails) => logErrorThrottled(`patchnote-${game.id}`, '패치노트', `${gameLabel(game)} 확인 실패(연속 ${fails}회)`, err, {}, 60 * 60_000),
     logInfo: msg => logSystem({ 유형: '패치노트', 내용: msg }),
   });
+  active = { watcher, send };
   timer = setInterval(() => { watcher.tick().catch(err => console.error('패치노트 확인 오류:', err)); }, TICK_MS);
   timer.unref?.();
   watcher.tick().catch(err => console.error('패치노트 확인 오류:', err));
 }
 
+// ── 관리 명령에서 쓰는 조작 ────────────────────────────────────
+function getPatchNoteStatus() { return active ? active.watcher.status() : null; }
+function setPatchNotePaused(value) { if (!active) return false; active.watcher.setPaused(value); return true; }
+async function checkPatchNotesNow() { return active ? active.watcher.checkNow() : false; }
+// 공지 채널에 "테스트" 카드를 한 장 올려 알림 경로(채널·권한·모양)가 살아 있는지 확인한다. 이미 알린 글로 기록하지 않는다.
+async function sendPatchNoteTest() {
+  if (!active) throw new Error('패치노트 감시가 아직 시작되지 않았습니다.');
+  const game = GAMES[0];
+  await active.send(game, { key: 'test', title: '[테스트] 패치노트 알림이 정상적으로 도착했어요', url: 'https://discord.com', at: Date.now(), note: '관리자가 보낸 테스트 알림입니다' });
+}
+
 module.exports = {
+  getPatchNoteStatus, setPatchNotePaused, checkPatchNotesNow, sendPatchNoteTest,
   startPatchNoteWatcher, createWatcher, buildPatchNotePayload,
   parseRiotPatches, parseOverwatchPatches, parsePubgPatches, parseRiotMaintenances, GAMES, POLL_MS, MAX_BACKOFF, describeFetchError,
 };

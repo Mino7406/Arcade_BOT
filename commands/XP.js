@@ -10,6 +10,7 @@ const {
   MessageFlags,
 } = require('discord.js');
 const { ADMIN_IDS } = require('../config');
+const { buildAdminHome, backRow: adminBackRow } = require('./관리');
 const { card, payload, COLORS, notice: quick } = require('../handlers/카드');
 const {
   getXp,
@@ -237,7 +238,7 @@ function buildRaidTestView(notice, guildId) {
       '이 서버는 레벨 시스템이 꺼져 있어 XP 조정은 할 수 없고, 레이드만 시험할 수 있어요.\n-# 여기서 소환하면 이 채널에 뜨고, 이 서버의 놀이터 기능만 멈춰요(본서버와 따로 돌고, XP를 멈추지도 보상을 주지도 않아요).',
       `**레이드** ${raid.active ? `👾 ${raid.monsterName} 진행 중 (${raid.phase === 'recruit' ? '모집' : '전투'})` : '⚪ 대기'}`,
     ],
-    rows: [new ActionRowBuilder().addComponents(raidButton(raid))],
+    rows: [new ActionRowBuilder().addComponents(raidButton(raid), ...adminBackRow().components)],
   }));
 }
 
@@ -332,15 +333,6 @@ function formatAdjustNotice(result) {
 
 // ── 진입 커맨드 ──────────────────────────────────────────────
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('xp')
-    .setDescription('[관리자 전용] XP 수동 조정 · XP 시스템 긴급정지/뉴비부스트 관리.'),
-
-  async execute(interaction) {
-    if (await denyGuard(interaction, { allowExcludedGuild: true })) return;
-    const view = isExcludedGuild(interaction.guildId) ? buildRaidTestView(undefined, interaction.guildId) : buildMenuView();
-    await interaction.reply({ ...view, flags: view.flags | MessageFlags.Ephemeral });
-  },
 };
 
 // ── 유저 선택 ────────────────────────────────────────────────
@@ -363,7 +355,7 @@ async function handleXpButton(interaction) {
     } else if (targetId === 'manage') {
       await interaction.update(buildManageView(undefined, interaction.guildId));
     } else if (targetId === 'home') {
-      await interaction.update(buildMenuView());
+      await interaction.update(buildAdminHome({ guildId: interaction.guildId })); // XP 콘솔은 /관리 홈으로 합쳐졌다
     }
     return;
   }

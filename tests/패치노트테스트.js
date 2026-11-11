@@ -272,6 +272,53 @@ test('카드: 컴포넌트 v2 컨테이너·썸네일 섹션·링크 버튼, 게
   assert.strictEqual(m.components[0].components.length, 2); // 날짜·표시가 없으면 줄이 없다
 });
 
+// ── 관리(/관리)용: 일시정지·상태·오늘 알림 수 ──
+test('일시정지하면 tick 이 확인하지 않고, 재개하면 바로 다시 확인한다(상태는 재시작해도 유지)', async () => {
+  let t = 1_000_000;
+  let calls = 0;
+  const game = { id: 'g', kind: 'patch', name: 'G', load: async () => { calls++; return [E('a', 1)]; } };
+  const storePath = newStore();
+  const w = createWatcher({ games: [game], send: async () => {}, storePath, now: () => t });
+  w.setPaused(true);
+  assert.strictEqual(w.isPaused(), true);
+  t += 10 * POLL_MS;
+  await w.tick();
+  assert.strictEqual(calls, 0, '일시정지 중에는 확인하지 않아야 한다');
+  assert.strictEqual(await w.checkNow(), false, '일시정지 중 지금 확인은 하지 않는다');
+  // 재시작해도 일시정지가 유지된다
+  const again = createWatcher({ games: [game], send: async () => {}, storePath, now: () => t });
+  assert.strictEqual(again.isPaused(), true);
+  again.setPaused(false);
+  await again.tick();
+  assert.strictEqual(calls, 1, '재개하면 바로 한 번 확인해야 한다');
+});
+
+test('상태: 마지막 확인 시각·성공/실패·오늘 알림 수, 날짜가 바뀌면 0부터', async () => {
+  let t = Date.parse('2026-11-12T03:00:00Z');
+  const list = [E('a', 1)];
+  let fail = false;
+  const game = { id: 'g', kind: 'patch', name: 'G', load: async () => { if (fail) throw new Error('접속 실패'); return list.slice(); } };
+  const sent = [];
+  const w = createWatcher({ games: [game], send: async (_g, e) => sent.push(e.key), storePath: newStore(), now: () => t });
+  assert.strictEqual(w.status().games[0].lastAt, null, '확인 전에는 시각이 없다');
+  await w.checkNow();
+  let st = w.status();
+  assert.strictEqual(st.games[0].ok, true);
+  assert.strictEqual(st.games[0].lastAt, t);
+  assert.strictEqual(st.today, 0);
+  list.unshift(E('b', 2));
+  await w.checkNow();
+  assert.strictEqual(w.status().today, 1, '새 글 하나를 알리면 오늘 1개');
+  fail = true;
+  t += 1000;
+  await w.checkNow();
+  st = w.status();
+  assert.strictEqual(st.games[0].ok, false);
+  assert.ok(st.games[0].error.includes('접속 실패'));
+  t += 24 * 3600_000; // 다음 날(KST)
+  assert.strictEqual(w.status().today, 0, '날짜가 바뀌면 오늘 알림 수는 0부터');
+});
+
 (async () => {
   let failed = 0;
   for (const { name, fn } of tests) {
