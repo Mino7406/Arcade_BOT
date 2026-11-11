@@ -133,7 +133,7 @@ function matchIndices(reels) {
 // 심볼별 배당표(TRIPLE_PAYOUTS 에서 만든다 — 배당을 바꾸면 화면도 같이 바뀐다)
 function payoutTable() {
   const entries = Object.entries(TRIPLE_PAYOUTS).map(([sym, x]) => `${sym.repeat(3)} **×${x}**`);
-  return `### 💰 배당표\n${entries.slice(0, 3).join('　')}\n${entries.slice(3).join('　')}\n-# 같은 심볼 2개 **×${TWO_MATCH_PAYOUT}** · 모두 다르면 꽝`;
+  return `### 💰 배당표\n${entries.slice(0, 3).join('　')}\n${entries.slice(3).join('　')}\n-# 같은 심볼 2개 **×${TWO_MATCH_PAYOUT}** · 모두 다르면 **꽝**`;
 }
 
 function buildLobbyCard(lobby) {
