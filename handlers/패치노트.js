@@ -21,7 +21,7 @@ const {
   ContainerBuilder, SectionBuilder, TextDisplayBuilder, ThumbnailBuilder,
   ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags,
 } = require('discord.js');
-const { PATCHNOTE_CHANNEL_ID, GAME_EMOJIS } = require('../config');
+const { PATCHNOTE_CHANNEL_ID, PATCHNOTE_EMOJIS } = require('../config');
 const { logSystem, logErrorThrottled } = require('./로그');
 const { writeJsonIfChanged } = require('./저장');
 
@@ -176,18 +176,18 @@ const PUBG_NOTICE_API = 'https://api-foc.krafton.com/content/post/news?lang=ko&d
 // 확인 대상(게임 × 종류). id는 저장 기록의 키라서 바꾸면 처음부터 다시 기억만 한다.
 // allowEmpty: 점검처럼 "비어 있는 게 정상"인 목록은 빈 결과를 오류로 보지 않는다.
 const GAMES = [
-  { id: 'lol', kind: PATCH, name: '리그 오브 레전드', color: 0xc89b3c, emojiId: GAME_EMOJIS.lol,
+  { id: 'lol', kind: PATCH, name: '리그 오브 레전드', color: 0xc89b3c, emojiId: PATCHNOTE_EMOJIS.lol,
     load: async () => parseRiotPatches(await fetchText(`${LOL_BASE}/ko-kr/news/tags/patch-notes/`), LOL_BASE) },
-  { id: 'lol-maint', kind: MAINTENANCE, allowEmpty: true, name: '리그 오브 레전드', color: 0xc89b3c, emojiId: GAME_EMOJIS.lol,
+  { id: 'lol-maint', kind: MAINTENANCE, allowEmpty: true, name: '리그 오브 레전드', color: 0xc89b3c, emojiId: PATCHNOTE_EMOJIS.lol,
     load: async () => parseRiotMaintenances(await fetchText(LOL_STATUS), 'https://status.riotgames.com/lol?region=kr1&locale=ko_KR') },
-  { id: 'valorant', kind: PATCH, name: '발로란트', color: 0xff4655, emojiId: GAME_EMOJIS.valorant,
+  { id: 'valorant', kind: PATCH, name: '발로란트', color: 0xff4655, emojiId: PATCHNOTE_EMOJIS.valorant,
     load: async () => parseRiotPatches(await fetchText(`${VALO_BASE}/ko-kr/news/tags/patch-notes/`), VALO_BASE) },
-  { id: 'valorant-maint', kind: MAINTENANCE, allowEmpty: true, name: '발로란트', color: 0xff4655, emojiId: GAME_EMOJIS.valorant,
+  { id: 'valorant-maint', kind: MAINTENANCE, allowEmpty: true, name: '발로란트', color: 0xff4655, emojiId: PATCHNOTE_EMOJIS.valorant,
     load: async () => parseRiotMaintenances(await fetchText(VALO_STATUS), 'https://status.riotgames.com/valorant?region=kr&locale=ko_KR') },
-  { id: 'overwatch', kind: PATCH, name: '오버워치', color: 0xf99e1a, emojiId: GAME_EMOJIS.overwatch, load: () => loadOverwatch() },
-  { id: 'pubg', kind: PATCH, name: '배틀그라운드', color: 0xf2a900, emojiId: GAME_EMOJIS.pubg,
+  { id: 'overwatch', kind: PATCH, name: '오버워치', color: 0xf99e1a, emojiId: PATCHNOTE_EMOJIS.overwatch, load: () => loadOverwatch() },
+  { id: 'pubg', kind: PATCH, name: '배틀그라운드', color: 0xf2a900, emojiId: PATCHNOTE_EMOJIS.pubg,
     load: async () => parsePubgPatches(await fetchText(PUBG_API, PUBG_HEADERS)) },
-  { id: 'pubg-maint', kind: MAINTENANCE, allowEmpty: true, name: '배틀그라운드', color: 0xf2a900, emojiId: GAME_EMOJIS.pubg,
+  { id: 'pubg-maint', kind: MAINTENANCE, allowEmpty: true, name: '배틀그라운드', color: 0xf2a900, emojiId: PATCHNOTE_EMOJIS.pubg,
     load: async () => parsePubgPatches(await fetchText(PUBG_NOTICE_API, PUBG_HEADERS), Date.now(), { category: 'notice', titleHas: '점검' }) },
 ];
 
