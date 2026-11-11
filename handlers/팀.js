@@ -271,6 +271,7 @@ async function handleTeamAssignSelect(interaction) {
 }
 
 module.exports = {
+  buildTeamManagePayload, // 화면 모음·테스트용
   buildMatchSelectMenu,
   handleTeamMatchSelect,
   handleTeamButton,

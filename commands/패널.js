@@ -4,7 +4,6 @@ const {
   StringSelectMenuBuilder,
   ButtonBuilder,
   ButtonStyle,
-  EmbedBuilder,
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
@@ -14,6 +13,7 @@ const {
 const { ADMIN_IDS, AUTO_CLOSE_DELAY_MS, disarmAutoEnd, clearNotifyTimer, deleteMentionMessage, announceMatchCompletionXp, getCancelledDeletions } = require('../handlers/공용');
 // 끝말잇기/틱택토/레벨/랭킹은 이 채널(놀이터)에서만 사용 가능.
 const { PLAYGROUND_CHANNEL_ID } = require('../config');
+const { card, payload, COLORS } = require('../handlers/카드');
 const { buildRealmPanelPayload } = require('../forms/마크');
 const { buildCobblemonPanelPayload, rememberCobblemonPanel } = require('../forms/코블몬');
 
@@ -98,57 +98,19 @@ const PLAYGROUND_COMMAND_LIST = [
 ];
 
 function buildCommandListPayload() {
-  const embed = new EmbedBuilder()
-    .setColor(0x5865F2)
-    .setTitle('📖 명령어 목록')
-    .addFields(
-      ...COMMAND_LIST.map(c => ({ name: `\`${c.name}\``, value: c.value, inline: true })),
-      { name: '​', value: '**🎡 놀이터 채널 전용**', inline: false },
-      ...PLAYGROUND_COMMAND_LIST.map(c => ({ name: `\`${c.name}\``, value: c.value, inline: true })),
-    );
-
-  return { embeds: [embed], flags: MessageFlags.Ephemeral };
+  const line = c => `**\`${c.name}\`**　${c.value}`;
+  return payload(card({
+    color: COLORS.info,
+    header: '📖 명령어 목록',
+    blocks: [
+      COMMAND_LIST.map(line).join('\n'),
+      `### 🎡 놀이터 채널 전용\n${PLAYGROUND_COMMAND_LIST.map(line).join('\n')}`,
+    ],
+  }), { ephemeral: true });
 }
 
 // /패널 최초 게시와 "🔄 새로고침" 버튼(index.js)에서 함께 사용.
 function buildSetupPanelPayload(interaction) {
-  const embed = new EmbedBuilder()
-    .setColor(0x5865F2)
-    .setTitle('게임모집 채널에 오신 걸 환영합니다!')
-    .setDescription(
-      [
-        '> **명령어 없이 바로 이용하세요. **',
-        '아래 버튼 하나로 내전/모집 생성부터 관리까지 최소한의 동작으로 끝낼 수 있도록 만들었어요.',
-        '',
-        '> **⚔️ 내전 생성**',
-        '팀 배정까지 포함된 정식 내전 모집을 만들어요.',
-        '',
-        '> **📋 모집 생성**',
-        '팀 배정 없는 가벼운 인원 모집을 만들어요.',
-        '',
-        '> **🔎 불러오기**',
-        '채팅에 묻힌 내전/모집 게시글을 다시 끌어올려요.',
-        '',
-        '> **🛠️ 팀 관리**',
-        '진행 중인 내전의 팀을 수동/자동으로 배정해요.',
-        '',
-        '> **📖 명령어가 궁금하신가요? **',
-        '**명령어 보기** 버튼을 누르면 전체 명령어 목록을 바로 확인할 수 있어요.',
-      ].join('\n'),
-    )
-    .setThumbnail(interaction.client.user.displayAvatarURL())
-    .setFooter({
-      text: '버튼 말고도 해당 채널에서 명령어로도 사용 가능합니다.',
-      iconURL: interaction.client.user.displayAvatarURL(),
-    });
-
-  const playgroundEmbed = new EmbedBuilder()
-    .setColor(0x57F287)
-    .setTitle('🎡 놀이터 채널 안내')
-    .setDescription(
-      '**끝말잇기, 틱택토, 오목, 룰렛, 레벨, 랭킹**은 놀이터 채널에서만 이용할 수 있어요.\n아래 버튼으로 바로 이동하세요.',
-    );
-
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('recruit:내전').setLabel('⚔️ 내전 생성').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('recruit:모집').setLabel('📋 모집 생성').setStyle(ButtonStyle.Success),
@@ -157,14 +119,41 @@ function buildSetupPanelPayload(interaction) {
   );
   const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('recruit:명령어').setLabel('📖 명령어 보기').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('recruit:관리').setLabel('⚙️ 관리').setStyle(ButtonStyle.Danger),
+  );
+  const playgroundRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setLabel('🎡 놀이터 바로가기')
       .setStyle(ButtonStyle.Link)
       .setURL(`https://discord.com/channels/${interaction.guild.id}/${PLAYGROUND_CHANNEL_ID}`),
-    new ButtonBuilder().setCustomId('recruit:관리').setLabel('⚙️ 관리').setStyle(ButtonStyle.Danger),
   );
 
-  return { embeds: [embed, playgroundEmbed], components: [row1, row2] };
+  const main = card({
+    color: COLORS.info,
+    header: '게임모집 채널에 오신 걸 환영합니다!',
+    sub: '명령어 없이 바로 이용하세요',
+    thumb: interaction.client.user.displayAvatarURL(),
+    thumbAlt: interaction.client.user.username,
+    blocks: [
+      '아래 버튼 하나로 내전/모집 생성부터 관리까지 최소한의 동작으로 끝낼 수 있도록 만들었어요.',
+      '### ⚔️ 내전 생성\n팀 배정까지 포함된 정식 내전 모집을 만들어요.\n' +
+        '### 📋 모집 생성\n팀 배정 없는 가벼운 인원 모집을 만들어요.\n' +
+        '### 🔎 불러오기\n채팅에 묻힌 내전/모집 게시글을 다시 끌어올려요.\n' +
+        '### 🛠️ 팀 관리\n진행 중인 내전의 팀을 수동/자동으로 배정해요.',
+      '### 📖 명령어가 궁금하신가요?\n**명령어 보기** 버튼을 누르면 전체 명령어 목록을 바로 확인할 수 있어요.',
+    ],
+    footer: '버튼 말고도 해당 채널에서 명령어로도 사용 가능합니다.',
+    rows: [row1, row2],
+  });
+
+  const playground = card({
+    color: COLORS.ok,
+    header: '🎡 놀이터 채널 안내',
+    blocks: ['**끝말잇기, 틱택토, 오목, 룰렛, 레벨, 랭킹**은 놀이터 채널에서만 이용할 수 있어요.\n아래 버튼으로 바로 이동하세요.'],
+    rows: [playgroundRow],
+  });
+
+  return payload([main, playground]);
 }
 
 // "⚙️ 관리" 버튼(index.js) → 관리자에게만 표시되는 패널 관리 메뉴. 새로고침 등 관리자 전용

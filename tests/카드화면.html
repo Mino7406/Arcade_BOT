@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>아케이드봇 컴포넌트 v2 화면 모음</title>
+<style>
+  :root { --bg:#1e1f22; --panel:#313338; --card:#2b2d31; --text:#dbdee1; --muted:#949ba4; --link:#00a8fc; --line:#3f4147; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.375 "gg sans","Noto Sans KR","Malgun Gothic",system-ui,sans-serif; }
+  header.top { padding:28px 32px 8px; max-width:1240px; margin:0 auto; }
+  header.top h1 { margin:0 0 6px; font-size:24px; }
+  header.top p { margin:0; color:var(--muted); }
+  nav.tabs { position:sticky; top:0; z-index:5; background:var(--bg); border-bottom:1px solid var(--line); padding:10px 32px; display:flex; gap:8px; flex-wrap:wrap; }
+  nav.tabs button { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:16px; padding:6px 14px; cursor:pointer; font:inherit; }
+  nav.tabs button.on { background:#5865f2; border-color:#5865f2; color:#fff; }
+  main { max-width:1240px; margin:0 auto; padding:20px 32px 60px; display:grid; grid-template-columns:repeat(auto-fill,minmax(500px,1fr)); gap:26px 28px; align-items:start; }
+  .shot h3 { margin:0 0 2px; font-size:14px; color:#f2f3f5; }
+  .shot .note { margin:0 0 8px; color:var(--muted); font-size:12px; min-height:16px; }
+  .msg { background:var(--panel); border-radius:8px; padding:14px 16px 16px 66px; position:relative; }
+  .msg .avatar { position:absolute; left:14px; top:14px; width:40px; height:40px; border-radius:50%; background:#5865f2; display:flex; align-items:center; justify-content:center; font-size:20px; }
+  .msg .who { font-weight:600; color:#f2f3f5; margin-bottom:4px; }
+  .msg .who .bot { background:#5865f2; color:#fff; font-size:10px; border-radius:3px; padding:1px 5px; margin-left:6px; vertical-align:2px; }
+  .msg .who .eph { color:var(--muted); font-weight:400; font-size:12px; margin-left:8px; }
+  .container { background:var(--card); border:1px solid #1e1f22; border-left:4px solid var(--accent,#4e5058); border-radius:8px; padding:14px 16px; margin:4px 0 6px; max-width:480px; }
+  .container > *:first-child { margin-top:0; }
+  .container > *:last-child { margin-bottom:0; }
+  .section { display:flex; gap:14px; align-items:flex-start; justify-content:space-between; }
+  .section .body { flex:1; min-width:0; }
+  .thumb { width:72px; height:72px; border-radius:8px; object-fit:cover; flex:none; background:#1e1f22; }
+  .text { white-space:pre-wrap; word-wrap:break-word; }
+  .text h1 { font-size:20px; margin:0 0 2px; color:#f2f3f5; }
+  .text h2 { font-size:17px; margin:2px 0; color:#f2f3f5; }
+  .text h3 { font-size:15px; margin:2px 0; color:#f2f3f5; }
+  .text .sub { font-size:12px; color:var(--muted); }
+  .text blockquote { margin:2px 0; padding:0 0 0 10px; border-left:4px solid #4e5058; }
+  .text code { background:#1e1f22; border-radius:3px; padding:1px 4px; font:12.5px Consolas,monospace; }
+  .text pre { background:#1e1f22; border:1px solid #3f4147; border-radius:4px; padding:6px 8px; margin:4px 0; font:12.5px/1.4 Consolas,"Malgun Gothic",monospace; white-space:pre-wrap; }
+  .text .mention { background:rgba(88,101,242,.3); color:#c9cdfb; border-radius:3px; padding:0 2px; }
+  .emoji { width:20px; height:20px; vertical-align:-4px; }
+  hr.sep { border:0; border-top:1px solid #3f4147; margin:10px 0; }
+  hr.sep.nodiv { border-top-color:transparent; margin:4px 0; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .btn { border:0; border-radius:3px; padding:2px 14px; height:32px; min-width:60px; color:#fff; font:500 14px "Noto Sans KR","Malgun Gothic",sans-serif; display:inline-flex; align-items:center; gap:6px; cursor:default; }
+  .btn.s1 { background:#5865f2; } .btn.s2 { background:#4e5058; } .btn.s3 { background:#248046; } .btn.s4 { background:#da373c; } .btn.s5 { background:#4e5058; }
+  .btn[disabled] { opacity:.5; }
+  .select { flex:1 1 100%; background:#1e1f22; border:1px solid #3f4147; border-radius:4px; padding:8px 10px; color:var(--muted); display:flex; justify-content:space-between; }
+  .gallery { background:#1e1f22; border-radius:6px; overflow:hidden; margin:4px 0; }
+  .gallery img { display:block; width:100%; }
+  .missing { color:#f0b232; font-size:12px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>아케이드봇 · 컴포넌트 v2 화면 모음</h1>
+  <p>봇의 실제 빌더 함수가 만든 메시지 데이터를 디스코드 모양으로 그린 것입니다. 이모지 그림은 디스코드 서버에서 불러옵니다.</p>
+</header>
+<nav class="tabs" id="tabs"></nav>
+<main id="main"></main>
+
+<script src="data.js"></script>
+<script>
+const ORDER = ['내전 · 모집', '틱택토', '오목', '끝말잇기', '룰렛', '레벨 · 랭킹 · 퀴즈', '관리 · 안내 패널'];
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function inline(s) {
+  s = esc(s);
+  s = s.replace(/&lt;a?:(\w+):(\d+)&gt;/g, (_, n, id) => `<img class="emoji" src="https://cdn.discordapp.com/emojis/${id}.png?size=48" alt=":${n}:" onerror="this.replaceWith(document.createTextNode(':${n}:'))">`);
+  s = s.replace(/&lt;@&amp;(\d+)&gt;/g, '<span class="mention">@역할</span>');
+  s = s.replace(/&lt;@!?(\d+)&gt;/g, '<span class="mention">@유저</span>');
+  s = s.replace(/&lt;t:(\d+):[a-zA-Z]&gt;/g, (_, t) => new Date(Number(t) * 1000).toLocaleString('ko-KR', { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }));
+  s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+  s = s.replace(/__([^_]+)__/g, '<u>$1</u>');
+  s = s.replace(/\*([^*\n]+)\*/g, '<i>$1</i>');
+  return s;
+}
+
+function markdown(src) {
+  // 코드 블록 분리
+  const parts = src.split(/```/);
+  let out = '';
+  parts.forEach((part, i) => {
+    if (i % 2 === 1) { out += '<pre>' + esc(part.replace(/^\n/, '').replace(/\n$/, '')) + '</pre>'; return; }
+    part.split('\n').forEach((line, idx, arr) => {
+      if (line === '' && (idx === 0 || idx === arr.length - 1)) return;
+      let m;
+      if ((m = line.match(/^# (.*)$/))) out += `<h1>${inline(m[1])}</h1>`;
+      else if ((m = line.match(/^## (.*)$/))) out += `<h2>${inline(m[1])}</h2>`;
+      else if ((m = line.match(/^### (.*)$/))) out += `<h3>${inline(m[1])}</h3>`;
+      else if ((m = line.match(/^-# (.*)$/))) out += `<div class="sub">${inline(m[1])}</div>`;
+      else if ((m = line.match(/^> (.*)$/))) out += `<blockquote>${inline(m[1])}</blockquote>`;
+      else out += `<div>${inline(line) || '&nbsp;'}</div>`;
+    });
+  });
+  return `<div class="text">${out}</div>`;
+}
+
+function emojiHtml(e) {
+  if (!e) return '';
+  if (e.id) return `<img class="emoji" src="https://cdn.discordapp.com/emojis/${e.id}.png?size=48" alt="">`;
+  return e.name || '';
+}
+
+function renderComponent(c, files) {
+  switch (c.type) {
+    case 17: {
+      const color = c.accent_color != null ? '#' + c.accent_color.toString(16).padStart(6, '0') : '#4e5058';
+      return `<div class="container" style="--accent:${color}">${(c.components || []).map(x => renderComponent(x, files)).join('')}</div>`;
+    }
+    case 9: {
+      const body = (c.components || []).map(x => renderComponent(x, files)).join('');
+      const acc = c.accessory ? renderComponent(c.accessory, files) : '';
+      return `<div class="section"><div class="body">${body}</div>${acc}</div>`;
+    }
+    case 10: return markdown(c.content || '');
+    case 11: {
+      let url = c.media.url;
+      if (url.startsWith('attachment://')) url = (files && files[url.slice(13)]) || '';
+      return url ? `<img class="thumb" src="${url}" alt="">` : '<div class="thumb"></div>';
+    }
+    case 12: return `<div class="gallery">${(c.items || []).map(it => {
+      let url = it.media.url;
+      if (url.startsWith('attachment://')) url = (files && files[url.slice(13)]) || '';
+      return url ? `<img src="${url}" alt="">` : '<div class="missing">이미지</div>';
+    }).join('')}</div>`;
+    case 14: return `<hr class="sep${c.divider ? '' : ' nodiv'}">`;
+    case 1: return `<div class="row">${(c.components || []).map(x => renderComponent(x, files)).join('')}</div>`;
+    case 2: {
+      const style = c.style || 2;
+      const label = c.label ? inline(c.label) : '';
+      const link = style === 5 ? ' ↗' : '';
+      return `<span class="btn s${style}"${c.disabled ? ' disabled' : ''}>${emojiHtml(c.emoji)}${label}${link}</span>`;
+    }
+    case 3: case 5: case 6: case 7: case 8:
+      return `<div class="select"><span>${esc(c.placeholder || '선택')}</span><span>⌄</span></div>`;
+    default: return `<div class="missing">[${c.type}]</div>`;
+  }
+}
+
+function render(group) {
+  const main = document.getElementById('main');
+  main.innerHTML = '';
+  window.SCREENS.filter(s => group === '전체' || s.group === group).forEach(s => {
+    const el = document.createElement('div');
+    el.className = 'shot';
+    el.innerHTML = `<h3>${esc(s.title)}</h3><p class="note">${esc(s.note || '')}</p>
+      <div class="msg"><div class="avatar">🎮</div>
+        <div class="who">ARCADE BOT<span class="bot">봇</span>${s.ephemeral ? '<span class="eph">🔒 나에게만 표시됨</span>' : ''}</div>
+        ${s.components.map(c => renderComponent(c, s.files)).join('')}
+      </div>`;
+    main.appendChild(el);
+  });
+}
+
+const tabs = document.getElementById('tabs');
+['전체', ...ORDER].forEach((g, i) => {
+  const b = document.createElement('button');
+  b.textContent = g;
+  b.onclick = () => { [...tabs.children].forEach(x => x.classList.remove('on')); b.classList.add('on'); render(g); window.scrollTo(0, 0); };
+  if (i === 0) b.classList.add('on');
+  tabs.appendChild(b);
+});
+window.SCREENS.sort((a, b) => ORDER.indexOf(a.group) - ORDER.indexOf(b.group));
+render('전체');
+</script>
+</body>
+</html>

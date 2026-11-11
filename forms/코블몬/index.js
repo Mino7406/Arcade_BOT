@@ -4,12 +4,12 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  EmbedBuilder,
   AttachmentBuilder,
   MessageFlags,
 } = require('discord.js');
 const { writeJsonIfChanged } = require('../../handlers/저장');
 const { logSystem, logError } = require('../../handlers/로그');
+const { card, payload, messageText } = require('../../handlers/카드');
 
 const COBBLEMON_COLOR = 0xE8344E;
 // 패널 제목. 재시작 시 저장 목록이 비어 있으면 이 제목(또는 예전 제목)으로 게시된 패널을 찾는다.
@@ -76,34 +76,20 @@ function buildCobblemonButtons() {
 // "코블몬" 안내 패널 — 신청 절차 없이 설치기 링크와 모드 사용법 버튼만 둔다.
 // client를 넘기면 footer 아이콘에 봇 프로필 사진을 붙인다(안 넘겨도 동작).
 function buildCobblemonPanelPayload(client) {
-  const embed = new EmbedBuilder()
-    .setColor(COBBLEMON_COLOR)
-    .setTitle(PANEL_TITLE)
-    .setDescription(
-      [
-        '-# **2026.10.25 ~**',
-        '',
-        '> **<:pokeball_cobblemon:1563187920158986281> 참가 방법**',
-        '**<:cobblemon:1562830370368528384>설치기 다운로드** 버튼을 누르면 다운로드 링크로 이동됩니다.\n해당 서버는 위 설치기를 통해야만 **접속이 가능합니다.**',
-        '',
-        '> **<:greatball_cobblemon:1563187918762279072> 주의사항**',
-        '해당 서버는 렉을 최소화하기 위해 **월드 제한**을 두고 있습니다.\n**렉을 유발하는 장치 제작, 행동은 제제 대상**입니다.',
-        '',
-        '> **<:ultraball_cobblemon:1563187922071462009> 행동 강령**',
-        'ARCADE 전용 모드 제작으로 갈등 발생을 최소화 하였으나 **갈등을 조장하는 장치 제작, 행동은 제제 대상**입니다.',
-      ].join('\n'),
-    )
-    .setThumbnail(`attachment://${THUMBNAIL_FILENAME}`)
-    .setFooter({
-      text: "관련 문의는 임원 '김민호' 에게 해주시면 됩니다.",
-      iconURL: client?.user?.displayAvatarURL() ?? undefined,
-    });
-
-  return {
-    embeds: [embed],
-    components: [buildCobblemonButtons()],
-    files: [new AttachmentBuilder(THUMBNAIL_PATH, { name: THUMBNAIL_FILENAME })],
-  };
+  return payload(card({
+    color: COBBLEMON_COLOR,
+    header: PANEL_TITLE,
+    sub: '2026.10.25 ~',
+    thumb: `attachment://${THUMBNAIL_FILENAME}`,
+    thumbAlt: '코블몬',
+    blocks: [
+      '### <:pokeball_cobblemon:1563187920158986281> 참가 방법\n**<:cobblemon:1562830370368528384>설치기 다운로드** 버튼을 누르면 다운로드 링크로 이동됩니다.\n해당 서버는 위 설치기를 통해야만 **접속이 가능합니다.**',
+      '### <:greatball_cobblemon:1563187918762279072> 주의사항\n해당 서버는 렉을 최소화하기 위해 **월드 제한**을 두고 있습니다.\n**렉을 유발하는 장치 제작, 행동은 제제 대상**입니다.',
+      '### <:ultraball_cobblemon:1563187922071462009> 행동 강령\nARCADE 전용 모드 제작으로 갈등 발생을 최소화 하였으나 **갈등을 조장하는 장치 제작, 행동은 제제 대상**입니다.',
+    ],
+    footer: "관련 문의는 임원 '김민호' 에게 해주시면 됩니다.",
+    rows: [buildCobblemonButtons()],
+  }), { files: [new AttachmentBuilder(THUMBNAIL_PATH, { name: THUMBNAIL_FILENAME })] });
 }
 
 // /패널 → 코블몬으로 패널을 게시한 직후 호출 — 오픈 시각에 버튼을 바꿀 수 있게 메시지 위치를 기억해 둔다.
@@ -111,6 +97,13 @@ function rememberCobblemonPanel(message) {
   const panels = loadPanels().filter(p => p.messageId !== message.id);
   panels.push({ channelId: message.channelId, messageId: message.id });
   savePanels(panels);
+}
+
+// 코블몬 안내 패널인지: 카드(제목이 `# 제목` 줄)와 예전 임베드(title) 둘 다 알아본다.
+function isCobblemonPanelMessage(m) {
+  if (PANEL_TITLES.includes(m.embeds?.[0]?.title)) return true;
+  const lines = messageText(m).split('\n');
+  return PANEL_TITLES.some(t => lines.includes(`# ${t}`));
 }
 
 // 저장된 목록이 비어 있을 때(목록 저장 기능 이전에 게시했거나 DB를 옮긴 경우) 봇이 올린 패널을 채널에서 찾아 기억한다.
@@ -125,7 +118,7 @@ async function discoverCobblemonPanels(client) {
       const messages = await channel.messages.fetch({ limit: 100 }).catch(() => null);
       if (!messages) continue;
       for (const m of messages.values()) {
-        if (m.author.id === client.user.id && PANEL_TITLES.includes(m.embeds[0]?.title)) {
+        if (m.author.id === client.user.id && isCobblemonPanelMessage(m)) {
           found.push({ channelId: m.channelId, messageId: m.id });
         }
       }
@@ -195,7 +188,7 @@ async function handleCobblemonButton(interaction) {
       return;
     }
     // 오픈 시각이 지났는데 아직 일반 버튼인 패널(갱신 전)을 누른 경우 — 이 패널을 바로 링크 버튼으로 바꾼다.
-    await interaction.update({ components: [buildCobblemonButtons()] });
+    await interaction.update(buildCobblemonPanelPayload(interaction.client)); // v2는 components가 메시지 전체라 카드째 다시 그린다
     await interaction.followUp({
       content: '**설치기가 열렸습니다.** 버튼을 한 번 더 누르면 다운로드됩니다.',
       flags: MessageFlags.Ephemeral,

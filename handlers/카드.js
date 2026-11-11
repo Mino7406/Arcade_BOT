@@ -187,6 +187,38 @@ function payload(cards, extra = {}) {
 }
 
 /**
+ * 메시지의 글자를 모두 이어서 돌려준다. v2 카드(컨테이너 안 TextDisplay)와 예전 임베드(title·description·필드)를
+ * 둘 다 읽어서, 업데이트 전에 올라간 옛 메시지도 같은 방식으로 찾고 읽을 수 있다.
+ */
+function messageText(msg) {
+  const parts = [];
+  const walk = (c) => {
+    if (!c) return;
+    if (typeof c.content === 'string') parts.push(c.content);
+    for (const child of c.components ?? []) walk(child);
+  };
+  for (const c of msg?.components ?? []) walk(c);
+  for (const e of msg?.embeds ?? []) {
+    if (e.title) parts.push(e.title);
+    if (e.description) parts.push(e.description);
+    for (const f of e.fields ?? []) parts.push(`${f.name}\n${f.value}`);
+  }
+  return parts.join('\n');
+}
+
+/**
+ * 메시지(컨테이너 안까지)에 customId 가 prefix 로 시작하는 버튼/메뉴가 있는지 찾는다.
+ * v2는 버튼 줄이 컨테이너 안에 들어갈 수 있어서 message.components 를 한 겹만 훑으면 놓친다.
+ */
+function hasCustomId(components, prefix) {
+  for (const c of components || []) {
+    if (typeof c.customId === 'string' && c.customId.startsWith(prefix)) return true;
+    if (c.components && hasCustomId(c.components, prefix)) return true;
+  }
+  return false;
+}
+
+/**
  * 이미 올라간 v2 메시지에서 "맨 위 버튼 줄"만 바꾼다(카드·이미지 등 나머지는 그대로).
  * 예전엔 message.edit({ components: [] }) 로 버튼만 떼었지만, v2에서는 components 가 메시지 전체라
  * 그렇게 하면 카드까지 사라진다. 카드 안(컨테이너 안)의 버튼은 건드리지 않는다.
@@ -234,5 +266,7 @@ module.exports = {
   card,
   payload,
   withTopRows,
+  hasCustomId,
+  messageText,
   notice,
 };

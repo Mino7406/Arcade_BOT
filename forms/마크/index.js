@@ -3,7 +3,6 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  EmbedBuilder,
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
@@ -58,6 +57,8 @@ function logRealmDmFailure(err, applicant) {
   }
 }
 
+const { card, payload, messageText, COLORS } = require('../../handlers/카드');
+
 const REALM_COLOR = 0x57F287;
 const PENDING_COLOR = 0xF0B232;
 const REJECTED_COLOR = 0xED4245;
@@ -83,27 +84,6 @@ const APPLY_DISABLED = false;
 // /마크 최초 게시에서 사용. 이후 새로고침 등이 생기면 여기를 재사용한다(패널.js 패턴과 동일).
 // client를 넘기면 footer 아이콘에 봇 프로필 사진을 붙인다(안 넘겨도 동작).
 function buildRealmPanelPayload(client) {
-  const embed = new EmbedBuilder()
-    .setColor(REALM_COLOR)
-    .setTitle('마인크래프트 렐름 참가 신청')
-    .setDescription(
-      [
-        '-# **09/05 ~ 10/04 OPEN**',
-        '',
-        '> **<:apple:1544507302948634704> 신청 방법**',
-        '**<:Book:1544331697049305098>신청하기** 버튼을 눌러 **마인크래프트 닉네임**을 제출해주세요.\n검토 후 결과를 DM으로 안내드려요.',
-        '',
-        '> **<:flag:1544635910757425183> 주의사항**',
-        '**최신 릴리스**로 접속하셔야 렐름에 입장이 가능합니다.\n서버에 접속할 때는 반드시 **Java Edition**으로 접속해주세요. Bedrock Edition은 지원하지 않습니다.',
-        '',
-      ].join('\n'),
-    )
-    .setThumbnail(`attachment://${THUMBNAIL_FILENAME}`)
-    .setFooter({
-      text: '@마크 역할이 있어야 규정집에 접근 가능합니다.',
-      iconURL: client?.user?.displayAvatarURL() ?? undefined,
-    });
-
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('realm:apply').setLabel('신청하기').setEmoji({ id: '1544331697049305098' }).setStyle(ButtonStyle.Success).setDisabled(APPLY_DISABLED),
     new ButtonBuilder()
@@ -113,11 +93,19 @@ function buildRealmPanelPayload(client) {
       .setURL(`https://discord.com/channels/${GUILD_ID}/${REALM_RULES_CHANNEL_ID}/${REALM_RULES_MESSAGE_ID}`),
   );
 
-  return {
-    embeds: [embed],
-    components: [row],
-    files: [new AttachmentBuilder(THUMBNAIL_PATH, { name: THUMBNAIL_FILENAME })],
-  };
+  return payload(card({
+    color: REALM_COLOR,
+    header: '마인크래프트 렐름 참가 신청',
+    sub: '09/05 ~ 10/04 OPEN',
+    thumb: `attachment://${THUMBNAIL_FILENAME}`,
+    thumbAlt: '마인크래프트 렐름',
+    blocks: [
+      '### <:apple:1544507302948634704> 신청 방법\n**<:Book:1544331697049305098>신청하기** 버튼을 눌러 **마인크래프트 닉네임**을 제출해주세요.\n검토 후 결과를 DM으로 안내드려요.',
+      '### <:flag:1544635910757425183> 주의사항\n**최신 릴리스**로 접속하셔야 렐름에 입장이 가능합니다.\n서버에 접속할 때는 반드시 **Java Edition**으로 접속해주세요. Bedrock Edition은 지원하지 않습니다.',
+    ],
+    footer: '@마크 역할이 있어야 규정집에 접근 가능합니다.',
+    rows: [row],
+  }), { files: [new AttachmentBuilder(THUMBNAIL_PATH, { name: THUMBNAIL_FILENAME })] });
 }
 
 // 규정집 메시지에 ✅류 반응을 남긴 유저 ID 캐시 — "신청하기" 클릭마다 채널/메시지/반응자
@@ -212,18 +200,8 @@ function buildRealmReviewPayload({ applicant, displayName, nickname, appliedAt, 
 
   const ts = Math.floor(appliedAt / 1000);
 
-  const embed = new EmbedBuilder()
-    .setColor(statusMeta.color)
-    .setAuthor({ name: `${displayName} 님의 렐름 신청서`, iconURL: applicant.displayAvatarURL() })
-    .setTitle(statusMeta.title)
-    .addFields(
-      { name: FIELD_NICKNAME, value: nickname, inline: true },
-      { name: FIELD_APPLIED_AT, value: `<t:${ts}:f>`, inline: true },
-    );
-
-  if (processedByName) embed.setFooter({ text: `처리자: ${processedByName}` });
-
-  const components = status === 'pending'
+  // 닉네임·신청 일시는 아래 두 줄 그대로 다시 읽어 쓴다(readRealmReview) — 별도 저장소 없이 메시지가 상태를 들고 있다.
+  const rows = status === 'pending'
     ? [
         new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId(`realm:approve:${applicant.id}`).setLabel('승인').setEmoji({ id: '1544331499976007810' }).setStyle(ButtonStyle.Success),
@@ -232,7 +210,36 @@ function buildRealmReviewPayload({ applicant, displayName, nickname, appliedAt, 
       ]
     : [];
 
-  return { embeds: [embed], components };
+  return payload(card({
+    color: statusMeta.color,
+    header: statusMeta.title,
+    sub: `${displayName} 님의 렐름 신청서`,
+    thumb: applicant.displayAvatarURL(),
+    thumbAlt: displayName,
+    blocks: [
+      `${FIELD_NICKNAME}　**${nickname}**\n${FIELD_APPLIED_AT}　<t:${ts}:f>`,
+    ],
+    footer: processedByName ? `처리자: ${processedByName}` : undefined,
+    rows,
+  }));
+}
+
+// 검토 메시지에서 닉네임/신청 일시를 읽는다. 카드(현재 형식)와 예전 임베드(필드) 둘 다 읽는다.
+function readRealmReview(message) {
+  const legacy = message.embeds?.[0];
+  if (legacy?.fields?.length) {
+    return {
+      nickname: legacy.fields.find(f => f.name === FIELD_NICKNAME)?.value ?? '알 수 없음',
+      appliedAtText: legacy.fields.find(f => f.name === FIELD_APPLIED_AT)?.value ?? '',
+    };
+  }
+  const lines = messageText(message).split('\n');
+  const valueOf = (name) => {
+    const line = lines.find(l => l.startsWith(name));
+    return line ? line.slice(name.length).replace(/^[\s\u3000]+/, '') : '';
+  };
+  const nickname = valueOf(FIELD_NICKNAME).replace(/^\*\*(.*)\*\*$/, '$1');
+  return { nickname: nickname || '알 수 없음', appliedAtText: valueOf(FIELD_APPLIED_AT) };
 }
 
 // 명단 메시지에는 패널.js의 "⚙️ 관리" 버튼과 같은 방식으로 진입 버튼 하나만 둔다.
@@ -271,9 +278,12 @@ function buildRealmRosterAdminMenuPayload(notice) {
 // 열이 어긋나 보여서, 정렬에 기대지 않는 번호 목록으로 표시한다.
 function buildRealmRosterMessagePayload(entries) {
   if (entries.length === 0) {
-    const embed = new EmbedBuilder().setColor(REALM_COLOR).setTitle('<:flag2:1544677209426624552> 멤버 목록 (0명)')
-      .setDescription('아직 승인된 멤버가 없습니다.');
-    return { embeds: [embed], components: [buildRealmRosterButtons()] };
+    return payload(card({
+      color: REALM_COLOR,
+      header: '<:flag2:1544677209426624552> 멤버 목록 (0명)',
+      blocks: ['아직 승인된 멤버가 없습니다.'],
+      rows: [buildRealmRosterButtons()],
+    }));
   }
 
   const display = entries.slice(0, ROSTER_DISPLAY_LIMIT);
@@ -282,12 +292,12 @@ function buildRealmRosterMessagePayload(entries) {
     lines.push(`\n_...외 ${entries.length - ROSTER_DISPLAY_LIMIT}명 더 있음_`);
   }
 
-  const embed = new EmbedBuilder()
-    .setColor(REALM_COLOR)
-    .setTitle(`<:flag2:1544677209426624552> 멤버 목록 (총 ${entries.length}명)`)
-    .setDescription(lines.join('\n'));
-
-  return { embeds: [embed], components: [buildRealmRosterButtons()] };
+  return payload(card({
+    color: REALM_COLOR,
+    header: `<:flag2:1544677209426624552> 멤버 목록 (총 ${entries.length}명)`,
+    blocks: [lines.join('\n')],
+    rows: [buildRealmRosterButtons()],
+  }));
 }
 
 // 유저 ID 입력칸 하나는 세 모달(추가/편집/제외)이 공통으로 쓰므로 빌더로 뽑아둔다.
@@ -440,6 +450,7 @@ module.exports = {
   buildRealmPanelPayload,
   buildRealmApplyModal,
   buildRealmReviewPayload,
+  buildRealmRosterMessagePayload, // 화면 모음·테스트용
   refreshRealmRosterMessage,
 };
 
@@ -497,9 +508,7 @@ async function handleRealmButton(interaction) {
   const processedByName = interaction.member?.displayName ?? interaction.user.username;
 
   // 원본 임베드에서 닉네임/신청 일시를 그대로 읽어와 재사용한다(별도 저장소 없이 메시지 자체가 상태를 들고 있음).
-  const original = interaction.message.embeds[0];
-  const nickname = original.fields.find(f => f.name === FIELD_NICKNAME)?.value ?? '알 수 없음';
-  const appliedAtField = original.fields.find(f => f.name === FIELD_APPLIED_AT)?.value ?? '';
+  const { nickname, appliedAtText: appliedAtField } = readRealmReview(interaction.message);
   const appliedAt = (appliedAtField.match(/^<t:(\d+):f>$/)?.[1] ?? Math.floor(Date.now() / 1000)) * 1000;
 
   removePendingApplication(interaction.guildId, applicantId); // 처리 완료 — 승인이면 명단으로, 거절이면 재신청 가능하게

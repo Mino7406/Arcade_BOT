@@ -1,22 +1,25 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const { getXp, levelFromXp, buildProgressBar } = require('../handlers/레벨링');
 const { displayNameFromMember } = require('../handlers/이름');
+const { card, payload, notice, COLORS } = require('../handlers/카드');
 
-function buildLevelEmbed(guildId, targetUser, displayName) {
+// rows: 카드 안에 넣을 버튼 줄(나에게만 보이는 화면에는 공유하기 버튼, 공개 게시에는 없음)
+function buildLevelPayload(guildId, targetUser, displayName, rows = []) {
   const xp = getXp(guildId, targetUser.id);
   const { level, currentLevelXp, neededXp } = levelFromXp(xp);
   const bar = buildProgressBar(currentLevelXp, neededXp);
 
-  return new EmbedBuilder()
-    .setColor(0x5865F2)
-    .setThumbnail(targetUser.displayAvatarURL({ size: 256 }))
-    .setDescription(
-      `## ${displayName}\n` +
-      `## LEVEL ${level}\n` +
-      `${bar}\n` +
-      `**${currentLevelXp} / ${neededXp}** XP　(누적 \`${xp}\` XP)`,
-    )
-    .setTimestamp();
+  return payload(card({
+    color: COLORS.info,
+    header: displayName,
+    sub: '레벨 카드',
+    thumb: targetUser.displayAvatarURL({ size: 256 }),
+    thumbAlt: displayName,
+    blocks: [
+      `## LEVEL ${level}\n${bar}\n**${currentLevelXp} / ${neededXp}** XP　(누적 \`${xp}\` XP)`,
+    ],
+    rows,
+  }));
 }
 
 function buildShareRow(targetUserId) {
@@ -41,12 +44,9 @@ module.exports = {
     const targetMember = interaction.options.getMember('유저') || interaction.member;
     const displayName = displayNameFromMember(targetMember, targetUser);
 
-    const embed = buildLevelEmbed(interaction.guildId, targetUser, displayName);
-
     await interaction.reply({
-      embeds: [embed],
-      components: [buildShareRow(targetUser.id)],
-      flags: MessageFlags.Ephemeral,
+      ...buildLevelPayload(interaction.guildId, targetUser, displayName, [buildShareRow(targetUser.id)]),
+      flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
     });
   },
 };
@@ -60,15 +60,14 @@ async function handleLevelShareButton(interaction) {
   const targetUser = targetMember?.user || await interaction.client.users.fetch(targetUserId).catch(() => null);
 
   if (!targetUser) {
-    await interaction.editReply({ content: '⚠️ **유저를 찾을 수 없습니다.**', embeds: [], components: [] });
+    await interaction.editReply(notice('⚠️ **유저를 찾을 수 없습니다.**'));
     return;
   }
 
   const displayName = targetMember?.displayName || targetUser.globalName || targetUser.username;
-  const embed = buildLevelEmbed(interaction.guildId, targetUser, displayName);
-
-  await interaction.channel.send({ embeds: [embed] });
+  await interaction.channel.send(buildLevelPayload(interaction.guildId, targetUser, displayName));
   await interaction.deleteReply();
 }
 
+module.exports.buildLevelPayload = buildLevelPayload; // 화면 모음·테스트용
 module.exports.handleLevelShareButton = handleLevelShareButton;

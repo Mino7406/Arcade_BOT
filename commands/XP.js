@@ -1,6 +1,5 @@
 const {
   SlashCommandBuilder,
-  EmbedBuilder,
   ActionRowBuilder,
   UserSelectMenuBuilder,
   ButtonBuilder,
@@ -11,6 +10,7 @@ const {
   MessageFlags,
 } = require('discord.js');
 const { ADMIN_IDS } = require('../config');
+const { card, payload, COLORS } = require('../handlers/카드');
 const {
   getXp,
   levelFromXp,
@@ -93,42 +93,35 @@ function buildActionRows(guildId, targetId) {
 
 // ── /xp 첫 화면: "XP 조정" / "XP 관리" 분기 ──────────────────────
 function buildMenuView() {
-  return {
-    content: '**XP 콘솔** — 항목을 선택하세요.',
-    embeds: [],
-    components: [
+  return payload(card({
+    color: COLORS.info,
+    header: '🎛️ XP 콘솔',
+    blocks: ['항목을 선택하세요.'],
+    rows: [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('xp:menu:adjust').setEmoji('⚙️').setLabel('XP 조정').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('xp:menu:manage').setEmoji('🛠️').setLabel('XP 관리').setStyle(ButtonStyle.Secondary),
       ),
     ],
-  };
+  }));
 }
 
 // ── "XP 관리" 패널: 일반파밍/미니게임 긴급정지 + 뉴비부스트 토글 ──
 function buildManageView(notice, guildId) {
   const st = getXpState();
   const raid = getRaidStatus(guildId);
-  const embed = new EmbedBuilder()
-    .setColor(st.farmFrozen || st.minigameFrozen ? 0xED4245 : 0x57F287)
-    .setDescription(
-      `## 🛠️ XP 관리\n` +
-      `**일반 파밍 XP** ${st.farmFrozen ? '🔴 정지됨' : '🟢 작동 중'}\n` +
-      `-# 메인·TTS 채팅 · 통화방 체류 · 내전/모집 완료 보너스\n\n` +
-      `**미니게임 XP** ${st.minigameFrozen ? '🔴 정지됨' : '🟢 작동 중'}\n` +
-      `-# 오목 · 룰렛 · 틱택토 · 끝말잇기 · 퀴즈\n\n` +
-      `**뉴비부스트(×2)** ${st.newbieBoostEnabled ? '🟢 ON' : '⚪ OFF'}\n` +
-      `-# 뉴비부스트 역할의 메인·TTS·통화방 체류 XP 2배\n\n` +
-      `**레이드 자동 출현** ${raid.autoSpawn ? '🟢 가동 중' : '🔴 중지됨'}\n` +
-      `-# 하루~사흘마다(무작위) 놀이터에 출현 · 진행 중엔 채팅·통화방·미니게임 XP 정지\n\n` +
-      raidStatusText(raid) +
-      (notice ? `\n\n${notice}` : ''),
-    )
-    .setTimestamp();
-  return {
-    content: '',
-    embeds: [embed],
-    components: [
+  return payload(card({
+    color: st.farmFrozen || st.minigameFrozen ? COLORS.err : COLORS.ok,
+    header: '🛠️ XP 관리',
+    blocks: [
+      notice || null,
+      `**일반 파밍 XP** ${st.farmFrozen ? '🔴 정지됨' : '🟢 작동 중'}\n-# 메인·TTS 채팅 · 통화방 체류 · 내전/모집 완료 보너스`,
+      `**미니게임 XP** ${st.minigameFrozen ? '🔴 정지됨' : '🟢 작동 중'}\n-# 오목 · 룰렛 · 틱택토 · 끝말잇기 · 퀴즈`,
+      `**뉴비부스트(×2)** ${st.newbieBoostEnabled ? '🟢 ON' : '⚪ OFF'}\n-# 뉴비부스트 역할의 메인·TTS·통화방 체류 XP 2배`,
+      `**레이드 자동 출현** ${raid.autoSpawn ? '🟢 가동 중' : '🔴 중지됨'}\n-# 하루~사흘마다(무작위) 놀이터에 출현 · 진행 중엔 채팅·통화방·미니게임 XP 정지`,
+      raidStatusText(raid),
+    ],
+    rows: [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('xp:mng:farm')
           .setEmoji(st.farmFrozen ? '▶️' : '⏸️')
@@ -164,7 +157,7 @@ function buildManageView(notice, guildId) {
         raidButton(raid),
       ),
     ],
-  };
+  }));
 }
 
 // 레이드 상태 두 줄(진행 여부 / 다음 자동 출현 시각) — XP 관리 패널과 테스트 서버 화면이 공유.
@@ -183,9 +176,6 @@ function raidButton(raid) {
 
 // 👾 레이드 소환 → 몬스터 고르기: 🎲 무작위 + 등록된 몬스터마다 버튼 하나(한 줄에 5개씩), 맨 아래 돌아가기.
 function buildRaidPickView(guildId, notice) {
-  const embed = new EmbedBuilder()
-    .setColor(0xED4245)
-    .setDescription('## 👾 레이드 소환\n어떤 몬스터를 소환할까요?\n-# 🎲 무작위는 등록된 몬스터 중 하나를 골라요(자동 출현과 같음).' + (notice ? `\n\n${notice}` : ''));
   const buttons = [
     new ButtonBuilder().setCustomId('xp:summon:random').setEmoji('🎲').setLabel('무작위').setStyle(ButtonStyle.Primary),
     ...MONSTERS.map(m => new ButtonBuilder().setCustomId(`xp:summon:${m.id}`).setEmoji(m.emoji).setLabel(m.name).setStyle(ButtonStyle.Danger)),
@@ -195,16 +185,21 @@ function buildRaidPickView(guildId, notice) {
   rows.push(new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('xp:mng:raidback').setEmoji('↩️').setLabel('돌아가기').setStyle(ButtonStyle.Secondary),
   ));
-  return { content: '', embeds: [embed], components: rows };
+  return payload(card({
+    color: COLORS.err,
+    header: '👾 레이드 소환',
+    blocks: [
+      notice || null,
+      '어떤 몬스터를 소환할까요?\n-# 🎲 무작위는 등록된 몬스터 중 하나를 골라요(자동 출현과 같음).',
+    ],
+    rows,
+  }));
 }
 
 // 🔄 몬스터 변경 → 다음 자동 출현 몬스터 고르기: 🎲 무작위(다시 뽑기) + 몬스터마다 버튼(지금 정해진 몬스터는 초록), 돌아가기.
 function buildNextMonsterView(guildId) {
   const raid = getRaidStatus(guildId);
   const next = raid.nextMonster;
-  const embed = new EmbedBuilder()
-    .setColor(0x5865F2)
-    .setDescription(`## 🔄 다음 출현 몬스터 변경\n지금 정해진 몬스터: ${next ? `${next.emoji} **${next.name}**` : '없음'}\n-# 🎲 무작위는 등록된 몬스터 중에서 다시 뽑아요. 출현한 뒤 그다음 몬스터는 다시 무작위로 정해져요.`);
   const buttons = [
     new ButtonBuilder().setCustomId('xp:nextmon:random').setEmoji('🎲').setLabel('무작위').setStyle(ButtonStyle.Primary),
     ...MONSTERS.map(m => new ButtonBuilder().setCustomId(`xp:nextmon:${m.id}`).setEmoji(m.emoji).setLabel(m.name)
@@ -215,7 +210,14 @@ function buildNextMonsterView(guildId) {
   rows.push(new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('xp:menu:manage').setEmoji('↩️').setLabel('돌아가기').setStyle(ButtonStyle.Secondary),
   ));
-  return { content: '', embeds: [embed], components: rows };
+  return payload(card({
+    color: COLORS.info,
+    header: '🔄 다음 출현 몬스터 변경',
+    blocks: [
+      `지금 정해진 몬스터: ${next ? `${next.emoji} **${next.name}**` : '없음'}\n-# 🎲 무작위는 등록된 몬스터 중에서 다시 뽑아요. 출현한 뒤 그다음 몬스터는 다시 무작위로 정해져요.`,
+    ],
+    rows,
+  }));
 }
 
 // 소환/종료 후 다시 그릴 화면 — 테스트 서버면 테스트 화면, 아니면 XP 관리 패널.
@@ -228,16 +230,16 @@ function raidResultView(interaction, notice) {
 // 버튼을 누른 채널에 뜨고, 본서버 XP를 멈추지도 보상을 주지도 않는다).
 function buildRaidTestView(notice, guildId) {
   const raid = getRaidStatus(guildId);
-  const embed = new EmbedBuilder()
-    .setColor(0x5865F2)
-    .setDescription(
-      `## 🧪 레이드 테스트\n` +
-      `이 서버는 레벨 시스템이 꺼져 있어 XP 조정은 할 수 없고, 레이드만 시험할 수 있어요.\n` +
-      `-# 여기서 소환하면 이 채널에 뜨고, 이 서버의 놀이터 기능만 멈춰요(본서버와 따로 돌고, XP를 멈추지도 보상을 주지도 않아요).\n\n` +
-      `**레이드** ${raid.active ? `👾 ${raid.monsterName} 진행 중 (${raid.phase === 'recruit' ? '모집' : '전투'})` : '⚪ 대기'}` +
-      (notice ? `\n\n${notice}` : ''),
-    );
-  return { content: '', embeds: [embed], components: [new ActionRowBuilder().addComponents(raidButton(raid))] };
+  return payload(card({
+    color: COLORS.info,
+    header: '🧪 레이드 테스트',
+    blocks: [
+      notice || null,
+      '이 서버는 레벨 시스템이 꺼져 있어 XP 조정은 할 수 없고, 레이드만 시험할 수 있어요.\n-# 여기서 소환하면 이 채널에 뜨고, 이 서버의 놀이터 기능만 멈춰요(본서버와 따로 돌고, XP를 멈추지도 보상을 주지도 않아요).',
+      `**레이드** ${raid.active ? `👾 ${raid.monsterName} 진행 중 (${raid.phase === 'recruit' ? '모집' : '전투'})` : '⚪ 대기'}`,
+    ],
+    rows: [new ActionRowBuilder().addComponents(raidButton(raid))],
+  }));
 }
 
 // ── 긴급정지 ON/OFF 확인 화면 ──────────────────────────────────
@@ -247,46 +249,47 @@ function buildConfirmView(which) {
   const frozen = isFarm ? st.farmFrozen : st.minigameFrozen;
   const label = isFarm ? '일반 파밍' : '미니게임';
   const act = frozen ? '재개' : '긴급정지';
-  const embed = new EmbedBuilder()
-    .setColor(frozen ? 0x57F287 : 0xED4245)
-    .setDescription(
-      `## ⚠️ 확인\n**${label} XP 지급을 ${act}**하시겠습니까?\n\n` +
-      (frozen
+  return payload(card({
+    color: frozen ? COLORS.ok : COLORS.err,
+    header: '⚠️ 확인',
+    blocks: [
+      `**${label} XP 지급을 ${act}**하시겠습니까?`,
+      frozen
         ? '재개하면 즉시 다시 XP가 지급됩니다.'
-        : `정지하면 관리자가 다시 켤 때까지 ${label} 관련 XP가 전혀 지급되지 않습니다.`),
-    );
-  return {
-    content: '',
-    embeds: [embed],
-    components: [
+        : `정지하면 관리자가 다시 켤 때까지 ${label} 관련 XP가 전혀 지급되지 않습니다.`,
+    ],
+    rows: [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`xp:mngyes:${which}`).setLabel(`네, ${act}합니다`)
           .setStyle(frozen ? ButtonStyle.Success : ButtonStyle.Danger),
         new ButtonBuilder().setCustomId('xp:mngno').setLabel('취소').setStyle(ButtonStyle.Secondary),
       ),
     ],
-  };
+  }));
 }
 
-function buildPanelEmbed(guildId, targetId, targetUser, displayName, notice) {
+// rows: 카드 안에 넣을 유저 선택/조정 버튼 줄
+function buildPanelCard(guildId, targetId, targetUser, displayName, notice, rows) {
   const xp = getXp(guildId, targetId);
   const { level, currentLevelXp, neededXp } = levelFromXp(xp);
   const bar = buildProgressBar(currentLevelXp, neededXp);
   const frozen = isUserXpFrozen(guildId, targetId);
 
-  const embed = new EmbedBuilder()
-    .setColor(frozen ? 0xED4245 : 0x5865F2)
-    .setDescription(
-      `## ⚙️ XP 조정\n` +
+  return card({
+    color: frozen ? COLORS.err : COLORS.info,
+    header: '⚙️ XP 조정',
+    sub: `대상 : ${displayName}`,
+    thumb: targetUser ? targetUser.displayAvatarURL({ size: 256 }) : undefined,
+    thumbAlt: displayName,
+    blocks: [
+      notice || null,
       `대상 : <@${targetId}> (\`${displayName}\`)` +
-      (frozen ? `\n🚫 **지급 정지 중** — 자동 지급 경로(채팅·통화방·미니게임 등)에서 더 이상 XP를 받지 않습니다.` : '') +
-      `\n\n**LEVEL ${level}**\n${bar}\n**${currentLevelXp} / ${neededXp}** XP　(누적 \`${xp}\` XP)` +
-      (notice ? `\n\n${notice}` : ''),
-    )
-    .setFooter({ text: '아래 버튼으로 XP를 조정할 수 있습니다.' })
-    .setTimestamp();
-  if (targetUser) embed.setThumbnail(targetUser.displayAvatarURL({ size: 256 }));
-  return embed;
+        (frozen ? '\n🚫 **지급 정지 중** — 자동 지급 경로(채팅·통화방·미니게임 등)에서 더 이상 XP를 받지 않습니다.' : ''),
+      `### LEVEL ${level}\n${bar}\n**${currentLevelXp} / ${neededXp}** XP　(누적 \`${xp}\` XP)`,
+    ],
+    footer: '아래 버튼으로 XP를 조정할 수 있습니다.',
+    rows,
+  });
 }
 
 async function resolveTarget(interaction, targetId) {
@@ -301,11 +304,10 @@ async function buildPanel(interaction, targetId, notice) {
 }
 
 function buildPanelView(interaction, targetId, { user, displayName }, notice) {
-  return {
-    content: '',
-    embeds: [buildPanelEmbed(interaction.guildId, targetId, user, displayName, notice)],
-    components: [buildPickRow(targetId), ...buildActionRows(interaction.guildId, targetId)],
-  };
+  return payload(buildPanelCard(
+    interaction.guildId, targetId, user, displayName, notice,
+    [buildPickRow(targetId), ...buildActionRows(interaction.guildId, targetId)],
+  ));
 }
 
 // 로그 파일(DB/log/날짜.json)에 남길 감사 한 줄. 레벨이 그대로면 Lv.만, 바뀌면 전→후로 표기.
@@ -338,7 +340,7 @@ module.exports = {
   async execute(interaction) {
     if (await denyGuard(interaction, { allowExcludedGuild: true })) return;
     const view = isExcludedGuild(interaction.guildId) ? buildRaidTestView(undefined, interaction.guildId) : buildMenuView();
-    await interaction.reply({ ...view, flags: MessageFlags.Ephemeral });
+    await interaction.reply({ ...view, flags: view.flags | MessageFlags.Ephemeral });
   },
 };
 
@@ -358,7 +360,7 @@ async function handleXpButton(interaction) {
   // 첫 화면 분기
   if (action === 'menu') {
     if (targetId === 'adjust') {
-      await interaction.update({ content: '조정할 유저를 선택하세요.', embeds: [], components: [buildPickRow()] });
+      await interaction.update(payload(card({ color: COLORS.info, header: '⚙️ XP 조정', blocks: ['조정할 유저를 선택하세요.'], rows: [buildPickRow()] })));
     } else if (targetId === 'manage') {
       await interaction.update(buildManageView(undefined, interaction.guildId));
     } else if (targetId === 'home') {
@@ -568,6 +570,8 @@ async function handleXpModal(interaction) {
   }
 }
 
+// 화면 모음·테스트에서 직접 그려 보려고 화면 빌더도 함께 내보낸다.
+module.exports.views = { buildMenuView, buildManageView, buildRaidPickView, buildNextMonsterView, buildRaidTestView, buildConfirmView, buildPanelView };
 module.exports.handleXpUserSelect = handleXpUserSelect;
 module.exports.handleXpButton = handleXpButton;
 module.exports.handleXpModal = handleXpModal;

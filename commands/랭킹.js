@@ -1,10 +1,8 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { card, payload, notice, hasCustomId, COLORS } = require('../handlers/카드');
 const { getLeaderboard, getLeaderboardSize, buildProgressBar } = require('../handlers/레벨링');
 
 const PAGE_SIZE = 5;
-const DESCRIPTION_LIMIT = 4096; // Discord 임베드 description 최대 길이
-const HEADER = '## 🏆 서버 랭킹\n\n';
-const TRUNCATE_NOTICE = '\n\n*(목록이 길어 일부 순위는 생략되었습니다)*';
 const MEDALS = ['🥇', '🥈', '🥉'];
 const BAR_LENGTH = 10;
 const MEMBER_FETCH_CHUNK_SIZE = 100; // 디스코드 게이트웨이 멤버 조회 1회 요청당 유저 ID 최대 개수
@@ -43,25 +41,7 @@ function formatEntry(entry, name) {
   const medal = MEDALS[entry.rank - 1];
   const rankText = medal ? `${medal} **${entry.rank}위**` : `**${entry.rank}위**`;
   const bar = buildProgressBar(entry.currentLevelXp, entry.neededXp, BAR_LENGTH);
-  return `> ${rankText} · **${name}**\n> -# Lv.${entry.level} ・ \`${bar}\` ・ ${entry.xp} XP`;
-}
-
-// 인용구(>) 줄 사이에 빈 줄을 넣어야 하나로 이어붙지 않고 유저마다 별도 블록으로 보인다.
-// 목록이 길어져도 Discord embed description 한도(4096자)를 넘지 않도록 안전하게 자른다.
-function buildDescription(lines) {
-  const full = HEADER + lines.join('\n\n');
-  if (full.length <= DESCRIPTION_LIMIT) return full;
-
-  const budget = DESCRIPTION_LIMIT - HEADER.length - TRUNCATE_NOTICE.length;
-  const kept = [];
-  let used = 0;
-  for (const line of lines) {
-    const add = kept.length === 0 ? line.length : line.length + 2; // '\n\n' 구분자 포함
-    if (used + add > budget) break;
-    kept.push(line);
-    used += add;
-  }
-  return HEADER + kept.join('\n\n') + TRUNCATE_NOTICE;
+  return `${rankText} · **${name}**\n-# Lv.${entry.level} ・ \`${bar}\` ・ ${entry.xp} XP`;
 }
 
 // includeShare: false면 공유하기 버튼을 뺀다 (이미 공개된 메시지에는 다시 공유할 이유가 없음).
@@ -115,15 +95,18 @@ async function buildRankingView(guild, page, includeShare = true) {
   const offset = (clampedPage - 1) * PAGE_SIZE;
   const pageEntries = entries.slice(offset, offset + PAGE_SIZE);
 
-  const lines = pageEntries.map((entry) => formatEntry(entry, names.get(entry.userId)));
+  // 한 사람이 한 블록(구분선 없이 간격만) — 5명이라 글자 수 한도(약 4000자)에 걸릴 일이 없다.
+  const blocks = pageEntries.map((entry) => ({ text: formatEntry(entry, names.get(entry.userId)), noDivider: true }));
 
-  const embed = new EmbedBuilder()
-    .setColor(0xFEE75C)
-    .setDescription(buildDescription(lines))
-    .setFooter({ text: `${clampedPage} / ${totalPages} 페이지` })
-    .setTimestamp();
+  const rankingCard = card({
+    color: COLORS.gold,
+    header: '🏆 서버 랭킹',
+    sub: [`${clampedPage} / ${totalPages} 페이지`, `전체 ${total}명`],
+    blocks,
+    rows: buildComponents(clampedPage, totalPages, includeShare),
+  });
 
-  return { embed, components: buildComponents(clampedPage, totalPages, includeShare) };
+  return { payload: payload(rankingCard) };
 }
 
 module.exports = {
@@ -136,11 +119,11 @@ module.exports = {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const view = await buildRankingView(interaction.guild, 1);
     if (!view) {
-      await interaction.editReply({ content: '📭 **아직 레벨 기록이 없습니다.**' });
+      await interaction.editReply(notice('📭 **아직 레벨 기록이 없습니다.**'));
       return;
     }
 
-    await interaction.editReply({ embeds: [view.embed], components: view.components });
+    await interaction.editReply(view.payload);
   },
 };
 
@@ -186,16 +169,14 @@ async function showRankingPage(interaction, page) {
   // 지금 누른 메시지에 원래 공유하기 버튼이 있었는지 그대로 유지한다.
   // (공개 채널 메시지는 공유하기 버튼이 없어야 하므로, 페이지를 넘겨도 다시 생기면 안 된다.)
   // 행 전체를 훑어서 확인한다 — 배포 시점에 따라 공유하기 버튼이 어느 행에 있었는지가 달라질 수 있다.
-  const includeShare = interaction.message.components.some(
-    row => row.components.some(c => c.customId?.startsWith('ranking:share:')),
-  );
+  const includeShare = hasCustomId(interaction.message.components, 'ranking:share:');
   const view = await buildRankingView(interaction.guild, page, includeShare);
   if (!view) {
-    await interaction.editReply({ content: '📭 **아직 레벨 기록이 없습니다.**', embeds: [], components: [] });
+    await interaction.editReply(notice('📭 **아직 레벨 기록이 없습니다.**'));
     return;
   }
 
-  await interaction.editReply({ embeds: [view.embed], components: view.components });
+  await interaction.editReply(view.payload);
 }
 
 // ── 공유하기 버튼 처리 ──────────────────────────────────────────
@@ -206,14 +187,15 @@ async function handleRankingShareButton(interaction) {
   const page = parseInt(interaction.customId.slice('ranking:share:'.length), 10) || 1;
   const view = await buildRankingView(interaction.guild, page, false);
   if (!view) {
-    await interaction.editReply({ content: '📭 **아직 레벨 기록이 없습니다.**', embeds: [], components: [] });
+    await interaction.editReply(notice('📭 **아직 레벨 기록이 없습니다.**'));
     return;
   }
 
-  await interaction.channel.send({ embeds: [view.embed], components: view.components });
+  await interaction.channel.send(view.payload);
   await interaction.deleteReply();
 }
 
+module.exports.buildRankingView = buildRankingView; // 화면 모음·테스트용
 module.exports.handleRankingPageButton = handleRankingPageButton;
 module.exports.handleRankingGotoButton = handleRankingGotoButton;
 module.exports.handleRankingGotoModal = handleRankingGotoModal;

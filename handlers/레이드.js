@@ -20,7 +20,7 @@ const path = require('path');
 const {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, AttachmentBuilder,
   ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, SeparatorSpacingSize, MediaGalleryBuilder, MediaGalleryItemBuilder,
-  ComponentType, EmbedBuilder,
+  ComponentType,
 } = require('discord.js');
 const { applyXp, deductXpFromAll, isExcludedGuild, announceLevelUp, setRaidXpFrozen } = require('./레벨링');
 const { KST_OFFSET_MS } = require('./시간');
@@ -1097,13 +1097,13 @@ async function resumeRaid(client, message, saved) {
 // 이어갈 수 없는 레이드 메시지를 '봇 점검으로 사라졌다'로 정리한다.
 async function markInterrupted(message) {
   if (!MONSTERS.length) {
-    await message.edit({ embeds: [new EmbedBuilder().setColor(ACCENT.end).setDescription(`# ${OUTCOME_TEXT.restart}`)], components: [] }).catch(() => {});
+    await message.edit({ content: `# ${OUTCOME_TEXT.restart}`, embeds: [], components: [] }).catch(() => {});
     return;
   }
   const ghost = { monster: MONSTERS[0], battle: null, party: [], freezesXp: false, imageUrl: null };
-  // 예전 버전(임베드)으로 띄운 메시지는 V2로 바꿀 수 없을 수 있어, 실패하면 임베드로 정리한다.
+  // 예전 버전(임베드)으로 띄운 메시지는 V2로 바꿀 수 없을 수 있어, 실패하면 글자만으로 정리한다.
   await message.edit(await endView(ghost, 'restart')).catch(() =>
-    message.edit({ embeds: [new EmbedBuilder().setColor(ACCENT.end).setDescription(`# ${OUTCOME_TEXT.restart}`)], components: [] }).catch(() => {}),
+    message.edit({ content: `# ${OUTCOME_TEXT.restart}`, embeds: [], components: [] }).catch(() => {}),
   );
 }
 

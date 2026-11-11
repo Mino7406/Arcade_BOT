@@ -5,7 +5,6 @@
 const fs = require('fs');
 const path = require('path');
 const {
-  EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -22,7 +21,7 @@ const { KST_OFFSET_MS } = require('./시간');
 const { ADMIN_IDS, STEAM_EMOJI_ID } = require('../config');
 const { logSystem, logError, userLabel } = require('./로그');
 const { writeJsonIfChanged } = require('./저장');
-const { card, payload, text, COLORS, clipLines, emojiUrl, customEmojiId } = require('./카드');
+const { card, payload, text, messageText, COLORS, clipLines, emojiUrl, customEmojiId } = require('./카드');
 
 // 내전(naejeon)/모집(mojip) 두 시스템이 공유하는 게임 → 역할 이름 매핑.
 // (역할 멘션 대상 채널이 있으면 해당 역할을 핑한다.)
@@ -65,11 +64,6 @@ function stripEmoji(text) {
     .replace(/[\u200d\ufe0f\u20e3]/g, '')                  // ZWJ·이모지 변형 선택자·키캡 결합 문자
     .replace(/\s{2,}/g, ' ')
     .trim();
-}
-
-// 직접 입력(custom)일 때는 제목에 게임 아이콘을 붙이지 않는다.
-function titleHeader(game, gameInfo, title) {
-  return game === 'custom' ? `## ${title}` : `## ${gameInfo.emoji}  ${title}`;
 }
 
 // DM을 보낼 수 없는 정상적인 상황(수신자가 DM 차단 / 봇과 공통 서버 없음)의 디스코드 에러 코드.
@@ -381,20 +375,6 @@ function scheduleCancelledDelete(client, msgId, channelId, cancelledAt = Date.no
   saveNow(client);
 }
 
-// 메시지의 글자를 모두 이어서 돌려준다. 컴포넌트 v2 카드(컨테이너 안 TextDisplay)와
-// 예전 임베드(description)를 둘 다 읽는다 — 업데이트 전에 올라간 옛 취소 메시지도 찾을 수 있게.
-function messageTextOf(msg) {
-  const parts = [];
-  const walk = (c) => {
-    if (!c) return;
-    if (typeof c.content === 'string') parts.push(c.content);
-    for (const child of c.components ?? []) walk(child);
-  };
-  for (const c of msg.components ?? []) walk(c);
-  for (const e of msg.embeds ?? []) if (e.description) parts.push(e.description);
-  return parts.join('\n');
-}
-
 // 저장 파일에서 빠진 취소 임베드(강제종료 직전 취소분, 자동 삭제 도중 실패분 등)를 메시지 기록에서
 // 직접 찾아 삭제 예약을 다시 건다. 이렇게 하면 관리 메뉴 삭제 목록에도 다시 나타나고, 이미 지연시간이
 // 지난 임베드는 바로 삭제된다. 취소 시각은 취소할 때 임베드에 찍어둔 타임스탬프를 쓴다.
@@ -414,7 +394,7 @@ async function recoverCancelledEmbeds(client, channelIds) {
 
       for (const msg of batch.values()) {
         if (msg.author.id !== client.user.id || tracked.has(msg.id)) continue;
-        const body = messageTextOf(msg);
+        const body = messageText(msg);
         if (!body.includes('🔴 취소됨')) continue;
         const cancelledAt = Date.parse(msg.embeds[0]?.timestamp) || msg.editedTimestamp || msg.createdTimestamp;
         const headLine = body.split('\n').find(l => /^#{1,2}\s/.test(l)) || '';
@@ -950,7 +930,6 @@ module.exports = {
   buildPreviewComponents,
   buildCancelComponents,
   buildNotifyModal,
-  titleHeader,
   stripEmoji,
   armAutoEnd,
   disarmAutoEnd,

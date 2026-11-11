@@ -6,7 +6,7 @@
 // 그래야 두 문제가 동시에 유효해서 생기는 중복/혼선을 막을 수 있다.
 // API를 못 쓰는 경우(키 없음/장애)에만 아주 작은 비상용 목록으로 대체한다.
 
-const { EmbedBuilder } = require('discord.js');
+const { card, payload, COLORS } = require('./카드');
 const fs = require('fs');
 const path = require('path');
 const { applyXp, isExcludedGuild, isMinigameXpFrozen } = require('./레벨링');
@@ -87,20 +87,16 @@ function badgeLine(grade, xpReward) {
     : `💰 **${xpReward} XP**`;
 }
 
-function buildQuizEmbed({ word, hint, grade, xpReward }) {
-  return new EmbedBuilder()
-    .setColor(0xFFD700) // 오목·틱택토 결과(승리) 임베드와 같은 노란색
-    .setTitle('📖 오늘의 퀴즈!')
-    .setDescription(
-      `${badgeLine(grade, xpReward)}
-
-` +
-      `다음 뜻풀이에 해당하는 단어는? **(${word.length}글자)**
-` +
-      `> ${hint}`,
-    )
-    .setFooter({ text: '✏️ 채팅으로 정답을 입력하면 자동으로 채점됩니다.' })
-    .setTimestamp();
+function buildQuizCard({ word, hint, grade, xpReward }) {
+  return card({
+    color: 0xFFD700, // 오목·틱택토 결과(승리) 카드와 같은 노란색
+    header: '📖 오늘의 퀴즈!',
+    blocks: [
+      badgeLine(grade, xpReward),
+      `다음 뜻풀이에 해당하는 단어는? **(${word.length}글자)**\n> ${hint}`,
+    ],
+    footer: '✏️ 채팅으로 정답을 입력하면 자동으로 채점됩니다.',
+  });
 }
 
 // 순수 달력 날짜가 아니라 "이 시각이 어느 출제 사이클에 속하는지"를 반환한다. 출제 가능
@@ -264,7 +260,7 @@ async function postQuiz(client, state, picked, slotKey = 'activeQuiz', extraFiel
     state[slotKey] = quiz;
     saveState(state);
 
-    await channel.send({ embeds: [buildQuizEmbed({ ...picked, xpReward })] });
+    await channel.send(payload(buildQuizCard({ ...picked, xpReward })));
     // 정답 단어는 로그 파일에 남기지 않는다(파일을 보는 사람에게 미해결 문제 정답이 새면 안 됨) — 정답 공개/마감 시점에 남긴다.
     logSystem({ 유형: '퀴즈', 채널: `#${channel.name}`, 내용: `${slotKey === 'activeQuiz' ? '자동' : '관리자'} 출제 — 난이도 ${picked.grade ?? '-'}, 보상 ${xpReward} XP` });
     return true;
@@ -541,4 +537,5 @@ async function handleQuizMessage(message) {
 module.exports = {
   startQuizScheduler, handleQuizMessage, QUIZ_CHANNEL_ID,
   pauseQuiz, resumeQuiz, postCustomQuiz, getQuizStatus,
+  buildQuizCard, // 화면 모음·테스트용
 };
