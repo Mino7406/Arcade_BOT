@@ -147,7 +147,7 @@ function buildLobbyCard(lobby) {
   return card({
     color: COLORS.info,
     header: '🎰 룰렛머신',
-    sub: ['하루 1회', `베팅 가능 최대 ${lobby.maxAvailable} XP`],
+    sub: ['하루 1회'],
     blocks: [
       `<@${lobby.userId}>님, 베팅 XP를 고른 뒤 **🎰 돌리기**를 누르세요.`,
       { image: SLOT_URL },
