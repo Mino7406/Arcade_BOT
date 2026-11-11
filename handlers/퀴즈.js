@@ -265,7 +265,7 @@ async function postQuiz(client, state, picked, slotKey = 'activeQuiz', extraFiel
     saveState(state);
 
     await channel.send({ embeds: [buildQuizEmbed({ ...picked, xpReward })] });
-    // 정답 단어는 log.json에 남기지 않는다(파일을 보는 사람에게 미해결 문제 정답이 새면 안 됨) — 정답 공개/마감 시점에 남긴다.
+    // 정답 단어는 로그 파일에 남기지 않는다(파일을 보는 사람에게 미해결 문제 정답이 새면 안 됨) — 정답 공개/마감 시점에 남긴다.
     logSystem({ 유형: '퀴즈', 채널: `#${channel.name}`, 내용: `${slotKey === 'activeQuiz' ? '자동' : '관리자'} 출제 — 난이도 ${picked.grade ?? '-'}, 보상 ${xpReward} XP` });
     return true;
   } catch (err) {

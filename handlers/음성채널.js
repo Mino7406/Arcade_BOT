@@ -192,7 +192,7 @@ async function createTempChannel(newState) {
   tempChannelIds.add(tempChannel.id);
   saveTempChannels();
 
-  // 누가 언제 방을 만들었는지 DB/log.json에 남긴다. 임시 채널은 비면 곧 사라지기 때문에
+  // 누가 언제 방을 만들었는지 DB/log/(날짜별 로그)에 남긴다. 임시 채널은 비면 곧 사라지기 때문에
   // 생성 시점에 남겨두지 않으면 나중에 디스코드 쪽에서 되짚을 방법이 없다.
   logSystem({
     유형: '음성채널',

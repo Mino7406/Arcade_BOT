@@ -308,7 +308,7 @@ function buildPanelView(interaction, targetId, { user, displayName }, notice) {
   };
 }
 
-// 로그 파일(DB/log.json)에 남길 감사 한 줄. 레벨이 그대로면 Lv.만, 바뀌면 전→후로 표기.
+// 로그 파일(DB/log/날짜.json)에 남길 감사 한 줄. 레벨이 그대로면 Lv.만, 바뀌면 전→후로 표기.
 function xpLogLine(result) {
   const sign = result.appliedDelta >= 0 ? '+' : '';
   const lv = result.oldLevel === result.newLevel

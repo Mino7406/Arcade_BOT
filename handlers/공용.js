@@ -81,7 +81,7 @@ const DM_FAIL_REASONS = {
   50278: '공통 서버 없음(서버를 나감)',
 };
 
-// DM 발송 실패를 콘솔과 DB/log.json에 함께 남긴다. 콘솔은 봇이 꺼지면 사라지므로,
+// DM 발송 실패를 콘솔과 DB/log/(날짜별 로그)에 함께 남긴다. 콘솔은 봇이 꺼지면 사라지므로,
 // "언제 · 누구한테 · 왜 실패했는지"를 나중에도 되짚을 수 있게 파일 로그에도 기록한다.
 // 흔한 수신 불가(DM_UNREACHABLE_CODES)는 봇 잘못이 아니라 한 줄 경고, 그 외는 스택까지 남긴다.
 function logDmFailure(err, { 종류, label, target, match }) {
