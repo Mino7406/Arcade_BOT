@@ -37,6 +37,13 @@ const channel = { id: 'ch1', guildId: 'gMain', name: '놀이터', send: async (p
 const client = { channels: { fetch: async () => channel }, guilds: { cache: new Map() } };
 const parts = () => current.components.map(c => c.toJSON()).flatMap(c => (c.type === 17 ? c.components : [c]));
 const desc = () => parts().filter(c => c.type === 10).map(c => c.content).join('\n');
+// 메시지 payload 의 글자: 예전 content 와 v2 카드(컨테이너·섹션 안 TextDisplay)를 모두 모은다.
+const pText = (p) => {
+  const out = [p?.content || ''];
+  const walk = (list) => { for (const c of list || []) { const j = c?.toJSON?.() ?? c; if (j.type === 10) out.push(j.content); walk(j.components); } };
+  walk(p?.components);
+  return out.join('\n');
+};
 const buttons = () => parts().filter(c => c.type === 1).flatMap(r => r.components);
 const hasImage = () => parts().some(c => c.type === 12);
 const images = [];
@@ -68,19 +75,19 @@ let ok4;
   // 2) 모집: 중복 역할 거부, 역할 변경, 3명 참가
   let it = fakeInteraction('1', 'raid:role:sword'); await raidMod.handleRaidButton(it);
   it = fakeInteraction('2', 'raid:role:sword'); await raidMod.handleRaidButton(it);
-  assert(it.replied?.content.includes('이미 다른 사람'), '같은 역할 중복 거부');
+  assert(pText(it.replied).includes('이미 다른 사람'), '같은 역할 중복 거부');
   it = fakeInteraction('1', 'raid:role:archer'); await raidMod.handleRaidButton(it);
   assert(buttons().some(b => b.label?.includes('궁수 · 유저1')), '참가 중 역할 변경');
   await raidMod.handleRaidButton(fakeInteraction('2', 'raid:role:sword'));
   await raidMod.handleRaidButton(fakeInteraction('3', 'raid:role:healer'));
   it = fakeInteraction('9', 'raid:act:attack'); await raidMod.handleRaidButton(it);
-  assert(it.replied?.content.includes('모집 중'), '모집 중 행동 버튼 거부');
+  assert(pText(it.replied).includes('모집 중'), '모집 중 행동 버튼 거부');
 
   // 3) 모집 마감(타이머) → 3인 전투 시작
   await runTimers();
   assert(desc().includes('TURN 1 · 행동을 고르세요') && buttons().some(b => b.custom_id === 'raid:act:skill'), '모집 마감 후 전투 화면(TURN 1)');
   it = fakeInteraction('9', 'raid:act:attack'); await raidMod.handleRaidButton(it);
-  assert(it.replied?.content.includes('파티원만'), '파티원 아닌 사람 거부');
+  assert(pText(it.replied).includes('파티원만'), '파티원 아닌 사람 거부');
 
   // 4) 한 명만 고르면 화면에 ✅, 전원 고르면 같은 응답 안에서 턴 진행
   it = fakeInteraction('1', 'raid:act:skill'); await raidMod.handleRaidButton(it);
@@ -88,11 +95,11 @@ let ok4;
   await raidMod.handleRaidButton(fakeInteraction('2', 'raid:act:attack'));
   it = fakeInteraction('3', 'raid:act:attack'); await raidMod.handleRaidButton(it);
   assert(it.deferred && lastEdit.files && desc().includes('TURN 1 종료') && buttons().filter(b => b.custom_id?.startsWith('raid:act:')).every(b => b.disabled), '마지막 선택 → 결과 화면(TURN 1 종료, 버튼 꺼짐)');
-  { const t2 = fakeInteraction('2', 'raid:act:attack'); await raidMod.handleRaidButton(t2); assert(t2.replied?.content.includes('턴이 끝났어요'), '결과 화면 중 클릭은 안내만'); }
+  { const t2 = fakeInteraction('2', 'raid:act:attack'); await raidMod.handleRaidButton(t2); assert(pText(t2.replied).includes('턴이 끝났어요'), '결과 화면 중 클릭은 안내만'); }
   await runTimers();
   assert(desc().includes('TURN 2 · 행동을 고르세요') && buttons().some(b => b.custom_id === 'raid:act:attack' && !b.disabled), '2.5초 뒤 다음 턴 선택 화면(TURN 2, 버튼 켜짐)');
   it = fakeInteraction('1', 'raid:act:skill'); await raidMod.handleRaidButton(it);
-  assert(it.replied?.content.includes('턴 뒤에'), '스킬 쿨타임 거부');
+  assert(pText(it.replied).includes('턴 뒤에'), '스킬 쿨타임 거부');
 
   // 5) 타이머로 넘어가는 턴(아무도 안 고름 → 자동 공격)
   await runTimers();
@@ -110,7 +117,7 @@ let ok4;
         if (act === 'potion' && !d.includes(`유저${uid}`)) continue;
         const t = fakeInteraction(uid, 'raid:act:' + act); await raidMod.handleRaidButton(t);
         if (!t.replied) break;
-        if (t.replied.content.includes('쓰러진') || t.replied.content.includes('끝난')) break;
+        if (pText(t.replied).includes('쓰러진') || pText(t.replied).includes('끝난')) break;
       }
       if (!buttons().length) break;
     }
@@ -149,21 +156,21 @@ let ok4;
     const { ADMIN_IDS } = require(path.join(root, 'config.js'));
     await raidMod.forceSpawnRaid({ guildId: 'other', channel: { ...channel, send: async (p) => { current = p; return message; } }, client });
     let t = fakeInteraction('5', 'raid:start'); await raidMod.handleRaidButton(t);
-    assert(t.replied?.content.includes('참가자가 없어요'), '참가자 없으면 바로 시작 거부');
+    assert(pText(t.replied).includes('참가자가 없어요'), '참가자 없으면 바로 시작 거부');
     await raidMod.handleRaidButton(fakeInteraction('5', 'raid:role:tank'));
     await raidMod.handleRaidButton(fakeInteraction('6', 'raid:role:healer'));
     assert(desc().includes('첫 참가자가 방장이 되며'), '방장 안내 표시');
     t = fakeInteraction('6', 'raid:start'); await raidMod.handleRaidButton(t);
-    assert(t.replied?.content.includes('방장 **유저5**'), '방장 아닌 참가자는 바로 시작 거부');
+    assert(pText(t.replied).includes('방장 **유저5**'), '방장 아닌 참가자는 바로 시작 거부');
     t = fakeInteraction('5', 'raid:start'); await raidMod.handleRaidButton(t);
     assert(desc().includes('TURN 1'), '방장이 바로 시작');
     await raidMod.forceEndRaid();
     await raidMod.forceSpawnRaid({ guildId: 'other', channel: { ...channel, send: async (p) => { current = p; return message; } }, client });
     await raidMod.handleRaidButton(fakeInteraction('7', 'raid:role:sword'));
     t = fakeInteraction(ADMIN_IDS[0], 'raid:start'); await raidMod.handleRaidButton(t);
-    assert(t.replied?.content.includes('1명뿐이에요') && !desc().includes('TURN 1'), '1명일 때 파티 밖 관리자가 바로 시작 → 본인에게만 확인 메시지');
+    assert(pText(t.replied).includes('1명뿐이에요') && !desc().includes('TURN 1'), '1명일 때 파티 밖 관리자가 바로 시작 → 본인에게만 확인 메시지');
     let t2 = fakeInteraction('7', 'raid:start'); await raidMod.handleRaidButton(t2);
-    assert(t2.replied?.content.includes('혼자예요') && !desc().includes('TURN 1'), '혼자인 방장이 바로 시작 → 본인에게만 확인 메시지');
+    assert(pText(t2.replied).includes('혼자예요') && !desc().includes('TURN 1'), '혼자인 방장이 바로 시작 → 본인에게만 확인 메시지');
     const ephem = { id: 'ephemeral-1' };
     const mk = (id) => { const x = fakeInteraction(ADMIN_IDS[0], id); x.message = ephem; x.update = async (pl) => { x.updated = pl; }; x.deleteReply = async () => { x.deleted = true; }; return x; };
     t = mk('raid:solo:no'); await raidMod.handleRaidButton(t);
@@ -220,7 +227,7 @@ let ok4;
     assert(current.files?.length === 1 && hasImage(), '다시 올린 메시지에 그림 첨부');
     const old = fakeInteraction('1', 'raid:role:sword'); old.message = { id: first };
     await raidMod.handleRaidButton(old);
-    assert(old.replied?.content.includes('맨 아래로 옮겨졌어요'), '예전 메시지 버튼은 옮겨졌다고 안내');
+    assert(pText(old.replied).includes('맨 아래로 옮겨졌어요'), '예전 메시지 버튼은 옮겨졌다고 안내');
     const now = fakeInteraction('1', 'raid:role:sword'); now.message = { id: ch2.lastMessageId };
     await raidMod.handleRaidButton(now);
     assert(now.deferred && ch2.lastMessageId === now.message.id, '안 묻혔으면 제자리 수정(새 메시지 안 보냄)');
@@ -332,8 +339,9 @@ let ok4;
       let n = 0;
       ch.send = async (p) => {
         const m = { id: `${id}-${++n}`, channel: ch, edit: async () => m, delete: async () => { ch.log.push(`삭제 ${m.id}`); } };
-        ch.log.push(p.components ? `레이드 ${m.id}` : `멘션 ${m.id}`);
-        if (!p.components) ch.mention = p;
+        const isMention = pText(p).includes('레이드 전투 시작!'); // 시작 멘션도 이제 카드라서 글자로 구분한다
+        ch.log.push(isMention ? `멘션 ${m.id}` : `레이드 ${m.id}`);
+        if (isMention) ch.mention = p;
         ch.lastMessageId = m.id;
         return m;
       };
@@ -349,7 +357,7 @@ let ok4;
     await click(ch, 'p3', 'raid:role:tank'); await flushRender();
     await click(ch, 'p1', 'raid:start'); await flushRender();
     const m1 = ch.mention;
-    assert(m1 && m1.content.includes('<@p2>') && m1.content.includes('<@p3>') && !m1.content.includes('<@p1>') && m1.allowedMentions.users.join() === 'p2,p3', '시작 멘션: 바로 시작을 누른 방장은 빼고 파티원만 부름');
+    assert(m1 && pText(m1).includes('<@p2>') && pText(m1).includes('<@p3>') && !pText(m1).includes('<@p1>') && m1.allowedMentions.users.join() === 'p2,p3', '시작 멘션: 바로 시작을 누른 방장은 빼고 파티원만 부름');
     const iMention = ch.log.findIndex(x => x.startsWith('멘션'));
     assert(iMention > 0 && ch.log.slice(iMention + 1).some(x => x.startsWith('레이드')) && ch.lastMessageId.startsWith('men1') && ch.log.at(-1) !== `멘션 ${ch.lastMessageId}`, '시작 멘션: 멘션 다음에 레이드 메시지가 그 아래로 다시 올라감');
     assert(raidMod.getRaidStatus('gMain').phase === 'battle', '시작 멘션 뒤에도 전투 진행');
@@ -365,7 +373,7 @@ let ok4;
     await click(ch, 'q1', 'raid:role:sword'); await flushRender();
     await click(ch, 'q2', 'raid:role:healer'); await flushRender();
     await runTimers();
-    assert(ch.mention && ch.mention.content.includes('<@q1>') && ch.mention.content.includes('<@q2>'), '시작 멘션: 모집 마감으로 시작하면 파티원 전원');
+    assert(ch.mention && pText(ch.mention).includes('<@q1>') && pText(ch.mention).includes('<@q2>'), '시작 멘션: 모집 마감으로 시작하면 파티원 전원');
     await origEnd('gMain'); await flushRender();
 
     // 혼자 시작 → 부를 사람이 없으니 멘션 없음
