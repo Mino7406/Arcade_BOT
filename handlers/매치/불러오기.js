@@ -1,7 +1,7 @@
 const { buildPublicMessagePayload } = require('./내전');
 const { buildMojipMessagePayload } = require('./모집');
 const { notice } = require('../공통/카드');
-const { armAutoEnd, AUTO_CLOSE_DELAY_MS, armNotifyReminder, saveNow } = require('./공용');
+const { armAutoEnd, AUTO_CLOSE_DELAY_MS, armNotifyReminder, saveNow, findMatchRole } = require('./공용');
 
 async function handleRMatchSelect(interaction) {
   const value = interaction.values[0];
@@ -17,9 +17,10 @@ async function handleRMatchSelect(interaction) {
     return;
   }
 
-  // 다시 올릴 때는 역할 멘션 줄을 빼고(핑 중복 방지) 카드만 올린다.
-  match.roleContent = '';
-  const payload = type === 'naejeon' ? buildPublicMessagePayload(match) : buildMojipMessagePayload(match);
+  // 다시 올릴 때는 역할 멘션도 한 번 더 한다(새 메시지라 알림이 다시 간다). 예전에 올라간 모집은 보관된 값이 없어 서버에서 다시 찾는다.
+  const role = findMatchRole(interaction.guild, match.data);
+  match.roleContent = role ? `<@&${role.id}>` : '';
+  const payload = type === 'naejeon' ? buildPublicMessagePayload(match, { pingRole: true }) : buildMojipMessagePayload(match, { pingRole: true });
   const newMsg = await interaction.channel.send(payload);
   match.message.delete().catch(() => {});
   matches.delete(msgId);

@@ -659,7 +659,7 @@ function matchTeamBlocks(participants, teams, { withUnassigned = true } = {}) {
 }
 
 // 공개 게시 카드. teams가 있으면 참가자 목록 대신 팀 구성을 보여 준다(내전 전용).
-function buildMatchCard({ label, data, participants, closed = false, teams = null, rows = [] }) {
+function buildMatchCard({ label, data, participants, closed = false, teams = null, rows = [], roleMention = '' }) {
   const { game, gameInfo, title, players, description } = data;
   const max = parseInt(players) || 0;
   const isFull = participants.length >= max;
@@ -668,6 +668,7 @@ function buildMatchCard({ label, data, participants, closed = false, teams = nul
   const color = closed ? COLORS.ok : gameInfo.color;
   return card({
     color,
+    top: roleMention.trim() || undefined, // 게임 역할 멘션 줄(카드 안 맨 위)
     header: gameHeader(game, gameInfo, title),
     sub: [label, statusText],
     thumb: gameThumb(gameInfo),
@@ -877,11 +878,24 @@ function buildPreviewPayload(type, data, extra = {}) {
   return payload(buildPreviewCard({ data, rows: buildPreviewComponents(type, data) }), extra);
 }
 
-// 공개 게시 메시지(카드 + 필요하면 역할 멘션 줄). v2는 content를 못 쓰므로 멘션은 카드 위 글자로 올린다.
-function buildMatchMessagePayload({ label, match, rows }) {
-  const cardMsg = buildMatchCard({ label, data: match.data, participants: match.participants, closed: match.closed, teams: match.teams, rows });
-  const components = match.roleContent ? [text(match.roleContent), cardMsg] : [cardMsg];
-  return payload(components, { allowedMentions: { parse: [] } });
+// 게임 역할: 게임별 역할 이름(ROLE_NAMES) 또는 스팀 멘션이 켜진 경우 "스팀" 역할을 서버에서 찾는다.
+function findMatchRole(guild, data) {
+  const roleName = ROLE_NAMES[data?.game] || (data?.mentionSteam ? '스팀' : null);
+  return roleName && guild ? (guild.roles.cache.find(r => r.name === roleName) || null) : null;
+}
+
+// 역할 멘션 글자(`<@&id>`)에서 역할 ID 를 뽑는다.
+function roleIdOf(roleContent) {
+  return /<@&([^>\s]+)>/.exec(roleContent || '')?.[1] || null;
+}
+
+// 공개 게시 메시지: 카드 한 장. 역할 멘션 줄은 카드 안 맨 위에 들어간다(v2는 content를 못 쓴다).
+// 멘션 알림은 메시지를 새로 보낼 때만 간다 — pingRole:true 일 때만 allowedMentions 에 역할을 담고(재게시),
+// 보통의 수정(참가·마감 등)은 줄만 남기고 다시 알리지 않는다.
+function buildMatchMessagePayload({ label, match, rows, pingRole = false }) {
+  const cardMsg = buildMatchCard({ label, data: match.data, participants: match.participants, closed: match.closed, teams: match.teams, rows, roleMention: match.roleContent || '' });
+  const roleId = roleIdOf(match.roleContent);
+  return payload(cardMsg, { allowedMentions: pingRole && roleId ? { roles: [roleId], users: [] } : { parse: [] } });
 }
 
 // 주최자 관리 메뉴(나만 보이는 임시 메시지). 게임 색 띠 + 제목/상태 + 방금 한 조작 결과 + 버튼.
@@ -1046,6 +1060,8 @@ module.exports = {
   deleteMentionMessage,
   shuffleIntoTeams,
   buildMatchCard,
+  findMatchRole,
+  roleIdOf,
   buildPreviewCard,
   buildPreviewPayload,
   buildMatchDmPayload,

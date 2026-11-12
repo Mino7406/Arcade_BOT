@@ -199,6 +199,23 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     assert(has(), '게시 직후 역할 멘션 줄');
     await mojip.handleMojipButton(mkInteraction({ user: 'u9', customId: 'mojip:join', message: m.message }));
     assert(has(), '참가 후 카드를 고쳐도 역할 멘션 줄 유지');
+    // 멘션 줄은 카드(컨테이너) 안 맨 위 글자
+    const top = m.message.components.find(c => c.type === 17)?.components?.[0];
+    assert(top?.type === 10 && top.content.includes('<@&ROLE1>'), '역할 멘션은 카드 안 맨 위 글자');
+
+    // 불러오기: 새 메시지로 다시 올리면서 역할 멘션도 다시 한 번(allowedMentions 에 역할)
+    const reload = require(path.join(root, 'handlers/매치/불러오기.js'));
+    const origSend = channel.send; let sentPayload = null;
+    channel.send = async (p) => { sentPayload = p; return origSend(p); };
+    const rit = mkInteraction({ user: ADMIN, customId: 'reload:select', values: [`mojip:${m.message.id}`], message: new FakeMsg(require(path.join(root, 'handlers/공통/카드.js')).notice('r'), channel) });
+    rit.guild.roles.cache.find = () => ({ id: 'ROLE1' });
+    await reload.handleRMatchSelect(rit);
+    channel.send = origSend;
+    assert(sentPayload && sentPayload.allowedMentions.roles?.join() === 'ROLE1', '불러오기로 다시 올릴 때 역할 멘션 알림');
+    const m2 = [...client.mojipMatches.values()].at(-1);
+    assert(JSON.stringify(m2.message.components).includes('<@&ROLE1>'), '다시 올린 카드에도 역할 멘션 줄');
+    await mojip.handleMojipButton(mkInteraction({ user: 'u8', customId: 'mojip:join', message: m2.message }));
+    assert(JSON.stringify(m2.message.components).includes('<@&ROLE1>'), '다시 올린 뒤 고쳐도 멘션 줄 유지');
   });
 
   // ── 틱택토 ──

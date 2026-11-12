@@ -102,6 +102,7 @@ function toneOf(content) {
  *
  * @param {object} o
  * @param {number|string} [o.color]  띠 색(숫자) 또는 COLORS 키
+ * @param {string} [o.top]           제목 위 맨 첫 줄 글자(역할 멘션 같은 호출). 카드 안 글자의 멘션도 allowedMentions 에 담으면 알림이 간다
  * @param {string} [o.header]        제목(`## ` 자동 — 예전 `# ` 카드도 찾을 수 있게 헤더 판별은 hasHeaderLine 사용). 이모지 포함 가능
  * @param {string} [o.sub]           제목 아래 작은 회색 줄(`-# ` 자동). 배열이면 " · "로 이음
  * @param {string} [o.thumb]         오른쪽 위 작은 그림 URL (제목+부제와 같은 섹션에 붙음)
@@ -120,6 +121,9 @@ function card(o = {}) {
   const container = new ContainerBuilder();
   const accent = typeof o.color === 'string' ? COLORS[o.color] : o.color;
   if (accent !== undefined && accent !== null) container.setAccentColor(accent);
+
+  // 카드 맨 위 글자(역할 멘션 등). 제목 위에 따로 한 줄로 놓는다.
+  if (o.top) container.addTextDisplayComponents(text(o.top));
 
   const head = [];
   if (o.header) head.push(text(`## ${o.header}`));

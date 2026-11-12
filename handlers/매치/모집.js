@@ -7,7 +7,7 @@ const {
 } = require('discord.js');
 
 const {
-  ADMIN_IDS, buildCancelledCard, buildMatchCard, buildMatchMessagePayload, buildPreviewPayload, buildManagePayload, buildMentionPayload, markClosed, markReopened, toggleAutoCloseWhileClosed, announceMatchCompletionXp,
+  ADMIN_IDS, buildCancelledCard, buildMatchCard, findMatchRole, buildMatchMessagePayload, buildPreviewPayload, buildManagePayload, buildMentionPayload, markClosed, markReopened, toggleAutoCloseWhileClosed, announceMatchCompletionXp,
   ROLE_NAMES, scheduleCancelledDelete, deleteMentionMessage, AUTO_CLOSE_DELAY_MS, saveNow,
   getClientMap, getMojipMatches: getMojips,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
@@ -53,11 +53,12 @@ function buildPublicComponents(participants, maxPlayers, closed = false) {
 }
 
 // 공개 게시 메시지: 카드 한 장. 버튼은 카드 안에 들어간다.
-function buildMojipMessagePayload(match) {
+function buildMojipMessagePayload(match, opts = {}) {
   const maxPlayers = parseInt(match.data.players) || 0;
   return buildMatchMessagePayload({
     label: '모집',
     match,
+    ...opts,
     rows: buildPublicComponents(match.participants, maxPlayers, match.closed),
   });
 }
@@ -248,14 +249,12 @@ async function handleMojipButton(interaction) {
     }
     const maxPlayers = parseInt(data.players) || 0;
     const participants = [];
-    const roleName = ROLE_NAMES[data.game] || (data.mentionSteam ? '스팀' : null);
-    const role = roleName && interaction.guild
-      ? interaction.guild.roles.cache.find(r => r.name === roleName)
-      : null;
+    const role = findMatchRole(interaction.guild, data);
     getPending(interaction.client).delete(interaction.user.id);
     const roleContent = role ? `<@&${role.id}>` : '';
-    const publishCard = buildMatchCard({ label: '모집', data, participants, rows: buildPublicComponents(participants, maxPlayers) });
-    const msg = await interaction.channel.send(payload(roleContent ? [text(roleContent), publishCard] : [publishCard], {
+    // 역할 멘션은 카드 안 맨 위 글자로 넣고, 새로 보내는 이 메시지에만 알림이 가게 allowedMentions 에 담는다.
+    const publishCard = buildMatchCard({ label: '모집', data, participants, rows: buildPublicComponents(participants, maxPlayers), roleMention: roleContent });
+    const msg = await interaction.channel.send(payload(publishCard, {
       allowedMentions: { roles: role ? [role.id] : [], users: [] },
     }));
     const match = { data, participants, message: msg, closed: false, closedAt: null, mentionSent: false, roleContent, guildId: interaction.guildId }; // roleContent: 카드를 고칠 때마다 역할 멘션 줄을 다시 붙이려고 보관
