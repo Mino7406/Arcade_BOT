@@ -117,6 +117,7 @@ function buildSetupPanelPayload(interaction) {
   );
   const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('recruit:명령어').setLabel('📖 명령어 보기').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('recruit:DM알림').setLabel('🔔 DM 알림 설정').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('recruit:관리').setLabel('⚙️ 관리').setStyle(ButtonStyle.Danger),
   );
   const playgroundRow = new ActionRowBuilder().addComponents(

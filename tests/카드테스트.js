@@ -181,6 +181,34 @@ function rowsIn(list, acc = []) {
     assert.strictEqual(data.notifyAt, null); assert.strictEqual(data.notifyAuto, false);
   });
 
+  check('일시 글자 해석: 저녁·밤·내일은 읽고, 아침/저녁이 애매한 "8시"는 안 읽는다', () => {
+    const c = require('../handlers/매치/공용');
+    const hm = t => { const e = c.parseDatetimeText(t); return e && c.formatNotifyTime(e).split(' ')[1]; };
+    assert.strictEqual(hm('내일 저녁 8시'), '20:00');
+    assert.strictEqual(hm('오늘 밤 11시'), '23:00');
+    assert.strictEqual(hm('저녁 8시 반'), '20:30');
+    assert.strictEqual(hm('내일 오전 9시 30분'), '09:30');
+    assert.strictEqual(hm('11/13 20시'), '20:00');
+    for (const t of ['내일 8시', '오늘 8시', '모이면', '11월 13일 8시', '2/30 20:00']) assert.strictEqual(c.parseDatetimeText(t), null, t);
+  });
+  check('DM 알림 설정: 기본 ON, 끄면 OFF, 카드는 현재 상태 쪽 버튼만 비활성화', () => {
+    const dm = require('../handlers/매치/DM설정');
+    const find = (p, id) => { const out = []; (function walk(l) { for (const x of l || []) { if (x.custom_id === id) out.push(x); walk(x.components); } })(p.components.map(c => c.toJSON())); return out[0]; };
+    assert.strictEqual(dm.isDmEnabled('u-test'), true, '기본값은 ON');
+    let p = dm.buildDmSettingPayload('u-test');
+    assert.strictEqual(find(p, 'dmpref:on').disabled, true);
+    assert.strictEqual(find(p, 'dmpref:off').disabled, false);
+    assert.strictEqual(find(p, 'dmpref:on').style, 3, 'ON은 초록(Success)');
+    assert.strictEqual(find(p, 'dmpref:off').style, 2, 'OFF는 회색(Secondary)');
+    dm.setDmEnabled('u-test', false);
+    assert.strictEqual(dm.isDmEnabled('u-test'), false);
+    p = dm.buildDmSettingPayload('u-test');
+    assert.strictEqual(find(p, 'dmpref:on').disabled, false);
+    assert.strictEqual(find(p, 'dmpref:off').disabled, true);
+    dm.setDmEnabled('u-test', true);
+    assert.strictEqual(dm.isDmEnabled('u-test'), true);
+  });
+
   console.log(`\n카드 테스트 — 통과 ${pass} · 실패 ${fail}`);
   process.exit(fail ? 1 : 0);
 })().catch(err => { console.error(err); process.exit(1); });

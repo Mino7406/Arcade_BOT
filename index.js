@@ -22,6 +22,7 @@ const { handleTttButton } = require('./handlers/게임/틱택토');
 const { handleOmokButton, handleOmokMessage } = require('./handlers/게임/오목');
 const { loadRoulette, saveRoulette, handleRouletteButton } = require('./handlers/게임/룰렛');
 const { loadBotMatchXp, saveBotMatchXp } = require('./handlers/게임/봇전한도');
+const { loadDmPrefs, saveDmPrefs, buildDmSettingPayload, handleDmSettingButton } = require('./handlers/매치/DM설정');
 const { loadRealmRoster, saveRealmRoster } = require('./forms/마크/명단');
 const { startQuizScheduler, handleQuizMessage } = require('./handlers/게임/퀴즈');
 const { startPatchNoteWatcher } = require('./handlers/관리/패치노트');
@@ -342,6 +343,7 @@ async function onReady(c) {
   loadXpState(); // XP 긴급정지/뉴비부스트 스위치 상태 복원
   loadRoulette(); // 룰렛 일일 플레이 기록 복원
   loadBotMatchXp(); // 끝말잇기·틱택토 봇전 일일 XP 한도 기록 복원
+  loadDmPrefs(); // 내전/모집 DM 알림 끈 유저 목록 복원
   loadRealmRoster(); // 마인크래프트 렐름 승인 명단 복원
   startCobblemonOpenTimer(c); // 게시된 코블몬 패널을 최신 내용으로 갱신 + 설치기 오픈 시각에 버튼을 다운로드 링크로 전환
   await initRulesAgreementCache(c); // 렐름 규정집 반응(✅) 캐시 초기화
@@ -570,6 +572,10 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply(buildTeamMatchListPayload(interaction));
       } else if (interaction.customId === 'recruit:명령어') {
         await interaction.reply(buildCommandListPayload());
+      } else if (interaction.customId === 'recruit:DM알림') {
+        await interaction.reply(buildDmSettingPayload(interaction.user.id, { ephemeral: true }));
+      } else if (interaction.customId.startsWith('dmpref:')) {
+        await handleDmSettingButton(interaction);
       } else if (interaction.customId === 'recruit:관리') {
         if (!ADMIN_IDS.includes(interaction.user.id)) {
           logBlocked(interaction, '관리자 권한 없음');
@@ -704,6 +710,7 @@ setInterval(() => {
   try { saveAll(client); } catch (e) { console.error('자동 저장 실패:', e); logErrorThrottled('save:matches', '저장 오류', '내전/모집 자동 저장 실패', e); }
   try { saveLevels(); } catch (e) { console.error('레벨 자동 저장 실패:', e); logErrorThrottled('save:levels', '저장 오류', 'levels.json 자동 저장 실패 — XP가 디스크에 반영되지 않는 중', e); }
   try { saveRoulette(); } catch (e) { console.error('룰렛 자동 저장 실패:', e); logErrorThrottled('save:roulette', '저장 오류', 'roulette.json 자동 저장 실패', e); }
+  try { saveDmPrefs(); } catch (e) { console.error('DM 알림 설정 자동 저장 실패:', e); }
   try { saveBotMatchXp(); } catch (e) { console.error('봇전 XP 한도 자동 저장 실패:', e); logErrorThrottled('save:botxp', '저장 오류', 'botMatchXp.json 자동 저장 실패', e); }
   try { saveRealmRoster(); } catch (e) { console.error('렐름 승인 명단 자동 저장 실패:', e); logErrorThrottled('save:roster', '저장 오류', 'realm_roster.json 자동 저장 실패', e); }
 }, 30_000);
@@ -739,6 +746,7 @@ function shutdown(signal) {
     try { saveLevels(); } catch (e) { console.error('레벨 종료 저장 실패:', e); }
     try { saveRoulette(); } catch (e) { console.error('룰렛 종료 저장 실패:', e); }
     try { saveBotMatchXp(); } catch (e) { console.error('봇전 XP 한도 종료 저장 실패:', e); }
+    try { saveDmPrefs(); } catch (e) { console.error('DM 알림 설정 종료 저장 실패:', e); }
     try { saveRealmRoster(); } catch (e) { console.error('렐름 승인 명단 종료 저장 실패:', e); }
   }
   // 로그는 dataReady와 무관하게(복원 전에 눌린 상호작용도 남아 있으므로) 항상 밀어 넣는다.

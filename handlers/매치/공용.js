@@ -17,6 +17,7 @@ const { KST_OFFSET_MS } = require('../공통/시간');
 const { ADMIN_IDS, STEAM_EMOJI_ID } = require('../../config');
 const { logSystem, logError } = require('../공통/로그');
 const { writeJsonIfChanged } = require('../공통/저장');
+const { isDmEnabled } = require('./DM설정');
 const { card, payload, text, messageText, footerSide, COLORS, clipLines, emojiUrl, customEmojiId } = require('../공통/카드');
 
 // 내전(naejeon)/모집(mojip) 두 시스템이 공유하는 게임 → 역할 이름 매핑.
@@ -200,36 +201,53 @@ function defaultDatetimeText(now = Date.now()) {
   return formatNotifyTime(now);
 }
 
-const DATETIME_KO_REGEX = /^(\d{1,2})\s*월\s*(\d{1,2})\s*일?\s*(오전|오후)?\s*(\d{1,2})\s*시(?:\s*(?:(\d{1,2})\s*분?|(반)))?$/;
+// 날짜(11/12 · 11월 12일 · 오늘/내일/모레) + 시간대 말(오전·오후·아침·낮·저녁·밤·새벽) + 시각(8시 · 8시 30분 · 8시 반 · 8:30)
+const DATETIME_REGEX = /^(?:(\d{1,2})\s*(?:\/|월)\s*(\d{1,2})\s*일?|(오늘|내일|모레))?\s*(오전|오후|아침|낮|저녁|밤|새벽)?\s*(\d{1,2})\s*(시|:)\s*(?:(\d{1,2})\s*분?|(반))?$/;
+const DAY_SHIFT = { 오늘: 0, 내일: 1, 모레: 2 };
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-// 일시 글자 → epoch ms(KST). 못 읽으면 null. 연도가 없으므로 올해로 보되, 3시간 넘게 지난 시각이면 내년으로 본다
-// (모달을 연 직후의 "지금 시각"이 몇 분 지나도 올해로 유지되게).
+// 일시 글자 → epoch ms(KST). 못 읽거나 AM/PM 이 애매하면 null("8시"만 적으면 아침인지 저녁인지 알 수 없으므로 읽지 않는다).
+// 연도가 없으므로 올해로 보되, 날짜를 적었는데 3시간 넘게 지났으면 내년으로 본다(모달을 연 직후 "지금 시각"이 몇 분
+// 지나도 올해로 유지되게). 날짜 없이 시간대 말만 있으면(저녁 8시) 오늘, 이미 지났으면 내일로 본다.
 function parseDatetimeText(input, now = Date.now()) {
-  const s = (input || '').trim();
-  let month, day, period, hour, minute;
-  let m = NOTIFY_TIME_REGEX.exec(s);
-  if (m) {
-    [month, day, period, hour, minute] = [Number(m[1]), Number(m[2]), m[3], Number(m[4]), Number(m[5])];
-  } else if ((m = DATETIME_KO_REGEX.exec(s))) {
-    [month, day, period, hour] = [Number(m[1]), Number(m[2]), m[3], Number(m[4])];
-    minute = m[6] ? 30 : Number(m[5] || 0);
-  } else {
-    return null;
-  }
-  if (month < 1 || month > 12 || minute > 59) return null;
-  if (period) {
-    if (hour < 1 || hour > 12) return null;
-    if (period === '오전') hour = hour === 12 ? 0 : hour;
-    else hour = hour === 12 ? 12 : hour + 12;
+  const m = DATETIME_REGEX.exec((input || '').trim());
+  if (!m) return null;
+  const hasDate = !!m[1] || !!m[3];
+  const word = m[4];
+  if (!hasDate && !word) return null;
+  let hour = Number(m[5]);
+  if (m[6] === ':' && m[7] === undefined) return null;
+  const minute = m[8] ? 30 : Number(m[7] || 0);
+  if (minute > 59) return null;
+  let dayPlus = 0;
+  if (word && hour <= 12) {
+    if (hour < 1) return null;
+    if (word === '오전' || word === '아침' || word === '새벽') hour = hour === 12 ? 0 : hour;
+    else if (word === '낮') hour = hour === 12 ? 12 : hour + 12;
+    else if (word === '밤') {
+      if (hour === 12) { hour = 0; dayPlus = 1; } else if (hour >= 6) hour += 12;
+    } else hour = hour === 12 ? 12 : hour + 12; // 오후·저녁
   } else if (hour > 23) {
     return null;
+  } else if (!word && m[6] === '시' && hour <= 12) {
+    return null;
   }
-  const year = new Date(now + KST_OFFSET_MS).getUTCFullYear();
-  const build = (y) => Date.UTC(y, month - 1, day, hour, minute) - KST_OFFSET_MS;
-  let epoch = build(year);
-  if (epoch < now - 3 * 60 * 60 * 1000) epoch = build(year + 1);
-  const check = new Date(epoch + KST_OFFSET_MS);
-  if (check.getUTCMonth() + 1 !== month || check.getUTCDate() !== day) return null;
+
+  const kstNow = new Date(now + KST_OFFSET_MS);
+  const fromUtc = (y, mo, d) => Date.UTC(y, mo, d, hour, minute) - KST_OFFSET_MS;
+  let epoch;
+  if (m[1]) {
+    const month = Number(m[1]), day = Number(m[2]);
+    if (month < 1 || month > 12) return null;
+    const year = kstNow.getUTCFullYear();
+    epoch = fromUtc(year, month - 1, day) + dayPlus * DAY_MS;
+    if (epoch < now - 3 * 60 * 60 * 1000) epoch = fromUtc(year + 1, month - 1, day) + dayPlus * DAY_MS;
+    const check = new Date(epoch - dayPlus * DAY_MS + KST_OFFSET_MS);
+    if (check.getUTCMonth() + 1 !== month || check.getUTCDate() !== day) return null; // 2/30 같은 날짜
+  } else {
+    epoch = fromUtc(kstNow.getUTCFullYear(), kstNow.getUTCMonth(), kstNow.getUTCDate()) + (DAY_SHIFT[m[3]] ?? 0) * DAY_MS + dayPlus * DAY_MS;
+    if (!m[3] && epoch < now - 3 * 60 * 60 * 1000) epoch += DAY_MS;
+  }
   return epoch;
 }
 
@@ -245,10 +263,11 @@ function deriveNotifyFromDatetime(datetime, { allowPast = true } = {}) {
 
 // 일시로 자동 설정된 알림(notifyAuto)이면, 일시가 바뀐 만큼 알림 시각도 따라 바꾼다. 못 읽게 되면 알림을 끈다.
 function syncAutoNotify(data) {
-  if (!data?.notifyAuto) return;
+  if (!data?.notifyAuto) return null;
   const auto = deriveNotifyFromDatetime(data.datetime);
-  if (auto) Object.assign(data, auto);
-  else Object.assign(data, { notifyAt: null, notify12h: false, notifyAuto: false });
+  if (auto) { Object.assign(data, auto); return 'changed'; }
+  Object.assign(data, { notifyAt: null, notify12h: false, notifyAuto: false });
+  return 'off';
 }
 
 // 알림 시각 입력 모달(내전/모집 공용). 비워서 제출하면 예약을 취소하는 용도로도 쓰인다.
@@ -332,7 +351,8 @@ async function sendMatchStartDm(match, label) {
   const client = match.message?.client;
   if (!client) return;
   const organizerId = match.data?.organizer?.id;
-  const recipients = match.participants.filter(u => u?.id && u.id !== organizerId);
+  // DM 알림을 꺼 둔 유저(🔔 DM 알림 설정)는 보내지 않는다.
+  const recipients = match.participants.filter(u => u?.id && u.id !== organizerId && isDmEnabled(u.id));
   const seen = new Set();
   let sent = 0;
   let failed = 0;
@@ -493,6 +513,7 @@ async function notifyOrganizerOnClose(match, label) {
   const organizer = match?.data?.organizer;
   const client = match?.message?.client;
   if (!organizer?.id || !client) return;
+  if (!isDmEnabled(organizer.id)) return; // DM 알림을 꺼 둔 주최자
   try {
     const user = await client.users.fetch(organizer.id);
     const { title } = match.data;

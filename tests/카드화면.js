@@ -215,6 +215,11 @@ async function buildScreens() {
   const applicant = { id: '5', displayAvatarURL: () => 'https://cdn.discordapp.com/embed/avatars/2.png' };
   add('관리 · 안내 패널', '게임모집 안내 패널', '카드 2장(모집 / 놀이터)', panel.buildSetupPanelPayload(fake));
   add('관리 · 안내 패널', '명령어 목록', '', panel.buildCommandListPayload());
+  const dmPref = req('handlers/매치/DM설정.js');
+  add('관리 · 안내 패널', 'DM 알림 설정 — ON (기본)', '🔔 DM 알림 설정 버튼 · 지금 상태(ON) 버튼이 비활성화', dmPref.buildDmSettingPayload('screen-dm-on', { ephemeral: true }));
+  dmPref.setDmEnabled('screen-dm-off', false);
+  add('관리 · 안내 패널', 'DM 알림 설정 — OFF', 'OFF를 누르면 OFF 버튼이 비활성화되고 ON(초록)이 활성화', dmPref.buildDmSettingPayload('screen-dm-off', { ephemeral: true }));
+  dmPref.setDmEnabled('screen-dm-off', true);
   add('관리 · 안내 패널', 'XP 관리', '긴급정지·뉴비부스트·레이드 상태를 카드 한 장에', xp.buildManageView('✅ 뉴비부스트를 **켰습니다**.', '1'));
   add('관리 · 안내 패널', '긴급정지 확인', '', xp.buildConfirmView('farm'));
   add('관리 · 안내 패널', 'XP 조정 패널', '', xp.buildPanelView({ guildId: '1' }, '100', { user: null, displayName: '민호' }, '✅ **+500 XP** 적용 (누적 `3120` → `3620`)'));

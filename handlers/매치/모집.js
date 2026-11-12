@@ -224,12 +224,13 @@ async function handleMojipEditModal(interaction) {
   }
 
   Object.assign(data, { gameInfo, title, datetime, players, description });
-  syncAutoNotify(data); // 일시로 자동 설정된 알림이면 새 일시를 따라간다
+  const autoNotifyOff = syncAutoNotify(data) === 'off'; // 일시로 자동 설정된 알림이면 새 일시를 따라간다
 
   // 미리보기의 [수정] 버튼에서 연 모달이라 update()로 그 미리보기 메시지를 바로 고친다.
   // (예전엔 처음 미리보기를 띄운 인터랙션을 보관해 editReply했는데, 토큰이 15분이면 만료돼
   //  미리보기를 오래 띄워두고 수정하면 Invalid Webhook Token(50027)으로 실패했다.)
   await interaction.update(buildPreviewPayload('mojip', data));
+  if (autoNotifyOff) await interaction.followUp(notice('🔕 **일시를 읽을 수 없어 알림 예약이 꺼졌습니다.** (예: `11/12 20:00`, `내일 저녁 8시`)\n다시 켜려면 🔔 알림 예약을 눌러주세요.', { ephemeral: true })).catch(() => {});
 }
 
 async function handleMojipButton(interaction) {
@@ -747,14 +748,15 @@ async function handleMojipMatchEditModal(interaction) {
   }
 
   match.data = { ...match.data, gameInfo, title, datetime, players, description };
+  let autoNotifyOff = false;
   if (match.data.notifyAuto && !match.notifySent) {
-    syncAutoNotify(match.data);
+    autoNotifyOff = syncAutoNotify(match.data) === 'off';
     armNotifyReminder(getMojips(interaction.client), msgId, match, '모집');
   }
 
   await match.message.edit(buildMojipMessagePayload(match));
 
-  await interaction.reply(notice('✅ **모집 정보가 수정되었습니다.**', { ephemeral: true }));
+  await interaction.reply(notice(`✅ **모집 정보가 수정되었습니다.**${autoNotifyOff ? '\n🔕 일시를 읽을 수 없어 알림 예약이 꺼졌습니다. (예: `11/12 20:00`, `내일 저녁 8시`)' : ''}`, { ephemeral: true }));
 }
 
 // customId: mojip:notify_modal:{msgId}. 비워서 제출하면 예약을 취소한다.
