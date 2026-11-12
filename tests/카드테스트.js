@@ -157,6 +157,30 @@ function rowsIn(list, acc = []) {
     }
   });
 
+  check('생성 모달 일시는 지금 시각으로 미리 채워지고, 알림이 그 시각을 인식한다', () => {
+    const c = require('../handlers/매치/공용');
+    const now = Date.now();
+    const text = c.defaultDatetimeText(now);
+    assert.ok(/^\d{1,2}\/\d{1,2} \d{2}:\d{2}$/.test(text), text);
+    const auto = c.deriveNotifyFromDatetime(text);
+    assert.ok(auto && Math.abs(auto.notifyAt - now) < 60 * 1000, '지금 시각을 그대로 읽어야 함');
+    assert.strictEqual(auto.notify12h, false);
+    const modal = c.buildModal('mojip', '모집', { lol: { name: '롤', emoji: '🎮', defaultPlayers: 5 } }, 'lol').toJSON();
+    const dt = modal.components.map(r => r.components[0]).find(x => x.custom_id === 'datetime');
+    assert.strictEqual(dt.value, text.replace(/\d{2}$/, dt.value.slice(-2)), '모달 일시 기본값');
+    const kst = d => c.formatNotifyTime(d);
+    const tomorrow = new Date(now + 24 * 3600 * 1000);
+    const ko = `${new Date(tomorrow.getTime() + 9 * 3600e3).getUTCMonth() + 1}월 ${new Date(tomorrow.getTime() + 9 * 3600e3).getUTCDate()}일 오후 8시`;
+    const k = c.deriveNotifyFromDatetime(ko);
+    assert.ok(k && k.notify12h === true && kst(k.notifyAt).endsWith('20:00'), ko);
+    assert.strictEqual(c.deriveNotifyFromDatetime('내일 8시'), null, '못 읽는 글자는 null');
+    const data = { datetime: text, notifyAuto: true };
+    data.datetime = ko; c.syncAutoNotify(data);
+    assert.ok(data.notifyAt && data.notifyAuto, '일시가 바뀌면 알림 시각도 따라감');
+    data.datetime = '내일 8시'; c.syncAutoNotify(data);
+    assert.strictEqual(data.notifyAt, null); assert.strictEqual(data.notifyAuto, false);
+  });
+
   console.log(`\n카드 테스트 — 통과 ${pass} · 실패 ${fail}`);
   process.exit(fail ? 1 : 0);
 })().catch(err => { console.error(err); process.exit(1); });

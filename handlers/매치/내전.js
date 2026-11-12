@@ -10,7 +10,7 @@ const {
   ADMIN_IDS, getClientMap, getNaejeonMatches: getMatches, shuffleIntoTeams, buildTeamResultCard, buildCancelledCard, buildMatchCard, buildMatchMessagePayload, buildPreviewPayload, buildManagePayload, buildMentionPayload, markClosed, markReopened, toggleAutoCloseWhileClosed, announceMatchCompletionXp,
   ROLE_NAMES, scheduleCancelledDelete, deleteMentionMessage, AUTO_CLOSE_DELAY_MS, saveNow,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
-  buildNotifyModal: buildNotifyModalBase, parseNotifyTime, formatNotifyTimeSmart, isNotify12HourInput, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
+  buildNotifyModal: buildNotifyModalBase, parseNotifyTime, deriveNotifyFromDatetime, syncAutoNotify, formatNotifyTimeSmart, isNotify12HourInput, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
 } = require('./공용');
 const { notice, payload, text } = require('../공통/카드');
 const { displayNameFromInteraction } = require('../공통/이름');
@@ -299,6 +299,7 @@ async function handleNaejeonEditModal(interaction) {
   }
 
   Object.assign(data, { gameInfo, title, datetime, players, description });
+  syncAutoNotify(data); // 일시로 자동 설정된 알림이면 새 일시를 따라간다
 
   // 미리보기의 [수정] 버튼에서 연 모달이라 update()로 그 미리보기 메시지를 바로 고친다.
   // (예전엔 처음 미리보기를 띄운 인터랙션을 보관해 editReply했는데, 토큰이 15분이면 만료돼
@@ -630,6 +631,16 @@ async function handleNaejeonButton(interaction) {
       await interaction.update(notice(`🔔 **이미 알림이 예약되어 있습니다.** (${formatNotifyTimeSmart(match.data.notifyAt, match.data.notify12h)})\n수정하시겠습니까?`, { rows: [confirmRow] }));
       return;
     }
+    // 일시에 적힌 시각을 알림 시각으로 바로 인식한다(지난 시각이거나 읽을 수 없으면 직접 입력창을 연다).
+    const auto = deriveNotifyFromDatetime(match.data.datetime, { allowPast: false });
+    if (auto) {
+      Object.assign(match.data, auto, { notifyAuto: true });
+      match.notifySent = false;
+      armNotifyReminder(getMatches(interaction.client), matchMsgId, match, '내전');
+      await match.message.edit(buildPublicMessagePayload(match)).catch(err => { logError('매치 알림', `${match.data?.title ?? '?'}(${match.message?.id}) 알림 예약 아이콘 갱신 실패`, err); });
+      await interaction.update(buildManagePayload({ label: '내전', match, note: `🔔 **일시에 맞춰 ${formatNotifyTimeSmart(auto.notifyAt, auto.notify12h)}에 참가자에게 DM 알림을 보낼게요.**`, rows: buildManageMenu(match, matchMsgId) }));
+      return;
+    }
     await interaction.showModal(buildNotifyModal(matchMsgId, match.data.notifyAt, match.data.notify12h));
     return;
   }
@@ -797,6 +808,15 @@ async function handleNaejeonButton(interaction) {
       await interaction.reply(notice(`⚠️ **데이터가 만료되었습니다.**\n다시 \`/내전\`을 실행해주세요.`, { ephemeral: true }));
       return;
     }
+    // 일시에 적힌 시각을 알림 시각으로 바로 인식한다(읽을 수 없을 때만 직접 입력창을 연다).
+    if (!data.notifyAt) {
+      const auto = deriveNotifyFromDatetime(data.datetime);
+      if (auto) {
+        Object.assign(data, auto, { notifyAuto: true });
+        await interaction.update(buildPreviewPayload('naejeon', data));
+        return;
+      }
+    }
     await interaction.showModal(buildNotifyModal('preview', data.notifyAt, data.notify12h));
     return;
   }
@@ -866,6 +886,10 @@ async function handleNaejeonMatchEditModal(interaction) {
   }
 
   match.data = { ...match.data, gameInfo, title, datetime, players, description };
+  if (match.data.notifyAuto && !match.notifySent) {
+    syncAutoNotify(match.data);
+    armNotifyReminder(getMatches(interaction.client), matchMsgId, match, '내전');
+  }
 
   await match.message.edit(buildPublicMessagePayload(match));
 
@@ -896,9 +920,11 @@ async function handleNaejeonNotifyModal(interaction) {
       }
       data.notifyAt = notifyAt;
       data.notify12h = isNotify12HourInput(raw);
+      data.notifyAuto = false;
     } else {
       data.notifyAt = null;
       data.notify12h = false;
+      data.notifyAuto = false;
     }
     await interaction.update(buildPreviewPayload('naejeon', data));
     return;
@@ -913,6 +939,7 @@ async function handleNaejeonNotifyModal(interaction) {
   if (!raw) {
     match.data.notifyAt = null;
     match.data.notify12h = false;
+    match.data.notifyAuto = false;
     match.notifySent = false;
     clearNotifyTimer(match);
     await match.message.edit(buildPublicMessagePayload(match)).catch(err => { console.error('알림 예약 아이콘 갱신 실패:', err); logError('매치 알림', `${match.data?.title ?? '?'}(${match.message?.id}) 알림 예약 아이콘 갱신 실패`, err); });
@@ -932,6 +959,7 @@ async function handleNaejeonNotifyModal(interaction) {
 
   match.data.notifyAt = notifyAt;
   match.data.notify12h = isNotify12HourInput(raw);
+  match.data.notifyAuto = false;
   match.notifySent = false;
   armNotifyReminder(getMatches(interaction.client), matchMsgId, match, '내전');
   await match.message.edit(buildPublicMessagePayload(match)).catch(err => { console.error('알림 예약 아이콘 갱신 실패:', err); logError('매치 알림', `${match.data?.title ?? '?'}(${match.message?.id}) 알림 예약 아이콘 갱신 실패`, err); });

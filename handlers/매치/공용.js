@@ -193,6 +193,64 @@ function formatNotifyTimeSmart(epochMs, is12h) {
   return is12h ? formatNotifyTimeKorean(epochMs) : formatNotifyTime(epochMs);
 }
 
+// ── 모달 일시 기본값 / 알림 자동 인식 ──────────────────────────────
+// 생성 모달의 "일시"는 지금 시각("11/12 20:00")이 미리 채워져 있다. 이 형식(또는 "11월 12일 오후 8시"
+// 같은 흔한 한글 표기)이면 알림 버튼을 눌렀을 때 일시를 그대로 알림 시각으로 인식한다.
+function defaultDatetimeText(now = Date.now()) {
+  return formatNotifyTime(now);
+}
+
+const DATETIME_KO_REGEX = /^(\d{1,2})\s*월\s*(\d{1,2})\s*일?\s*(오전|오후)?\s*(\d{1,2})\s*시(?:\s*(?:(\d{1,2})\s*분?|(반)))?$/;
+
+// 일시 글자 → epoch ms(KST). 못 읽으면 null. 연도가 없으므로 올해로 보되, 3시간 넘게 지난 시각이면 내년으로 본다
+// (모달을 연 직후의 "지금 시각"이 몇 분 지나도 올해로 유지되게).
+function parseDatetimeText(input, now = Date.now()) {
+  const s = (input || '').trim();
+  let month, day, period, hour, minute;
+  let m = NOTIFY_TIME_REGEX.exec(s);
+  if (m) {
+    [month, day, period, hour, minute] = [Number(m[1]), Number(m[2]), m[3], Number(m[4]), Number(m[5])];
+  } else if ((m = DATETIME_KO_REGEX.exec(s))) {
+    [month, day, period, hour] = [Number(m[1]), Number(m[2]), m[3], Number(m[4])];
+    minute = m[6] ? 30 : Number(m[5] || 0);
+  } else {
+    return null;
+  }
+  if (month < 1 || month > 12 || minute > 59) return null;
+  if (period) {
+    if (hour < 1 || hour > 12) return null;
+    if (period === '오전') hour = hour === 12 ? 0 : hour;
+    else hour = hour === 12 ? 12 : hour + 12;
+  } else if (hour > 23) {
+    return null;
+  }
+  const year = new Date(now + KST_OFFSET_MS).getUTCFullYear();
+  const build = (y) => Date.UTC(y, month - 1, day, hour, minute) - KST_OFFSET_MS;
+  let epoch = build(year);
+  if (epoch < now - 3 * 60 * 60 * 1000) epoch = build(year + 1);
+  const check = new Date(epoch + KST_OFFSET_MS);
+  if (check.getUTCMonth() + 1 !== month || check.getUTCDate() !== day) return null;
+  return epoch;
+}
+
+// 일시 글자에서 알림 시각을 뽑는다. 읽을 수 없거나 너무 먼 미래면 null.
+// allowPast=false 면 이미 지난 시각도 null(마감된 매치에서 눌렀을 때 DM 이 바로 나가는 일을 막음).
+function deriveNotifyFromDatetime(datetime, { allowPast = true } = {}) {
+  const notifyAt = parseDatetimeText(datetime);
+  if (!notifyAt) return null;
+  if (!allowPast && notifyAt <= Date.now()) return null;
+  if (isNotifyTooFar(notifyAt)) return null;
+  return { notifyAt, notify12h: isNotify12HourInput(datetime) };
+}
+
+// 일시로 자동 설정된 알림(notifyAuto)이면, 일시가 바뀐 만큼 알림 시각도 따라 바꾼다. 못 읽게 되면 알림을 끈다.
+function syncAutoNotify(data) {
+  if (!data?.notifyAuto) return;
+  const auto = deriveNotifyFromDatetime(data.datetime);
+  if (auto) Object.assign(data, auto);
+  else Object.assign(data, { notifyAt: null, notify12h: false, notifyAuto: false });
+}
+
 // 알림 시각 입력 모달(내전/모집 공용). 비워서 제출하면 예약을 취소하는 용도로도 쓰인다.
 // is12h를 넘기면 기존 예약을 수정할 때 원래 입력했던 형식 그대로 재입력창에 채워준다.
 function buildNotifyModal(type, matchMsgId, notifyAt, is12h) {
@@ -701,7 +759,7 @@ function buildModal(type, label, GAMES, game, data = {}) {
     .setCustomId('datetime')
     .setLabel('일시')
     .setStyle(TextInputStyle.Short)
-    .setPlaceholder('예: 6월 5일 오후 8시')
+    .setPlaceholder('예: 11/12 20:00 또는 11월 12일 오후 8시')
     .setRequired(true)
     .setMaxLength(50);
 
@@ -722,7 +780,7 @@ function buildModal(type, label, GAMES, game, data = {}) {
     .setMaxLength(300);
 
   if (data.title)       titleInput.setValue(data.title);
-  if (data.datetime)    datetimeInput.setValue(data.datetime);
+  datetimeInput.setValue(data.datetime || defaultDatetimeText()); // 처음 열면 지금 시각이 미리 채워진다
   if (data.players)     playersInput.setValue(data.players);
   else if (gameInfo.defaultPlayers) playersInput.setValue(String(gameInfo.defaultPlayers));
   if (data.description) descInput.setValue(data.description);
@@ -990,6 +1048,10 @@ module.exports = {
   toggleAutoCloseWhileClosed,
   announceMatchCompletionXp,
   parseNotifyTime,
+  defaultDatetimeText,
+  parseDatetimeText,
+  deriveNotifyFromDatetime,
+  syncAutoNotify,
   formatNotifyTime,
   formatNotifyTimeKorean,
   formatNotifyTimeSmart,
