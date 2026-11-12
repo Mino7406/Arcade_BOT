@@ -95,10 +95,12 @@ async function refreshRecruitPanels(client) {
 async function refreshMatches(client) {
   const { buildPublicMessagePayload } = require('../매치/내전');
   const { buildMojipMessagePayload } = require('../매치/모집');
+  const { ensureMatchRole } = require('../매치/공용');
   let done = 0;
   for (const [map, build] of [[client.naejeonMatches, buildPublicMessagePayload], [client.mojipMatches, buildMojipMessagePayload]]) {
     for (const match of map?.values?.() ?? []) {
       if (!match.message) continue;
+      ensureMatchRole(match, client.guilds?.cache?.get(match.guildId)); // 멘션 줄이 없던 옛 카드에 역할 줄을 채운다
       const ok = await match.message.edit(build(match)).then(() => true).catch(() => false);
       if (ok) done++;
     }

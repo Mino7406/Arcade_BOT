@@ -884,6 +884,14 @@ function findMatchRole(guild, data) {
   return roleName && guild ? (guild.roles.cache.find(r => r.name === roleName) || null) : null;
 }
 
+// 역할 멘션 줄이 없는 옛 매치(저장된 값이 없거나 비어 있음)에 서버에서 찾은 게임 역할을 채운다.
+// 복원·최신화 때 카드를 다시 그리기 전에 부르면, 이미 올라가 있던 카드에도 멘션 줄이 붙는다(알림은 가지 않음).
+function ensureMatchRole(match, guild) {
+  if (match.roleContent) return;
+  const role = findMatchRole(guild, match.data);
+  if (role) match.roleContent = `<@&${role.id}>`;
+}
+
 // 역할 멘션 글자(`<@&id>`)에서 역할 ID 를 뽑는다.
 function roleIdOf(roleContent) {
   return /<@&([^>\s]+)>/.exec(roleContent || '')?.[1] || null;
@@ -1061,6 +1069,7 @@ module.exports = {
   shuffleIntoTeams,
   buildMatchCard,
   findMatchRole,
+  ensureMatchRole,
   roleIdOf,
   buildPreviewCard,
   buildPreviewPayload,

@@ -14,7 +14,7 @@ require('./migrate').migrateOldDbFiles();
 
 const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleNaejeonNotifyModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload: buildNaejeonMessagePayload } = require('./handlers/매치/내전');
 const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipNotifyModal, handleMojipMemberAdd, handleMojipMemberRemove, buildMojipMessagePayload } = require('./handlers/매치/모집');
-const { armAutoEnd, AUTO_CLOSE_DELAY_MS, GENERAL_MESSAGE_DELETE_DELAY_MS, announceMatchCompletionXp, scheduleCancelledDelete, scheduleMessageDelete, deleteMentionMessage, armNotifyReminder, ADMIN_IDS, saveAll, enableSaveNow, loadRows, recoverCancelledEmbeds } = require('./handlers/매치/공용');
+const { armAutoEnd, AUTO_CLOSE_DELAY_MS, GENERAL_MESSAGE_DELETE_DELAY_MS, announceMatchCompletionXp, scheduleCancelledDelete, scheduleMessageDelete, deleteMentionMessage, armNotifyReminder, ADMIN_IDS, saveAll, enableSaveNow, loadRows, recoverCancelledEmbeds, ensureMatchRole } = require('./handlers/매치/공용');
 const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/매치/팀');
 const { handleRMatchSelect } = require('./handlers/매치/불러오기');
 const { handleWcButton, handleWcMessage } = require('./handlers/게임/끝말잇기');
@@ -174,6 +174,7 @@ async function restoreMatches(c) {
       // 봇이 꺼져있는 동안 임베드/버튼 코드가 바뀌었을 수 있으므로, 복원 시점에
       // 최신 코드 기준으로 메시지를 다시 그려 옛 라벨(예: "모집 완료")이 남지 않게 합니다.
       const buildPayload = row.type === 'naejeon' ? buildNaejeonMessagePayload : buildMojipMessagePayload;
+      ensureMatchRole(match, c.guilds.cache.get(match.guildId)); // 멘션 줄이 없던 옛 카드에 역할 줄을 채운다(알림은 가지 않음)
       await match.message.edit(buildPayload(match)).catch(err => console.error('복원 후 메시지 갱신 중 오류:', err));
 
       // 봇이 꺼져있던 동안 setTimeout이 소실되므로, 마감(closed) 시점을 기준으로

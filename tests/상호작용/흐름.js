@@ -216,6 +216,17 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     assert(JSON.stringify(m2.message.components).includes('<@&ROLE1>'), '다시 올린 카드에도 역할 멘션 줄');
     await mojip.handleMojipButton(mkInteraction({ user: 'u8', customId: 'mojip:join', message: m2.message }));
     assert(JSON.stringify(m2.message.components).includes('<@&ROLE1>'), '다시 올린 뒤 고쳐도 멘션 줄 유지');
+
+    // 새로고침(게시물 최신화): 멘션 줄이 없던 옛 카드에도 역할 줄이 붙는다(알림 없이 수정만)
+    const { refreshPostedMessages } = require(path.join(root, 'handlers/관리/최신화.js'));
+    m2.roleContent = ''; // 옛 카드처럼 저장된 역할 값이 없는 상태
+    await m2.message.edit(require(path.join(root, 'handlers/매치/모집.js')).buildMojipMessagePayload(m2));
+    assert(!JSON.stringify(m2.message.components).includes('<@&ROLE1>'), '(전제) 멘션 줄 없는 옛 카드');
+    const guild = { roles: { cache: { find: () => ({ id: 'ROLE1' }) } } };
+    m2.guildId = 'g1'; client.guilds.cache.set('g1', guild);
+    await refreshPostedMessages(client, { includeMatches: true });
+    client.guilds.cache.delete('g1');
+    assert(JSON.stringify(m2.message.components).includes('<@&ROLE1>'), '새로고침하면 옛 카드에도 역할 멘션 줄이 붙음');
   });
 
   // ── 틱택토 ──
