@@ -87,12 +87,18 @@ function badgeLine(grade, xpReward) {
     : `💰 **${xpReward} XP**`;
 }
 
-// 정답 안내 카드. 답장이지만 작성자에게 알림이 가지 않게(repliedUser:false) 하고, 레벨업했을 때만 그 유저를 부른다.
+// 정답 안내 카드. 정답 단어가 제목(##)이고, 위에 작은 "정답입니다!" 줄, 아래에 보상 줄이 온다.
+// 답장이지만 작성자에게 알림이 가지 않게(repliedUser:false) 하고, 레벨업했을 때만 그 유저를 부른다.
 function buildCorrectPayload({ word, xpReward, frozen = false, levelUpLine = '', mentionUserId = null }) {
-  const body = frozen
-    ? `**${word}**\n-# ⚙️ 현재 XP 지급이 일시 중지되어 이번 정답은 XP가 지급되지 않았습니다.`
-    : `**${word}**　💰 **+${xpReward} XP**${levelUpLine}`;
-  return payload(card({ color: COLORS.ok, header: '⭕ 정답입니다!', blocks: [body] }), {
+  const reward = frozen
+    ? '-# ⚙️ 현재 XP 지급이 일시 중지되어 이번 정답은 XP가 지급되지 않았습니다.'
+    : `💰 **+${xpReward} XP**${levelUpLine}`;
+  return payload(card({
+    color: COLORS.ok,
+    top: '-# ⭕ 정답입니다!',
+    header: word,
+    blocks: [{ text: reward, noDivider: true }],
+  }), {
     allowedMentions: { repliedUser: false, users: mentionUserId ? [mentionUserId] : [] },
   });
 }
