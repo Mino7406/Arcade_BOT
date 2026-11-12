@@ -87,17 +87,14 @@ ${xpLine}`,
         rows: [
           new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('admin:panels').setLabel('패널 게시').setEmoji('📌').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('admin:refresh').setLabel('게시물 최신화').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('admin:refresh').setLabel('새로고침').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId('admin:channel').setLabel('게임모집 관리').setEmoji('🧹').setStyle(ButtonStyle.Secondary),
           ),
-          new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('admin:home').setLabel('새로고침').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
-            // 테스트 전용 버튼은 테스트 서버에서만 보인다(다른 관리자가 본서버에서 잘못 누르지 않도록)
-            ...(isTestGuild(guildId) ? [
-              new ButtonBuilder().setCustomId('admin:patch:test').setLabel('테스트 알림').setEmoji('🧪').setStyle(ButtonStyle.Secondary).setDisabled(!patch),
-              new ButtonBuilder().setCustomId('xp:menu:manage').setLabel('레이드 테스트').setEmoji('👾').setStyle(ButtonStyle.Secondary),
-            ] : []),
-          ),
+          // 테스트 전용 버튼은 테스트 서버에서만 보인다(다른 관리자가 본서버에서 잘못 누르지 않도록)
+          ...(isTestGuild(guildId) ? [new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('admin:patch:test').setLabel('테스트 알림').setEmoji('🧪').setStyle(ButtonStyle.Secondary).setDisabled(!patch),
+            new ButtonBuilder().setCustomId('xp:menu:manage:raidtest').setLabel('레이드 테스트').setEmoji('👾').setStyle(ButtonStyle.Secondary),
+          )] : []),
         ],
       },
     ],
@@ -182,7 +179,7 @@ async function handleAdminButton(interaction) {
     const { refreshPostedMessages } = require('./최신화');
     const result = await refreshPostedMessages(interaction.client, { includeCobblemon: true }).catch(err => ({ error: err?.message ?? String(err) }));
     logAction(interaction, '관리', `게시물 최신화 — ${result.summary ?? result.error}`);
-    await interaction.editReply(buildAdminHome({ guildId, note: result.error ? `⚠️ **최신화 중 오류:** ${result.error}` : `🔄 **게시물을 최신 디자인으로 갱신했어요.**\n-# ${result.summary}` }));
+    await interaction.editReply(buildAdminHome({ guildId, note: result.error ? `⚠️ **최신화 중 오류:** ${result.error}` : `🔄 **화면을 새로고치고 게시물을 최신 디자인으로 갱신했어요.**\n-# ${result.summary}` }));
     return;
   }
 }
