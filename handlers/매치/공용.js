@@ -624,14 +624,13 @@ function numberedBlock(users) {
   return `\`\`\`\n${clipLines(lines, 900)}\n\`\`\``;
 }
 
-function matchInfoBlock(data, { withNotify = true } = {}) {
+function matchInfoBlock(data) {
   const { datetime, organizer, gameInfo } = data;
   const lines = [
     `🎮 **게임**　${gameInfo.name}`,
     `📅 **일시**　${datetime}`,
     `👑 **주최자**　**\`${organizer.displayName}\`**`,
   ];
-  if (withNotify && data.notifyAt) lines.push(`🔔 **알림**　${notifyWhenText(data)}`);
   return lines.join('\n');
 }
 
@@ -712,7 +711,7 @@ function buildCancelledCard({ label, data, byOrganizer }) {
     sub: [label, '🔴 취소됨'],
     thumb: gameThumb(gameInfo),
     thumbAlt: gameInfo.name,
-    blocks: [matchInfoBlock(data, { withNotify: false })],
+    blocks: [matchInfoBlock(data)],
     footer: byOrganizer ? `❌ 주최자에 의해 ${label}이 취소되었습니다.` : `⚙️ 관리자에 의해 ${label}이 취소 처리되었습니다.`,
   });
 }
@@ -747,7 +746,7 @@ function buildTeamResultCard(data, teams) {
     thumb: gameThumb(gameInfo),
     thumbAlt: gameInfo.name,
     blocks: [
-      matchInfoBlock(data, { withNotify: false }),
+      matchInfoBlock(data),
       ...matchTeamBlocks([], teams, { withUnassigned: false }),
     ],
     footer: '✅ 팀이 배정되었습니다.',
