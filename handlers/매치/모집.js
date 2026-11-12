@@ -195,7 +195,7 @@ async function handleMojipModal(interaction) {
     return;
   }
 
-  const data = { game, gameInfo, title, datetime, players, description, autoClose: true, organizer: { id: interaction.user.id, displayName: displayNameFromInteraction(interaction) } };
+  const data = { game, gameInfo, title, datetime, players, description, autoClose: true, createdAt: Date.now(), organizer: { id: interaction.user.id, displayName: displayNameFromInteraction(interaction) } };
   getPending(interaction.client).set(interaction.user.id, data);
 
   await interaction.reply(buildPreviewPayload('mojip', data, { ephemeral: true }));
@@ -493,14 +493,14 @@ async function handleMojipButton(interaction) {
       await interaction.update(notice(`🔔 **이미 알림이 예약되어 있습니다.** (${formatNotifyTimeSmart(match.data.notifyAt, match.data.notify12h)})\n수정하시겠습니까?`, { rows: [confirmRow] }));
       return;
     }
-    // 일시에 적힌 시각을 알림 시각으로 바로 인식한다(지난 시각이거나 읽을 수 없으면 직접 입력창을 연다).
-    const auto = deriveNotifyFromDatetime(match.data.datetime, { allowPast: false });
+    // 일시에 적힌 시각을 알림 시각으로 바로 인식한다(읽을 수 없으면 직접 입력창을 연다. 이미 지난 시각이면 마감 때 바로 보낸다).
+    const auto = deriveNotifyFromDatetime(match.data.datetime, { base: match.data.createdAt });
     if (auto) {
       Object.assign(match.data, auto, { notifyAuto: true, notifyAutoSrc: match.data.datetime });
       match.notifySent = false;
       armNotifyReminder(getMojips(interaction.client), msgId, match, '모집');
       await match.message.edit(buildMojipMessagePayload(match)).catch(err => { logError('매치 알림', `${match.data?.title ?? '?'}(${match.message?.id}) 알림 예약 아이콘 갱신 실패`, err); });
-      await interaction.update(buildManagePayload({ label: '모집', match, note: `🔔 **일시에 맞춰 ${formatNotifyTimeSmart(auto.notifyAt, auto.notify12h)}에 참가자에게 DM 알림을 보낼게요.**`, rows: buildManageMenu(match, msgId) }));
+      await interaction.update(buildManagePayload({ label: '모집', match, note: auto.notifyAt <= Date.now() ? '🔔 **일시가 이미 지나서, 마감되면 바로 참가자에게 DM 알림을 보낼게요.**' : `🔔 **일시에 맞춰 ${formatNotifyTimeSmart(auto.notifyAt, auto.notify12h)}에 참가자에게 DM 알림을 보낼게요.**`, rows: buildManageMenu(match, msgId) }));
       return;
     }
     await interaction.showModal(buildNotifyModal(msgId, match.data.notifyAt, match.data.notify12h));
@@ -672,7 +672,7 @@ async function handleMojipButton(interaction) {
     }
     // 일시에 적힌 시각을 알림 시각으로 바로 인식한다(읽을 수 없을 때만 직접 입력창을 연다).
     if (!data.notifyAt) {
-      const auto = deriveNotifyFromDatetime(data.datetime);
+      const auto = deriveNotifyFromDatetime(data.datetime, { base: data.createdAt });
       if (auto) {
         Object.assign(data, auto, { notifyAuto: true, notifyAutoSrc: data.datetime });
         await interaction.update(buildPreviewPayload('mojip', data));

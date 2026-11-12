@@ -252,11 +252,12 @@ function parseDatetimeText(input, now = Date.now()) {
 }
 
 // 일시 글자에서 알림 시각을 뽑는다. 읽을 수 없거나 너무 먼 미래면 null.
-// allowPast=false 면 이미 지난 시각도 null(마감된 매치에서 눌렀을 때 DM 이 바로 나가는 일을 막음).
-function deriveNotifyFromDatetime(datetime, { allowPast = true } = {}) {
-  const notifyAt = parseDatetimeText(datetime);
+// base 는 "그 일시를 적은 때"(data.createdAt): 연도·지난 시각 판단을 이 시각 기준으로 해서, 모달에 미리 채워진
+// 지금 시각이 몇 시간 뒤 알림을 켜는 때에도 내년으로 넘어가지 않는다.
+// 이미 지난 시각이면 알림 시각도 지난 채로 두고, 마감되는 순간 바로 DM 이 나간다(trySendNotify).
+function deriveNotifyFromDatetime(datetime, { base } = {}) {
+  const notifyAt = parseDatetimeText(datetime, base || Date.now());
   if (!notifyAt) return null;
-  if (!allowPast && notifyAt <= Date.now()) return null;
   if (isNotifyTooFar(notifyAt)) return null;
   return { notifyAt, notify12h: isNotify12HourInput(datetime) };
 }
@@ -265,7 +266,7 @@ function deriveNotifyFromDatetime(datetime, { allowPast = true } = {}) {
 function syncAutoNotify(data) {
   if (!data?.notifyAuto) return null;
   if (data.datetime === data.notifyAutoSrc) return null; // 일시가 그대로면(메모·인원만 고친 경우) 알림을 건드리지 않는다
-  const auto = deriveNotifyFromDatetime(data.datetime);
+  const auto = deriveNotifyFromDatetime(data.datetime, { base: data.createdAt });
   if (auto) { Object.assign(data, auto, { notifyAutoSrc: data.datetime }); return 'changed'; }
   Object.assign(data, { notifyAt: null, notify12h: false, notifyAuto: false, notifyAutoSrc: null });
   return 'off';
@@ -617,13 +618,6 @@ function numberedBlock(users) {
   return `\`\`\`\n${clipLines(lines, 900)}\n\`\`\``;
 }
 
-// ▰▰▰▱▱ 모양 진행 막대. 정원 대비 참가 인원을 한눈에 보여 준다.
-function progressBar(current, max, length = 10) {
-  if (!max || max < 1) return '';
-  const filled = Math.min(length, Math.round((current / max) * length));
-  return '▰'.repeat(filled) + '▱'.repeat(length - filled);
-}
-
 function matchInfoBlock(data, { withNotify = true } = {}) {
   const { datetime, organizer, gameInfo } = data;
   const lines = [
@@ -640,8 +634,7 @@ function matchMemoBlock(description) {
 }
 
 function matchParticipantsBlock(participants, max) {
-  const bar = progressBar(participants.length, max);
-  const head = `### 👥 참가자　${participants.length} / ${max}명${bar ? `\n${bar}` : ''}`;
+  const head = `### 👥 참가자　${participants.length} / ${max}명`;
   const body = participants.length > 0 ? numberedBlock(participants) : '*아직 참가자가 없습니다.*';
   return `${head}\n${body}`;
 }

@@ -183,6 +183,12 @@ function rowsIn(list, acc = []) {
     const kept = { datetime: '1/1 20:00', notifyAuto: true, notifyAutoSrc: '1/1 20:00', notifyAt: 123 };
     assert.strictEqual(c.syncAutoNotify(kept), null);
     assert.strictEqual(kept.notifyAt, 123);
+    // 모달에 미리 채운 지금 시각은 몇 시간 뒤 알림을 켜도 내년으로 넘어가지 않고, 지난 채로 남아 마감 때 바로 나간다
+    const created = Date.now() - 5 * 3600 * 1000;
+    const stamp = c.defaultDatetimeText(created);
+    const past = c.deriveNotifyFromDatetime(stamp, { base: created });
+    assert.ok(past && Math.abs(past.notifyAt - created) < 60 * 1000 && past.notifyAt < Date.now(), '지난 일시도 알림 시각으로 유지');
+    assert.strictEqual(c.deriveNotifyFromDatetime(stamp), null, 'base 없이는 5시간 지난 일시를 내년으로 봄(기존 동작)');
   });
 
   check('일시 글자 해석: 저녁·밤·내일은 읽고, 아침/저녁이 애매한 "8시"는 안 읽는다', () => {
