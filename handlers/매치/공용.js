@@ -259,7 +259,9 @@ function deriveNotifyFromDatetime(datetime, { base } = {}) {
   const notifyAt = parseDatetimeText(datetime, base || Date.now());
   if (!notifyAt) return null;
   if (isNotifyTooFar(notifyAt)) return null;
-  return { notifyAt, notify12h: isNotify12HourInput(datetime) };
+  // 일시가 "지금"이거나 이미 지난 시각(모달에 미리 채워진 지금 시각을 그대로 둔 경우)이면 마감되는 순간 바로 보낸다.
+  const notifyOnClose = notifyAt <= (base || Date.now()) + 2 * 60 * 1000;
+  return { notifyAt, notify12h: isNotify12HourInput(datetime), notifyOnClose };
 }
 
 // 일시로 자동 설정된 알림(notifyAuto)이면, 일시가 바뀐 만큼 알림 시각도 따라 바꾼다. 못 읽게 되면 알림을 끈다.
@@ -268,13 +270,13 @@ function syncAutoNotify(data) {
   if (data.datetime === data.notifyAutoSrc) return null; // 일시가 그대로면(메모·인원만 고친 경우) 알림을 건드리지 않는다
   const auto = deriveNotifyFromDatetime(data.datetime, { base: data.createdAt });
   if (auto) { Object.assign(data, auto, { notifyAutoSrc: data.datetime }); return 'changed'; }
-  Object.assign(data, { notifyAt: null, notify12h: false, notifyAuto: false, notifyAutoSrc: null });
+  Object.assign(data, { notifyAt: null, notify12h: false, notifyAuto: false, notifyAutoSrc: null, notifyOnClose: false });
   return 'off';
 }
 
 // 알림 시각 입력 모달(내전/모집 공용). 비워서 제출하면 예약을 취소하는 용도로도 쓰인다.
 // is12h를 넘기면 기존 예약을 수정할 때 원래 입력했던 형식 그대로 재입력창에 채워준다.
-function buildNotifyModal(type, matchMsgId, notifyAt, is12h) {
+function buildNotifyModal(type, matchMsgId, notifyAt, is12h, onClose = false) {
   const input = new TextInputBuilder()
     .setCustomId('notify_time')
     .setLabel('알림 시각 (24시간제 또는 오전/오후)')
@@ -282,12 +284,17 @@ function buildNotifyModal(type, matchMsgId, notifyAt, is12h) {
     .setPlaceholder('예: 6/5 20:00 또는 6/5 오후 8:00 · 비우면 알림 취소')
     .setRequired(false)
     .setMaxLength(20);
-  if (notifyAt) input.setValue(formatNotifyTimeSmart(notifyAt, is12h));
+  if (notifyAt && !onClose) input.setValue(formatNotifyTimeSmart(notifyAt, is12h)); // 마감 시 바로 보내는 알림은 비워 둔다(시각을 적으면 그 시각에 발송)
 
   return new ModalBuilder()
     .setCustomId(`${type}:notify_modal:${matchMsgId}`)
     .setTitle('🔔 시작 시간 알림 예약')
     .addComponents(new ActionRowBuilder().addComponents(input));
+}
+
+// 카드·버튼에 보여 줄 알림 시점: 일시를 안 고치고 켠 알림(마감 때 바로 발송)은 시각 대신 "자동 발송".
+function notifyWhenText(data) {
+  return data?.notifyOnClose ? '자동 발송' : formatNotifyTimeSmart(data.notifyAt, data.notify12h);
 }
 
 function clearNotifyTimer(match) {
@@ -307,23 +314,22 @@ function isNotifyTooFar(notifyAt) {
   return notifyAt - Date.now() > MAX_TIMEOUT_DELAY_MS;
 }
 
-// notifyAt 시각에 마감(closed) 상태면 DM을 보내고 notifySent를 표시한다. 이미 보냈거나 아직
-// 마감 전이면 아무것도 하지 않는다 — 마감 전이라 건너뛴 경우엔 나중에 markClosed가 호출될 때
-// (그 시점에 이미 예약 시각이 지나 있으면) 다시 시도하므로, 여기서 놓쳐도 유실되지 않는다.
-// armNotifyReminder의 타이머가 매치가 살아있는 동안(matchesMap에 남아 있는 동안)에만 이 함수를
-// 호출하므로, 취소/종료/삭제된 매치는 자연히 발송 대상에서 빠진다(fire() 안 matchesMap.get(msgId)
-// 조회 실패 시 조용히 건너뜀).
+// 알림 발송 규칙(참가자 전원에게 시작 알림 DM, 한 번만).
+//  - 시각을 직접 정한 알림(notifyOnClose=false): 그 시각이 되면 마감 여부와 상관없이 그 시점의 참가자에게 보낸다.
+//  - "마감 시 바로" 알림(notifyOnClose=true, 일시를 안 고치고 🔔를 누른 경우): 마감되는 순간 보낸다.
+// 시각이 됐는데 매치가 이미 사라졌다면(취소·삭제) armNotifyReminder 의 fire() 가 조회에 실패해 보내지 않는다.
+// markClosed 도 이 함수를 불러서, 마감 전이라 못 보낸 "마감 시 바로" 알림이 마감 순간에 나간다.
 async function trySendNotify(match, label) {
-  if (!match.data?.notifyAt || match.notifySent || !match.closed) return;
-  if (match.data.notifyAt > Date.now()) return; // 예약 시각이 아직 안 지났으면 armNotifyReminder의 타이머가 그때 처리
+  if (!match.data?.notifyAt || match.notifySent) return;
+  if (match.data.notifyOnClose && !match.closed) return;
+  if (match.data.notifyAt > Date.now()) return; // 예약 시각이 아직 안 됐으면 armNotifyReminder 의 타이머가 그때 처리
   match.notifySent = true;
   await sendMatchStartDm(match, label);
 }
 
 // data.notifyAt(epoch ms) 시각에 trySendNotify를 시도한다. notifyAt이 그 사이 바뀌었거나
 // 매치 자체가 취소/종료/삭제로 matchesMap에서 사라졌으면 옛 예약이므로 발송하지 않는다.
-// 이미 지난 시각으로 예약(호출)되면 타이머 없이 바로 시도한다(마감 상태면 즉시 발송, 아니면
-// 마감 시점까지 기다림).
+// 이미 지난 시각으로 예약(호출)되면 타이머 없이 바로 시도한다("마감 시 바로" 알림은 마감 때까지 기다림).
 function armNotifyReminder(matchesMap, msgId, match, label) {
   clearNotifyTimer(match);
   const notifyAt = match.data?.notifyAt;
@@ -625,7 +631,7 @@ function matchInfoBlock(data, { withNotify = true } = {}) {
     `📅 **일시**　${datetime}`,
     `👑 **주최자**　**\`${organizer.displayName}\`**`,
   ];
-  if (withNotify && data.notifyAt) lines.push(`🔔 **알림**　${formatNotifyTimeSmart(data.notifyAt, data.notify12h)}`);
+  if (withNotify && data.notifyAt) lines.push(`🔔 **알림**　${notifyWhenText(data)}`);
   return lines.join('\n');
 }
 
@@ -848,12 +854,12 @@ function buildPreviewComponents(type, data = null) {
   const autoCloseToggle = new ButtonBuilder()
     .setCustomId(`${type}:toggle_autoclose`)
     .setEmoji('⏰')
-    .setLabel(data && data.autoClose ? '자동 종료: ON' : '자동 종료: OFF')
+    .setLabel(data && data.autoClose ? '자동 삭제: ON' : '자동 삭제: OFF')
     .setStyle(data && data.autoClose ? ButtonStyle.Success : ButtonStyle.Secondary);
   const notifyAt = data?.notifyAt;
   const notifyButton = new ButtonBuilder()
     .setCustomId(`${type}:notify_set_preview`)
-    .setLabel(notifyAt ? `🔔 알림 예약: ${formatNotifyTimeSmart(notifyAt, data?.notify12h)}` : '🔔 알림 예약')
+    .setLabel(notifyAt ? `🔔 알림 예약: ${notifyWhenText(data)}` : '🔔 알림 예약')
     .setStyle(notifyAt ? ButtonStyle.Success : ButtonStyle.Secondary);
 
   if (data && data.game === 'custom') {
@@ -1066,6 +1072,7 @@ module.exports = {
   defaultDatetimeText,
   parseDatetimeText,
   deriveNotifyFromDatetime,
+  notifyWhenText,
   syncAutoNotify,
   formatNotifyTime,
   formatNotifyTimeKorean,

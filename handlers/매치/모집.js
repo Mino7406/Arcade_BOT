@@ -11,7 +11,7 @@ const {
   ROLE_NAMES, scheduleCancelledDelete, deleteMentionMessage, AUTO_CLOSE_DELAY_MS, saveNow,
   getClientMap, getMojipMatches: getMojips,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
-  buildNotifyModal: buildNotifyModalBase, parseNotifyTime, deriveNotifyFromDatetime, syncAutoNotify, formatNotifyTimeSmart, isNotify12HourInput, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
+  buildNotifyModal: buildNotifyModalBase, parseNotifyTime, deriveNotifyFromDatetime, syncAutoNotify, notifyWhenText, formatNotifyTimeSmart, isNotify12HourInput, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
 } = require('./공용');
 const { notice, payload, text } = require('../공통/카드');
 const { displayNameFromInteraction } = require('../공통/이름');
@@ -34,8 +34,8 @@ function buildModal(game, data = {}) {
   return buildModalBase('mojip', '모집', GAMES, game, data);
 }
 
-function buildNotifyModal(msgId, notifyAt, is12h) {
-  return buildNotifyModalBase('mojip', msgId, notifyAt, is12h);
+function buildNotifyModal(msgId, notifyAt, is12h, onClose) {
+  return buildNotifyModalBase('mojip', msgId, notifyAt, is12h, onClose);
 }
 
 function buildPublicComponents(participants, maxPlayers, closed = false) {
@@ -102,7 +102,7 @@ function buildNotifyButton(match, msgId) {
   const notifyAt = match.data?.notifyAt;
   return new ButtonBuilder()
     .setCustomId(`mojip:notify_set:${msgId}`)
-    .setLabel(notifyAt ? `🔔 알림 예약: ${formatNotifyTimeSmart(notifyAt, match.data?.notify12h)}` : '🔔 알림 예약')
+    .setLabel(notifyAt ? `🔔 알림 예약: ${notifyWhenText(match.data)}` : '🔔 알림 예약')
     .setStyle(notifyAt ? ButtonStyle.Success : ButtonStyle.Secondary)
     .setDisabled(!!match.notifySent);
 }
@@ -196,6 +196,9 @@ async function handleMojipModal(interaction) {
   }
 
   const data = { game, gameInfo, title, datetime, players, description, autoClose: true, createdAt: Date.now(), organizer: { id: interaction.user.id, displayName: displayNameFromInteraction(interaction) } };
+  // 알림 예약은 기본 ON: 일시를 읽을 수 있으면 자동으로 켠다(안 고친 지금 시각이면 "자동 발송" = 마감 때 바로, 고쳤으면 그 시각). 끄려면 🔔 알림 예약에서 비워 제출.
+  const autoNotify = deriveNotifyFromDatetime(datetime, { base: data.createdAt });
+  if (autoNotify) Object.assign(data, autoNotify, { notifyAuto: true, notifyAutoSrc: datetime });
   getPending(interaction.client).set(interaction.user.id, data);
 
   await interaction.reply(buildPreviewPayload('mojip', data, { ephemeral: true }));
@@ -490,7 +493,7 @@ async function handleMojipButton(interaction) {
           .setLabel('↩️ 돌아가기')
           .setStyle(ButtonStyle.Secondary),
       );
-      await interaction.update(notice(`🔔 **이미 알림이 예약되어 있습니다.** (${formatNotifyTimeSmart(match.data.notifyAt, match.data.notify12h)})\n수정하시겠습니까?`, { rows: [confirmRow] }));
+      await interaction.update(notice(`🔔 **이미 알림이 예약되어 있습니다.** (${notifyWhenText(match.data)})\n수정하시겠습니까?`, { rows: [confirmRow] }));
       return;
     }
     // 일시에 적힌 시각을 알림 시각으로 바로 인식한다(읽을 수 없으면 직접 입력창을 연다. 이미 지난 시각이면 마감 때 바로 보낸다).
@@ -500,10 +503,10 @@ async function handleMojipButton(interaction) {
       match.notifySent = false;
       armNotifyReminder(getMojips(interaction.client), msgId, match, '모집');
       await match.message.edit(buildMojipMessagePayload(match)).catch(err => { logError('매치 알림', `${match.data?.title ?? '?'}(${match.message?.id}) 알림 예약 아이콘 갱신 실패`, err); });
-      await interaction.update(buildManagePayload({ label: '모집', match, note: auto.notifyAt <= Date.now() ? '🔔 **일시가 이미 지나서, 마감되면 바로 참가자에게 DM 알림을 보낼게요.**' : `🔔 **일시에 맞춰 ${formatNotifyTimeSmart(auto.notifyAt, auto.notify12h)}에 참가자에게 DM 알림을 보낼게요.**`, rows: buildManageMenu(match, msgId) }));
+      await interaction.update(buildManagePayload({ label: '모집', match, note: auto.notifyOnClose ? '🔔 **자동 발송으로 설정했어요.** 마감되는 순간 참가자에게 DM 알림을 보내요.' : `🔔 **일시에 맞춰 ${formatNotifyTimeSmart(auto.notifyAt, auto.notify12h)}에 참가자에게 DM 알림을 보낼게요.**`, rows: buildManageMenu(match, msgId) }));
       return;
     }
-    await interaction.showModal(buildNotifyModal(msgId, match.data.notifyAt, match.data.notify12h));
+    await interaction.showModal(buildNotifyModal(msgId, match.data.notifyAt, match.data.notify12h, match.data.notifyOnClose));
     return;
   }
 
@@ -523,7 +526,7 @@ async function handleMojipButton(interaction) {
       await interaction.reply(notice('❌ **이미 발송된 알림은 다시 수정할 수 없습니다.**', { ephemeral: true }));
       return;
     }
-    await interaction.showModal(buildNotifyModal(msgId, match.data.notifyAt, match.data.notify12h));
+    await interaction.showModal(buildNotifyModal(msgId, match.data.notifyAt, match.data.notify12h, match.data.notifyOnClose));
     return;
   }
 
@@ -679,7 +682,7 @@ async function handleMojipButton(interaction) {
         return;
       }
     }
-    await interaction.showModal(buildNotifyModal('preview', data.notifyAt, data.notify12h));
+    await interaction.showModal(buildNotifyModal('preview', data.notifyAt, data.notify12h, data.notifyOnClose));
     return;
   }
 
@@ -785,11 +788,13 @@ async function handleMojipNotifyModal(interaction) {
       data.notify12h = isNotify12HourInput(raw);
       data.notifyAuto = false;
       data.notifyAutoSrc = null;
+      data.notifyOnClose = false;
     } else {
       data.notifyAt = null;
       data.notify12h = false;
       data.notifyAuto = false;
       data.notifyAutoSrc = null;
+      data.notifyOnClose = false;
     }
     await interaction.update(buildPreviewPayload('mojip', data));
     return;
@@ -806,6 +811,7 @@ async function handleMojipNotifyModal(interaction) {
     match.data.notify12h = false;
     match.data.notifyAuto = false;
     match.data.notifyAutoSrc = null;
+    match.data.notifyOnClose = false;
     match.notifySent = false;
     clearNotifyTimer(match);
     await match.message.edit(buildMojipMessagePayload(match)).catch(err => { console.error('알림 예약 아이콘 갱신 실패:', err); logError('매치 알림', `${match.data?.title ?? '?'}(${match.message?.id}) 알림 예약 아이콘 갱신 실패`, err); });
@@ -827,6 +833,7 @@ async function handleMojipNotifyModal(interaction) {
   match.data.notify12h = isNotify12HourInput(raw);
   match.data.notifyAuto = false;
   match.data.notifyAutoSrc = null;
+  match.data.notifyOnClose = false;
   match.notifySent = false;
   armNotifyReminder(getMojips(interaction.client), msgId, match, '모집');
   await match.message.edit(buildMojipMessagePayload(match)).catch(err => { console.error('알림 예약 아이콘 갱신 실패:', err); logError('매치 알림', `${match.data?.title ?? '?'}(${match.message?.id}) 알림 예약 아이콘 갱신 실패`, err); });

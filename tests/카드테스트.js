@@ -189,6 +189,12 @@ function rowsIn(list, acc = []) {
     const past = c.deriveNotifyFromDatetime(stamp, { base: created });
     assert.ok(past && Math.abs(past.notifyAt - created) < 60 * 1000 && past.notifyAt < Date.now(), '지난 일시도 알림 시각으로 유지');
     assert.strictEqual(c.deriveNotifyFromDatetime(stamp), null, 'base 없이는 5시간 지난 일시를 내년으로 봄(기존 동작)');
+    // 안 고친 지금 시각 = "자동 발송"(마감 때 바로), 미래 시각을 직접 적으면 그 시각에 발송
+    assert.strictEqual(past.notifyOnClose, true);
+    assert.strictEqual(c.notifyWhenText({ notifyAt: past.notifyAt, notifyOnClose: true }), '자동 발송');
+    const later = c.deriveNotifyFromDatetime('내일 저녁 8시');
+    assert.ok(later && later.notifyOnClose === false, '미래 시각은 그 시각에 발송');
+    assert.notStrictEqual(c.notifyWhenText({ notifyAt: later.notifyAt, notify12h: false, notifyOnClose: false }), '자동 발송');
   });
 
   check('일시 글자 해석: 저녁·밤·내일은 읽고, 아침/저녁이 애매한 "8시"는 안 읽는다', () => {
@@ -200,6 +206,23 @@ function rowsIn(list, acc = []) {
     assert.strictEqual(hm('내일 오전 9시 30분'), '09:30');
     assert.strictEqual(hm('11/13 20시'), '20:00');
     for (const t of ['내일 8시', '오늘 8시', '모이면', '11월 13일 8시', '2/30 20:00']) assert.strictEqual(c.parseDatetimeText(t), null, t);
+  });
+  check('알림 발송 규칙: 직접 정한 시각은 마감과 무관하게, 자동 발송은 마감 때', () => {
+    const c = require('../handlers/매치/공용');
+    const mk = (extra) => ({ data: { notifyAt: Date.now() - 1000, ...extra }, participants: [], closed: false, notifySent: false });
+    const map = new Map();
+    const byTime = mk({ notifyOnClose: false });
+    map.set('a', byTime); c.armNotifyReminder(map, 'a', byTime, '모집');
+    assert.strictEqual(byTime.notifySent, true, '직접 정한 시각이 지났으면 마감 전이어도 발송');
+    const onClose = mk({ notifyOnClose: true });
+    map.set('b', onClose); c.armNotifyReminder(map, 'b', onClose, '모집');
+    assert.strictEqual(onClose.notifySent, false, '자동 발송은 마감 전에는 대기');
+    onClose.closed = true; c.armNotifyReminder(map, 'b', onClose, '모집');
+    assert.strictEqual(onClose.notifySent, true, '자동 발송은 마감되면 발송');
+    const future = mk({ notifyOnClose: false, notifyAt: Date.now() + 60 * 60 * 1000 });
+    map.set('c', future); c.armNotifyReminder(map, 'c', future, '모집');
+    assert.strictEqual(future.notifySent, false, '아직 시각 전이면 대기');
+    c.clearNotifyTimer(future);
   });
   check('DM 알림 설정: 기본 ON, 끄면 OFF, 카드는 현재 상태 쪽 버튼만 비활성화', () => {
     const dm = require('../handlers/매치/DM설정');
