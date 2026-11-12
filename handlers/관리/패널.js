@@ -134,7 +134,7 @@ function buildSetupPanelPayload(interaction) {
     thumb: interaction.client.user.displayAvatarURL(),
     thumbAlt: interaction.client.user.username,
     blocks: [
-      '아래 버튼 하나로 내전/모집 생성부터 관리까지 최소한의 동작으로 끝낼 수 있도록 만들었어요.',
+      '아래 버튼 하나로 내전/모집 생성부터 관리까지\n최소한의 동작으로 끝낼 수 있도록 만들었어요.',
       '> **⚔️ 내전 생성**\n팀 배정까지 포함된 정식 내전 모집을 만들어요.\n\n' +
         '> **📋 모집 생성**\n팀 배정 없는 가벼운 인원 모집을 만들어요.\n\n' +
         '> **🔎 불러오기**\n채팅에 묻힌 내전/모집 게시글을 다시 끌어올려요.\n\n' +
