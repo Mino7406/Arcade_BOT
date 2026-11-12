@@ -37,7 +37,10 @@ function buildPatchBlocks(status) {
       text: `### 📣 소식 알림\n${status.paused ? '⏸️ 일시정지됨' : '▶️ 작동 중'} · 오늘 ${status.today}개 알림\n-# 롤 · 발로란트 · 오버워치 · 배그 공식 홈페이지의 패치노트와 점검 공지`,
       button: pauseButton,
     },
-    `### 🔎 출처별 마지막 확인\n${patchSourceLines(status)}`,
+    {
+      text: `### 🔎 출처별 마지막 확인\n${patchSourceLines(status)}`,
+      button: new ButtonBuilder().setCustomId('admin:patch:check').setLabel('지금 확인').setEmoji('📡').setStyle(ButtonStyle.Success).setDisabled(!!status.paused),
+    },
   ];
 }
 
@@ -67,8 +70,14 @@ function buildAdminHome({ guildId, note } = {}) {
       note || null,
       ...buildPatchBlocks(patch),
       {
-        text: `### ✨ XP 시스템\n${xpLine}`,
-        button: new ButtonBuilder().setCustomId('xp:menu:manage').setLabel('XP 관리').setEmoji('🛠️').setStyle(ButtonStyle.Primary),
+        text: `### ✨ XP 시스템
+${xpLine}`,
+      },
+      {
+        rows: [new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('xp:menu:manage').setLabel('XP 관리').setEmoji('🛠️').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId('xp:menu:adjust').setLabel('XP 조정').setEmoji('⚙️').setStyle(ButtonStyle.Secondary),
+        )],
       },
       {
         text: `### 🧠 퀴즈\n${quizLine}`,
@@ -77,14 +86,12 @@ function buildAdminHome({ guildId, note } = {}) {
       {
         rows: [
           new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('xp:menu:adjust').setLabel('XP 조정').setEmoji('⚙️').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId('admin:panels').setLabel('패널 게시').setEmoji('📌').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId('admin:refresh').setLabel('게시물 최신화').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('admin:channel').setLabel('채널 관리').setEmoji('🧹').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('admin:channel').setLabel('게임모집 관리').setEmoji('🧹').setStyle(ButtonStyle.Secondary),
           ),
           new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('admin:home').setLabel('새로고침').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('admin:patch:check').setLabel('지금 확인').setEmoji('📡').setStyle(ButtonStyle.Secondary).setDisabled(!!patch?.paused || !patch),
             // 테스트 전용 버튼은 테스트 서버에서만 보인다(다른 관리자가 본서버에서 잘못 누르지 않도록)
             ...(isTestGuild(guildId) ? [
               new ButtonBuilder().setCustomId('admin:patch:test').setLabel('테스트 알림').setEmoji('🧪').setStyle(ButtonStyle.Secondary).setDisabled(!patch),

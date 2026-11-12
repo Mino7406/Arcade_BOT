@@ -207,7 +207,7 @@ async function buildScreens() {
   patchState = { ...patchState, paused: true };
   add('관리 · 안내 패널', '/관리 홈 — 소식 알림 일시정지됨', '일시정지하면 재개 버튼으로 바뀌고 확인도 멈춰요', adminHome({ guildId: '1', note: '⏸️ **소식 알림을 일시정지했어요.** 재개할 때까지 새 글이 올라와도 알리지 않아요.' }));
   patchState = { ...patchState, paused: false };
-  add('관리 · 안내 패널', '/관리 → 채널 관리', '패널의 ⚙️ 관리 기능을 /관리에서도 (새로고침은 자동 최신화라 없음)', panel.buildAdminMenuPayload('admin'));
+  add('관리 · 안내 패널', '/관리 → 게임모집 관리', '패널의 ⚙️ 관리 기능을 /관리에서도 (새로고침은 자동 최신화라 없음)', panel.buildAdminMenuPayload('admin'));
   add('관리 · 안내 패널', '패널 게시 선택', '/관리 → 패널 게시', panel.buildPanelSelectPayload({ withBack: true }));
   add('관리 · 안내 패널', '퀴즈 관리 (메뉴로 버튼)', '', quizCmd.buildQuizPanelPayload('1', '▶️ 자동 출제를 다시 시작했습니다.'));
 
@@ -215,7 +215,6 @@ async function buildScreens() {
   const applicant = { id: '5', displayAvatarURL: () => 'https://cdn.discordapp.com/embed/avatars/2.png' };
   add('관리 · 안내 패널', '게임모집 안내 패널', '카드 2장(모집 / 놀이터)', panel.buildSetupPanelPayload(fake));
   add('관리 · 안내 패널', '명령어 목록', '', panel.buildCommandListPayload());
-  add('관리 · 안내 패널', '/xp 콘솔 메뉴', '', xp.buildMenuView());
   add('관리 · 안내 패널', 'XP 관리', '긴급정지·뉴비부스트·레이드 상태를 카드 한 장에', xp.buildManageView('✅ 뉴비부스트를 **켰습니다**.', '1'));
   add('관리 · 안내 패널', '긴급정지 확인', '', xp.buildConfirmView('farm'));
   add('관리 · 안내 패널', 'XP 조정 패널', '', xp.buildPanelView({ guildId: '1' }, '100', { user: null, displayName: '민호' }, '✅ **+500 XP** 적용 (누적 `3120` → `3620`)'));

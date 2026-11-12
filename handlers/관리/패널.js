@@ -169,13 +169,13 @@ function buildAdminMenuPayload(panelMessageId, notice) {
   const blocks = [
     notice || null,
     fromAdmin ? null : { text: '### 🔄 새로고침\n-# 이 안내 패널을 지금 코드의 디자인으로 다시 그려요', button: btn('refresh', '새로고침', ButtonStyle.Primary) },
-    { text: '### 🧹 채널 청소\n-# 게임모집 채널의 유저 메시지를 한꺼번에 지워요(봇 메시지는 그대로) · 다른 채널에서는 쓸 수 없어요', button: btn('purge', '청소', ButtonStyle.Danger) },
+    { text: '### 🧹 게임모집 채널 청소\n-# 게임모집 채널의 유저 메시지를 한꺼번에 지워요(봇 메시지는 그대로) · 어느 채널에서 눌러도 게임모집 채널만 청소해요', button: btn('purge', '청소', ButtonStyle.Danger) },
     { text: '### 🗑️ 내전/모집 삭제\n-# 목록에서 골라 지우거나 전부 지워요', button: btn('match_delete', '삭제', ButtonStyle.Danger) },
     { text: '### 🤖 봇 메시지 삭제\n-# 메시지 ID나 링크로 봇이 보낸 메시지를 지워요', button: btn('bot_msg_delete', '삭제', ButtonStyle.Secondary) },
   ];
   return menu({
-    header: fromAdmin ? '🧹 채널 관리' : '⚙️ 패널 관리',
-    sub: fromAdmin ? '지금 이 채널 기준' : '새로고침 · 채널 청소 · 삭제',
+    header: fromAdmin ? '🧹 게임모집 관리' : '⚙️ 패널 관리',
+    sub: fromAdmin ? '게임모집 채널 기준' : '새로고침 · 채널 청소 · 삭제',
     blocks,
     rows: fromAdmin ? [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('admin:home').setLabel('↩️ 메뉴로').setStyle(ButtonStyle.Secondary))] : [],
   });
@@ -455,14 +455,18 @@ async function handlePanelButton(interaction) {
   }
 
   if (action === 'purge') {
-    // 채널 청소는 게임모집 채널에서만 — 다른 채널(놀이터 등)의 대화를 실수로 지우지 않게 막는다(테스트 서버는 예외).
-    if (interaction.channelId !== RECRUIT_CHANNEL_ID && !isTestGuild(interaction.guildId)) {
-      await interaction.update(buildAdminMenuPayload(panelMessageId, `⚠️ **채널 청소는 게임모집 채널(<#${RECRUIT_CHANNEL_ID}>)에서만 쓸 수 있어요.**`));
+    // 채널 청소는 어느 채널에서 눌러도 항상 게임모집 채널을 청소한다(다른 채널의 대화를 지우지 않게).
+    // 테스트 서버는 게임모집 채널이 따로 없으므로 누른 채널을 대상으로 한다.
+    await interaction.deferUpdate();
+    const target = isTestGuild(interaction.guildId)
+      ? interaction.channel
+      : await interaction.client.channels.fetch(RECRUIT_CHANNEL_ID).catch(() => null);
+    if (!target?.messages) {
+      await interaction.editReply(buildAdminMenuPayload(panelMessageId, `⚠️ **게임모집 채널(<#${RECRUIT_CHANNEL_ID}>)을 찾을 수 없어요.**`));
       return;
     }
-    await interaction.deferUpdate();
-    await purgeUserMessages(interaction.channel);
-    await interaction.editReply(buildAdminMenuPayload(panelMessageId, '🧹 **채널의 모든 유저 메시지를 삭제하였습니다.**'));
+    await purgeUserMessages(target);
+    await interaction.editReply(buildAdminMenuPayload(panelMessageId, '🧹 **게임모집 채널의 모든 유저 메시지를 삭제하였습니다.**'));
     return;
   }
 

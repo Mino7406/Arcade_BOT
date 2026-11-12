@@ -90,21 +90,6 @@ function buildActionRows(guildId, targetId) {
   ];
 }
 
-// ── /xp 첫 화면: "XP 조정" / "XP 관리" 분기 ──────────────────────
-function buildMenuView() {
-  return payload(card({
-    color: COLORS.info,
-    header: '🎛️ XP 콘솔',
-    blocks: ['항목을 선택하세요.'],
-    rows: [
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('xp:menu:adjust').setEmoji('⚙️').setLabel('XP 조정').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('xp:menu:manage').setEmoji('🛠️').setLabel('XP 관리').setStyle(ButtonStyle.Secondary),
-      ),
-    ],
-  }));
-}
-
 // ── "XP 관리" 패널: 일반파밍/미니게임 긴급정지 + 뉴비부스트 토글 ──
 function buildManageView(notice, guildId) {
   const st = getXpState();
@@ -304,7 +289,7 @@ async function buildPanel(interaction, targetId, notice) {
 function buildPanelView(interaction, targetId, { user, displayName }, notice) {
   return payload(buildPanelCard(
     interaction.guildId, targetId, user, displayName, notice,
-    [buildPickRow(targetId), ...buildActionRows(interaction.guildId, targetId)],
+    [buildPickRow(targetId), ...buildActionRows(interaction.guildId, targetId), adminBackRow()],
   ));
 }
 
@@ -349,7 +334,7 @@ async function handleXpButton(interaction) {
   // 첫 화면 분기
   if (action === 'menu') {
     if (targetId === 'adjust') {
-      await interaction.update(payload(card({ color: COLORS.info, header: '⚙️ XP 조정', blocks: ['조정할 유저를 선택하세요.'], rows: [buildPickRow()] })));
+      await interaction.update(payload(card({ color: COLORS.info, header: '⚙️ XP 조정', blocks: ['조정할 유저를 선택하세요.'], rows: [buildPickRow(), adminBackRow()] })));
     } else if (targetId === 'manage') {
       await interaction.update(raidResultView(interaction)); // 테스트 서버면 레이드 테스트 화면, 아니면 XP 관리
     } else if (targetId === 'home') {
@@ -554,7 +539,7 @@ async function handleXpModal(interaction) {
 }
 
 // 화면 모음·테스트에서 직접 그려 보려고 화면 빌더도 함께 내보낸다.
-module.exports.views = { buildMenuView, buildManageView, buildRaidPickView, buildNextMonsterView, buildRaidTestView, buildConfirmView, buildPanelView };
+module.exports.views = { buildManageView, buildRaidPickView, buildNextMonsterView, buildRaidTestView, buildConfirmView, buildPanelView };
 module.exports.handleXpUserSelect = handleXpUserSelect;
 module.exports.handleXpButton = handleXpButton;
 module.exports.handleXpModal = handleXpModal;

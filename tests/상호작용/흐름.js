@@ -337,25 +337,28 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await home.handleAdminButton(deny2);
   });
 
-  await flow('채널 청소: 게임모집 채널에서만 실행, 다른 채널은 거부', async () => {
+  await flow('채널 청소: 어느 채널에서 눌러도 게임모집 채널만 청소', async () => {
     const config = require(path.join(root, 'config.js'));
     const menuMsg = new FakeMsg(require(path.join(root, 'handlers/공통/카드.js')).notice('메뉴'), channel);
-    // 다른 채널(놀이터)
+    const recruit = mkChannel(config.RECRUIT_CHANNEL_ID);
+    let cleanedRecruit = false;
+    recruit.bulkDelete = async () => { cleanedRecruit = true; return new Map(); };
+    recruit.messages.fetch = async () => new Map();
+    // 누른 곳은 놀이터 — 절대 청소되면 안 된다
     channel.id = 'c-playground';
-    let cleaned = false;
-    channel.bulkDelete = async () => { cleaned = true; return new Map(); };
+    let cleanedHere = false;
+    channel.bulkDelete = async () => { cleanedHere = true; return new Map(); };
     channel.messages.fetch = async () => new Map();
-    const denied = mkInteraction({ user: ADMIN, customId: 'panel:purge:admin', message: menuMsg });
-    denied.channelId = channel.id;
-    await panel.handlePanelButton(denied);
-    assert(!cleaned, '게임모집 채널이 아닌데 청소가 실행됨');
-    assert(JSON.stringify(menuMsg.components).includes('게임모집 채널'), '거부 안내가 화면에 안 보임');
-    // 게임모집 채널
-    channel.id = config.RECRUIT_CHANNEL_ID;
+    const origFetch = client.channels.fetch;
+    let fetchedId = null;
+    client.channels.fetch = async id => { fetchedId = id; return recruit; };
     const ok = mkInteraction({ user: ADMIN, customId: 'panel:purge:admin', message: menuMsg });
     ok.channelId = channel.id;
     await panel.handlePanelButton(ok);
-    assert(JSON.stringify(menuMsg.components).includes('삭제하였습니다'), '게임모집 채널에서 청소 완료 안내가 안 보임');
+    client.channels.fetch = origFetch;
+    assert(fetchedId === config.RECRUIT_CHANNEL_ID, '게임모집 채널을 대상으로 잡지 않음');
+    assert(!cleanedHere, '누른 채널(놀이터)이 청소됨');
+    assert(JSON.stringify(menuMsg.components).includes('삭제하였습니다'), '청소 완료 안내가 안 보임');
     channel.id = 'c1';
   });
 
