@@ -55,7 +55,7 @@ function buildAdminHome({ guildId, note } = {}) {
     `파밍 ${xp.farmFrozen ? '🔴' : '🟢'}`,
     `미니게임 ${xp.minigameFrozen ? '🔴' : '🟢'}`,
     `부스트 ${xp.newbieBoostEnabled ? '🟢' : '⚪'}`,
-    `레이드 자동 ${raid.autoSpawn ? '🟢' : '🔴'}`,
+    `레이드 ${raid.autoSpawn ? '🟢' : '🔴'}`,
   ].join(' · ');
   const quizLine = quiz
     ? `자동 출제 ${quiz.paused ? '⏸️ 중지됨' : '▶️ 작동 중'} · 오늘 ${quiz.posted ? '✅ 출제됨' : '⏳ 대기 중'}`
