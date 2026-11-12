@@ -545,8 +545,9 @@ function progressBar(current, max, length = 10) {
 }
 
 function matchInfoBlock(data, { withNotify = true } = {}) {
-  const { datetime, organizer } = data;
+  const { datetime, organizer, gameInfo } = data;
   const lines = [
+    `🎮 **게임**　${gameInfo.name}`,
     `📅 **일시**　${datetime}`,
     `👑 **주최자**　**\`${organizer.displayName}\`**`,
   ];
@@ -590,7 +591,7 @@ function buildMatchCard({ label, data, participants, closed = false, teams = nul
   return card({
     color,
     header: gameHeader(game, gameInfo, title),
-    sub: [label, gameInfo.name, statusText],
+    sub: [label, statusText],
     thumb: gameThumb(gameInfo),
     thumbAlt: gameInfo.name,
     blocks: [
@@ -610,7 +611,7 @@ function buildPreviewCard({ data, rows = [] }) {
   return card({
     color: gameInfo.color,
     header: gameHeader(game, gameInfo, title),
-    sub: ['미리보기', gameInfo.name, '⏳ 게시 전'],
+    sub: ['미리보기', '⏳ 게시 전'],
     thumb: gameThumb(gameInfo),
     thumbAlt: gameInfo.name,
     blocks: [
@@ -629,7 +630,7 @@ function buildCancelledCard({ label, data, byOrganizer }) {
   return card({
     color: COLORS.err,
     header: gameHeader(game, gameInfo, title),
-    sub: [label, gameInfo.name, '🔴 취소됨'],
+    sub: [label, '🔴 취소됨'],
     thumb: gameThumb(gameInfo),
     thumbAlt: gameInfo.name,
     blocks: [matchInfoBlock(data, { withNotify: false })],
@@ -663,7 +664,7 @@ function buildTeamResultCard(data, teams) {
   return card({
     color: gameInfo.color,
     header: gameHeader(game, gameInfo, title),
-    sub: ['내전', gameInfo.name, '⚔️ 팀 배정'],
+    sub: ['내전', '⚔️ 팀 배정'],
     thumb: gameThumb(gameInfo),
     thumbAlt: gameInfo.name,
     blocks: [
