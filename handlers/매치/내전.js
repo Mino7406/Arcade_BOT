@@ -635,7 +635,7 @@ async function handleNaejeonButton(interaction) {
     // 일시에 적힌 시각을 알림 시각으로 바로 인식한다(지난 시각이거나 읽을 수 없으면 직접 입력창을 연다).
     const auto = deriveNotifyFromDatetime(match.data.datetime, { allowPast: false });
     if (auto) {
-      Object.assign(match.data, auto, { notifyAuto: true });
+      Object.assign(match.data, auto, { notifyAuto: true, notifyAutoSrc: match.data.datetime });
       match.notifySent = false;
       armNotifyReminder(getMatches(interaction.client), matchMsgId, match, '내전');
       await match.message.edit(buildPublicMessagePayload(match)).catch(err => { logError('매치 알림', `${match.data?.title ?? '?'}(${match.message?.id}) 알림 예약 아이콘 갱신 실패`, err); });
@@ -813,7 +813,7 @@ async function handleNaejeonButton(interaction) {
     if (!data.notifyAt) {
       const auto = deriveNotifyFromDatetime(data.datetime);
       if (auto) {
-        Object.assign(data, auto, { notifyAuto: true });
+        Object.assign(data, auto, { notifyAuto: true, notifyAutoSrc: data.datetime });
         await interaction.update(buildPreviewPayload('naejeon', data));
         return;
       }
@@ -923,10 +923,12 @@ async function handleNaejeonNotifyModal(interaction) {
       data.notifyAt = notifyAt;
       data.notify12h = isNotify12HourInput(raw);
       data.notifyAuto = false;
+      data.notifyAutoSrc = null;
     } else {
       data.notifyAt = null;
       data.notify12h = false;
       data.notifyAuto = false;
+      data.notifyAutoSrc = null;
     }
     await interaction.update(buildPreviewPayload('naejeon', data));
     return;
@@ -942,6 +944,7 @@ async function handleNaejeonNotifyModal(interaction) {
     match.data.notifyAt = null;
     match.data.notify12h = false;
     match.data.notifyAuto = false;
+    match.data.notifyAutoSrc = null;
     match.notifySent = false;
     clearNotifyTimer(match);
     await match.message.edit(buildPublicMessagePayload(match)).catch(err => { console.error('알림 예약 아이콘 갱신 실패:', err); logError('매치 알림', `${match.data?.title ?? '?'}(${match.message?.id}) 알림 예약 아이콘 갱신 실패`, err); });
@@ -962,6 +965,7 @@ async function handleNaejeonNotifyModal(interaction) {
   match.data.notifyAt = notifyAt;
   match.data.notify12h = isNotify12HourInput(raw);
   match.data.notifyAuto = false;
+  match.data.notifyAutoSrc = null;
   match.notifySent = false;
   armNotifyReminder(getMatches(interaction.client), matchMsgId, match, '내전');
   await match.message.edit(buildPublicMessagePayload(match)).catch(err => { console.error('알림 예약 아이콘 갱신 실패:', err); logError('매치 알림', `${match.data?.title ?? '?'}(${match.message?.id}) 알림 예약 아이콘 갱신 실패`, err); });

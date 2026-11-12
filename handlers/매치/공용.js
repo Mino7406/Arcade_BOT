@@ -264,9 +264,10 @@ function deriveNotifyFromDatetime(datetime, { allowPast = true } = {}) {
 // 일시로 자동 설정된 알림(notifyAuto)이면, 일시가 바뀐 만큼 알림 시각도 따라 바꾼다. 못 읽게 되면 알림을 끈다.
 function syncAutoNotify(data) {
   if (!data?.notifyAuto) return null;
+  if (data.datetime === data.notifyAutoSrc) return null; // 일시가 그대로면(메모·인원만 고친 경우) 알림을 건드리지 않는다
   const auto = deriveNotifyFromDatetime(data.datetime);
-  if (auto) { Object.assign(data, auto); return 'changed'; }
-  Object.assign(data, { notifyAt: null, notify12h: false, notifyAuto: false });
+  if (auto) { Object.assign(data, auto, { notifyAutoSrc: data.datetime }); return 'changed'; }
+  Object.assign(data, { notifyAt: null, notify12h: false, notifyAuto: false, notifyAutoSrc: null });
   return 'off';
 }
 

@@ -179,6 +179,10 @@ function rowsIn(list, acc = []) {
     assert.ok(data.notifyAt && data.notifyAuto, '일시가 바뀌면 알림 시각도 따라감');
     data.datetime = '내일 8시'; c.syncAutoNotify(data);
     assert.strictEqual(data.notifyAt, null); assert.strictEqual(data.notifyAuto, false);
+    // 일시가 그대로면(메모·인원만 수정) 알림은 건드리지 않는다 — 지난 일시라도 꺼지지 않음
+    const kept = { datetime: '1/1 20:00', notifyAuto: true, notifyAutoSrc: '1/1 20:00', notifyAt: 123 };
+    assert.strictEqual(c.syncAutoNotify(kept), null);
+    assert.strictEqual(kept.notifyAt, 123);
   });
 
   check('일시 글자 해석: 저녁·밤·내일은 읽고, 아침/저녁이 애매한 "8시"는 안 읽는다', () => {
