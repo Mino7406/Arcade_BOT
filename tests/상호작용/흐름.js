@@ -189,8 +189,20 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     }
   });
 
+  await flow('모집: 참가해서 카드를 고쳐도 역할 멘션 줄이 남는다', async () => {
+    await mojip.handleMojipModal(mkInteraction({ user: ADMIN, customId: 'mojip:modal:lol', fields: { title: '', datetime: '내일', players: '5', description: '' } }));
+    const pub = mkInteraction({ user: ADMIN, customId: 'mojip:publish', message: new FakeMsg(require(path.join(root, 'handlers/공통/카드.js')).notice('p'), channel) });
+    pub.guild.roles.cache.find = () => ({ id: 'ROLE1' });
+    await mojip.handleMojipButton(pub);
+    const m = [...client.mojipMatches.values()].at(-1);
+    const has = () => JSON.stringify(m.message.components).includes('<@&ROLE1>');
+    assert(has(), '게시 직후 역할 멘션 줄');
+    await mojip.handleMojipButton(mkInteraction({ user: 'u9', customId: 'mojip:join', message: m.message }));
+    assert(has(), '참가 후 카드를 고쳐도 역할 멘션 줄 유지');
+  });
+
   // ── 틱택토 ──
-  const ttt = require(path.join(root, 'handlers/게임/틱택토.js'));
+  const ttt =require(path.join(root, 'handlers/게임/틱택토.js'));
   await flow('틱택토: 로비 → 참가 → 시작 → 한 판 → 재대결 → 종료', async () => {
     const start = mkInteraction({ user: 'u1', command: '틱택토' });
     await ttt.startTttCommand(start);

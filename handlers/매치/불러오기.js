@@ -18,7 +18,7 @@ async function handleRMatchSelect(interaction) {
   }
 
   // 다시 올릴 때는 역할 멘션 줄을 빼고(핑 중복 방지) 카드만 올린다.
-  if (type === 'naejeon') match.roleContent = '';
+  match.roleContent = '';
   const payload = type === 'naejeon' ? buildPublicMessagePayload(match) : buildMojipMessagePayload(match);
   const newMsg = await interaction.channel.send(payload);
   match.message.delete().catch(() => {});

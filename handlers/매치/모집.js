@@ -258,7 +258,7 @@ async function handleMojipButton(interaction) {
     const msg = await interaction.channel.send(payload(roleContent ? [text(roleContent), publishCard] : [publishCard], {
       allowedMentions: { roles: role ? [role.id] : [], users: [] },
     }));
-    const match = { data, participants, message: msg, closed: false, closedAt: null, mentionSent: false, guildId: interaction.guildId };
+    const match = { data, participants, message: msg, closed: false, closedAt: null, mentionSent: false, roleContent, guildId: interaction.guildId }; // roleContent: 카드를 고칠 때마다 역할 멘션 줄을 다시 붙이려고 보관
     getMojips(interaction.client).set(msg.id, match);
     saveNow(interaction.client);
     logAction(interaction, '매치 생성', `모집 '${data.title}'(${msg.id}) 공개 게시 — ${data.gameInfo?.name ?? data.game}`);
