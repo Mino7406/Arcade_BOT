@@ -564,8 +564,10 @@ function buildGameCard(game) {
     blocks,
     image: 'attachment://omok.png',
     footer: game.status !== 'finished' ? `⏰ ${TURN_MS / 60000}분 안에 두지 않으면 시간 초과로 종료됩니다.` : undefined,
-    // 진행 중에는 포기 버튼이 카드 안에 들어간다. 종료 후 재대결 줄은 카드 밖(withTopRows로 따로 뗄 수 있게).
-    ...(game.status === 'finished' ? {} : footerSide(buildPlayingComponents(game), /^omok:resign:/)), // 포기는 안내 줄 오른쪽으로
+    // 진행 중에는 포기 버튼이 카드 안에 들어간다. 종료 후 재대결 줄도 카드 안 맨 아래(withTopRows로 따로 뗄 수 있게).
+    ...(game.status === 'finished'
+      ? { rows: [buildFinishedRow(game.players.B, game.players.W)] } // 종료 후 재대결/종료 줄도 카드 안 맨 아래
+      : footerSide(buildPlayingComponents(game), /^omok:resign:/)), // 포기는 안내 줄 오른쪽으로
   });
 }
 
@@ -591,7 +593,7 @@ async function playingPayload(game) {
 }
 
 async function finishedPayload(game) {
-  return payload([buildGameCard(game), buildFinishedRow(game.players.B, game.players.W)], { files: [await boardFile(game)] });
+  return payload(buildGameCard(game), { files: [await boardFile(game)] });
 }
 
 // ── 보드를 항상 맨 아래에 유지 (끝말잇기 moveBoardDown과 동일) ──────────

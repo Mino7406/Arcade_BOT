@@ -26,7 +26,7 @@ const { applyXp, deductXpFromAll, isExcludedGuild, announceLevelUp, setRaidXpFro
 const { KST_OFFSET_MS } = require('../공통/시간');
 const { GUILD_ID, PLAYGROUND_CHANNEL_ID, ADMIN_IDS } = require('../../config');
 const { logSystem, logError, userLabel } = require('../공통/로그');
-const { card, payload: cardPayload } = require('../공통/카드');
+const { card, payload: cardPayload, notice } = require('../공통/카드');
 const { writeJsonIfChanged } = require('../공통/저장');
 const { displayNameFromInteraction } = require('../공통/이름');
 const {
@@ -619,10 +619,8 @@ async function sendRaidMessage(r, payload, { deleteOld }) {
 async function sendStartMention(r, ids) {
   if (!ids.length || !r.message?.channel) return false;
   try {
-    r.startMentionMessage = await r.message.channel.send({
-      content: `⚔️ **레이드 전투 시작!** ${ids.map(id => `<@${id}>`).join(' ')} - 아래 레이드 메시지에서 ${TURN_MS / 1000}초 안에 행동을 골라 주세요`,
-      allowedMentions: { users: ids },
-    });
+    // 카드 안의 멘션도 allowedMentions에 담은 유저에게는 알림이 간다(카드 글자는 TextDisplay).
+    r.startMentionMessage = await r.message.channel.send(notice(`⚔️ **레이드 전투 시작!** ${ids.map(id => `<@${id}>`).join(' ')}\n아래 레이드 메시지에서 ${TURN_MS / 1000}초 안에 행동을 골라 주세요`, { allowedMentions: { users: ids } }));
     if (r.phase !== 'battle' || r.battle.turn > 1) deleteStartMention(r);
     return true;
   } catch (err) {
@@ -895,12 +893,12 @@ async function handleRaidButton(interaction) {
       return;
     }
     if (!rr || rr.phase !== 'recruit') {
-      await interaction.update({ content: '⌛ 이미 시작됐거나 끝난 레이드예요.', components: [] });
+      await interaction.update(notice('⌛ 이미 시작됐거나 끝난 레이드예요.'));
       return;
     }
     const uid = interaction.user.id;
     if (!rr.party.length || (rr.party[0].userId !== uid && !ADMIN_IDS.includes(uid))) {
-      await interaction.update({ content: '▶️ 바로 시작은 방장과 관리자만 할 수 있어요.', components: [] });
+      await interaction.update(notice('▶️ 바로 시작은 방장과 관리자만 할 수 있어요.'));
       return;
     }
     logSystem({ 유형: '레이드', 유저: userLabel(uid), 내용: `바로 시작(혼자 확인) — ${rr.party.length}명으로 출발` });
@@ -913,43 +911,42 @@ async function handleRaidButton(interaction) {
 
   const r = raids.get(interaction.guildId);
   if (r?.movedFrom.has(interaction.message.id)) {
-    await interaction.reply({ content: '⬇️ 레이드 메시지가 채팅 맨 아래로 옮겨졌어요. 아래 메시지에서 다시 눌러 주세요!', flags: MessageFlags.Ephemeral });
+    await interaction.reply(notice('⬇️ 레이드 메시지가 채팅 맨 아래로 옮겨졌어요. 아래 메시지에서 다시 눌러 주세요!', { ephemeral: true }));
     return;
   }
   if (!r || r.message?.id !== interaction.message.id) {
-    await interaction.reply({ content: '⌛ 이미 끝난 레이드예요.', flags: MessageFlags.Ephemeral });
+    await interaction.reply(notice('⌛ 이미 끝난 레이드예요.', { ephemeral: true }));
     return;
   }
 
   if (kind === 'role' || kind === 'leave' || kind === 'start') {
     if (r.phase !== 'recruit') {
-      await interaction.reply({ content: '⚔️ 이미 전투가 시작됐어요.', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⚔️ 이미 전투가 시작됐어요.', { ephemeral: true }));
       return;
     }
     const userId = interaction.user.id;
     // 바로 시작: 방장(지금 남아 있는 가장 먼저 참가한 사람)과 관리자만. 모집 시간을 다 기다리지 않고 출발한다.
     if (kind === 'start') {
       if (r.party.length === 0) {
-        await interaction.reply({ content: '아직 참가자가 없어요.', flags: MessageFlags.Ephemeral });
+        await interaction.reply(notice('아직 참가자가 없어요.', { ephemeral: true }));
         return;
       }
       if (r.party[0].userId !== userId && !ADMIN_IDS.includes(userId)) {
-        await interaction.reply({ content: `▶️ 바로 시작은 방장 **${r.party[0].name}**님과 관리자만 누를 수 있어요.`, flags: MessageFlags.Ephemeral });
+        await interaction.reply(notice(`▶️ 바로 시작은 방장 **${r.party[0].name}**님과 관리자만 누를 수 있어요.`, { ephemeral: true }));
         return;
       }
       // 혼자면 실수로 누른 건 아닌지 본인에게만 한 번 더 묻는다. 파티에 없는 관리자가 누르면 그 1명 기준으로 묻는다.
       if (r.party.length === 1) {
         const self = r.party[0].userId === userId;
-        await interaction.reply({
-          content: self
+        await interaction.reply(notice(self
             ? '🙋 **지금 파티에 혼자예요.**\n정말 혼자 시작할까요? 도와줄 동료 없이 혼자 싸워야 해요.'
-            : `🙋 **지금 파티에 1명뿐이에요.**\n정말 이대로 시작할까요? **${r.party[0].name}**님이 동료 없이 혼자 싸워야 해요.`,
-          components: [new ActionRowBuilder().addComponents(
+            : `🙋 **지금 파티에 1명뿐이에요.**\n정말 이대로 시작할까요? **${r.party[0].name}**님이 동료 없이 혼자 싸워야 해요.`, {
+          ephemeral: true,
+          rows: [new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('raid:solo:yes').setEmoji('⚔️').setLabel(self ? '혼자 시작' : '1명으로 시작').setStyle(ButtonStyle.Danger),
             new ButtonBuilder().setCustomId('raid:solo:no').setLabel('취소').setStyle(ButtonStyle.Secondary),
           )],
-          flags: MessageFlags.Ephemeral,
-        });
+        }));
         return;
       }
       logSystem({ 유형: '레이드', 유저: userLabel(userId), 내용: `바로 시작 — ${r.party.length}명으로 출발` });
@@ -960,7 +957,7 @@ async function handleRaidButton(interaction) {
     const mine = r.party.find(p => p.userId === userId);
     if (kind === 'leave') {
       if (!mine) {
-        await interaction.reply({ content: '참가하지 않았어요.', flags: MessageFlags.Ephemeral });
+        await interaction.reply(notice('참가하지 않았어요.', { ephemeral: true }));
         return;
       }
       r.party = r.party.filter(p => p.userId !== userId);
@@ -970,14 +967,14 @@ async function handleRaidButton(interaction) {
     }
     if (!ROLES[arg]) return;
     if (r.party.some(p => p.role === arg && p.userId !== userId)) {
-      await interaction.reply({ content: '이미 다른 사람이 고른 역할이에요.', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('이미 다른 사람이 고른 역할이에요.', { ephemeral: true }));
       return;
     }
     if (mine) {
       mine.role = arg; // 참가 중이면 역할만 바꾼다
     } else {
       if (r.party.length >= PARTY_MAX) {
-        await interaction.reply({ content: '파티가 가득 찼어요.', flags: MessageFlags.Ephemeral });
+        await interaction.reply(notice('파티가 가득 찼어요.', { ephemeral: true }));
         return;
       }
       r.party.push({ userId, name: displayNameFromInteraction(interaction), role: arg });
@@ -991,16 +988,16 @@ async function handleRaidButton(interaction) {
 
   if (kind === 'act') {
     if (r.phase !== 'battle') {
-      await interaction.reply({ content: '⏳ 아직 모집 중이에요.', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('⏳ 아직 모집 중이에요.', { ephemeral: true }));
       return;
     }
     if (r.showingResult) {
-      await interaction.reply({ content: '📜 턴이 끝났어요. 곧 다음 턴이 시작돼요!', flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice('📜 턴이 끝났어요. 곧 다음 턴이 시작돼요!', { ephemeral: true }));
       return;
     }
     const error = checkChoice(r.battle, interaction.user.id, arg);
     if (error) {
-      await interaction.reply({ content: `⚠️ ${error}`, flags: MessageFlags.Ephemeral });
+      await interaction.reply(notice(`⚠️ ${error}`, { ephemeral: true }));
       return;
     }
     choose(r.battle, interaction.user.id, arg);

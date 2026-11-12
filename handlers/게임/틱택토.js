@@ -315,16 +315,14 @@ function buildGameCard(game, note) {
     sub: game.status === 'finished' ? '게임 종료' : '진행 중',
     blocks,
     footer: game.status !== 'finished' ? `⏰ ${TIMEOUT_MS / 60000}분 안에 두지 않으면 시간 초과로 종료됩니다.` : undefined,
-    rows: buildBoard(game),
+    rows: [...buildBoard(game), ...(game.status === 'finished' ? [buildFinishedRow(game)] : [])],
   });
 }
 
-// 대국 메시지 전체: 카드(판 버튼은 카드 안) + 끝났으면 맨 아래에 재대결/종료 버튼.
-// 재대결·종료 줄은 카드 밖에 둬서, 나중에 그 줄만 떼어도 카드가 남는다(withTopRows).
+// 대국 메시지 전체: 카드 한 장(판 버튼과, 끝났으면 맨 아래 재대결/종료 버튼이 모두 카드 안).
+// 재대결·종료 줄만 나중에 withTopRows로 떼어도 카드는 남는다.
 function buildGamePayload(game, note) {
-  const parts = [buildGameCard(game, note)];
-  if (game.status === 'finished') parts.push(buildFinishedRow(game));
-  return payload(parts);
+  return payload(buildGameCard(game, note));
 }
 
 // 무한모드에서 각 마크가 이미 3개를 채워, 다음 그 마크가 하나 더 놓이면 사라질 "가장 오래된"

@@ -293,17 +293,35 @@ function hasCustomId(components, prefix) {
 }
 
 /**
- * 이미 올라간 v2 메시지에서 "맨 위 버튼 줄"만 바꾼다(카드·이미지 등 나머지는 그대로).
+ * 이미 올라간 v2 메시지에서 "재대결/종료 버튼 줄"만 바꾼다(카드·이미지 등 나머지는 그대로).
  * 예전엔 message.edit({ components: [] }) 로 버튼만 떼었지만, v2에서는 components 가 메시지 전체라
- * 그렇게 하면 카드까지 사라진다. 카드 안(컨테이너 안)의 버튼은 건드리지 않는다.
+ * 그렇게 하면 카드까지 사라진다. 결과 버튼 줄은 카드(컨테이너) 안 맨 아래에 있고, 옛 메시지에 남은
+ * 카드 밖 버튼 줄도 함께 정리한다. 판 버튼·포기 같은 카드 안의 다른 버튼은 건드리지 않는다.
+ * rows 를 주면 카드 안 맨 아래에 그 줄을 넣는다.
  */
 function withTopRows(message, rows = []) {
-  const kept = (message.components || [])
-    .filter(c => c.type !== ComponentType.ActionRow)
-    .map(c => (typeof c.toJSON === 'function' ? c.toJSON() : c));
+  const toJson = c => (c && typeof c.toJSON === 'function' ? c.toJSON() : c);
+  const isResultRow = r => r?.type === ComponentType.ActionRow
+    && (r.components || []).some(b => /:(rematch|close)(:|$)/.test(b.custom_id ?? b.customId ?? ''));
+  const add = [].concat(rows).filter(Boolean).map(toJson);
+
+  let placed = false;
+  const kept = [];
+  for (const raw of message.components || []) {
+    const c = toJson(raw);
+    if (c.type === ComponentType.ActionRow) continue; // 옛 메시지의 카드 밖 버튼 줄
+    if (c.type === ComponentType.Container) {
+      const inner = (c.components || []).filter(x => !isResultRow(x));
+      if (!placed && add.length > 0) { inner.push(...add); placed = true; }
+      kept.push({ ...c, components: inner });
+    } else {
+      kept.push(c);
+    }
+  }
+  if (!placed) kept.push(...add);
   return {
     allowedMentions: { parse: [] },
-    components: [...kept, ...[].concat(rows).filter(Boolean)],
+    components: kept,
     flags: V2_FLAG,
   };
 }

@@ -360,6 +360,7 @@ function buildFinishedCard(game) {
     header: '🔤 끝말잇기',
     sub: '게임 종료',
     blocks: [summary, xp || null, `### 📝 마지막 단어들\n${recent}`],
+    rows: buildFinishedComponents(game),
   });
 }
 
@@ -392,10 +393,10 @@ function formatXpResultLine(game) {
   return `\n🎉 **봇을 이겨서 XP 획득**\n${winnerLines}${capNote}`;
 }
 
-// 상황별 메시지 전체. 재대결·종료 줄은 카드 밖(맨 아래)에 둬서 withTopRows로 그 줄만 뗄 수 있다.
+// 상황별 메시지 전체. 재대결 줄은 카드 안 맨 아래에 있고 withTopRows로 그 줄만 뗄 수 있다.
 function waitingPayload(game) { return payload(buildWaitingCard(game)); }
 function playingPayload(game, note) { return payload(buildPlayingCard(game, note)); }
-function finishedPayload(game) { return payload([buildFinishedCard(game), ...buildFinishedComponents(game)]); }
+function finishedPayload(game) { return payload(buildFinishedCard(game)); }
 function rematchRequestPayload(game) { return payload(buildRematchRequestCard(game)); }
 
 // ── 컴포넌트 빌더 ──────────────────────────────────────────────
