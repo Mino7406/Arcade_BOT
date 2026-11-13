@@ -19,18 +19,28 @@ const SOURCES = {
 const DIR = path.join(__dirname, '..', '..', 'assets', '썸네일');
 
 const padded = new Map(); // 원래 이모지 ID → 여백 넣은 앱 이모지 ID
+let lastError = null;      // 마지막 준비 실패 이유(/관리 새로고침 안내에 보여 줌)
 
 // 앱 이모지 목록을 한 번 불러와 없는 것만 등록한다(이미 있으면 API 호출은 목록 조회 1번뿐).
 async function ensureThumbEmojis(client) {
   const manager = client.application?.emojis;
-  if (!manager) return 0;
-  const list = await manager.fetch();
+  if (!manager) { lastError = '봇 앱 정보를 아직 못 불러옴'; return 0; }
+  let list;
+  try {
+    list = await manager.fetch();
+  } catch (err) {
+    lastError = `앱 이모지 목록 조회 실패: ${err?.message ?? err}`;
+    logError('처리 오류', '썸네일 앱 이모지 목록 조회 실패', err);
+    return padded.size;
+  }
+  lastError = null;
   let created = 0;
   for (const [srcId, name] of Object.entries(SOURCES)) {
     const emojiName = `${PREFIX}${name}`;
     let emoji = list.find(e => e.name === emojiName);
     if (!emoji) {
       emoji = await manager.create({ attachment: path.join(DIR, `${name}.png`), name: emojiName }).catch(err => {
+        lastError = `${emojiName} 등록 실패: ${err?.message ?? err}`;
         logError('처리 오류', `썸네일 이모지 등록 실패 (${emojiName})`, err);
         return null;
       });
@@ -40,6 +50,11 @@ async function ensureThumbEmojis(client) {
   }
   if (created) logSystem({ 유형: '봇 상태', 내용: `카드 썸네일용 앱 이모지 ${created}개 등록` });
   return padded.size;
+}
+
+// 준비 상태: 여백 그림 몇 개가 준비됐는지와 마지막 실패 이유.
+function thumbStatus() {
+  return { ready: padded.size, total: Object.keys(SOURCES).length, error: lastError };
 }
 
 // 게임 이모지 ID 로 썸네일 주소. 여백 넣은 그림이 준비됐으면 그 주소, 아니면 원래 이모지 그림.
@@ -57,4 +72,4 @@ function upgradeThumbUrl(url) {
   return id ? emojiUrl(id) : null;
 }
 
-module.exports = { ensureThumbEmojis, thumbUrlFor, upgradeThumbUrl, SOURCES, PREFIX };
+module.exports = { ensureThumbEmojis, thumbStatus, thumbUrlFor, upgradeThumbUrl, SOURCES, PREFIX };

@@ -6,7 +6,7 @@
 // 그래야 두 문제가 동시에 유효해서 생기는 중복/혼선을 막을 수 있다.
 // API를 못 쓰는 경우(키 없음/장애)에만 아주 작은 비상용 목록으로 대체한다.
 
-const { card, payload, COLORS } = require('../공통/카드');
+const { card, payload, COLORS, messageText } = require('../공통/카드');
 const fs = require('fs');
 const path = require('path');
 const { applyXp, isExcludedGuild, isMinigameXpFrozen } = require('../레벨/레벨링');
@@ -119,6 +119,32 @@ function buildCorrectPayload({ word, xpReward, grade = null, frozen = false, lev
     blocks: [reward],
   }), {
     allowedMentions: { repliedUser: false, users: mentionUserId ? [mentionUserId] : [] },
+  });
+}
+
+// /관리 새로고침: 예전 모양으로 올라간 정답 카드를 지금 모양으로 다시 만든다(상태가 없어도 글자와 답장 대상에서 복원).
+// 정답 카드는 맞힌 사람의 채팅에 단 답장이라, 답장 대상 메시지에서 정답자 이름·프로필을 얻는다(걸린 시간은 알 수 없어 생략).
+// 정답 카드가 아니거나 이미 새 모양이거나 답장 대상을 못 찾으면 null.
+async function rebuildCorrectCard(message) {
+  const body = messageText(message);
+  if (!body.includes('⭕ 정답입니다!') || body.includes('맞혔어요')) return null;
+  const refId = message.reference?.messageId;
+  if (!refId || !message.channel?.messages) return null;
+  const ref = await message.channel.messages.fetch(refId).catch(() => null);
+  if (!ref?.author) return null;
+  const word = (body.split('\n').find(l => /^##\s/.test(l)) || '').replace(/^##\s+/, '').trim();
+  if (!word) return null;
+  const xp = /\+(\d+)\s*XP/.exec(body);
+  const frozen = body.includes('지급되지 않았습니다');
+  if (!xp && !frozen) return null;
+  const levelUp = body.split('\n').find(l => l.includes('레벨을 달성했어요'));
+  return buildCorrectPayload({
+    word,
+    xpReward: xp ? Number(xp[1]) : 0,
+    grade: (/(초급|중급|고급)/.exec(body) || [])[1] ?? null,
+    frozen,
+    levelUpLine: levelUp ? `\n${levelUp}` : '',
+    ...solverInfo(ref, {}),
   });
 }
 
@@ -577,4 +603,5 @@ module.exports = {
   startQuizScheduler, handleQuizMessage, QUIZ_CHANNEL_ID,
   pauseQuiz, resumeQuiz, postCustomQuiz, getQuizStatus,
   buildQuizCard, buildCorrectPayload, // 화면 모음·테스트용
+  rebuildCorrectCard, // /관리 새로고침
 };

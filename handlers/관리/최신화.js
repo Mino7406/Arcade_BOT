@@ -113,8 +113,17 @@ async function refreshMatches(client) {
 // 상태가 남아 있는 게시물(진행 중 내전/모집·패널)은 데이터로 다시 그리고, 여기서는 그 밖의 카드
 // (지난 결과·팀 배정·취소된 카드 등)를 글자·버튼은 그대로 두고 배치만 맞춘다. 바뀔 게 없으면 수정하지 않는다.
 // 채널당 메시지 조회 1번이라 호스팅 부담이 작다.
+// 상태 데이터 없이 메시지 글자만으로 지금 디자인을 다시 만들 수 있는 카드. 해당 없으면 null.
+async function rebuildFromMessage(m) {
+  const { rebuildCorrectCard } = require('../게임/퀴즈');
+  return rebuildCorrectCard(m);
+}
+
 async function refreshRecentBotCards(client, { perChannel = 10 } = {}) {
   let done = 0, scanned = 0;
+  // 썸네일용 앱 이모지가 아직 준비 안 됐으면(봇 시작 때 실패 등) 여기서 한 번 더 시도한다.
+  const { ensureThumbEmojis, thumbStatus } = require('../공통/썸네일');
+  if (thumbStatus().ready < thumbStatus().total) await ensureThumbEmojis(client).catch(() => {});
   for (const guild of client.guilds?.cache?.values?.() ?? []) {
     const channels = await guild.channels.fetch().catch(() => null);
     if (!channels) continue;
@@ -127,6 +136,13 @@ async function refreshRecentBotCards(client, { perChannel = 10 } = {}) {
         const isV2 = typeof m.flags?.has === 'function' ? m.flags.has(V2_FLAG) : !!(Number(m.flags) & V2_FLAG);
         if (!isV2) continue; // 옛 임베드 메시지는 배치를 알 수 없어 그대로 둔다
         scanned++;
+        // 글자에서 다시 만들 수 있는 카드(옛 퀴즈 정답 카드 등)는 지금 코드로 새로 그린다.
+        const rebuilt = await rebuildFromMessage(m).catch(() => null);
+        if (rebuilt) {
+          const ok = await m.edit(rebuilt).then(() => true).catch(err => { logError('처리 오류', `최근 카드 다시 그리기 실패 (${m.channelId}/${m.id})`, err); return false; });
+          if (ok) done++;
+          continue;
+        }
         const next = relayoutCardJson(m.components, { mapThumbUrl: upgradeThumbUrl }); // 배치 + 여백 넣은 게임 썸네일
         if (!next) continue;
         // 첨부(그림)는 그대로 두고(attachments 생략) 배치만 고친다. 수정은 알림이 가지 않지만 멘션 해석도 막아 둔다.
@@ -175,6 +191,9 @@ async function refreshPostedMessages(client, { includeCobblemon = false, include
     const r = await refreshRecentBotCards(client).catch(err => { notes.push(`최근 카드 오류: ${err?.message ?? err}`); return { done: 0, scanned: 0 }; });
     counts.recent = r.done;
     counts.recentScanned = r.scanned;
+    const t = require('../공통/썸네일').thumbStatus();
+    counts.thumbs = `${t.ready}/${t.total}`;
+    if (t.error) notes.push(`썸네일 이모지: ${t.error}`);
   }
 
   const parts = [
@@ -183,7 +202,8 @@ async function refreshPostedMessages(client, { includeCobblemon = false, include
     counts.roster != null && `명단 ${counts.roster}개`,
     counts.cobblemon != null && `코블몬 패널 ${counts.cobblemon}개`,
     counts.matches != null && `내전/모집 ${counts.matches}건`,
-    counts.recent != null && `최근 카드 ${counts.recentScanned}개 중 ${counts.recent}개 배치 수정`,
+    counts.recent != null && `최근 카드 ${counts.recentScanned}개 중 ${counts.recent}개 수정`,
+    counts.thumbs != null && `작은 썸네일 ${counts.thumbs} 준비`,
   ].filter(Boolean);
   const summary = parts.join(' · ') + (notes.length ? ` — ${notes.join(' / ')}` : '');
   return { summary, counts };
