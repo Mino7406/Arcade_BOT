@@ -8,7 +8,7 @@ const {
 
 const {
   ADMIN_IDS, getClientMap, getNaejeonMatches: getMatches, shuffleIntoTeams, buildTeamResultCard, buildCancelledCard, buildMatchCard, findMatchRole, buildMatchMessagePayload, buildPreviewPayload, buildManagePayload, buildMentionPayload, markClosed, markReopened, toggleAutoCloseWhileClosed, announceMatchCompletionXp,
-  ROLE_NAMES, scheduleCancelledDelete, deleteMentionMessage, AUTO_CLOSE_DELAY_MS, saveNow,
+  ROLE_NAMES, scheduleCancelledDelete, deleteMentionMessage, autoEndAt, armAutoEnd, saveNow,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
   buildNotifyModal: buildNotifyModalBase, parseNotifyTime, deriveNotifyFromDatetime, syncAutoNotify, syncNotifyOnEdit, notifySyncNote, notifySentMessage, notifyTooFarMessage, lateJoinNote, notifyWhenText, formatNotifyTimeSmart, isNotify12HourInput, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
   setPublicPayloadBuilder,
@@ -78,11 +78,11 @@ function buildCancelComponents() {
   return buildCancelComponentsBase('naejeon');
 }
 
-// 마감된 상태에서 자동 삭제 예정 시각(closedAt + AUTO_CLOSE_DELAY_MS)이 이미 지났는지 확인한다.
+// 마감된 상태에서 자동 삭제 예정 시각(autoEndAt: 마감·시작 시각 중 늦은 쪽 + AUTO_CLOSE_DELAY_MS)이 이미 지났는지 확인한다.
 // autoClose가 꺼진 채로 마감돼 타이머가 안 걸린 매치는 시간이 아무리 지나도
 // 저절로 안 없어지므로, 이 경우 ON/OFF 토글 대신 바로 "삭제" 버튼을 보여준다.
 function isAutoDeleteExpired(match) {
-  return !!(match.closed && match.closedAt && Date.now() - match.closedAt >= AUTO_CLOSE_DELAY_MS);
+  return !!(match.closed && match.closedAt && Date.now() >= autoEndAt(match));
 }
 
 function buildAutoCloseToggleButton(match, matchMsgId, label) {
@@ -899,6 +899,8 @@ async function handleNaejeonMatchEditModal(interaction) {
   // 켜 둔 알림(아직 발송 전)은 새 일시를 읽을 수 있으면 일시 10분 전으로 옮긴다(자동 알림이 된다). 이미 보낸 뒤 일시를 미루면 다시 건다.
   const notifySync = syncNotifyOnEdit(match, prevDatetime);
   if (notifySync === 'changed' || notifySync === 'off' || notifySync === 'rearmed') armNotifyReminder(getMatches(interaction.client), matchMsgId, match, '내전');
+  // 마감된 상태에서 일시를 바꾸면 자동 삭제 시각(마감·시작 중 늦은 쪽 + 6시간)도 다시 계산한다.
+  if (match.closed && match.data.datetime !== prevDatetime) armAutoEnd(getMatches(interaction.client), matchMsgId, match, '내전');
 
   await match.message.edit(buildPublicMessagePayload(match));
 

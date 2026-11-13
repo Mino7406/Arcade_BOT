@@ -9,7 +9,7 @@ const {
   MessageFlags,
 } = require('discord.js');
 
-const { ADMIN_IDS, AUTO_CLOSE_DELAY_MS, disarmAutoEnd, clearNotifyTimer, deleteMentionMessage, announceMatchCompletionXp, getCancelledDeletions } = require('../매치/공용');
+const { ADMIN_IDS, autoEndAt, disarmAutoEnd, clearNotifyTimer, deleteMentionMessage, announceMatchCompletionXp, getCancelledDeletions } = require('../매치/공용');
 // 끝말잇기/틱택토/레벨/랭킹은 이 채널(놀이터)에서만 사용 가능.
 const { PLAYGROUND_CHANNEL_ID, RECRUIT_CHANNEL_ID, isTestGuild } = require('../../config');
 const { card, payload, menu, footerSide, COLORS, notice: quick } = require('../공통/카드');
@@ -234,7 +234,7 @@ function formatTimeLeft(deleteAt) {
 function formatMatchStatus(match) {
   if (!match.closed) return '🟢 모집 중';
   if (!match.data?.autoClose || !match.closedAt) return '🔒 마감됨';
-  return `🔒 마감됨 · ${formatTimeLeft(match.closedAt + AUTO_CLOSE_DELAY_MS)}`;
+  return `🔒 마감됨 · ${formatTimeLeft(autoEndAt(match))}`;
 }
 
 // 현재 서버에서 삭제 가능한 항목(진행 중/마감된 내전·모집 + 취소되어 자동삭제 대기 중인 게시글)을

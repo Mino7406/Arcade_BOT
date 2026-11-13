@@ -14,7 +14,7 @@ require('./migrate').migrateOldDbFiles();
 
 const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleNaejeonNotifyModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload: buildNaejeonMessagePayload } = require('./handlers/매치/내전');
 const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipNotifyModal, handleMojipMemberAdd, handleMojipMemberRemove, buildMojipMessagePayload } = require('./handlers/매치/모집');
-const { armAutoEnd, AUTO_CLOSE_DELAY_MS, GENERAL_MESSAGE_DELETE_DELAY_MS, announceMatchCompletionXp, scheduleCancelledDelete, scheduleMessageDelete, deleteMentionMessage, armNotifyReminder, ADMIN_IDS, saveAll, enableSaveNow, loadRows, recoverCancelledEmbeds, ensureMatchRole } = require('./handlers/매치/공용');
+const { armAutoEnd, autoEndAt, AUTO_CLOSE_DELAY_MS, GENERAL_MESSAGE_DELETE_DELAY_MS, announceMatchCompletionXp, scheduleCancelledDelete, scheduleMessageDelete, deleteMentionMessage, armNotifyReminder, ADMIN_IDS, saveAll, enableSaveNow, loadRows, recoverCancelledEmbeds, ensureMatchRole } = require('./handlers/매치/공용');
 const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/매치/팀');
 const { handleRMatchSelect } = require('./handlers/매치/불러오기');
 const { handleWcButton, handleWcMessage } = require('./handlers/게임/끝말잇기');
@@ -183,7 +183,7 @@ async function restoreMatches(c) {
       const label = row.type === 'naejeon' ? '내전' : '모집';
       let deleted = false;
       if (match.closed && match.data?.autoClose) {
-        const remaining = match.closedAt ? AUTO_CLOSE_DELAY_MS - (Date.now() - match.closedAt) : 0;
+        const remaining = match.closedAt ? autoEndAt(match) - Date.now() : 0; // 마감·시작 시각 중 늦은 쪽 기준
         if (remaining <= 0) {
           try {
             await announceMatchCompletionXp(match);

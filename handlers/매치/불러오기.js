@@ -1,7 +1,7 @@
 const { buildPublicMessagePayload } = require('./내전');
 const { buildMojipMessagePayload } = require('./모집');
 const { notice } = require('../공통/카드');
-const { armAutoEnd, AUTO_CLOSE_DELAY_MS, armNotifyReminder, saveNow, findMatchRole } = require('./공용');
+const { armAutoEnd, autoEndAt, armNotifyReminder, saveNow, findMatchRole } = require('./공용');
 
 async function handleRMatchSelect(interaction) {
   const value = interaction.values[0];
@@ -30,7 +30,7 @@ async function handleRMatchSelect(interaction) {
   // 재게시로 옛 메시지 ID에 걸려있던 자동 종료 타이머가 무효화되므로, 새 ID로 남은 시간만큼 다시 건다.
   // (마감 상태가 아니면 애초에 걸려있던 타이머가 없으므로 아무것도 하지 않는다.)
   if (match.closed && match.data?.autoClose) {
-    const remaining = match.closedAt ? AUTO_CLOSE_DELAY_MS - (Date.now() - match.closedAt) : 0;
+    const remaining = match.closedAt ? autoEndAt(match) - Date.now() : 0;
     armAutoEnd(matches, newMsg.id, match, label, Math.max(0, remaining));
   }
   // 알림 예약 타이머도 옛 메시지 ID에 걸려있으므로 새 ID로 다시 건다.

@@ -323,17 +323,35 @@ const oneLine = (s) => s.replace(/\*\*/g, '').replace(/\n+/g, ' / ').replace(/-#
     check(got.length === 2, '20:50에 두 명에게 다시 발송');
   });
 
-  await scenario('14. 내일 일정인데 오늘 정원이 차서 마감 → 마감 6시간 뒤 자동 삭제', async () => {
+  const alive = (m) => { const yes = map().has(m.message.id) && !m.message.deleted; log(yes ? `🃏 카드 남아 있음` : `🗑️ 카드 자동 삭제됨`); return yes; };
+
+  await scenario('14. 내일 일정인데 오늘 정원이 차서 마감 → 시작 6시간 뒤에 자동 삭제', async () => {
     const m = await create({ datetime: '내일 저녁 8시', players: '2' });
     check(common.notifyWhenText(m.data).startsWith('11/14 19:50'), '내일 19:50 자동 알림');
     await join(m, 'u2'); await join(m, 'u3');
-    log(`🔒 정원이 차서 마감(자동 삭제 ${m.data.autoClose ? 'ON' : 'OFF'})`);
-    await advanceTo(at('19:50', 1)); dmsSince(0);
-    const alive = map().has(m.message.id);
-    log(alive ? '🃏 카드 남아 있음' : '🗑️ 마감 6시간 뒤(00:00) 카드가 자동 삭제됨');
-    // 알려진 문제(아직 안 고침): 자동 삭제가 마감 시각 기준 6시간이라 다음 날 일정이면 알림 전에 카드가 사라진다.
-    if (dms.length === 2) check(true, '다음 날 19:50 알림이 나감');
-    else console.log('      ⚠️ 알려진 문제: 마감 6시간 뒤 자동 삭제로 카드와 다음 날 알림이 함께 사라짐');
+    log(`🔒 정원이 차서 마감(자동 삭제 ${m.data.autoClose ? 'ON' : 'OFF'}) → 삭제 예정 ${common.formatNotifyTime(common.autoEndAt(m))}`);
+    await advanceTo(at('00:30', 1)); check(alive(m), '마감 6시간 뒤(자정)에도 카드가 남아 있음');
+    await advanceTo(at('19:50', 1)); const got = dmsSince(0);
+    check(got.length === 2, '다음 날 19:50 알림이 나감');
+    await advanceTo(at('01:59', 2)); check(alive(m), '시작(20:00) 6시간 뒤 직전까지 남아 있음');
+    await advanceTo(at('02:00', 2)); check(!alive(m), '시작 6시간 뒤(다음다음 날 02:00) 자동 삭제');
+  });
+
+  await scenario('15. 자동 삭제 시각: 지난 일시·못 읽는 일시·마감 중 일시 수정', async () => {
+    const a = await create({ datetime: common.defaultDatetimeText(NOW), players: '2', title: '바로 시작 내전' });
+    await join(a, 'u2'); await join(a, 'u3');
+    check(common.autoEndAt(a) === at('00:00', 1), `지금 시각 일시는 마감 기준 6시간 뒤(${kst(common.autoEndAt(a))})`);
+    NOW = at('18:00');
+    const b = await create({ datetime: '모이면 시작', players: '2', title: '못 읽는 일시 내전' });
+    await join(b, 'u2'); await join(b, 'u3');
+    check(common.autoEndAt(b) === at('00:00', 1), `못 읽는 일시도 마감 기준(${kst(common.autoEndAt(b))})`);
+    NOW = at('18:00');
+    const c = await create({ datetime: '21:00', players: '2', title: '마감 뒤 미루는 내전' });
+    await join(c, 'u2'); await join(c, 'u3');
+    check(common.autoEndAt(c) === at('03:00', 1), '오늘 21:00 일정은 시작 6시간 뒤(03:00)');
+    await edit(c, '내일 저녁 8시');
+    check(common.autoEndAt(c) === at('02:00', 2), '마감 중 내일로 미루면 삭제도 다음다음 날 02:00으로 밀림');
+    await advanceTo(at('03:30', 1)); check(alive(c), '원래 삭제 시각(03:00)이 지나도 남아 있음');
   });
 
   console.log(`\n알림 시뮬레이션 — 통과 ${pass} · 실패 ${fail}`);

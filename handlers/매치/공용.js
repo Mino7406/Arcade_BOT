@@ -480,12 +480,28 @@ async function sendMatchStartDm(match, label) {
   });
 }
 
-// 마감(closed)된 시점부터 delayMs(기본 AUTO_CLOSE_DELAY_MS) 후 자동으로 메시지를 삭제한다.
+// 마감된 카드가 자동 삭제되는 시각. 마감 시각과 일시(시작 시각) 중 늦은 쪽에서 AUTO_CLOSE_DELAY_MS 뒤 —
+// 내일 일정이 오늘 정원이 차서 마감돼도 시작하기 전에 카드(와 시작 알림)가 사라지지 않게.
+// 일시를 못 읽으면 마감 시각 기준. closedAt 이 없으면 null.
+function autoEndAt(match) {
+  if (!match?.closedAt) return null;
+  const startAt = match.data?.datetime ? parseDatetimeText(match.data.datetime, match.data.createdAt || match.closedAt) : null;
+  return Math.max(match.closedAt, startAt || 0) + AUTO_CLOSE_DELAY_MS;
+}
+
+// 마감(closed)된 시점부터 delayMs(기본: autoEndAt 까지 남은 시간) 후 자동으로 메시지를 삭제한다.
 // autoClose 옵션이 꺼져있으면 아무것도 하지 않는다. 봇 재시작 후 복원할 때는
 // 이미 지난 시간만큼 뺀 delayMs를 넘겨 원래 마감 시각 기준을 유지한다.
-function armAutoEnd(matchesMap, msgId, match, label, delayMs = AUTO_CLOSE_DELAY_MS) {
+function armAutoEnd(matchesMap, msgId, match, label, delayMs) {
   clearAutoEndTimer(match);
   if (!match.data?.autoClose) return;
+  if (delayMs === undefined) delayMs = (autoEndAt(match) ?? Date.now() + AUTO_CLOSE_DELAY_MS) - Date.now();
+  delayMs = Math.max(0, delayMs);
+  // setTimeout 한계(약 24.8일)를 넘으면 한계까지 기다렸다가 남은 시간으로 다시 건다(바로 실행돼 버리지 않게).
+  if (delayMs > MAX_TIMEOUT_DELAY_MS) {
+    match._autoEndTimer = setTimeout(() => armAutoEnd(matchesMap, msgId, match, label), MAX_TIMEOUT_DELAY_MS);
+    return;
+  }
   match._autoEndTimer = setTimeout(async () => {
     match._autoEndTimer = null;
     const current = matchesMap.get(msgId);
@@ -628,7 +644,7 @@ async function notifyOrganizerOnClose(match, label) {
   }
 }
 
-// 마감(🔒 마감됨) 상태로 전환하면서 자동 삭제 타이머를 건다(AUTO_CLOSE_DELAY_MS 후).
+// 마감(🔒 마감됨) 상태로 전환하면서 자동 삭제 타이머를 건다(마감·시작 시각 중 늦은 쪽 + AUTO_CLOSE_DELAY_MS, autoEndAt).
 // notify=false를 넘기면 주최자 DM을 보내지 않는다 — 주최자 본인이 직접
 // "마감하기" 버튼을 눌러 마감한 경우(이미 알고 있으므로 불필요)에 사용.
 function markClosed(matchesMap, msgId, match, label, notify = true) {
@@ -668,7 +684,7 @@ async function toggleAutoCloseWhileClosed(matchesMap, msgId, match, label, enabl
     clearAutoEndTimer(match);
     return;
   }
-  const remaining = match.closedAt ? AUTO_CLOSE_DELAY_MS - (Date.now() - match.closedAt) : AUTO_CLOSE_DELAY_MS;
+  const remaining = match.closedAt ? autoEndAt(match) - Date.now() : AUTO_CLOSE_DELAY_MS;
   if (remaining <= 0) {
     clearAutoEndTimer(match);
     try {
@@ -1185,6 +1201,7 @@ function loadRows() {
 module.exports = {
   ADMIN_IDS,
   AUTO_CLOSE_DELAY_MS,
+  autoEndAt,
   CANCELLED_DELETE_DELAY_MS,
   GENERAL_MESSAGE_DELETE_DELAY_MS,
   ROLE_NAMES,
