@@ -8,7 +8,7 @@ const { emojiUrl } = require('./카드');
 const { logSystem, logError } = require('./로그');
 
 // 원래 게임 이모지 ID → 여백 넣은 그림 파일 이름. 그림 크기를 바꾸면 PREFIX 를 바꿔 새로 등록되게 한다.
-const PREFIX = 't65_';
+const PREFIX = 't65c_'; // 시각 중심 보정판(이전 t65_ 앱 이모지와 구분)
 const SOURCES = {
   '1510933684750913626': 'lol',
   '1510933698349109268': 'valorant',
