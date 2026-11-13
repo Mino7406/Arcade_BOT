@@ -337,6 +337,8 @@ async function onReady(c) {
   console.log(`✅ 봇 로그인 완료: ${c.user.tag}`);
   setLogClient(c); // 로그에 유저 이름을 적을 때 캐시에서 찾기 위함
   c.startedAt = new Date();
+  // 카드 게임 썸네일(여백 넣어 65%)용 앱 이모지 확인·등록 — 복원하며 카드를 다시 그리기 전에 준비한다.
+  await require('./handlers/공통/썸네일').ensureThumbEmojis(c).catch(err => console.error('썸네일 이모지 준비 실패(원래 그림으로 표시):', err));
   await restoreMatches(c); // ⬅️ 추가: 저장된 내전/모집 복원
   enableSaveNow(); // 복원이 끝났으므로 이제부터는 게시/취소 직후 바로 저장해도 안전하다
   await recoverCancelledEmbeds(c, new Set([...allowedChannels, MATCH_BONUS_CHANNEL_ID])); // 저장 파일에서 빠진 취소 임베드 삭제 예약 복구

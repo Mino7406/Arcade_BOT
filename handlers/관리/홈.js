@@ -177,7 +177,7 @@ async function handleAdminButton(interaction) {
   if (sub === 'refresh') {
     await interaction.deferUpdate();
     const { refreshPostedMessages } = require('./최신화');
-    const result = await refreshPostedMessages(interaction.client, { includeCobblemon: true }).catch(err => ({ error: err?.message ?? String(err) }));
+    const result = await refreshPostedMessages(interaction.client, { includeCobblemon: true, includeRecent: true }).catch(err => ({ error: err?.message ?? String(err) }));
     logAction(interaction, '관리', `게시물 최신화 — ${result.summary ?? result.error}`);
     await interaction.editReply(buildAdminHome({ guildId, note: result.error ? `⚠️ **최신화 중 오류:** ${result.error}` : `🔄 **화면을 새로고치고 게시물을 최신 디자인으로 갱신했어요.**\n-# ${result.summary}` }));
     return;

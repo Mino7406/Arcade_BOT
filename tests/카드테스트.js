@@ -320,6 +320,57 @@ function rowsIn(list, acc = []) {
     assert.strictEqual(dm.isDmEnabled('u-test'), true);
   });
 
+  await checkAsync('게임 썸네일: 여백 넣은 앱 이모지를 없을 때만 등록하고, 준비 전에는 원래 그림', async () => {
+    const th = require('../handlers/공통/썸네일');
+    const lolId = '1510933684750913626';
+    assert.ok(th.thumbUrlFor(lolId).includes(lolId), '준비 전에는 원래 이모지 그림');
+    const created = [];
+    const existing = [{ id: 'E_VAL', name: `${th.PREFIX}valorant` }];
+    const client = { application: { emojis: {
+      fetch: async () => ({ find: (fn) => existing.find(fn) }),
+      create: async ({ attachment, name }) => { assert.ok(require('fs').existsSync(attachment), `그림 파일 ${attachment}`); created.push(name); return { id: `N_${name}`, name }; },
+    } } };
+    await th.ensureThumbEmojis(client);
+    assert.strictEqual(created.length, Object.keys(th.SOURCES).length - 1, '이미 있는 것(발로란트)은 다시 등록하지 않음');
+    assert.ok(th.thumbUrlFor(lolId).includes(`N_${th.PREFIX}lol`), '준비되면 여백 넣은 그림');
+    assert.ok(th.thumbUrlFor('1510933698349109268').includes('E_VAL'));
+    assert.strictEqual(th.upgradeThumbUrl(`https://cdn.discordapp.com/emojis/${lolId}.png?size=128`), th.thumbUrlFor(lolId), '옛 썸네일 주소 → 새 주소');
+    assert.strictEqual(th.upgradeThumbUrl('https://cdn.discordapp.com/emojis/999.png'), null, '모르는 그림은 그대로');
+  });
+
+  await checkAsync('/관리 새로고침: 채널마다 최근 10개 봇 카드의 배치·썸네일을 맞추고 바뀔 게 없으면 안 고침', async () => {
+    const { relayoutCardJson, V2_FLAG } = require('../handlers/공통/카드');
+    const { refreshRecentBotCards } = require('../handlers/관리/최신화');
+    const lolUrl = 'https://cdn.discordapp.com/emojis/1510933684750913626.png?size=128';
+    const oldCard = [{ type: 17, accent_color: 1, components: [
+      { type: 10, content: '<@&1>' },
+      { type: 9, components: [{ type: 10, content: '## 롤 내전' }, { type: 10, content: '-# 내전 · 🔒 마감됨' }], accessory: { type: 11, media: { url: lolUrl } } },
+      { type: 14, divider: true, spacing: 1 }, { type: 10, content: '본문' },
+    ] }];
+    const merged = relayoutCardJson(oldCard);
+    assert.ok(merged && merged[0].components[0].type === 9 && merged[0].components[0].components[0].content === '<@&1>', '멘션이 썸네일 섹션 첫 줄로');
+    assert.strictEqual(merged[0].components.length, 3, '나머지 본문은 그대로');
+    assert.strictEqual(relayoutCardJson(merged), null, '이미 새 배치면 null');
+    assert.strictEqual(relayoutCardJson([{ type: 17, components: [{ type: 10, content: '-# ⭕ 정답' }, { type: 10, content: '## 사과' }] }]), null, '썸네일 없는 카드는 그대로');
+    const swapped = relayoutCardJson(merged, { mapThumbUrl: (u) => (u === lolUrl ? 'NEW' : null) });
+    assert.strictEqual(swapped[0].components[0].accessory.media.url, 'NEW', '썸네일 주소 교체');
+
+    const edits = [];
+    const fetchLimits = [];
+    const mk = (id, author, comps, flags = V2_FLAG) => ({ id, channelId: 'c', author: { id: author }, flags, components: comps, edit: async (p) => { edits.push({ id, p }); } });
+    // b: 배치도 썸네일(위 테스트에서 준비된 여백 그림)도 이미 최신인 카드
+    const upToDate = relayoutCardJson(merged, { mapThumbUrl: require('../handlers/공통/썸네일').upgradeThumbUrl }) || merged;
+    const msgs = [mk('a', 'bot', oldCard), mk('b', 'bot', upToDate), mk('c', 'user', oldCard), mk('d', 'bot', oldCard, 0)];
+    const channel = { isTextBased: () => true, messages: { fetch: async ({ limit }) => { fetchLimits.push(limit); return new Map(msgs.map(m => [m.id, m])); } } };
+    const voice = { isTextBased: () => false };
+    const client = { user: { id: 'bot' }, guilds: { cache: new Map([['g', { channels: { fetch: async () => new Map([['c1', channel], ['v1', voice]]) } }]]) } };
+    const r = await refreshRecentBotCards(client);
+    assert.deepStrictEqual(fetchLimits, [10], '글 채널마다 최근 10개');
+    assert.strictEqual(r.scanned, 2, '봇이 올린 v2 카드만 본다(유저 글·옛 임베드 제외)');
+    assert.deepStrictEqual(edits.map(e => e.id), ['a'], '배치가 옛날인 카드만 고친다');
+    assert.ok(edits[0].p.flags === V2_FLAG && !('attachments' in edits[0].p), 'v2 플래그 유지, 첨부는 건드리지 않음');
+  });
+
   console.log(`\n카드 테스트 — 통과 ${pass} · 실패 ${fail}`);
   process.exit(fail ? 1 : 0);
 })().catch(err => { console.error(err); process.exit(1); });

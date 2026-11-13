@@ -19,6 +19,7 @@ const { logSystem, logError } = require('../공통/로그');
 const { writeJsonIfChanged } = require('../공통/저장');
 const { isDmEnabled } = require('./DM설정');
 const { card, payload, text, messageText, footerSide, COLORS, clipLines, emojiUrl, customEmojiId } = require('../공통/카드');
+const { thumbUrlFor } = require('../공통/썸네일');
 
 // 내전(naejeon)/모집(mojip) 두 시스템이 공유하는 게임 → 역할 이름 매핑.
 // (역할 멘션 대상 채널이 있으면 해당 역할을 핑한다.)
@@ -725,9 +726,9 @@ function gameHeader(game, gameInfo, title) {
 }
 
 // 게임 이모지가 커스텀 이모지면 카드 오른쪽 위 작은 그림으로 쓴다(직접 입력은 그림 없음).
+// 둘레에 여백을 넣어 로고를 65%로 줄인 앱 이모지가 준비돼 있으면 그 그림(공통/썸네일.js).
 function gameThumb(gameInfo) {
-  const id = customEmojiId(gameInfo?.emoji);
-  return id ? emojiUrl(id) : undefined;
+  return thumbUrlFor(customEmojiId(gameInfo?.emoji));
 }
 
 function numberedBlock(users) {

@@ -202,6 +202,41 @@ function card(o = {}) {
 }
 
 /**
+ * 이미 올라가 있는 카드(컴포넌트 JSON)를 지금 card() 의 배치 규칙에 맞게 고친다. 상태 데이터가 없어 다시 만들 수
+ * 없는 카드(지난 게임 결과·팀 배정 카드 등)를 /관리 새로고침에서 최신 모양으로 바꿀 때 쓴다. 글자·버튼은 그대로 두고
+ * 배치만 바꾼다. 바꿀 게 없으면 null.
+ *  - 맨 위 글자(역할 멘션 등)가 썸네일 섹션 바깥 위에 따로 있으면 섹션 안 첫 줄로 넣는다(card() 의 topInHead).
+ *  - mapThumbUrl(url) 이 새 주소를 돌려주면 썸네일 그림 주소를 바꾼다(여백 넣은 게임 썸네일 등).
+ */
+function relayoutCardJson(components, { mapThumbUrl } = {}) {
+  let changed = false;
+  const out = (components || []).map((c) => {
+    const json = c?.toJSON ? c.toJSON() : c;
+    if (json?.type !== 17 || !Array.isArray(json.components)) return json;
+    let list = json.components;
+    const [first, second, ...rest] = list;
+    const canMerge = first?.type === 10 && second?.type === 9 && second.accessory?.type === 11
+      && Array.isArray(second.components) && second.components.length < 3
+      && !/^#{1,3}\s/.test(first.content || ''); // 맨 위 글자가 제목이면 건드리지 않음
+    if (canMerge) {
+      changed = true;
+      list = [{ ...second, components: [first, ...second.components] }, ...rest];
+    }
+    if (mapThumbUrl) {
+      list = list.map((x) => {
+        if (x?.type !== 9 || x.accessory?.type !== 11) return x;
+        const next = mapThumbUrl(x.accessory.media?.url);
+        if (!next || next === x.accessory.media?.url) return x;
+        changed = true;
+        return { ...x, accessory: { ...x.accessory, media: { url: next } } };
+      });
+    }
+    return list === json.components ? json : { ...json, components: list };
+  });
+  return changed ? out : null;
+}
+
+/**
  * 버튼 줄(ActionRowBuilder 목록)에서 customId 가 re 에 맞는 버튼 하나를 뽑아낸다.
  * 뽑고 남은 버튼들로 줄을 다시 만들어 돌려준다(빈 줄은 없앰). 줄 오른쪽에 따로 둘 버튼을 고를 때 쓴다.
  * @returns {{ button: ButtonBuilder|null, rows: ActionRowBuilder[] }}
@@ -376,6 +411,7 @@ module.exports = {
   text,
   toneOf,
   card,
+  relayoutCardJson,
   payload,
   menu,
   asEphemeral,

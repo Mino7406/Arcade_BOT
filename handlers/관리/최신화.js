@@ -9,7 +9,8 @@ const path = require('path');
 const { GUILD_ID } = require('../../config');
 const { writeJsonIfChanged } = require('../공통/저장');
 const { logSystem, logError } = require('../공통/로그');
-const { hasHeaderLine } = require('../공통/카드');
+const { hasHeaderLine, relayoutCardJson, V2_FLAG } = require('../공통/카드');
+const { upgradeThumbUrl } = require('../공통/썸네일');
 
 const PANELS_PATH = path.join(__dirname, '..', '..', 'DB', 'panels.json');
 // 게임모집 안내 패널의 제목 줄(카드는 `## 제목`, 예전 카드는 `# 제목`, 옛 임베드는 title)
@@ -108,14 +109,47 @@ async function refreshMatches(client) {
   return done;
 }
 
+// 채널마다 최근 메시지 perChannel 개 안에서 봇이 올린 카드를 지금 배치 규칙으로 고친다(relayoutCardJson).
+// 상태가 남아 있는 게시물(진행 중 내전/모집·패널)은 데이터로 다시 그리고, 여기서는 그 밖의 카드
+// (지난 결과·팀 배정·취소된 카드 등)를 글자·버튼은 그대로 두고 배치만 맞춘다. 바뀔 게 없으면 수정하지 않는다.
+// 채널당 메시지 조회 1번이라 호스팅 부담이 작다.
+async function refreshRecentBotCards(client, { perChannel = 10 } = {}) {
+  let done = 0, scanned = 0;
+  for (const guild of client.guilds?.cache?.values?.() ?? []) {
+    const channels = await guild.channels.fetch().catch(() => null);
+    if (!channels) continue;
+    for (const channel of channels.values()) {
+      if (!channel?.isTextBased?.() || !channel.messages) continue;
+      const messages = await channel.messages.fetch({ limit: perChannel }).catch(() => null);
+      if (!messages) continue; // 볼 권한이 없는 채널 등
+      for (const m of messages.values()) {
+        if (m.author?.id !== client.user.id) continue;
+        const isV2 = typeof m.flags?.has === 'function' ? m.flags.has(V2_FLAG) : !!(Number(m.flags) & V2_FLAG);
+        if (!isV2) continue; // 옛 임베드 메시지는 배치를 알 수 없어 그대로 둔다
+        scanned++;
+        const next = relayoutCardJson(m.components, { mapThumbUrl: upgradeThumbUrl }); // 배치 + 여백 넣은 게임 썸네일
+        if (!next) continue;
+        // 첨부(그림)는 그대로 두고(attachments 생략) 배치만 고친다. 수정은 알림이 가지 않지만 멘션 해석도 막아 둔다.
+        const ok = await m.edit({ components: next, flags: V2_FLAG, allowedMentions: { parse: [] } }).then(() => true).catch(err => {
+          logError('처리 오류', `최근 카드 최신화 실패 (${m.channelId}/${m.id})`, err);
+          return false;
+        });
+        if (ok) done++;
+      }
+    }
+  }
+  return { done, scanned };
+}
+
 /**
  * 올라가 있는 메시지를 한꺼번에 최신화한다.
  * @param {object} [o]
  * @param {boolean} [o.includeCobblemon]  코블몬 패널도 다시 그릴지(봇 시작 때는 코블몬 쪽이 따로 하므로 false)
  * @param {boolean} [o.includeMatches]    진행 중 내전/모집도 다시 그릴지(봇 시작 때는 복원 과정에서 이미 함)
+ * @param {boolean} [o.includeRecent]     채널마다 최근 10개 봇 카드의 배치도 맞출지(/관리 새로고침)
  * @returns {{ summary: string, counts: object }}
  */
-async function refreshPostedMessages(client, { includeCobblemon = false, includeMatches = true } = {}) {
+async function refreshPostedMessages(client, { includeCobblemon = false, includeMatches = true, includeRecent = false } = {}) {
   const counts = {};
   const notes = [];
 
@@ -136,6 +170,12 @@ async function refreshPostedMessages(client, { includeCobblemon = false, include
     counts.cobblemon = await refreshCobblemonPanels(client).catch(err => { notes.push(`코블몬 패널 오류: ${err?.message ?? err}`); return 0; });
   }
   if (includeMatches) counts.matches = await refreshMatches(client).catch(err => { notes.push(`내전/모집 오류: ${err?.message ?? err}`); return 0; });
+  // 데이터로 다시 그린 뒤에 훑어야 같은 메시지를 두 번 고치지 않는다(이미 새 배치면 건너뜀).
+  if (includeRecent) {
+    const r = await refreshRecentBotCards(client).catch(err => { notes.push(`최근 카드 오류: ${err?.message ?? err}`); return { done: 0, scanned: 0 }; });
+    counts.recent = r.done;
+    counts.recentScanned = r.scanned;
+  }
 
   const parts = [
     counts.recruit != null && `안내 패널 ${counts.recruit}개`,
@@ -143,9 +183,10 @@ async function refreshPostedMessages(client, { includeCobblemon = false, include
     counts.roster != null && `명단 ${counts.roster}개`,
     counts.cobblemon != null && `코블몬 패널 ${counts.cobblemon}개`,
     counts.matches != null && `내전/모집 ${counts.matches}건`,
+    counts.recent != null && `최근 카드 ${counts.recentScanned}개 중 ${counts.recent}개 배치 수정`,
   ].filter(Boolean);
   const summary = parts.join(' · ') + (notes.length ? ` — ${notes.join(' / ')}` : '');
   return { summary, counts };
 }
 
-module.exports = { refreshPostedMessages, rememberRecruitPanel, isRecruitPanelMessage, RECRUIT_TITLE };
+module.exports = { refreshPostedMessages, refreshRecentBotCards, rememberRecruitPanel, isRecruitPanelMessage, RECRUIT_TITLE };
