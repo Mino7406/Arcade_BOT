@@ -997,7 +997,7 @@ let ok4;
     assert(lv.getXp('gMain', 'p1') === before.p1 - amt && lv.getXp('gMain', 'p2') === Math.max(0, before.p2 - amt), `전멸하면 서버 모든 유저 -${amt} XP(0 밑으로는 안 내려감)`);
     { // 안내의 인원·합계는 실제로 깎인 값이어야 한다(0에서 잘린 만큼은 합계에서 빠짐)
       const note = chNotes.find(c => c.includes('잃어버렸습니다')) ?? '';
-      const m = note.match(/\n\*\*합계:\*\* ([\d,]+)명 · (-[\d,]+) XP\n\*\*중단 시간:\*\* \d\d:\d\d–\d\d:\d\d \(.+\)$/);
+      const m = note.match(/\n\*\*합계:\*\* ([\d,]+)명 · (-[\d,]+) XP\n\*\*중단시간 :\*\*　\d\d:\d\d–\d\d:\d\d \(.+\)$/);
       const num = s => Number(s.replace(/,/g, ''));
       const wantTotal = allBefore.reduce((s, xp) => s + Math.min(xp, amt), 0);
       console.log('--- 전멸 채널 안내 ---\n' + note);

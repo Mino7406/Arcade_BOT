@@ -400,7 +400,7 @@ function buildEndNoticePayload({ kind, xp, details = [] }) {
     const affected = /^(\d[\d,]*)명 · 합계 : (-[\d,]+) XP$/.exec(detail);
     if (affected) return `**합계:** ${affected[1]}명 · ${affected[2]} XP`;
     const downtime = /^중단 시간 : (\d\d:\d\d)–(\d\d:\d\d) \((.+)\)$/.exec(detail);
-    if (downtime) return `**중단 시간:** ${downtime[1]}–${downtime[2]} (${downtime[3]})`;
+    if (downtime) return `**중단시간 :**　${downtime[1]}–${downtime[2]} (${downtime[3]})`;
     return detail;
   });
   return cardPayload(card({
