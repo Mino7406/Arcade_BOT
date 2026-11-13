@@ -135,7 +135,7 @@ let ok4;
   assert(end.includes('RAID CLEAR') ? sent.some(p => noteText(p).includes('XP 시스템 복구 완료')) : sent.some(p => noteText(p).includes('XP**를 잃어버렸습니다')), '종료 안내 메시지 전송(클리어면 복구 완료, 지면 XP 손실)');
   { const notice = sent.find(p => noteText(p).includes('XP 시스템 복구 완료') || noteText(p).includes('잃어버렸습니다'));
     assert(notice?.reply?.messageReference === message.id && notice.reply.failIfNotExists === false && notice.allowedMentions?.repliedUser === false, '종료 안내는 레이드 메시지에 답장(따로 보이게, 알림 없음)');
-    assert(/\n\*\*중단 시간\*\*　\d\d:\d\d–\d\d:\d\d \(.+\)$/.test(notice ? noteText(notice) : ''), '종료 안내에 시각 범위 뒤 괄호로 중단 시간 표시'); }
+    assert(/\n\*\*중단 시간 :\*\*　\d\d:\d\d–\d\d:\d\d \(.+\)$/.test(notice ? noteText(notice) : ''), '종료 안내에 시각 범위 뒤 괄호로 중단 시간 표시'); }
   if (end.includes('RAID CLEAR')) {
     assert(lv.getXp('gMain', '1') >= 300 && lv.getXp('gMain', '2') >= 300, '토벌 보상 XP 지급');
   }
@@ -997,7 +997,7 @@ let ok4;
     assert(lv.getXp('gMain', 'p1') === before.p1 - amt && lv.getXp('gMain', 'p2') === Math.max(0, before.p2 - amt), `전멸하면 서버 모든 유저 -${amt} XP(0 밑으로는 안 내려감)`);
     { // 안내의 인원·합계는 실제로 깎인 값이어야 한다(0에서 잘린 만큼은 합계에서 빠짐)
       const note = chNotes.find(c => c.includes('잃어버렸습니다')) ?? '';
-      const m = note.match(/\n\*\*합계 :\*\*　([\d,]+)명 · (-[\d,]+) XP\n\*\*중단시간 :\*\*　\d\d:\d\d–\d\d:\d\d \(.+\)$/);
+      const m = note.match(/\n\*\*합계 :\*\*　　　([\d,]+)명　│　(-[\d,]+) XP\n\*\*중단 시간 :\*\*　\d\d:\d\d–\d\d:\d\d \(.+\)$/);
       const num = s => Number(s.replace(/,/g, ''));
       const wantTotal = allBefore.reduce((s, xp) => s + Math.min(xp, amt), 0);
       console.log('--- 전멸 채널 안내 ---\n' + note);
