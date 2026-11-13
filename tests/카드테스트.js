@@ -195,6 +195,11 @@ function rowsIn(list, acc = []) {
     const later = c.deriveNotifyFromDatetime('내일 저녁 8시');
     assert.ok(later && later.notifyOnClose === false, '미래 시각은 그 시각에 발송');
     assert.notStrictEqual(c.notifyWhenText({ notifyAt: later.notifyAt, notify12h: false, notifyOnClose: false }), '자동 발송');
+    // 카드 표시: 안 고친 지금 시각은 끝에 " ~"(그때부터 열려 있음), 직접 적은 미래 시각·createdAt 없는 옛 데이터는 그대로
+    assert.strictEqual(c.datetimeDisplay({ datetime: stamp, createdAt: created }), `${stamp} ~`);
+    assert.strictEqual(c.datetimeDisplay({ datetime: '내일 저녁 8시', createdAt: Date.now() }), '내일 저녁 8시');
+    assert.strictEqual(c.datetimeDisplay({ datetime: stamp }), stamp);
+    assert.strictEqual(c.datetimeDisplay({ datetime: '아무 글자', createdAt: created }), '아무 글자');
   });
 
   check('일시 글자 해석: 저녁·밤·내일은 읽고, 아침/저녁이 애매한 "8시"는 안 읽는다', () => {

@@ -624,11 +624,21 @@ function numberedBlock(users) {
   return `\`\`\`\n${clipLines(lines, 900)}\n\`\`\``;
 }
 
+// 카드에 보여 줄 일시. 모달에 미리 채운 지금 시각을 그대로 뒀거나(= 모이는 대로 바로 시작) 적은 때 이미 지난
+// 시각이면 끝에 " ~"를 붙여 "그때부터 열려 있음"으로 보이게 한다 — 몇 시간 뒤에 봐도 지난 일정처럼 보이지 않게.
+// 판단은 deriveNotifyFromDatetime 의 notifyOnClose 와 같은 기준(적은 때 + 2분 이내). createdAt 이 없으면 그대로.
+function datetimeDisplay(data) {
+  const { datetime, createdAt } = data;
+  if (!createdAt) return datetime;
+  const at = parseDatetimeText(datetime, createdAt);
+  return at !== null && at <= createdAt + 2 * 60 * 1000 ? `${datetime} ~` : datetime;
+}
+
 function matchInfoBlock(data) {
-  const { datetime, organizer, gameInfo } = data;
+  const { organizer, gameInfo } = data;
   const lines = [
     `🎮 **게임**　${gameInfo.name}`,
-    `📅 **일시**　${datetime}`,
+    `📅 **일시**　${datetimeDisplay(data)}`,
     `👑 **주최자**　**\`${organizer.displayName}\`**`,
   ];
   return lines.join('\n');
@@ -1094,6 +1104,7 @@ module.exports = {
   announceMatchCompletionXp,
   parseNotifyTime,
   defaultDatetimeText,
+  datetimeDisplay,
   parseDatetimeText,
   deriveNotifyFromDatetime,
   notifyWhenText,
