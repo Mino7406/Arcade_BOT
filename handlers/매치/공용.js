@@ -208,14 +208,16 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 // 일시 글자 → epoch ms(KST). 못 읽거나 AM/PM 이 애매하면 null("8시"만 적으면 아침인지 저녁인지 알 수 없으므로 읽지 않는다).
 // 연도가 없으므로 올해로 보되, 날짜를 적었는데 3시간 넘게 지났으면 내년으로 본다(모달을 연 직후 "지금 시각"이 몇 분
-// 지나도 올해로 유지되게). 날짜 없이 시간대 말만 있으면(저녁 8시) 오늘, 이미 지났으면 내일로 본다.
+// 지나도 올해로 유지되게). 날짜 없이 시간대 말만 있거나(저녁 8시) 24시간제 시각만 있으면(20:00 · 20시) 오늘,
+// 3시간 넘게 지났으면 내일로 본다.
 function parseDatetimeText(input, now = Date.now()) {
   const m = DATETIME_REGEX.exec((input || '').trim());
   if (!m) return null;
   const hasDate = !!m[1] || !!m[3];
   const word = m[4];
-  if (!hasDate && !word) return null;
   let hour = Number(m[5]);
+  // 날짜도 시간대 말도 없으면 24시간제로 확실히 읽히는 것(20:00 · 08:30 · 13시 이상)만 받는다. "8시"는 아침/저녁이 애매해 안 읽는다.
+  if (!hasDate && !word && m[6] !== ':' && hour <= 12) return null;
   if (m[6] === ':' && m[7] === undefined) return null;
   const minute = m[8] ? 30 : Number(m[7] || 0);
   if (minute > 59) return null;

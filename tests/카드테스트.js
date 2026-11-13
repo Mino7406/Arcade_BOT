@@ -210,7 +210,17 @@ function rowsIn(list, acc = []) {
     assert.strictEqual(hm('저녁 8시 반'), '20:30');
     assert.strictEqual(hm('내일 오전 9시 30분'), '09:30');
     assert.strictEqual(hm('11/13 20시'), '20:00');
-    for (const t of ['내일 8시', '오늘 8시', '모이면', '11월 13일 8시', '2/30 20:00']) assert.strictEqual(c.parseDatetimeText(t), null, t);
+    for (const t of ['내일 8시', '오늘 8시', '모이면', '11월 13일 8시', '2/30 20:00', '8시', '12시', '20:']) assert.strictEqual(c.parseDatetimeText(t), null, t);
+    // 날짜 없이 24시간제 시각만: 오늘 그 시각, 3시간 넘게 지났으면 내일
+    const noon = Date.UTC(2026, 10, 13, 12, 0) - 9 * 3600e3; // KST 11/13 12:00
+    const at = t => c.formatNotifyTime(c.parseDatetimeText(t, noon));
+    assert.strictEqual(at('20:00'), '11/13 20:00');
+    assert.strictEqual(at('20시'), '11/13 20:00');
+    assert.strictEqual(at('13:30'), '11/13 13:30');
+    assert.strictEqual(at('8:00'), '11/14 08:00', '3시간 넘게 지난 시각은 내일');
+    assert.strictEqual(at('11:00'), '11/13 11:00', '조금 지난 시각은 오늘(마감 때 바로 발송)');
+    const d = { datetime: '20:00', createdAt: noon, notifyAuto: true, notifyAutoSrc: '11/13 12:00' };
+    assert.strictEqual(c.syncAutoNotify(d), 'changed', '수정창에 시각만 적어도 알림이 따라감');
   });
   check('알림 발송 규칙: 직접 정한 시각은 마감과 무관하게, 자동 발송은 마감 때', () => {
     const c = require('../handlers/매치/공용');
