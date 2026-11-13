@@ -200,7 +200,9 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await mojip.handleMojipButton(mkInteraction({ user: 'u9', customId: 'mojip:join', message: m.message }));
     assert(has(), '참가 후 카드를 고쳐도 역할 멘션 줄 유지');
     // 멘션 줄은 카드(컨테이너) 안 맨 위 글자
-    const top = m.message.components.find(c => c.type === 17)?.components?.[0];
+    // (게임 썸네일이 있으면 썸네일과 같은 섹션의 첫 글자로 들어간다)
+    const first = m.message.components.find(c => c.type === 17)?.components?.[0];
+    const top = first?.type === 9 ? first.components?.[0] : first;
     assert(top?.type === 10 && top.content.includes('<@&ROLE1>'), '역할 멘션은 카드 안 맨 위 글자');
 
     // 불러오기: 새 메시지로 다시 올리면서 역할 멘션도 다시 한 번(allowedMentions 에 역할)

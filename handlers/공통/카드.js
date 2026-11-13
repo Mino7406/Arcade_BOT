@@ -122,10 +122,13 @@ function card(o = {}) {
   const accent = typeof o.color === 'string' ? COLORS[o.color] : o.color;
   if (accent !== undefined && accent !== null) container.setAccentColor(accent);
 
-  // 카드 맨 위 글자(역할 멘션 등). 제목 위에 따로 한 줄로 놓는다.
-  if (o.top) container.addTextDisplayComponents(text(o.top));
+  // 카드 맨 위 글자(역할 멘션 등). 제목 위에 한 줄로 놓는다. 오른쪽 썸네일이 있으면 같은 칸(섹션)에 넣어
+  // 맨 위 글자·제목·상태 3줄 옆에 썸네일이 맞춰 붙게 한다(따로 두면 제목 2줄보다 썸네일이 커서 아래로 처져 보임).
+  const topInHead = !!(o.top && o.thumb && (o.header || o.sub));
+  if (o.top && !topInHead) container.addTextDisplayComponents(text(o.top));
 
   const head = [];
+  if (topInHead) head.push(text(o.top));
   if (o.header) head.push(text(`## ${o.header}`));
   const subText = Array.isArray(o.sub) ? o.sub.filter(Boolean).join(' · ') : o.sub;
   if (subText) head.push(text(`-# ${subText}`));
