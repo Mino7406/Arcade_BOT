@@ -788,7 +788,7 @@ function isNotifyPending(match) {
 // 정원이 차면 자동으로 마감되므로 상태는 둘뿐이다: 마감됨 / 모집 중. (마감을 해제해 정원이 찬 채 열려 있으면 모집 중에 표시만 덧붙인다)
 function matchStatusText({ closed, isFull, notifyOn = false }) {
   const base = closed ? '🔒 마감됨' : isFull ? '🟢 모집 중 (정원 가득)' : '🟢 모집 중';
-  return notifyOn ? `${base} 🔔` : base;
+  return notifyOn ? `${base} · 🔔` : base; // 상태와 · 로 구분한 한 칸
 }
 
 function buildMatchCard({ label, data, participants, closed = false, teams = null, rows = [], roleMention = '', notifyOn = false }) {

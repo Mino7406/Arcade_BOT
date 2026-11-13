@@ -133,7 +133,7 @@ const oneLine = (s) => s.replace(/\*\*/g, '').replace(/\n+/g, ' / ').replace(/-#
     await naejeon.handleNaejeonButton(it);
     log({ match_close: '🔒 주최자가 마감', match_reopen: '🔓 마감 해제', match_close_confirm: '✅ 마감 확정', match_cancel_confirm: '🗑️ 내전 취소' }[action] ?? action);
   }
-  const status = (m) => (m.message.text.match(/🟢 모집 중(?: \(정원 가득\))?(?: 🔔)?|🔒 마감됨(?: 🔔)?/) || ['?'])[0];
+  const status = (m) => (m.message.text.match(/🟢 모집 중(?: \(정원 가득\))?(?: · 🔔)?|🔒 마감됨(?: · 🔔)?/) || ['?'])[0];
   const showCard = (m) => log(`🃏 카드 상태: ${status(m)}`);
   function dmsSince(i) {
     const got = dms.slice(i);
@@ -160,7 +160,7 @@ const oneLine = (s) => s.replace(/\*\*/g, '').replace(/\n+/g, ' / ').replace(/-#
     const m = await create({ datetime: '20:00' });
     check(common.notifyWhenText(m.data) === '11/13 19:50 (자동)', '알림이 일시 10분 전(19:50, 자동)');
     for (const u of ['u2', 'u3', 'u4']) await join(m, u);
-    showCard(m); check(status(m) === '🟢 모집 중 🔔', '발송 전 카드에 🔔');
+    showCard(m); check(status(m) === '🟢 모집 중 · 🔔', '발송 전 카드에 🔔');
     await advanceTo(at('19:49')); let n = dms.length; dmsSince(0); check(n === 0, '19:49까지는 안 감');
     await advanceTo(at('19:50')); const got = dmsSince(n);
     check(got.length === 2 && !got.some(d => d.to === 'org' || d.to === 'u4'), '참가자에게만(주최자·DM 끈 사람 제외)');
@@ -177,7 +177,7 @@ const oneLine = (s) => s.replace(/\*\*/g, '').replace(/\n+/g, ' / ').replace(/-#
     check(common.notifyWhenText(m.data) === '마감 시 발송', '"마감 시 발송"으로 표시');
     await join(m, 'u2');
     await advanceTo(at('19:00')); dmsSince(0); check(dms.length === 0, '마감 전에는 1시간이 지나도 안 감');
-    showCard(m); check(status(m) === '🟢 모집 중 🔔', '기다리는 동안 🔔 유지');
+    showCard(m); check(status(m) === '🟢 모집 중 · 🔔', '기다리는 동안 🔔 유지');
     await join(m, 'u3'); await join(m, 'u5');
     await flush(); const got = dmsSince(0);
     check(m.closed && got.length === 3, '정원이 차서 자동 마감되는 순간 3명에게 발송');
@@ -202,7 +202,7 @@ const oneLine = (s) => s.replace(/\*\*/g, '').replace(/\n+/g, ' / ').replace(/-#
     await advanceTo(at('19:52'));
     const said = await edit(m, '22:00');
     check(/한 번 더 보낼게요/.test(said) && /21:50/.test(said), '주최자에게 "21:50에 한 번 더 보낼게요"');
-    showCard(m); check(status(m) === '🟢 모집 중 🔔', '🔔 다시 표시');
+    showCard(m); check(status(m) === '🟢 모집 중 · 🔔', '🔔 다시 표시');
     const n = dms.length; await advanceTo(at('21:50')); const got = dmsSince(n);
     check(got.length === 2 && /22:00/.test(got[0].text), '21:50에 새 일시로 다시 발송');
     const said2 = await edit(m, '21:00');
