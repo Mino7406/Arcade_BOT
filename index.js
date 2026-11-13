@@ -199,8 +199,8 @@ async function restoreMatches(c) {
         }
       }
 
-      // 알림 예약(notifyAt)도 setTimeout이 소실되므로 다시 건다. 이미 지난 시각이면
-      // armNotifyReminder가 내부적으로 그냥 건너뛴다(지나간 알림을 뒤늦게 보내지 않음).
+      // 알림 예약(notifyAt)도 setTimeout이 소실되므로 다시 건다. 꺼져 있던 동안 시각이 조금 지났으면 바로 보내고,
+      // 30분 넘게 지났으면 armNotifyReminder가 보내지 않고 건너뛴다(게임이 끝난 뒤 "곧 시작" DM이 가지 않게).
       if (!deleted && match.data?.notifyAt) {
         armNotifyReminder(map, row.message_id, match, label);
       }

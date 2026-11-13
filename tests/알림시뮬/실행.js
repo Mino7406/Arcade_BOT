@@ -1,0 +1,23 @@
+// 내전 시작 알림 시뮬레이션 실행기: node tests/알림시뮬/실행.js
+// 저장 파일(DB/)·로그를 건드리지 않도록 임시 폴더에 handlers·commands·forms·assets·config.js 를 복사해
+// 그 안에서 시나리오.js 를 돌리고 끝나면 지운다(상호작용 테스트와 같은 방식).
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { spawnSync } = require('child_process');
+
+const repo = path.join(__dirname, '..', '..');
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'notifysim-'));
+try {
+  for (const dir of ['handlers', 'commands', 'forms', 'assets', 'Monster']) fs.cpSync(path.join(repo, dir), path.join(tmp, dir), { recursive: true });
+  fs.copyFileSync(path.join(repo, 'config.js'), path.join(tmp, 'config.js'));
+  fs.copyFileSync(path.join(__dirname, '시나리오.js'), path.join(tmp, 'run.js'));
+  const result = spawnSync(process.execPath, [path.join(tmp, 'run.js')], {
+    encoding: 'utf8', timeout: 120_000,
+    env: { ...process.env, NODE_PATH: path.join(repo, 'node_modules') },
+  });
+  process.stdout.write((result.stdout || '') + (result.stderr || ''));
+  process.exitCode = result.status ? 1 : 0;
+} finally {
+  fs.rmSync(tmp, { recursive: true, force: true });
+}

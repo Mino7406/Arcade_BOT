@@ -285,6 +285,20 @@ function syncAutoNotify(data, prevDatetime) {
   return 'off';
 }
 
+// 공개된 매치의 일시를 고쳤을 때 알림 처리. 아직 안 보낸 알림은 syncAutoNotify 그대로.
+// 이미 보냈거나(지나서 건너뛴 것 포함) 일시를 뒤로 미뤄 새 일시 10분 전이 아직 안 왔으면 알림을 한 번 더 건다 → 'rearmed'
+// (미뤄진 줄 모르고 옛 시각에 모이는 일이 없게). 새 시각도 이미 지났으면 다시 걸지 않는다.
+function syncNotifyOnEdit(match, prevDatetime) {
+  if (!match.notifySent) return syncAutoNotify(match.data, prevDatetime);
+  if (match.data.datetime === prevDatetime) return null;
+  const auto = deriveNotifyFromDatetime(match.data.datetime, { base: match.data.createdAt });
+  if (!auto || auto.notifyOnClose) return null;
+  Object.assign(match.data, auto, { notifyAuto: true, notifyAutoSrc: match.data.datetime });
+  match.notifySent = false;
+  match.notifySkipped = false;
+  return 'rearmed';
+}
+
 // 알림 시각 입력 모달(내전/모집 공용). 비워서 제출하면 예약을 취소하는 용도로도 쓰인다.
 // is12h를 넘기면 기존 예약을 수정할 때 원래 입력했던 형식 그대로 재입력창에 채워준다.
 function buildNotifyModal(type, matchMsgId, notifyAt, is12h, onClose = false) {
@@ -303,10 +317,10 @@ function buildNotifyModal(type, matchMsgId, notifyAt, is12h, onClose = false) {
     .addComponents(new ActionRowBuilder().addComponents(input));
 }
 
-// 카드·버튼에 보여 줄 알림 시점: 알림 시각이 이미 지나 마감 때 바로 보내는 알림은 시각 대신 "자동 발송",
+// 카드·버튼에 보여 줄 알림 시점: 알림 시각이 이미 지나 마감 때 바로 보내는 알림은 시각 대신 "마감 시 발송",
 // 일시를 보고 봇이 잡은 알림(일시 10분 전)은 시각 뒤에 "(자동)", 주최자가 직접 적은 시각은 그대로.
 function notifyWhenText(data) {
-  if (data?.notifyOnClose) return '자동 발송';
+  if (data?.notifyOnClose) return '마감 시 발송';
   const when = formatNotifyTimeSmart(data.notifyAt, data.notify12h);
   return data?.notifyAuto ? `${when} (자동)` : when;
 }
@@ -316,9 +330,38 @@ function notifySyncNote(result, data) {
   if (result === 'changed') return data.notifyOnClose
     ? '\n🔔 새 일시 10분 전이 이미 지나서, 알림은 마감되는 순간 바로 보내요.'
     : `\n🔔 알림도 새 일시 10분 전인 ${formatNotifyTimeSmart(data.notifyAt, data.notify12h)}로 옮겼어요.`;
+  if (result === 'rearmed') return `\n🔔 일시가 미뤄져서, 새 일시 10분 전인 ${formatNotifyTimeSmart(data.notifyAt, data.notify12h)}에 알림을 한 번 더 보낼게요.`;
   if (result === 'kept') return `\n🔔 새 일시는 알림 시각으로 읽을 수 없어서, 직접 정한 알림 ${formatNotifyTimeSmart(data.notifyAt, data.notify12h)}은 그대로예요.`;
-  if (result === 'off') return '\n🔕 일시를 읽을 수 없어 알림 예약이 꺼졌습니다. (예: `11/12 20:00`, `내일 저녁 8시`)';
+  if (result === 'off') {
+    // 읽을 수는 있는데 꺼졌다면 너무 먼 일시(24일 넘게)라서다.
+    if (parseDatetimeText(data.datetime, data.createdAt || Date.now())) return '\n🔕 일시가 24일보다 멀어서 알림 예약이 꺼졌습니다. 알림은 24일 안쪽 일정만 예약할 수 있어요.';
+    return '\n🔕 일시를 읽을 수 없어 알림 예약이 꺼졌습니다. (예: `11/12 20:00`, `내일 저녁 8시`)\n다시 켜려면 🔔 알림 예약에서 시각을 직접 적어주세요.';
+  }
   return '';
+}
+
+// 이미 보낸(또는 건너뛴) 알림을 고치려 할 때 안내.
+function notifySentMessage(match) {
+  const head = match.notifySkipped
+    ? '⏭️ **봇이 꺼져 있는 동안 알림 시각이 한참 지나서, 이번 알림은 보내지 않았어요.**'
+    : '❌ **이미 발송된 알림은 다시 수정할 수 없습니다.**';
+  return `${head}\n일시를 뒤로 미루면 새 일시 10분 전으로 알림이 다시 걸려요.`;
+}
+
+// 알림이 이미 나간 뒤에 참가한 사람에게 참가 완료 안내 끝에 덧붙이는 한 줄.
+function lateJoinNote(match) {
+  if (!match?.notifySent || match.notifySkipped || !match.data?.notifyAt) return '';
+  return `\n⏰ 시작 알림은 이미 나갔어요 — 📅 **${datetimeDisplay(match.data)}** 시작이에요!`;
+}
+
+// 직접 적은 알림 시각이 24일 한도를 넘을 때 안내. 연도를 안 적으니 이미 지난 시각은 내년으로 읽혀 여기로 오는데,
+// 그때는 "24일" 대신 "이미 지난 시각"이라고 알려 준다.
+function notifyTooFarMessage(at) {
+  const d = new Date(at + KST_OFFSET_MS);
+  const lastYear = Date.UTC(d.getUTCFullYear() - 1, d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes()) - KST_OFFSET_MS;
+  const now = Date.now();
+  if (lastYear <= now && now - lastYear < 180 * DAY_MS) return `⚠️ **이미 지난 시각이에요.** 지금(${formatNotifyTime(now)}) 이후 시각을 적어주세요.`;
+  return '⚠️ **알림은 최대 24일 이내로만 예약할 수 있습니다.**';
 }
 
 function clearNotifyTimer(match) {
@@ -354,6 +397,8 @@ async function trySendNotify(match, label) {
 // 공개 카드 다시 그리기용 payload 빌더(라벨별로 내전/모집 모듈이 등록). 알림이 타이머로 발송되면
 // 상태 줄의 🔔를 지우려고 카드를 다시 그릴 때 쓴다.
 const publicPayloadBuilders = {};
+// 이보다 오래 지난 알림(봇 재시작 등으로 놓친 것)은 보내지 않고 건너뛴다.
+const NOTIFY_STALE_MS = 30 * 60 * 1000;
 function setPublicPayloadBuilder(label, fn) {
   publicPayloadBuilders[label] = fn;
 }
@@ -367,6 +412,17 @@ function armNotifyReminder(matchesMap, msgId, match, label) {
   if (!notifyAt || match.notifySent) return;
   const delayMs = notifyAt - Date.now();
   if (delayMs > MAX_TIMEOUT_DELAY_MS) return;
+
+  // 봇이 꺼져 있던 동안 시각이 한참(30분 넘게) 지난 알림은 뒤늦게 보내지 않는다 — 게임이 끝난 뒤에
+  // "곧 시작" DM 이 가지 않게. 발송한 것으로 처리하고(notifySkipped) 카드의 🔔도 지운다. 마감 시 발송 알림은 그대로 마감을 기다린다.
+  if (!match.data.notifyOnClose && delayMs < -NOTIFY_STALE_MS) {
+    match.notifySent = true;
+    match.notifySkipped = true;
+    logSystem({ 유형: '매치 알림', 채널: matchChannelName(match), 내용: `${matchTag(match, label)} 시작 알림 건너뜀 — 예약 시각 ${formatNotifyTime(notifyAt)}에서 ${Math.round(-delayMs / 60000)}분 지남` });
+    const build = publicPayloadBuilders[label];
+    if (build && match.message?.edit) match.message.edit(build(match)).catch(() => {});
+    return;
+  }
 
   const fire = () => {
     match._notifyTimer = null;
@@ -781,6 +837,7 @@ function buildCancelledCard({ label, data, byOrganizer }) {
 function buildMatchDmPayload({ kind, match, label }) {
   const { gameInfo, title } = match.data;
   const isStart = kind === 'start';
+  const startLine = isStart ? startDmHeadline(match) : '';
   const link = new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(match.message.url).setLabel('바로가기').setEmoji('🔗');
   return payload(card({
     color: gameInfo.color,
@@ -789,11 +846,25 @@ function buildMatchDmPayload({ kind, match, label }) {
     thumb: gameThumb(gameInfo),
     thumbAlt: gameInfo.name,
     blocks: [
-      isStart ? `**${title}** ${label} 시작 시간이에요!\n지금 바로 확인해 보세요.` : `**${title}** 이(가) 방금 마감됐어요!\n지금 바로 확인해 보세요.`,
+      isStart ? `${startLine}\n📅 **일시**　${datetimeDisplay(match.data)}` : `**${title}** 이(가) 방금 마감됐어요!\n지금 바로 확인해 보세요.`,
       { text: '### 🔗 바로가기\n누르면 해당 게시글로 이동해요.', button: link },
     ],
-    footer: isStart ? '📬 예약된 알림 시각이 되어 참가자에게 자동으로 전송되었습니다.' : '📬 자동 마감 처리되어 주최자에게 알림이 전송되었습니다.',
+    footer: isStart
+      ? (match.data.notifyOnClose ? '📬 마감되어 참가자에게 자동으로 전송되었습니다.' : '📬 예약된 알림 시각이 되어 참가자에게 자동으로 전송되었습니다.')
+      : '📬 자동 마감 처리되어 주최자에게 알림이 전송되었습니다.',
   }));
+}
+
+// 시작 알림 DM 첫 줄: 마감 시 발송이면 "마감됐어요, 곧 시작", 시작 전이면 남은 시간, 시작 시각이 지났거나 일시를 못 읽으면 "시작 시간".
+function startDmHeadline(match) {
+  const { title, datetime, createdAt, notifyOnClose } = match.data;
+  if (notifyOnClose) return `**${title}** 마감됐어요! 곧 시작해요.`;
+  const startAt = parseDatetimeText(datetime, createdAt || Date.now());
+  const left = startAt ? Math.round((startAt - Date.now()) / 60000) : 0;
+  if (left <= 0) return `**${title}** 시작 시간이에요!`;
+  const h = Math.floor(left / 60), m = left % 60;
+  const leftText = h ? `${h}시간${m ? ` ${m}분` : ''}` : `${m}분`;
+  return `**${title}** 시작 **${leftText} 전**이에요!`;
 }
 
 // 팀이 배정됐다고 채널에 알리는 카드(내전).
@@ -1160,6 +1231,10 @@ module.exports = {
   deriveNotifyFromDatetime,
   notifyWhenText,
   notifySyncNote,
+  notifySentMessage,
+  notifyTooFarMessage,
+  lateJoinNote,
+  syncNotifyOnEdit,
   syncAutoNotify,
   formatNotifyTime,
   formatNotifyTimeKorean,

@@ -197,10 +197,10 @@ function rowsIn(list, acc = []) {
     assert.strictEqual(c.deriveNotifyFromDatetime(stamp), null, 'base 없이는 5시간 지난 일시를 내년으로 봄(기존 동작)');
     // 안 고친 지금 시각 = "자동 발송"(마감 때 바로), 미래 시각을 직접 적으면 그 시각에 발송
     assert.strictEqual(past.notifyOnClose, true);
-    assert.strictEqual(c.notifyWhenText({ notifyAt: past.notifyAt, notifyOnClose: true }), '자동 발송');
+    assert.strictEqual(c.notifyWhenText({ notifyAt: past.notifyAt, notifyOnClose: true }), '마감 시 발송');
     const later = c.deriveNotifyFromDatetime('내일 저녁 8시');
     assert.ok(later && later.notifyOnClose === false, '미래 시각은 그 시각에 발송');
-    assert.notStrictEqual(c.notifyWhenText({ notifyAt: later.notifyAt, notify12h: false, notifyOnClose: false }), '자동 발송');
+    assert.notStrictEqual(c.notifyWhenText({ notifyAt: later.notifyAt, notify12h: false, notifyOnClose: false }), '마감 시 발송');
     assert.ok(c.notifyWhenText({ notifyAt: later.notifyAt, notify12h: false, notifyOnClose: false, notifyAuto: true }).endsWith(' (자동)'), '봇이 잡은 시각엔 (자동)');
     // 카드 표시: 안 고친 지금 시각은 끝에 " ~"(그때부터 열려 있음), 직접 적은 미래 시각·createdAt 없는 옛 데이터는 그대로
     assert.strictEqual(c.datetimeDisplay({ datetime: stamp, createdAt: created }), `${stamp} ~`);
