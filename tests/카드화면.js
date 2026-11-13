@@ -274,8 +274,8 @@ async function buildScreens() {
     const pe = await endR(oc, []);
     add('레이드', `종료 — ${label}`, '', pe, rf(pe));
   }
-  add('레이드', '종료 안내 — XP 시스템 복구 (결과 메시지에 답장)', '🔧 복구 완료 · 20:42–20:54 · 11분 59초', raidMod.buildEndNoticePayload({ kind: 'recover', details: ['중단 시간 : 20:42–20:54 · 11분 59초'] }));
-  add('레이드', '종료 안내 — XP 차감 (결과 메시지에 답장)', '☠️ XP 차감 · 합계 128명 · -17,536 XP', raidMod.buildEndNoticePayload({ kind: 'penalty', xp: 137, details: ['128명 · 합계 : -17,536 XP', '중단 시간 : 20:42–21:02 · 20분 3초'] }));
+  add('레이드', '종료 안내 — XP 시스템 복구 (결과 메시지에 답장)', '🔧 복구 완료 · 20:42–20:54 (11분 59초)', raidMod.buildEndNoticePayload({ kind: 'recover', details: ['중단 시간 : 20:42–20:54 (11분 59초)'] }));
+  add('레이드', '종료 안내 — 복구 실패 (결과 메시지에 답장)', '☠️ 복구 실패 · 합계 128명 · -17,536 XP', raidMod.buildEndNoticePayload({ kind: 'penalty', xp: 137, details: ['128명 · 합계 : -17,536 XP', '중단 시간 : 20:42–21:02 (20분 3초)'] }));
   add('레이드', '❔ 플레이 방법', '본인에게만 보이는 안내', raidMod.buildHelpView(m0));
 
   return screens;

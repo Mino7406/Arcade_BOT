@@ -389,7 +389,7 @@ function kstHourMinute(epochMs) {
 function endNoticeDetail(r, deducted) {
   const parts = [];
   if (deducted?.affected) parts.push(`${deducted.affected.toLocaleString()}명 · 합계 : -${deducted.total.toLocaleString()} XP`);
-  if (r.frozenAt) parts.push(`중단 시간 : ${kstHourMinute(r.frozenAt)}–${kstHourMinute(r.endedAt)} · ${formatDuration(r.endedAt - r.frozenAt)}`);
+  if (r.frozenAt) parts.push(`중단 시간 : ${kstHourMinute(r.frozenAt)}–${kstHourMinute(r.endedAt)} (${formatDuration(r.endedAt - r.frozenAt)})`);
   return parts; // 한 줄에 하나씩(합계 밑에 중단 시간 — 사용자 요청)
 }
 
@@ -398,15 +398,16 @@ function buildEndNoticePayload({ kind, xp, details = [] }) {
   const penalty = kind === 'penalty';
   const detailLines = details.map(detail => {
     const affected = /^(\d[\d,]*)명 · 합계 : (-[\d,]+) XP$/.exec(detail);
-    if (affected) return `**합계**　${affected[1]}명 · **${affected[2]} XP**`;
-    const downtime = /^중단 시간 : (\d\d:\d\d)–(\d\d:\d\d) · (.+)$/.exec(detail);
-    if (downtime) return `**중단 시간**　${downtime[1]}–${downtime[2]} · **${downtime[3]}**`;
+    if (affected) return `**합계:** ${affected[1]}명 · ${affected[2]} XP`;
+    const downtime = /^중단 시간 : (\d\d:\d\d)–(\d\d:\d\d) \((.+)\)$/.exec(detail);
+    if (downtime) return `**중단 시간:** ${downtime[1]}–${downtime[2]} (${downtime[3]})`;
     return detail;
   });
   return cardPayload(card({
     color: penalty ? 'err' : 'ok',
-    top: penalty ? '-# ☠️ **XP 차감**' : '-# 🔧 **복구 완료**',
-    header: penalty ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : 'XP 시스템 복구 완료',
+    top: penalty ? '-# ☠️ **복구 실패**' : '-# 🔧 **복구 완료**',
+    header: penalty ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : 'XP 시스템이 복구되었습니다.',
+    headerLevel: 3,
     blocks: detailLines.length ? [{ text: detailLines.join('\n') }] : [],
   }));
 }
