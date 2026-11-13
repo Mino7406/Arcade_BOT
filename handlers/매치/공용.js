@@ -253,25 +253,34 @@ function parseDatetimeText(input, now = Date.now()) {
   return epoch;
 }
 
-// 일시 글자에서 알림 시각을 뽑는다. 읽을 수 없거나 너무 먼 미래면 null.
+// 봇이 일시를 보고 자동으로 잡는 알림은 시작(일시) 10분 전에 보낸다. 주최자가 직접 적은 알림 시각은 그대로.
+const AUTO_NOTIFY_LEAD_MS = 10 * 60 * 1000;
+
+// 일시 글자에서 자동 알림 시각(일시 10분 전)을 뽑는다. 읽을 수 없거나 너무 먼 미래면 null.
 // base 는 "그 일시를 적은 때"(data.createdAt): 연도·지난 시각 판단을 이 시각 기준으로 해서, 모달에 미리 채워진
 // 지금 시각이 몇 시간 뒤 알림을 켜는 때에도 내년으로 넘어가지 않는다.
-// 이미 지난 시각이면 알림 시각도 지난 채로 두고, 마감되는 순간 바로 DM 이 나간다(trySendNotify).
+// 알림 시각(10분 전)이 이미 지났거나 2분 안이면(미리 채운 지금 시각을 그대로 둔 경우 등) 마감되는 순간 바로 보낸다.
 function deriveNotifyFromDatetime(datetime, { base } = {}) {
-  const notifyAt = parseDatetimeText(datetime, base || Date.now());
-  if (!notifyAt) return null;
+  const startAt = parseDatetimeText(datetime, base || Date.now());
+  if (!startAt) return null;
+  const notifyAt = startAt - AUTO_NOTIFY_LEAD_MS;
   if (isNotifyTooFar(notifyAt)) return null;
-  // 일시가 "지금"이거나 이미 지난 시각(모달에 미리 채워진 지금 시각을 그대로 둔 경우)이면 마감되는 순간 바로 보낸다.
-  const notifyOnClose = notifyAt <= (base || Date.now()) + 2 * 60 * 1000;
+  const notifyOnClose = notifyAt <= Math.max(base || 0, Date.now()) + 2 * 60 * 1000;
   return { notifyAt, notify12h: isNotify12HourInput(datetime), notifyOnClose };
 }
 
-// 일시로 자동 설정된 알림(notifyAuto)이면, 일시가 바뀐 만큼 알림 시각도 따라 바꾼다. 못 읽게 되면 알림을 끈다.
-function syncAutoNotify(data) {
-  if (!data?.notifyAuto) return null;
-  if (data.datetime === data.notifyAutoSrc) return null; // 일시가 그대로면(메모·인원만 고친 경우) 알림을 건드리지 않는다
+// 주최자가 일시를 고치면 켜져 있던 알림도 새 일시를 따라간다. prevDatetime 은 고치기 전 일시.
+//  - 알림이 꺼져 있거나 일시가 그대로면(메모·인원만 고친 경우) 건드리지 않는다 → null
+//  - 새 일시를 읽을 수 있으면 그 시각으로 옮기고 일시 기반(notifyAuto) 알림이 된다 → 'changed'
+//    (직접 시각을 적어 둔 알림도 마찬가지 — 일시를 바꿨다는 건 시작 시각이 바뀌었다는 뜻이므로)
+//  - 못 읽으면: 일시로 자동 설정된 알림은 끄고 → 'off', 직접 시각을 적어 둔 알림은 그대로 둔다 → 'kept'
+function syncAutoNotify(data, prevDatetime) {
+  if (!data?.notifyAt && !data?.notifyAuto) return null;
+  const before = data.notifyAuto ? data.notifyAutoSrc : prevDatetime;
+  if (before === undefined || data.datetime === before) return null;
   const auto = deriveNotifyFromDatetime(data.datetime, { base: data.createdAt });
-  if (auto) { Object.assign(data, auto, { notifyAutoSrc: data.datetime }); return 'changed'; }
+  if (auto) { Object.assign(data, auto, { notifyAuto: true, notifyAutoSrc: data.datetime }); return 'changed'; }
+  if (!data.notifyAuto) return 'kept';
   Object.assign(data, { notifyAt: null, notify12h: false, notifyAuto: false, notifyAutoSrc: null, notifyOnClose: false });
   return 'off';
 }
@@ -294,9 +303,22 @@ function buildNotifyModal(type, matchMsgId, notifyAt, is12h, onClose = false) {
     .addComponents(new ActionRowBuilder().addComponents(input));
 }
 
-// 카드·버튼에 보여 줄 알림 시점: 일시를 안 고치고 켠 알림(마감 때 바로 발송)은 시각 대신 "자동 발송".
+// 카드·버튼에 보여 줄 알림 시점: 알림 시각이 이미 지나 마감 때 바로 보내는 알림은 시각 대신 "자동 발송",
+// 일시를 보고 봇이 잡은 알림(일시 10분 전)은 시각 뒤에 "(자동)", 주최자가 직접 적은 시각은 그대로.
 function notifyWhenText(data) {
-  return data?.notifyOnClose ? '자동 발송' : formatNotifyTimeSmart(data.notifyAt, data.notify12h);
+  if (data?.notifyOnClose) return '자동 발송';
+  const when = formatNotifyTimeSmart(data.notifyAt, data.notify12h);
+  return data?.notifyAuto ? `${when} (자동)` : when;
+}
+
+// 일시를 고친 뒤 주최자에게 덧붙일 알림 안내(syncAutoNotify 결과별).
+function notifySyncNote(result, data) {
+  if (result === 'changed') return data.notifyOnClose
+    ? '\n🔔 새 일시 10분 전이 이미 지나서, 알림은 마감되는 순간 바로 보내요.'
+    : `\n🔔 알림도 새 일시 10분 전인 ${formatNotifyTimeSmart(data.notifyAt, data.notify12h)}로 옮겼어요.`;
+  if (result === 'kept') return `\n🔔 새 일시는 알림 시각으로 읽을 수 없어서, 직접 정한 알림 ${formatNotifyTimeSmart(data.notifyAt, data.notify12h)}은 그대로예요.`;
+  if (result === 'off') return '\n🔕 일시를 읽을 수 없어 알림 예약이 꺼졌습니다. (예: `11/12 20:00`, `내일 저녁 8시`)';
+  return '';
 }
 
 function clearNotifyTimer(match) {
@@ -1137,6 +1159,7 @@ module.exports = {
   parseDatetimeText,
   deriveNotifyFromDatetime,
   notifyWhenText,
+  notifySyncNote,
   syncAutoNotify,
   formatNotifyTime,
   formatNotifyTimeKorean,

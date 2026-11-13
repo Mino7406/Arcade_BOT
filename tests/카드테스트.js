@@ -168,7 +168,8 @@ function rowsIn(list, acc = []) {
     const text = c.defaultDatetimeText(now);
     assert.ok(/^\d{1,2}\/\d{1,2} \d{2}:\d{2}$/.test(text), text);
     const auto = c.deriveNotifyFromDatetime(text);
-    assert.ok(auto && Math.abs(auto.notifyAt - now) < 60 * 1000, '지금 시각을 그대로 읽어야 함');
+    assert.ok(auto && Math.abs(auto.notifyAt - (now - 10 * 60 * 1000)) < 60 * 1000, '지금 시각을 읽고 자동 알림은 10분 전');
+    assert.strictEqual(auto.notifyOnClose, true, '지금 시각 그대로면 10분 전이 이미 지나 마감 때 발송');
     assert.strictEqual(auto.notify12h, false);
     const modal = c.buildModal('mojip', '모집', { lol: { name: '롤', emoji: '🎮', defaultPlayers: 5 } }, 'lol').toJSON();
     const dt = modal.components.map(r => r.components[0]).find(x => x.custom_id === 'datetime');
@@ -177,9 +178,9 @@ function rowsIn(list, acc = []) {
     const tomorrow = new Date(now + 24 * 3600 * 1000);
     const ko = `${new Date(tomorrow.getTime() + 9 * 3600e3).getUTCMonth() + 1}월 ${new Date(tomorrow.getTime() + 9 * 3600e3).getUTCDate()}일 오후 8시`;
     const k = c.deriveNotifyFromDatetime(ko);
-    assert.ok(k && k.notify12h === true && kst(k.notifyAt).endsWith('20:00'), ko);
+    assert.ok(k && k.notify12h === true && kst(k.notifyAt).endsWith('19:50'), `${ko} → 자동 알림은 10분 전`);
     assert.strictEqual(c.deriveNotifyFromDatetime('내일 8시'), null, '못 읽는 글자는 null');
-    const data = { datetime: text, notifyAuto: true };
+    const data = { datetime: text, notifyAuto: true, notifyAutoSrc: text, notifyAt: now };
     data.datetime = ko; c.syncAutoNotify(data);
     assert.ok(data.notifyAt && data.notifyAuto, '일시가 바뀌면 알림 시각도 따라감');
     data.datetime = '내일 8시'; c.syncAutoNotify(data);
@@ -192,7 +193,7 @@ function rowsIn(list, acc = []) {
     const created = Date.now() - 5 * 3600 * 1000;
     const stamp = c.defaultDatetimeText(created);
     const past = c.deriveNotifyFromDatetime(stamp, { base: created });
-    assert.ok(past && Math.abs(past.notifyAt - created) < 60 * 1000 && past.notifyAt < Date.now(), '지난 일시도 알림 시각으로 유지');
+    assert.ok(past && Math.abs(past.notifyAt - (created - 10 * 60 * 1000)) < 60 * 1000 && past.notifyAt < Date.now(), '지난 일시도 알림 시각(10분 전)으로 유지');
     assert.strictEqual(c.deriveNotifyFromDatetime(stamp), null, 'base 없이는 5시간 지난 일시를 내년으로 봄(기존 동작)');
     // 안 고친 지금 시각 = "자동 발송"(마감 때 바로), 미래 시각을 직접 적으면 그 시각에 발송
     assert.strictEqual(past.notifyOnClose, true);
@@ -200,6 +201,7 @@ function rowsIn(list, acc = []) {
     const later = c.deriveNotifyFromDatetime('내일 저녁 8시');
     assert.ok(later && later.notifyOnClose === false, '미래 시각은 그 시각에 발송');
     assert.notStrictEqual(c.notifyWhenText({ notifyAt: later.notifyAt, notify12h: false, notifyOnClose: false }), '자동 발송');
+    assert.ok(c.notifyWhenText({ notifyAt: later.notifyAt, notify12h: false, notifyOnClose: false, notifyAuto: true }).endsWith(' (자동)'), '봇이 잡은 시각엔 (자동)');
     // 카드 표시: 안 고친 지금 시각은 끝에 " ~"(그때부터 열려 있음), 직접 적은 미래 시각·createdAt 없는 옛 데이터는 그대로
     assert.strictEqual(c.datetimeDisplay({ datetime: stamp, createdAt: created }), `${stamp} ~`);
     assert.strictEqual(c.datetimeDisplay({ datetime: '내일 저녁 8시', createdAt: Date.now() }), '내일 저녁 8시');
@@ -224,8 +226,45 @@ function rowsIn(list, acc = []) {
     assert.strictEqual(at('13:30'), '11/13 13:30');
     assert.strictEqual(at('8:00'), '11/14 08:00', '3시간 넘게 지난 시각은 내일');
     assert.strictEqual(at('11:00'), '11/13 11:00', '조금 지난 시각은 오늘(마감 때 바로 발송)');
-    const d = { datetime: '20:00', createdAt: noon, notifyAuto: true, notifyAutoSrc: '11/13 12:00' };
+    const d = { datetime: '20:00', createdAt: noon, notifyAuto: true, notifyAutoSrc: '11/13 12:00', notifyAt: noon };
     assert.strictEqual(c.syncAutoNotify(d), 'changed', '수정창에 시각만 적어도 알림이 따라감');
+  });
+  check('일시를 고치면 켜 둔 알림이 새 일시 10분 전으로 따라감(직접 적은 알림도), 못 읽으면 자동은 끄고 직접은 유지', () => {
+    const c = require('../handlers/매치/공용');
+    const created = Date.now();
+    const tmr = new Date(created + 24 * 3600e3 + 9 * 3600e3);
+    const md = `${tmr.getUTCMonth() + 1}/${tmr.getUTCDate()}`;
+    const hm = e => c.formatNotifyTime(e).split(' ')[1];
+    // 1) 자동 알림 → 새 일시 10분 전
+    const a = { datetime: `${md} 20:00`, createdAt: created };
+    Object.assign(a, c.deriveNotifyFromDatetime(a.datetime, { base: created }), { notifyAuto: true, notifyAutoSrc: a.datetime });
+    assert.strictEqual(hm(a.notifyAt), '19:50', '처음 켤 때도 10분 전');
+    let prev = a.datetime; a.datetime = `${md} 21:30`;
+    assert.strictEqual(c.syncAutoNotify(a, prev), 'changed');
+    assert.strictEqual(hm(a.notifyAt), '21:20');
+    assert.ok(c.notifySyncNote('changed', a).includes('21:20'));
+    // 2) 직접 적은 알림 → 일시를 읽을 수 있으면 자동 알림(10분 전)으로 바뀜
+    const m = { datetime: `${md} 20:00`, createdAt: created, notifyAt: c.parseDatetimeText(`${md} 19:00`, created), notifyAuto: false };
+    prev = m.datetime; m.datetime = `${md} 22:00`;
+    assert.strictEqual(c.syncAutoNotify(m, prev), 'changed');
+    assert.strictEqual(hm(m.notifyAt), '21:50'); assert.strictEqual(m.notifyAuto, true);
+    // 3) 못 읽는 일시: 직접 적은 알림은 그대로, 자동 알림은 꺼짐
+    const keep = { datetime: `${md} 20:00`, createdAt: created, notifyAt: 777, notifyAuto: false };
+    prev = keep.datetime; keep.datetime = '모이면';
+    assert.strictEqual(c.syncAutoNotify(keep, prev), 'kept'); assert.strictEqual(keep.notifyAt, 777);
+    prev = a.datetime; a.datetime = '모이면';
+    assert.strictEqual(c.syncAutoNotify(a, prev), 'off'); assert.strictEqual(a.notifyAt, null);
+    // 4) 알림이 꺼져 있거나 일시가 그대로면 건드리지 않음
+    const off = { datetime: `${md} 20:00`, createdAt: created };
+    prev = off.datetime; off.datetime = `${md} 21:00`;
+    assert.strictEqual(c.syncAutoNotify(off, prev), null); assert.ok(!off.notifyAt, '꺼진 알림은 새로 켜지지 않음');
+    assert.strictEqual(c.syncAutoNotify({ ...m, notifyAuto: false }, m.datetime), null, '일시 그대로면 그대로');
+    // 5) 새 일시의 10분 전이 이미 지났으면 마감 때 바로 발송
+    const soon = new Date(Date.now() + 5 * 60e3 + 9 * 3600e3);
+    const near = { datetime: `${md} 20:00`, createdAt: created - 3600e3, notifyAt: 1, notifyAuto: true, notifyAutoSrc: `${md} 20:00` };
+    prev = near.datetime; near.datetime = `${soon.getUTCMonth() + 1}/${soon.getUTCDate()} ${String(soon.getUTCHours()).padStart(2, '0')}:${String(soon.getUTCMinutes()).padStart(2, '0')}`;
+    assert.strictEqual(c.syncAutoNotify(near, prev), 'changed'); assert.strictEqual(near.notifyOnClose, true, '10분 전이 지났으면 자동 발송(마감 시)');
+    assert.ok(c.notifySyncNote('changed', near).includes('마감'));
   });
   check('알림 발송 규칙: 직접 정한 시각은 마감과 무관하게, 자동 발송은 마감 때', () => {
     const c = require('../handlers/매치/공용');

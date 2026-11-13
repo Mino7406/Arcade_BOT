@@ -10,7 +10,7 @@ const {
   ADMIN_IDS, getClientMap, getNaejeonMatches: getMatches, shuffleIntoTeams, buildTeamResultCard, buildCancelledCard, buildMatchCard, findMatchRole, buildMatchMessagePayload, buildPreviewPayload, buildManagePayload, buildMentionPayload, markClosed, markReopened, toggleAutoCloseWhileClosed, announceMatchCompletionXp,
   ROLE_NAMES, scheduleCancelledDelete, deleteMentionMessage, AUTO_CLOSE_DELAY_MS, saveNow,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
-  buildNotifyModal: buildNotifyModalBase, parseNotifyTime, deriveNotifyFromDatetime, syncAutoNotify, notifyWhenText, formatNotifyTimeSmart, isNotify12HourInput, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
+  buildNotifyModal: buildNotifyModalBase, parseNotifyTime, deriveNotifyFromDatetime, syncAutoNotify, notifySyncNote, notifyWhenText, formatNotifyTimeSmart, isNotify12HourInput, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
   setPublicPayloadBuilder,
 } = require('./공용');
 const { notice, payload, text } = require('../공통/카드');
@@ -304,14 +304,17 @@ async function handleNaejeonEditModal(interaction) {
     return;
   }
 
+  const prevDatetime = data.datetime;
   Object.assign(data, { gameInfo, title, datetime, players, description });
-  const autoNotifyOff = syncAutoNotify(data) === 'off'; // 일시로 자동 설정된 알림이면 새 일시를 따라간다
+  const notifySync = syncAutoNotify(data, prevDatetime); // 켜 둔 알림은 새 일시(10분 전)를 따라간다
+  const autoNotifyOff = notifySync === 'off';
 
   // 미리보기의 [수정] 버튼에서 연 모달이라 update()로 그 미리보기 메시지를 바로 고친다.
   // (예전엔 처음 미리보기를 띄운 인터랙션을 보관해 editReply했는데, 토큰이 15분이면 만료돼
   //  미리보기를 오래 띄워두고 수정하면 Invalid Webhook Token(50027)으로 실패했다.)
   await interaction.update(buildPreviewPayload('naejeon', data));
   if (autoNotifyOff) await interaction.followUp(notice('🔕 **일시를 읽을 수 없어 알림 예약이 꺼졌습니다.** (예: `11/12 20:00`, `내일 저녁 8시`)\n다시 켜려면 🔔 알림 예약을 눌러주세요.', { ephemeral: true })).catch(() => {});
+  else if (notifySync === 'kept') await interaction.followUp(notice(notifySyncNote('kept', data).trim(), { ephemeral: true })).catch(() => {});
 }
 
 // 팀 선택 드롭다운 제출 핸들러
@@ -643,7 +646,7 @@ async function handleNaejeonButton(interaction) {
       match.notifySent = false;
       armNotifyReminder(getMatches(interaction.client), matchMsgId, match, '내전');
       await match.message.edit(buildPublicMessagePayload(match)).catch(err => { logError('매치 알림', `${match.data?.title ?? '?'}(${match.message?.id}) 알림 예약 아이콘 갱신 실패`, err); });
-      await interaction.update(buildManagePayload({ label: '내전', match, note: auto.notifyOnClose ? '🔔 **자동 발송으로 설정했어요.** 마감되는 순간 참가자에게 DM 알림을 보내요.' : `🔔 **일시에 맞춰 ${formatNotifyTimeSmart(auto.notifyAt, auto.notify12h)}에 참가자에게 DM 알림을 보낼게요.**`, rows: buildManageMenu(match, matchMsgId) }));
+      await interaction.update(buildManagePayload({ label: '내전', match, note: auto.notifyOnClose ? '🔔 **자동 발송으로 설정했어요.** 마감되는 순간 참가자에게 DM 알림을 보내요.' : `🔔 **일시 10분 전인 ${formatNotifyTimeSmart(auto.notifyAt, auto.notify12h)}에 참가자에게 DM 알림을 보낼게요.**\n일시를 고치면 알림도 따라 옮겨져요.`, rows: buildManageMenu(match, matchMsgId) }));
       return;
     }
     await interaction.showModal(buildNotifyModal(matchMsgId, match.data.notifyAt, match.data.notify12h, match.data.notifyOnClose));
@@ -890,16 +893,15 @@ async function handleNaejeonMatchEditModal(interaction) {
     return;
   }
 
+  const prevDatetime = match.data.datetime;
   match.data = { ...match.data, gameInfo, title, datetime, players, description };
-  let autoNotifyOff = false;
-  if (match.data.notifyAuto && !match.notifySent) {
-    autoNotifyOff = syncAutoNotify(match.data) === 'off';
-    armNotifyReminder(getMatches(interaction.client), matchMsgId, match, '내전');
-  }
+  // 켜 둔 알림(아직 발송 전)은 새 일시를 읽을 수 있으면 일시 10분 전으로 옮긴다(자동 알림이 된다).
+  const notifySync = match.notifySent ? null : syncAutoNotify(match.data, prevDatetime);
+  if (notifySync === 'changed' || notifySync === 'off') armNotifyReminder(getMatches(interaction.client), matchMsgId, match, '내전');
 
   await match.message.edit(buildPublicMessagePayload(match));
 
-  await interaction.reply(notice(`✅ **내전 정보가 수정되었습니다.**${autoNotifyOff ? '\n🔕 일시를 읽을 수 없어 알림 예약이 꺼졌습니다. (예: `11/12 20:00`, `내일 저녁 8시`)' : ''}`, { ephemeral: true }));
+  await interaction.reply(notice(`✅ **내전 정보가 수정되었습니다.**${notifySyncNote(notifySync, match.data)}`, { ephemeral: true }));
 }
 
 // customId: naejeon:notify_modal:{matchMsgId}. 비워서 제출하면 예약을 취소한다.
