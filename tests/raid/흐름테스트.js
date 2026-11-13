@@ -80,6 +80,7 @@ let ok4;
   assert(buttons().some(b => b.label?.includes('궁수 · 유저1')), '참가 중 역할 변경');
   await raidMod.handleRaidButton(fakeInteraction('2', 'raid:role:sword'));
   await raidMod.handleRaidButton(fakeInteraction('3', 'raid:role:healer'));
+  assert(buttons().some(b => b.label === '궁수 · 유저1 👑') && !buttons().some(b => b.label?.includes('유저2 👑') || b.label?.includes('유저3 👑')), '방장(첫 참가자) 이름 옆에만 왕관');
   it = fakeInteraction('9', 'raid:act:attack'); await raidMod.handleRaidButton(it);
   assert(pText(it.replied).includes('모집 중'), '모집 중 행동 버튼 거부');
 

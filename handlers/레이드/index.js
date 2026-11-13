@@ -225,7 +225,8 @@ async function recruitView(r, { redraw = true } = {}) {
         return new ButtonBuilder()
           .setCustomId(`raid:role:${roleKey}`)
           .setEmoji(role.emoji)
-          .setLabel(taken ? `${role.name} · ${taken.name}`.slice(0, 80) : `${role.name} 참가`)
+          // 방장(가장 먼저 참가해 남아 있는 사람) 이름 옆에는 왕관
+          .setLabel(taken ? `${role.name} · ${taken.name}${taken === r.party[0] ? ' 👑' : ''}`.slice(0, 80) : `${role.name} 참가`)
           .setStyle(taken ? ButtonStyle.Secondary : ButtonStyle.Primary)
           .setDisabled(!!taken);
       }),
