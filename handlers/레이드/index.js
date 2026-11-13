@@ -50,7 +50,7 @@ const CLEAR_XP = 300;               // 토벌 성공 시 파티원 1인당
 const MVP_BONUS_XP = 100;           // 기여도 1위(피해 + 회복·부활 + 막아 준 피해, 레이드전투.js의 contribution) 추가 보상
 // 토벌 실패(전멸·시간 초과·무참가로 도주) 시 서버의 모든 유저가 잃는 XP — 레이드마다 이 범위에서 무작위 하나(모두 같은 값)
 const FAIL_PENALTY_XP_MIN = 50;
-const FAIL_PENALTY_XP_MAX = 150;
+const FAIL_PENALTY_XP_MAX = 200;
 const PENALTY_OUTCOMES = new Set(['wipe', 'timeout', 'noshow']);
 const rollPenaltyXp = () => FAIL_PENALTY_XP_MIN + Math.floor(Math.random() * (FAIL_PENALTY_XP_MAX - FAIL_PENALTY_XP_MIN + 1));
 const SCHEDULER_TICK_MS = 60 * 1000;
@@ -389,16 +389,26 @@ function kstHourMinute(epochMs) {
 function endNoticeDetail(r, deducted) {
   const parts = [];
   if (deducted?.affected) parts.push(`${deducted.affected.toLocaleString()}명 · 합계 : -${deducted.total.toLocaleString()} XP`);
-  if (r.frozenAt) parts.push(`중단 시간 : ${formatDuration(r.endedAt - r.frozenAt)} (${kstHourMinute(r.frozenAt)}~${kstHourMinute(r.endedAt)})`);
+  if (r.frozenAt) parts.push(`중단 시간 : ${kstHourMinute(r.frozenAt)}–${kstHourMinute(r.endedAt)} · ${formatDuration(r.endedAt - r.frozenAt)}`);
   return parts; // 한 줄에 하나씩(합계 밑에 중단 시간 — 사용자 요청)
 }
 
 // 레이드 결과 메시지 아래 답장으로 올라오는 카드. kind: 'recover'(토벌 성공, XP 복구) | 'penalty'(토벌 실패, 모든 유저 XP 차감)
 function buildEndNoticePayload({ kind, xp, details = [] }) {
-  const footer = details.join('\n-# ') || undefined; // footer 는 첫 줄에만 '-# '가 붙으므로 줄마다 직접 붙인다
-  return kind === 'penalty'
-    ? cardPayload(card({ color: 'err', header: `☠️ 모든 유저의 **${xp} XP**를 잃어버렸습니다...`, footer }))
-    : cardPayload(card({ color: 'ok', header: '🔧 XP 시스템 복구 완료', footer }));
+  const penalty = kind === 'penalty';
+  const detailLines = details.map(detail => {
+    const affected = /^(\d[\d,]*)명 · 합계 : (-[\d,]+) XP$/.exec(detail);
+    if (affected) return `**합계**　${affected[1]}명 · **${affected[2]} XP**`;
+    const downtime = /^중단 시간 : (\d\d:\d\d)–(\d\d:\d\d) · (.+)$/.exec(detail);
+    if (downtime) return `**중단 시간**　${downtime[1]}–${downtime[2]} · **${downtime[3]}**`;
+    return detail;
+  });
+  return cardPayload(card({
+    color: penalty ? 'err' : 'ok',
+    top: penalty ? '-# ☠️ **XP 차감**' : '-# 🔧 **복구 완료**',
+    header: penalty ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : 'XP 시스템 복구 완료',
+    blocks: detailLines.length ? [{ text: detailLines.join('\n') }] : [],
+  }));
 }
 // 이름 끝 글자 받침에 따라 '이'/'가'를 고른다(한글이 아니면 '이(가)')
 function subjectJosa(name) {
