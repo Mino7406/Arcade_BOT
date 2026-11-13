@@ -19,6 +19,11 @@ function check(name, fn) {
   try { fn(); pass++; } catch (err) { fail++; console.log(`✗ ${name}\n   ${err.message}`); }
 }
 
+async function checkAsync(name, fn) {
+  try { await fn(); pass++; } catch (err) { fail++; console.log(`✗ ${name}
+   ${err.message}`); }
+}
+
 function countComponents(list) {
   let n = 0;
   for (const c of list || []) {
@@ -238,6 +243,25 @@ function rowsIn(list, acc = []) {
     map.set('c', future); c.armNotifyReminder(map, 'c', future, '모집');
     assert.strictEqual(future.notifySent, false, '아직 시각 전이면 대기');
     c.clearNotifyTimer(future);
+  });
+  await checkAsync('알림 예약 중이면 상태 옆에 🔔, 발송되면 사라짐(타이머 발송 시 카드 다시 그림)', async () => {
+    const c = require('../handlers/매치/공용');
+    require('../handlers/매치/모집'); // 모집 카드 빌더 등록
+    const base = { game: 'custom', gameInfo: { name: '렐름', color: 0x5865f2 }, title: '테스트', players: '4', datetime: '11/13 20:00', organizer: { id: 'o', displayName: '주최' } };
+    const txt = p => JSON.stringify(p.components.map(x => (x.toJSON ? x.toJSON() : x)));
+    const m = { data: { ...base, notifyAt: Date.now() + 3600e3 }, participants: [], closed: false, notifySent: false };
+    assert.ok(txt(c.buildMatchMessagePayload({ label: '모집', match: m, rows: [] })).includes('🟢 모집 중 🔔'), '예약 중: 모집 중 🔔');
+    assert.ok(txt(c.buildManagePayload({ label: '모집', match: { ...m, closed: true }, rows: [] })).includes('🔒 마감됨 🔔'), '관리 메뉴도 마감됨 🔔');
+    assert.ok(!txt(c.buildMatchMessagePayload({ label: '모집', match: { ...m, notifySent: true }, rows: [] })).includes('🔔'), '발송 후에는 🔔 없음');
+    assert.ok(!txt(c.buildMatchMessagePayload({ label: '모집', match: { ...m, data: base }, rows: [] })).includes('🔔'), '알림 없으면 🔔 없음');
+    // 시각이 지났는데 마감 전이어도 발송되고, 카드를 다시 그려 🔔를 지운다
+    let edited = null;
+    const due = { data: { ...base, notifyAt: Date.now() - 1000, notifyOnClose: false }, participants: [], closed: false, notifySent: false, message: { edit: async p => { edited = p; } } };
+    const map = new Map([['d', due]]);
+    c.armNotifyReminder(map, 'd', due, '모집');
+    await new Promise(r => setTimeout(r, 20));
+    assert.strictEqual(due.notifySent, true, '시각이 지나면 마감 전이어도 발송');
+    assert.ok(edited && txt(edited).includes('🟢 모집 중') && !txt(edited).includes('🔔'), '발송 후 카드에서 🔔 제거');
   });
   check('DM 알림 설정: 기본 ON, 끄면 OFF, 카드는 현재 상태 쪽 버튼만 비활성화', () => {
     const dm = require('../handlers/매치/DM설정');

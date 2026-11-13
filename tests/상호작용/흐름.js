@@ -6,7 +6,7 @@
 //  - 컴포넌트 데이터가 discord.js 검증(toJSON)을 통과한다, 글자 4000자·컴포넌트 40개·최상위 10개 이내
 //  - 이미 v2로 올라간 메시지를 평문(content)으로 되돌려 고치지 않는다(디스코드가 거부함)
 const path = require('path');
-const root = path.join(__dirname, '..', '..');
+const root = __dirname; // 실행.js 가 임시 폴더 맨 위(run.js)로 복사해 돌리므로 handlers/ 는 바로 옆에 있다
 const { MessageFlags } = require('discord.js');
 
 const V2 = MessageFlags.IsComponentsV2;

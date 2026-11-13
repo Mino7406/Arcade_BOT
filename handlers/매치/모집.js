@@ -12,6 +12,7 @@ const {
   getClientMap, getMojipMatches: getMojips,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
   buildNotifyModal: buildNotifyModalBase, parseNotifyTime, deriveNotifyFromDatetime, syncAutoNotify, notifyWhenText, formatNotifyTimeSmart, isNotify12HourInput, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
+  setPublicPayloadBuilder,
 } = require('./공용');
 const { notice, payload, text } = require('../공통/카드');
 const { displayNameFromInteraction } = require('../공통/이름');
@@ -62,6 +63,7 @@ function buildMojipMessagePayload(match, opts = {}) {
     rows: buildPublicComponents(match.participants, maxPlayers, match.closed),
   });
 }
+setPublicPayloadBuilder('모집', buildMojipMessagePayload); // 알림이 타이머로 발송되면 공용 모듈이 이걸로 카드를 다시 그려 🔔를 지운다
 
 function buildLeaveButton(msgId) {
   return buildLeaveButtonBase('mojip', msgId);
@@ -253,7 +255,7 @@ async function handleMojipButton(interaction) {
     getPending(interaction.client).delete(interaction.user.id);
     const roleContent = role ? `<@&${role.id}>` : '';
     // 역할 멘션은 카드 안 맨 위 글자로 넣고, 새로 보내는 이 메시지에만 알림이 가게 allowedMentions 에 담는다.
-    const publishCard = buildMatchCard({ label: '모집', data, participants, rows: buildPublicComponents(participants, maxPlayers), roleMention: roleContent });
+    const publishCard = buildMatchCard({ label: '모집', data, participants, rows: buildPublicComponents(participants, maxPlayers), roleMention: roleContent, notifyOn: !!data.notifyAt }); // 미리보기에서 알림을 예약해 뒀으면 처음부터 🔔
     const msg = await interaction.channel.send(payload(publishCard, {
       allowedMentions: { roles: role ? [role.id] : [], users: [] },
     }));

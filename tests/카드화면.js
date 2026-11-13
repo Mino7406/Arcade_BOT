@@ -107,7 +107,7 @@ async function buildScreens() {
   });
 
   // ── 내전 / 모집 ───────────────────────────────
-  add('내전 · 모집', '내전 모집 중', '게임 색 띠 + 게임 아이콘 + 진행 막대 + 버튼이 카드 안에', buildPublicMessagePayload({
+  add('내전 · 모집', '내전 모집 중', '게임 색 띠 + 게임 아이콘 + 진행 막대 + 버튼이 카드 안에 · 알림 예약 중이면 상태 옆에 🔔', buildPublicMessagePayload({
     data: base('lol', { data: { description: '다이아 이하 환영 · 마이크 필수', notifyAt: nowPlus(2) } }), participants: users(6), closed: false, teams: null, roleContent: '<@&1> ',
   }));
   add('내전 · 모집', '내전 정원 차서 자동 마감', '정원이 차면 자동으로 마감됨(초록 띠) — "모집 완료" 상태는 없어졌어요', buildPublicMessagePayload({ data: base('val'), participants: users(10), closed: true, teams: null }));

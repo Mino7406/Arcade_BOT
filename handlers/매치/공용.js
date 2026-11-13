@@ -329,6 +329,13 @@ async function trySendNotify(match, label) {
   await sendMatchStartDm(match, label);
 }
 
+// 공개 카드 다시 그리기용 payload 빌더(라벨별로 내전/모집 모듈이 등록). 알림이 타이머로 발송되면
+// 상태 줄의 🔔를 지우려고 카드를 다시 그릴 때 쓴다.
+const publicPayloadBuilders = {};
+function setPublicPayloadBuilder(label, fn) {
+  publicPayloadBuilders[label] = fn;
+}
+
 // data.notifyAt(epoch ms) 시각에 trySendNotify를 시도한다. notifyAt이 그 사이 바뀌었거나
 // 매치 자체가 취소/종료/삭제로 matchesMap에서 사라졌으면 옛 예약이므로 발송하지 않는다.
 // 이미 지난 시각으로 예약(호출)되면 타이머 없이 바로 시도한다("마감 시 바로" 알림은 마감 때까지 기다림).
@@ -343,9 +350,17 @@ function armNotifyReminder(matchesMap, msgId, match, label) {
     match._notifyTimer = null;
     const current = matchesMap.get(msgId);
     if (!current || current.data?.notifyAt !== notifyAt) return;
+    const wasSent = current.notifySent;
     trySendNotify(current, label).catch(err => {
       console.error('시작 시간 알림 DM 발송 중 오류:', err);
       logError('매치 알림', `${matchTag(current, label)} 시작 알림 처리 중 오류`, err, { 채널: matchChannelName(current) });
+    }).then(async () => {
+      // 이번에 막 발송됐으면(DM 일부가 실패했어도) 공개 카드의 🔔를 지운다. 마감 순간 발송된 경우는 마감 처리에서 카드를 다시 그린다.
+      const build = publicPayloadBuilders[label];
+      if (wasSent || !current.notifySent || !build || matchesMap.get(msgId) !== current) return;
+      await current.message?.edit(build(current)).catch(err => {
+        logError('매치 알림', `${matchTag(current, label)} 알림 발송 후 카드 갱신 실패`, err, { 채널: matchChannelName(current) });
+      });
     });
   };
 
@@ -671,12 +686,22 @@ function matchTeamBlocks(participants, teams, { withUnassigned = true } = {}) {
 }
 
 // 공개 게시 카드. teams가 있으면 참가자 목록 대신 팀 구성을 보여 준다(내전 전용).
-function buildMatchCard({ label, data, participants, closed = false, teams = null, rows = [], roleMention = '' }) {
+// 시작 알림이 예약돼 있고 아직 발송 전이면 true — 상태 문구 옆에 🔔를 붙인다(발송되면 사라짐).
+function isNotifyPending(match) {
+  return !!(match?.data?.notifyAt && !match.notifySent);
+}
+
+// 정원이 차면 자동으로 마감되므로 상태는 둘뿐이다: 마감됨 / 모집 중. (마감을 해제해 정원이 찬 채 열려 있으면 모집 중에 표시만 덧붙인다)
+function matchStatusText({ closed, isFull, notifyOn = false }) {
+  const base = closed ? '🔒 마감됨' : isFull ? '🟢 모집 중 (정원 가득)' : '🟢 모집 중';
+  return notifyOn ? `${base} 🔔` : base;
+}
+
+function buildMatchCard({ label, data, participants, closed = false, teams = null, rows = [], roleMention = '', notifyOn = false }) {
   const { game, gameInfo, title, players, description } = data;
   const max = parseInt(players) || 0;
   const isFull = participants.length >= max;
-  // 정원이 차면 자동으로 마감되므로 상태는 둘뿐이다: 마감됨 / 모집 중. (마감을 해제해 정원이 찬 채 열려 있으면 모집 중에 표시만 덧붙인다)
-  const statusText = closed ? '🔒 마감됨' : isFull ? '🟢 모집 중 (정원 가득)' : '🟢 모집 중';
+  const statusText = matchStatusText({ closed, isFull, notifyOn });
   const color = closed ? COLORS.ok : gameInfo.color;
   return card({
     color,
@@ -913,7 +938,7 @@ function roleIdOf(roleContent) {
 // 멘션 알림은 메시지를 새로 보낼 때만 간다 — pingRole:true 일 때만 allowedMentions 에 역할을 담고(재게시),
 // 보통의 수정(참가·마감 등)은 줄만 남기고 다시 알리지 않는다.
 function buildMatchMessagePayload({ label, match, rows, pingRole = false }) {
-  const cardMsg = buildMatchCard({ label, data: match.data, participants: match.participants, closed: match.closed, teams: match.teams, rows, roleMention: match.roleContent || '' });
+  const cardMsg = buildMatchCard({ label, data: match.data, participants: match.participants, closed: match.closed, teams: match.teams, rows, roleMention: match.roleContent || '', notifyOn: isNotifyPending(match) });
   const roleId = roleIdOf(match.roleContent);
   return payload(cardMsg, { allowedMentions: pingRole && roleId ? { roles: [roleId], users: [] } : { parse: [] } });
 }
@@ -925,7 +950,7 @@ function buildManagePayload({ label, match, note, rows, ephemeral }) {
   const { gameInfo, title, players } = match.data;
   const max = parseInt(players) || 0;
   const isFull = match.participants.length >= max;
-  const status = match.closed ? '🔒 마감됨' : isFull ? '🟢 모집 중 (정원 가득)' : '🟢 모집 중';
+  const status = matchStatusText({ closed: match.closed, isFull, notifyOn: isNotifyPending(match) });
 
   const pulled = { toggle: null, cancel: null };
   const restRows = [];
@@ -1080,6 +1105,8 @@ module.exports = {
   deleteMentionMessage,
   shuffleIntoTeams,
   buildMatchCard,
+  isNotifyPending,
+  setPublicPayloadBuilder,
   findMatchRole,
   ensureMatchRole,
   roleIdOf,
