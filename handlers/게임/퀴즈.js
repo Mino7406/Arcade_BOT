@@ -87,20 +87,49 @@ function badgeLine(grade, xpReward) {
     : `💰 **${xpReward} XP**`;
 }
 
-// 정답 안내 카드. 정답 단어가 제목(##)이고, 위에 작은 "정답입니다!" 줄, 아래에 보상 줄이 온다.
+// 걸린 시간 표시: 59초 / 3분 12초 / 1시간 5분
+function elapsedText(ms) {
+  const sec = Math.max(1, Math.round(ms / 1000));
+  if (sec < 60) return `${sec}초`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}분${sec % 60 ? ` ${sec % 60}초` : ''}`;
+  const h = Math.floor(min / 60);
+  return `${h}시간${min % 60 ? ` ${min % 60}분` : ''}`;
+}
+
+// 정답 안내 카드. 위에 작은 "정답입니다!", 정답 단어가 제목(##), 그 아래 "누가 얼마 만에 맞혔는지",
+// 오른쪽에 정답자 프로필 썸네일, 구분선 아래 보상·난이도 줄. (짧은 세 줄이라 카드가 너무 좁아 보이던 것을 넓힘)
 // 답장이지만 작성자에게 알림이 가지 않게(repliedUser:false) 하고, 레벨업했을 때만 그 유저를 부른다.
-function buildCorrectPayload({ word, xpReward, frozen = false, levelUpLine = '', mentionUserId = null }) {
+function buildCorrectPayload({ word, xpReward, grade = null, frozen = false, levelUpLine = '', mentionUserId = null, solverName = null, solverAvatar = null, elapsedMs = null }) {
+  const badge = GRADE_BADGE[grade];
+  const gradeText = badge ? ` · ${badge.icon} ${grade} ${badge.stars}` : '';
   const reward = frozen
-    ? '-# ⚙️ 현재 XP 지급이 일시 중지되어 이번 정답은 XP가 지급되지 않았습니다.'
-    : `💰 **+${xpReward} XP**${levelUpLine}`;
+    ? `-# ⚙️ 현재 XP 지급이 일시 중지되어 이번 정답은 XP가 지급되지 않았습니다.${gradeText ? `\n-# ${gradeText.slice(3)}` : ''}`
+    : `💰 **+${xpReward} XP**${gradeText}${levelUpLine}`;
+  const who = solverName
+    ? `${solverName} 님이 ${elapsedMs > 0 ? `${elapsedText(elapsedMs)} 만에 ` : ''}맞혔어요`
+    : null;
   return payload(card({
     color: COLORS.ok,
     top: '-# ⭕ 정답입니다!',
     header: word,
-    blocks: [{ text: reward, noDivider: true }],
+    sub: who,
+    thumb: solverAvatar || undefined,
+    thumbAlt: solverName || undefined,
+    blocks: [reward],
   }), {
     allowedMentions: { repliedUser: false, users: mentionUserId ? [mentionUserId] : [] },
   });
+}
+
+// 채팅으로 맞힌 사람의 이름·프로필 사진(서버 프로필 → 계정 프로필)과 걸린 시간.
+function solverInfo(message, quiz) {
+  const m = message.member;
+  return {
+    solverName: m?.displayName || message.author.globalName || message.author.username,
+    solverAvatar: (m?.displayAvatarURL?.({ size: 128 }) || message.author.displayAvatarURL?.({ size: 128 })) ?? null,
+    elapsedMs: quiz.postedAt ? Date.now() - quiz.postedAt : null,
+  };
 }
 
 function buildQuizCard({ word, hint, grade, xpReward }) {
@@ -270,7 +299,7 @@ async function postQuiz(client, state, picked, slotKey = 'activeQuiz', extraFiel
     const xpReward = GRADE_XP[picked.grade] ?? DEFAULT_XP_REWARD;
     const quiz = {
       channelId: QUIZ_CHANNEL_ID, guildId: channel.guildId, word: picked.word,
-      grade: picked.grade ?? null, xpReward, ...extraFields,
+      grade: picked.grade ?? null, xpReward, postedAt: Date.now(), ...extraFields, // postedAt: 정답 카드의 "걸린 시간"
     };
     client[slotKey] = quiz;
     state[slotKey] = quiz;
@@ -533,13 +562,13 @@ async function handleQuizMessage(message) {
     if (isMinigameXpFrozen()) {
       // 관리자 긴급정지 중(미니게임) — 정답 처리는 하되 XP는 지급하지 않는다.
       logSystem({ 유형: '퀴즈', 유저: userLabel(message.author.id), 채널: `#${message.channel?.name ?? message.channelId}`, 내용: `정답 '${quiz.word}'(${quiz.grade ?? '-'}) — 미니게임 XP 긴급정지 중이라 XP 미지급` });
-      await message.reply(buildCorrectPayload({ word: quiz.word, frozen: true })).catch(() => {});
+      await message.reply(buildCorrectPayload({ word: quiz.word, grade: quiz.grade, frozen: true, ...solverInfo(message, quiz) })).catch(() => {});
       return;
     }
 
     const result = applyXp(quiz.guildId, message.author.id, quiz.xpReward, `퀴즈 정답 '${quiz.word}'(${quiz.grade ?? '-'}, ${slotKey === 'activeQuiz' ? '자동' : '관리자'} 출제)`);
     const levelUpLine = result.leveledUp ? `\n<@${message.author.id}>님이 ${result.newLevel}레벨을 달성했어요. 🎉` : '';
-    await message.reply(buildCorrectPayload({ word: quiz.word, xpReward: quiz.xpReward, levelUpLine, mentionUserId: result.leveledUp ? message.author.id : null })).catch(() => {});
+    await message.reply(buildCorrectPayload({ word: quiz.word, xpReward: quiz.xpReward, grade: quiz.grade, levelUpLine, mentionUserId: result.leveledUp ? message.author.id : null, ...solverInfo(message, quiz) })).catch(() => {});
     return; // 한 메시지는 한 슬롯만 채점
   }
 }
