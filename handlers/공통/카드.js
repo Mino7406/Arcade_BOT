@@ -151,8 +151,9 @@ function card(o = {}) {
     if (block === null || block === undefined || block === false) continue;
     const spec = typeof block === 'string' ? { text: block } : block;
     if (spec.image) {
-      // 본문 중간에 들어가는 그림(attachment://파일명 또는 URL)
-      if (!first) container.addSeparatorComponents(gap());
+      // 본문 중간에 들어가는 그림(attachment://파일명 또는 URL). divider:true 면 제목 바로 아래여도 위에 구분선을 긋는다.
+      if (spec.divider) container.addSeparatorComponents(divider());
+      else if (!first) container.addSeparatorComponents(gap());
       container.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(item => item.setURL(spec.image)));
       first = false;
       continue;

@@ -173,7 +173,7 @@ function buildSpinningPayload(lobby, bet, reels, phase = 0) {
     color: COLORS.info,
     header: '🎰 룰렛머신',
     sub: [`<@${lobby.userId}>`, '릴이 돌아가는 중...'],
-    blocks: [{ image: SLOT_URL }],
+    blocks: [{ image: SLOT_URL, divider: true }], // 결과 카드와 같은 자리에 구분선(그림이 위아래로 움직이지 않게)
     footer: '🎰 두근두근... 릴이 하나씩 멈춰요',
   }), { files: [slotFile(png)] });
 }
@@ -193,7 +193,7 @@ function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multi
     header: '🎰 룰렛머신',
     sub: [`<@${lobby.userId}>`, '결과'],
     blocks: [
-      { image: SLOT_URL },
+      { image: SLOT_URL, divider: true }, // 제목·결과 줄 아래 구분선
       `### ${resultLine}　${netLine}`, // 결과와 손익을 한 줄에
     ],
     footer: '⏰ 하루에 한 번만 돌릴 수 있어요.',
