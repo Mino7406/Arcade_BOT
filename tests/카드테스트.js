@@ -320,7 +320,7 @@ function rowsIn(list, acc = []) {
     assert.strictEqual(dm.isDmEnabled('u-test'), true);
   });
 
-  check('퀴즈 정답 카드: 정답자 프로필 썸네일 옆에 "N분 N초 만에 맞혔어요", 아래 보상·난이도', () => {
+  check('퀴즈 정답 카드: 정답자 프로필 썸네일 옆에 "N분 N초 만에 맞혔어요", 아래 보상', () => {
     const q = require('../handlers/게임/퀴즈');
     const json = (p) => p.components.map(c => c.toJSON());
     const [box] = json(q.buildCorrectPayload({ word: '바늘꽂이', xpReward: 200, grade: '초급', solverName: '유민', solverAvatar: 'https://x/a.png', elapsedMs: 192000 }));
@@ -328,12 +328,12 @@ function rowsIn(list, acc = []) {
     assert.strictEqual(head.type, 9, '썸네일 섹션');
     assert.deepStrictEqual(head.components.map(t => t.content), ['-# ⭕ 정답입니다!', '## 바늘꽂이', '-# 유민 님이 3분 12초 만에 맞혔어요']);
     assert.strictEqual(head.accessory.media.url, 'https://x/a.png');
-    assert.strictEqual(box.components.at(-1).content, '💰 **+200 XP** · 🟢 초급 ★☆☆');
+    assert.strictEqual(box.components.at(-1).content, '💰 **+200 XP**', '난이도는 표시하지 않음');
     const t = (ms) => JSON.stringify(json(q.buildCorrectPayload({ word: 'a', xpReward: 1, solverName: '나', elapsedMs: ms }))).match(/나 님이[^"]*/)[0];
     assert.ok(t(45000).includes('45초 만에') && t(3600e3 + 300e3).includes('1시간 5분 만에') && t(120000).includes('2분 만에'));
     assert.ok(t(null).endsWith('나 님이 맞혔어요'), '출제 시각을 모르는 옛 문제는 시간 없이');
     const frozen = json(q.buildCorrectPayload({ word: 'a', frozen: true, grade: '고급', solverName: '나' }))[0];
-    assert.ok(frozen.components.at(-1).content.includes('지급되지 않았습니다') && frozen.components.at(-1).content.includes('🔴 고급'));
+    assert.ok(frozen.components.at(-1).content.includes('지급되지 않았습니다') && !frozen.components.at(-1).content.includes('고급'));
   });
 
   await checkAsync('게임 썸네일: 여백 넣은 앱 이모지를 없을 때만 등록하고, 준비 전에는 원래 그림', async () => {

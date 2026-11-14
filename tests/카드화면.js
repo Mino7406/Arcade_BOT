@@ -174,7 +174,7 @@ async function buildScreens() {
   add('레벨 · 랭킹 · 퀴즈', '오늘의 퀴즈', '', card.payload(quizMod.buildQuizCard({ word: '고양이', hint: '집에서 기르는 작은 동물로, 야옹 하고 운다.', grade: '쉬움', xpReward: 40 })));
 
   add('레벨 · 랭킹 · 퀴즈', '레벨업 축하', '', req('handlers/레벨/레벨링.js').buildLevelUpPayload('100', 8));
-  add('레벨 · 랭킹 · 퀴즈', '퀴즈 정답', '정답자 프로필 썸네일 + 걸린 시간 + 보상·난이도', quizMod.buildCorrectPayload({ word: '바늘꽂이', xpReward: 200, grade: '초급', solverName: '유민', solverAvatar: 'https://cdn.discordapp.com/embed/avatars/2.png', elapsedMs: 192000 }));
+  add('레벨 · 랭킹 · 퀴즈', '퀴즈 정답', '정답자 프로필 썸네일 + 걸린 시간 + 보상', quizMod.buildCorrectPayload({ word: '바늘꽂이', xpReward: 200, grade: '초급', solverName: '유민', solverAvatar: 'https://cdn.discordapp.com/embed/avatars/2.png', elapsedMs: 192000 }));
   add('레벨 · 랭킹 · 퀴즈', '퀴즈 정답 (XP 긴급정지 중)', '', quizMod.buildCorrectPayload({ word: '고양이', grade: '중급', frozen: true, solverName: '민호', solverAvatar: 'https://cdn.discordapp.com/embed/avatars/1.png', elapsedMs: 45000 }));
 
   // ── 패치노트·점검 알림(공지 채널에 올라오는 카드) ───────

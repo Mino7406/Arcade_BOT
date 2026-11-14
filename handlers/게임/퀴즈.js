@@ -98,14 +98,13 @@ function elapsedText(ms) {
 }
 
 // 정답 안내 카드. 위에 작은 "정답입니다!", 정답 단어가 제목(##), 그 아래 "누가 얼마 만에 맞혔는지",
-// 오른쪽에 정답자 프로필 썸네일, 구분선 아래 보상·난이도 줄. (짧은 세 줄이라 카드가 너무 좁아 보이던 것을 넓힘)
+// 오른쪽에 정답자 프로필 썸네일, 구분선 아래 보상 줄. (짧은 세 줄이라 카드가 너무 좁아 보이던 것을 넓힘)
+// 난이도는 문제 카드에서 이미 보였으므로 정답 카드에는 넣지 않는다(grade 는 받아도 표시하지 않음).
 // 답장이지만 작성자에게 알림이 가지 않게(repliedUser:false) 하고, 레벨업했을 때만 그 유저를 부른다.
-function buildCorrectPayload({ word, xpReward, grade = null, frozen = false, levelUpLine = '', mentionUserId = null, solverName = null, solverAvatar = null, elapsedMs = null }) {
-  const badge = GRADE_BADGE[grade];
-  const gradeText = badge ? ` · ${badge.icon} ${grade} ${badge.stars}` : '';
+function buildCorrectPayload({ word, xpReward, frozen = false, levelUpLine = '', mentionUserId = null, solverName = null, solverAvatar = null, elapsedMs = null }) {
   const reward = frozen
-    ? `-# ⚙️ 현재 XP 지급이 일시 중지되어 이번 정답은 XP가 지급되지 않았습니다.${gradeText ? `\n-# ${gradeText.slice(3)}` : ''}`
-    : `💰 **+${xpReward} XP**${gradeText}${levelUpLine}`;
+    ? '-# ⚙️ 현재 XP 지급이 일시 중지되어 이번 정답은 XP가 지급되지 않았습니다.'
+    : `💰 **+${xpReward} XP**${levelUpLine}`;
   const who = solverName
     ? `${solverName} 님이 ${elapsedMs > 0 ? `${elapsedText(elapsedMs)} 만에 ` : ''}맞혔어요`
     : null;
