@@ -760,7 +760,7 @@ async function handleMojipMatchEditModal(interaction) {
   // 켜 둔 알림(아직 발송 전)은 새 일시를 읽을 수 있으면 일시 10분 전으로 옮긴다(자동 알림이 된다). 이미 보낸 뒤 일시를 미루면 다시 건다.
   const notifySync = syncNotifyOnEdit(match, prevDatetime);
   if (notifySync === 'changed' || notifySync === 'off' || notifySync === 'rearmed') armNotifyReminder(getMojips(interaction.client), msgId, match, '모집');
-  // 마감된 상태에서 일시를 바꾸면 자동 삭제 시각(마감·시작 중 늦은 쪽 + 6시간)도 다시 계산한다.
+  // 마감된 상태에서 일시를 바꾸면 자동 삭제 시각(마감·시작 중 늦은 쪽 + 4시간)도 다시 계산한다.
   if (match.closed && match.data.datetime !== prevDatetime) armAutoEnd(getMojips(interaction.client), msgId, match, '모집');
 
   await match.message.edit(buildMojipMessagePayload(match));

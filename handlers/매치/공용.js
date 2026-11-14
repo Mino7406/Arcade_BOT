@@ -99,9 +99,9 @@ function matchChannelName(match) {
   return match?.message?.channel?.name ? `#${match.message.channel.name}` : '-';
 }
 
-const AUTO_CLOSE_DELAY_MS = 6 * 60 * 60 * 1000;
-const CANCELLED_DELETE_DELAY_MS = 2 * 60 * 60 * 1000;
-const GENERAL_MESSAGE_DELETE_DELAY_MS = 1 * 60 * 60 * 1000;
+const AUTO_CLOSE_DELAY_MS = 4 * 60 * 60 * 1000;
+const CANCELLED_DELETE_DELAY_MS = 1 * 60 * 60 * 1000;
+const GENERAL_MESSAGE_DELETE_DELAY_MS = 10 * 60 * 1000;
 
 function clearAutoEndTimer(match) {
   if (match._autoEndTimer) {
