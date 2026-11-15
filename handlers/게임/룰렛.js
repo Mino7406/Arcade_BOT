@@ -216,7 +216,7 @@ function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multi
 function buildHackPromptPayload(prompt, have) {
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`roulette:hack:${prompt.id}`).setEmoji(hackUseButtonEmoji()).setLabel('사용').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId(`roulette:keep:${prompt.id}`).setLabel('그냥 확정').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`roulette:keep:${prompt.id}`).setLabel('넘기기').setStyle(ButtonStyle.Secondary),
   );
   return payload(card({
     color: HACK_COLOR,
@@ -469,7 +469,7 @@ async function offerHack(interaction, ctx) {
   }, HACK_PROMPT_MS);
 }
 
-// 🛠️ 사용 / 그냥 확정 버튼
+// 🛠️ 사용 / 넘기기 버튼
 async function handleHackButton(interaction, action, promptId) {
   const prompts = getHackPrompts(interaction.client);
   const prompt = prompts.get(promptId);

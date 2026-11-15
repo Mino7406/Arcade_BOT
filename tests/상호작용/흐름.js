@@ -353,7 +353,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
 
   // ── 해킹 툴: 레이드 보상(최대 3장) · 룰렛 꽝 번복 ──
   const hack = require(path.join(root, 'handlers/게임/해킹툴.js'));
-  await flow('해킹 툴: 최대 3장 · 꽝이면 본인에게만 묻고 번복 · 그냥 확정', async () => {
+  await flow('해킹 툴: 최대 3장 · 꽝이면 본인에게만 묻고 번복 · 넘기기', async () => {
     assert(hack.grantHackTool('g1', 'h0') && hack.grantHackTool('g1', 'h0') && hack.grantHackTool('g1', 'h0'), '3장까지 못 받음');
     assert(!hack.grantHackTool('g1', 'h0') && hack.getHackTools('g1', 'h0') === 3, '4장째를 받아 버림');
 
@@ -391,7 +391,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
       await roulette.handleRouletteButton(mkInteraction({ user: 'h1', customId: `roulette:hack:${spin.id}`, message: prompt.followUp }));
       assert(lv.getXp('g1', 'h1') === xp0 + 10, '같은 버튼을 다시 눌러 또 돌아감');
 
-      // 해킹 툴이 남아 있어도 '그냥 확정'이면 쓰지 않는다
+      // 해킹 툴이 남아 있어도 '넘기기'이면 쓰지 않는다
       lv.applyXp('g1', 'h2', 800, 'test');
       hack.grantHackTool('g1', 'h2');
       const s2 = mkInteraction({ user: 'h2', command: '룰렛' });
@@ -402,7 +402,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
       await roulette.handleRouletteButton(spin2);
       const p2 = client.rouletteHacks.get(spin2.id);
       await roulette.handleRouletteButton(mkInteraction({ user: 'h2', customId: `roulette:keep:${spin2.id}`, message: p2.followUp }));
-      assert(hack.getHackTools('g1', 'h2') === 1 && !client.rouletteHacks.has(spin2.id), '그냥 확정인데 해킹 툴이 쓰이거나 판이 남음');
+      assert(hack.getHackTools('g1', 'h2') === 1 && !client.rouletteHacks.has(spin2.id), '넘기기인데 해킹 툴이 쓰이거나 판이 남음');
     } finally {
       Math.random = realRandom;
     }
