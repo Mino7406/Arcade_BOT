@@ -26,6 +26,7 @@ const {
   setUserXpFrozen,
 } = require('../레벨/레벨링');
 const { logAction } = require('../공통/로그');
+const { HACK_TOOL_NAME, HACK_TOOL_MAX, getHackTools, grantHackTool, useHackTool, hackToolEmoji, hackToolButtonEmoji } = require('../게임/해킹툴');
 const { getRaidStatus, setAutoSpawn, setNextSpawnAt, setNextMonster, forceSpawnRaid, forceEndRaid } = require('../레이드');
 const { MONSTERS } = require('../레이드/전투');
 const { kstDateTimeString, parseKstDateTime } = require('../공통/시간');
@@ -86,6 +87,13 @@ function buildActionRows(guildId, targetId) {
         .setEmoji(frozen ? '✅' : '🚫')
         .setLabel(frozen ? '지급 재개' : '지급 정지')
         .setStyle(ButtonStyle.Secondary),
+    ),
+    // 해킹 툴(레이드 보상, 룰렛 꽝 번복권) 수동 지급·회수 — 최대 보유면 지급, 0개면 회수 버튼이 꺼진다
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`xp:hackadd:${targetId}`).setEmoji(hackToolButtonEmoji()).setLabel(`${HACK_TOOL_NAME} 지급`)
+        .setStyle(ButtonStyle.Primary).setDisabled(getHackTools(guildId, targetId) >= HACK_TOOL_MAX),
+      new ButtonBuilder().setCustomId(`xp:hacksub:${targetId}`).setLabel(`${HACK_TOOL_NAME} 회수`)
+        .setStyle(ButtonStyle.Secondary).setDisabled(getHackTools(guildId, targetId) <= 0),
     ),
   ];
 }
@@ -269,6 +277,7 @@ function buildPanelCard(guildId, targetId, targetUser, displayName, notice, rows
       `대상 : <@${targetId}> (\`${displayName}\`)` +
         (frozen ? '\n🚫 **지급 정지 중** — 자동 지급 경로(채팅·통화방·미니게임 등)에서 더 이상 XP를 받지 않습니다.' : ''),
       `### LEVEL ${level}\n${bar}\n**${currentLevelXp} / ${neededXp}** XP　(누적 \`${xp}\` XP)`,
+      `${hackToolEmoji()} **${HACK_TOOL_NAME}** ${getHackTools(guildId, targetId)} / ${HACK_TOOL_MAX}개`,
     ],
     footer: '아래 버튼으로 XP를 조정할 수 있습니다.',
     rows,
@@ -442,6 +451,19 @@ async function handleXpButton(interaction) {
     await interaction.update(buildPanelView(interaction, targetId, target,
       frozen ? '✅ **이 유저의 XP 지급을 재개**했습니다.' : '🚫 **이 유저의 XP 지급을 정지**했습니다.',
     ));
+    return;
+  }
+
+  if (action === 'hackadd' || action === 'hacksub') {
+    const add = action === 'hackadd';
+    const ok = add ? grantHackTool(interaction.guildId, targetId) : useHackTool(interaction.guildId, targetId);
+    const target = await resolveTarget(interaction, targetId);
+    const have = getHackTools(interaction.guildId, targetId);
+    if (ok) logAction(interaction, 'XP 조정', `${target.displayName}(${targetId}) ${HACK_TOOL_NAME} ${add ? '지급' : '회수'} → ${have}개`);
+    const msg = ok
+      ? `${hackToolEmoji()} **${HACK_TOOL_NAME} 1개를 ${add ? '지급' : '회수'}**했습니다. (보유 ${have} / ${HACK_TOOL_MAX}개)`
+      : add ? `⚠️ 이미 최대(${HACK_TOOL_MAX}개)로 갖고 있어요.` : '⚠️ 회수할 해킹 툴이 없어요.';
+    await interaction.update(buildPanelView(interaction, targetId, target, msg));
     return;
   }
 

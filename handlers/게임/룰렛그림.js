@@ -555,11 +555,11 @@ function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = 
 }
 
 // ── 해킹 침입 연출(해킹 툴을 쓰면 다시 돌리기 전에 짧게) ─────────────────────
-// 직전 꽝 결과를 해킹된 기계로 보여 주면서 단계마다 글리치가 심해지고, 가운데 창에 침입 진행 상황을 띄운다.
+// 간결하게: 직전 꽝 결과(어둡게) 위 정중앙에 해킹 툴 해골이 점점 크게 떠오르고, 글리치가 지지직거린다.
 const INTRO_STEPS = [
-  { title: 'SYSTEM  BREACH', sub: '보안 우회 중...', progress: 0.18, color: '#ff4d6d', power: 1.6 },
-  { title: 'HACKING...', sub: '결과 데이터 변조 중...', progress: 0.64, color: '#b26bff', power: 2.4 },
-  { title: 'ACCESS  GRANTED', sub: '릴 다시 돌리는 중!', progress: 1, color: '#3ee6ff', power: 1.2 },
+  { size: 70, dim: 0.55, power: 2.2 },
+  { size: 112, dim: 0.35, power: 1.6 },
+  { size: 140, dim: 0.25, power: 1.0 },
 ];
 const INTRO_STEP_COUNT = INTRO_STEPS.length;
 
@@ -577,25 +577,17 @@ function renderHackIntro({ reels, bet, step = 0 }) {
   const f = getFont();
   drawHackDecor(p, step);
   for (let i = 0; i < 3; i++) {
-    if (!reels?.[i]) continue;
-    const [ox, oy] = SYMBOL_OFFSET[reels[i]] || [0, 0];
-    drawSymbol(p, reels[i], WIN_X[i] + WIN_W / 2 + ox, WIN_CY + oy);
-    dimWindow(p, WIN_X[i], 0.5);
+    if (reels?.[i]) {
+      const [ox, oy] = SYMBOL_OFFSET[reels[i]] || [0, 0];
+      drawSymbol(p, reels[i], WIN_X[i] + WIN_W / 2 + ox, WIN_CY + oy);
+    }
+    dimWindow(p, WIN_X[i], st.dim);
   }
   const py = BOTTOM_PLATE_Y + PLATE_H / 2 - 1;
   if (bet != null) p.text(f, `베팅 : ${bet} XP`, 108, py, { size: 20, color: '#ffe9a8', align: 'left' });
-  p.text(f, '해킹 중...', 492, py, { size: 22, color: st.color, align: 'right' });
+  p.text(f, '해킹 중...', 492, py, { size: 22, color: HACK.border, align: 'right' });
+  drawSkull(p, 300, WIN_CY, st.size); // 정중앙 해골(글리치에 같이 흔들린다)
   applyGlitch(p, 11 + step * 5, st.power);
-
-  // 가운데 침입 창(글리치 위에 또렷하게)
-  const bx = 130, by = 84, bw = 340, bh = 88;
-  p.roundRect(bx - 3, by - 3, bw + 6, bh + 6, 14, st.color);
-  p.roundRect(bx, by, bw, bh, 12, '#05020f');
-  p.text(f, st.title, 300, by + 24, { size: 24, color: st.color });
-  p.text(f, st.sub, 300, by + 50, { size: 15, color: '#d9ccff' });
-  const barX = bx + 24, barY = by + 64, barW = bw - 48, barH = 10;
-  p.roundRect(barX, barY, barW, barH, 5, '#2a1a4a');
-  p.roundRect(barX, barY, Math.max(10, barW * st.progress), barH, 5, st.color);
   return p.png();
 }
 

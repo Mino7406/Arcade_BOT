@@ -84,7 +84,7 @@ function mkChannel(id = 'c1') {
 }
 const client = {
   user: { id: 'bot', username: 'ARCADE', displayAvatarURL: () => 'https://x/a.png' },
-  users: { fetch: async (id) => ({ id, username: id, send: async (p) => new FakeMsg(p, mkChannel('dm')) }) },
+  users: { fetch: async (id) => ({ id, username: id, displayAvatarURL: () => 'https://x/u.png', send: async (p) => new FakeMsg(p, mkChannel('dm')) }) },
   channels: { fetch: async () => channel, cache: new Map() },
   guilds: { cache: new Map() },
 };
@@ -447,6 +447,15 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     for (const cid of ['xp:menu:manage', 'xp:mng:boost', 'xp:mng:raidauto', 'xp:mng:farm', 'xp:mngno', 'xp:menu:home', 'xp:menu:adjust', 'xp:menu:home']) {
       await xp.handleXpButton(mkInteraction({ user: ADMIN, customId: cid, message: msg }));
     }
+    // XP 조정 유저 패널: 해킹 툴 지급(최대 3개에서 멈춤) · 회수
+    const hackMod = require(path.join(root, 'handlers/게임/해킹툴.js'));
+    for (let i = 0; i < 4; i++) await xp.handleXpButton(mkInteraction({ user: ADMIN, customId: 'xp:hackadd:hx1', message: msg }));
+    assert(hackMod.getHackTools('g1', 'hx1') === 3, `관리자 지급이 최대 3개에서 멈추지 않음(${hackMod.getHackTools('g1', 'hx1')})`);
+    assert(JSON.stringify(msg.components).includes('3 / 3개'), 'XP 조정 패널에 해킹 툴 보유 개수가 안 보임');
+    await xp.handleXpButton(mkInteraction({ user: ADMIN, customId: 'xp:hacksub:hx1', message: msg }));
+    assert(hackMod.getHackTools('g1', 'hx1') === 2, '관리자 회수가 안 됨');
+    await xp.handleXpButton(mkInteraction({ user: 'u9', customId: 'xp:hackadd:hx1', message: msg }));
+    assert(hackMod.getHackTools('g1', 'hx1') === 2, '관리자가 아닌데 해킹 툴이 지급됨');
     for (const cid of ['quiz:refresh', 'quiz:pause', 'quiz:resume']) {
       await quizAdmin.handleQuizAdminButton(mkInteraction({ user: ADMIN, customId: cid, message: msg }));
     }

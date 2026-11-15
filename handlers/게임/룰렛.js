@@ -200,7 +200,7 @@ function buildSpinningPayload(lobby, bet, reels, phase = 0, hacks = 0) {
 }
 
 // 해킹 침입 연출 카드(해킹 툴을 쓴 뒤 다시 돌리기 전). reels: 직전 꽝 결과, step: 단계 번호.
-const INTRO_STEP_MS = 1100; // 단계 사이 간격(3단계 ≈ 3.3초). 디스코드 메시지 수정 제한(약 5초에 5번) 안쪽
+const INTRO_STEP_MS = 900; // 단계 사이 간격(3단계 ≈ 2.7초). 디스코드 메시지 수정 제한(약 5초에 5번) 안쪽
 function buildHackIntroPayload(lobby, bet, reels, step, hacks) {
   const png = renderHackIntro({ reels, bet, step });
   return payload(card({
