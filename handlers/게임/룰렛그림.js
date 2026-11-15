@@ -555,13 +555,24 @@ function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = 
 }
 
 // ── 해킹 침입 연출(해킹 툴을 쓰면 다시 돌리기 전에 짧게) ─────────────────────
-// 간결하게: 직전 꽝 결과(어둡게) 위 정중앙에 해킹 툴 해골이 점점 크게 떠오르고, 글리치가 지지직거린다.
+// 1·2단계: 평범한 룰렛 기계가 점점 해킹된 기계 색으로 물들고, 위 판의 'ARCADE ROULETTE' 글자가 깨지며 'SYSTEM HACKED'로 바뀌어 간다.
+// 3단계: 완전히 해킹된 기계 — 직전 꽝 결과(어둡게) 위 정중앙에 해킹 툴 해골이 크게 뜬다.
 const INTRO_STEPS = [
-  { size: 70, dim: 0.55, power: 2.2 },
-  { size: 112, dim: 0.35, power: 1.6 },
-  { size: 140, dim: 0.25, power: 1.0 },
+  { mix: 0.15, brand: 'ARC4DE  RO#LET7E', brandColor: '#f5c542', dim: 1, power: 0.7 },
+  { mix: 0.6, brand: 'SY5T#M  H@CK#D', brandColor: '#c9a8ff', dim: 0.75, power: 1.6 },
+  { skull: 140, dim: 0.25, power: 1.0 },
 ];
 const INTRO_STEP_COUNT = INTRO_STEPS.length;
+
+// 두 배경 버퍼를 t 만큼 섞어 painter 버퍼에 넣는다(0 = 평범한 기계, 1 = 해킹된 기계)
+function mixInto(p, a, b, t) {
+  const buf = p.buf;
+  for (let i = 0; i < buf.length; i++) buf[i] = a[i] + (b[i] - a[i]) * t;
+}
+const lerpHex = (h1, h2, t) => {
+  const c = (h, k) => parseInt(h.slice(1 + k * 2, 3 + k * 2), 16);
+  return '#' + [0, 1, 2].map(k => Math.round(c(h1, k) + (c(h2, k) - c(h1, k)) * t).toString(16).padStart(2, '0')).join('');
+};
 
 /**
  * 해킹 침입 연출 그림 한 장(PNG).
@@ -573,20 +584,29 @@ const INTRO_STEP_COUNT = INTRO_STEPS.length;
 function renderHackIntro({ reels, bet, step = 0 }) {
   const st = INTRO_STEPS[Math.max(0, Math.min(INTRO_STEP_COUNT - 1, step))];
   const p = getPainter();
-  getHackBg().copy(p.buf);
   const f = getFont();
-  drawHackDecor(p, step);
+  const final = !!st.skull;
+  if (final) {
+    getHackBg().copy(p.buf);
+    drawHackDecor(p, step);
+  } else {
+    mixInto(p, getBg(), getHackBg(), st.mix);
+    // 위 판 글자를 깨진 글자로 다시 쓴다(판 안쪽만 덮어 테두리는 그대로)
+    p.roundRect(53, TOP_PLATE_Y + 3, 494, PLATE_H - 6, 10, lerpHex('#150a14', '#07031a', st.mix));
+    p.text(f, st.brand, 300, TOP_PLATE_Y + PLATE_H / 2, { size: 19, color: st.brandColor });
+    drawBulbs(p, step);
+  }
   for (let i = 0; i < 3; i++) {
     if (reels?.[i]) {
       const [ox, oy] = SYMBOL_OFFSET[reels[i]] || [0, 0];
       drawSymbol(p, reels[i], WIN_X[i] + WIN_W / 2 + ox, WIN_CY + oy);
     }
-    dimWindow(p, WIN_X[i], st.dim);
+    if (st.dim < 1) dimWindow(p, WIN_X[i], st.dim);
   }
   const py = BOTTOM_PLATE_Y + PLATE_H / 2 - 1;
   if (bet != null) p.text(f, `베팅 : ${bet} XP`, 108, py, { size: 20, color: '#ffe9a8', align: 'left' });
-  p.text(f, '해킹 중...', 492, py, { size: 22, color: HACK.border, align: 'right' });
-  drawSkull(p, 300, WIN_CY, st.size); // 정중앙 해골(글리치에 같이 흔들린다)
+  p.text(f, '해킹 중...', 492, py, { size: 22, color: final ? HACK.border : lerpHex('#ff9a9a', '#3ee6ff', st.mix), align: 'right' });
+  if (final) drawSkull(p, 300, WIN_CY, st.skull); // 정중앙 해골(글리치에 같이 흔들린다)
   applyGlitch(p, 11 + step * 5, st.power);
   return p.png();
 }
