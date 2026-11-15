@@ -140,7 +140,7 @@ Arcade_BOT/
 │  └─ realm_roster.json       # 길드별 마크(렐름) 승인 명단·검토 대기 신청·명단 메시지 ID
 ├─ assets/                   # 임베드에 첨부하는 이미지 (마크 신청서 썸네일 mc_realm_thumbnail.webp)
 │  ├─ 이모지/hacktool.png     # 해킹 툴 앱 이모지 원본(봇 시작 때 hacktool_v2 로 등록, 실패하면 🛠️)
-│  ├─ 이모지/hackuse.png      # 룰렛 꽝 확인 메시지 '사용' 버튼 이모지(hackuse_v1)
+│  ├─ 이모지/hackuse.png      # 룰렛 꽝 확인 메시지 '사용' 버튼 이모지(hackuse_v2, 밝은 테마에서도 보이게 검은 테두리)
 └─ env                       # 환경변수 파일 (gitignore, 아래 참고)
 ```
 

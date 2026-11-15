@@ -17,7 +17,7 @@ const HACK_TOOL_NAME = '해킹 툴';
 const EMOJI_DIR = path.join(__dirname, '..', '..', 'assets', '이모지');
 const EMOJIS = {
   tool: { name: 'hacktool_v2', file: 'hacktool.png', fallback: '🛠️', id: null }, // 아이템 자체(글자 속)
-  use: { name: 'hackuse_v1', file: 'hackuse.png', fallback: '🛠️', id: null },    // 꽝 확인 메시지의 '사용' 버튼
+  use: { name: 'hackuse_v2', file: 'hackuse.png', fallback: '🛠️', id: null },    // 꽝 확인 메시지의 '사용' 버튼
 };
 const EMOJI_NAME = EMOJIS.tool.name;
 const EMOJI_FILE = path.join(EMOJI_DIR, EMOJIS.tool.file);
