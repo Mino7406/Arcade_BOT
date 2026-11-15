@@ -381,8 +381,8 @@ async function spinLobby(interaction, lobby, lobbies) {
   // 과정에서 오류가 나더라도(권한 문제 등) 최소한 본인에게는 결과를 보여준다.
   let shown = null;
   try {
-    // 로비 메시지는 바로 지우지 않고 '돌리는 중' 안내로 바꿔 둔다 — 꽝이면 이 자리를 해킹 툴 확인으로 다시 쓴다.
-    // (후속 메시지(followUp)로 따로 보내면 지워진 로비에 단 답장처럼 보여 "메시지를 불러올 수 없어요"가 뜬다)
+    // 로비 메시지는 바로 지우지 않고 '돌리는 중' 안내로 바꿔 둔다. 꽝이면 해킹 툴 확인을 결과 아래(후속 메시지)에 띄우는데,
+    // 후속 메시지는 이 로비에 단 답장처럼 보여서 로비를 먼저 지우면 "메시지를 불러올 수 없어요"가 뜬다 — 확인이 끝나면 함께 지운다.
     await interaction.editReply(notice('🎰 **채널에서 룰렛을 돌리는 중...**')).catch(() => {});
     // interaction.channel은 캐시에 없으면 null일 수 있으므로(재시작 직후 등) fetch로 안전하게 가져온다.
     const channel = interaction.channel ?? await interaction.client.channels.fetch(interaction.channelId);
@@ -400,7 +400,7 @@ async function spinLobby(interaction, lobby, lobbies) {
 
   // 꽝이고 해킹 툴이 있으면 번복할지 본인에게만 묻는다(결과를 채널에 못 올렸으면 다시 돌릴 자리가 없어 묻지 않음).
   // 묻지 않으면 '돌리는 중' 안내(예전 로비 자리)는 지운다. 공개 실패로 결과를 여기 보여 줬으면 남긴다.
-  if (spin.kind === 'none' && shown && await offerHack(interaction, { lobby, bet, ...shown, hacks: 0 })) return;
+  if (spin.kind === 'none' && shown && await offerHack(interaction, { lobby, bet, ...shown, hacks: 0, root: interaction })) return;
   if (shown) await interaction.deleteReply().catch(() => {});
 }
 
@@ -461,16 +461,18 @@ async function revealSpin(channel, message, lobby, bet, spin, hacks) {
 }
 
 // 꽝이 나왔을 때 해킹 툴이 있으면 본인에게만 보이는 확인을 띄운다. 시간이 지나면 결과 확정.
-// 새 메시지가 아니라 그 상호작용의 본인 전용 메시지(처음엔 로비 자리, 다시 돌린 뒤엔 이 확인 메시지 자리)를 고쳐 쓴다.
-// 띄웠으면 true.
+// 처음엔 결과 카드 아래에 후속 메시지로 띄우고(로비 자리는 결과 카드보다 위라 놓치기 쉽다),
+// 다시 돌린 뒤 또 꽝이면 같은 확인 메시지 자리(버튼을 누른 메시지)를 고쳐 쓴다. 띄웠으면 true.
+// ctx.root: 처음 🎰 돌리기를 누른 상호작용 — 그 '돌리는 중' 안내(예전 로비 자리)를 마지막에 함께 지운다.
 async function offerHack(interaction, ctx) {
   const have = hackToolsOf(ctx.lobby.guildId, ctx.lobby.userId);
   if (have <= 0) return false;
   const prompts = getHackPrompts(interaction.client);
-  const prompt = { ...ctx, id: interaction.id, guildId: ctx.lobby.guildId, userId: ctx.lobby.userId, interaction, timeoutId: null };
+  const prompt = { ...ctx, id: interaction.id, guildId: ctx.lobby.guildId, userId: ctx.lobby.userId, interaction, msg: null, timeoutId: null };
   prompts.set(prompt.id, prompt);
   try {
-    await interaction.editReply(buildHackPromptPayload(prompt, have));
+    if (interaction === ctx.root) prompt.msg = await interaction.followUp(buildHackPromptPayload(prompt, have, { ephemeral: true }));
+    else await interaction.editReply(buildHackPromptPayload(prompt, have));
   } catch (err) {
     prompts.delete(prompt.id);
     console.error('해킹 툴 확인 메시지 표시 실패:', err);
@@ -479,9 +481,18 @@ async function offerHack(interaction, ctx) {
   prompt.timeoutId = setTimeout(() => {
     if (prompts.get(prompt.id) !== prompt) return;
     prompts.delete(prompt.id);
-    interaction.editReply(notice('⏰ **시간이 지나 결과가 그대로 확정됐어요.**')).catch(() => {});
+    closePrompt(prompt); // 시간이 지나면 결과 확정 — 확인 메시지와 '돌리는 중' 안내를 지운다
   }, HACK_PROMPT_MS);
   return true;
+}
+
+// 해킹 툴 확인 메시지와 그 위 '돌리는 중' 안내(예전 로비 자리)를 지운다.
+// 확인 메시지를 먼저 지워야 답장 표시가 "메시지를 불러올 수 없어요"로 깨지지 않는다.
+// via: 확인 메시지의 버튼을 누른 상호작용(그 메시지를 바로 지울 수 있다). 없으면 확인을 띄운 상호작용으로 지운다.
+async function closePrompt(prompt, via = null) {
+  if (via) await via.deleteReply().catch(() => {});
+  else await prompt.interaction.deleteReply(prompt.msg || '@original').catch(() => {});
+  await prompt.root.deleteReply().catch(() => {});
 }
 
 // 🛠️ 사용 / 넘기기 버튼
@@ -502,7 +513,8 @@ async function handleHackButton(interaction, action, promptId) {
   prompts.delete(promptId);
 
   if (action === 'keep') {
-    await interaction.update(notice('✅ **결과를 확정했어요.**'));
+    await interaction.deferUpdate().catch(() => {});
+    await closePrompt(prompt, interaction);
     return;
   }
 
@@ -545,9 +557,10 @@ async function handleHackButton(interaction, action, promptId) {
     announceLevelUp(interaction.client, prompt.guildId, prompt.userId, result.newLevel).catch(() => {});
   }
 
-  // 또 꽝이면 남은 개수가 있는 한 계속 쓸 수 있다(같은 확인 메시지 자리에 다시 묻는다). 아니면 '사용했어요' 안내를 지운다.
-  if (spin.kind === 'none' && message && await offerHack(interaction, { lobby, bet, channel: prompt.channel, message, hacks })) return;
-  if (message) await interaction.deleteReply().catch(() => {});
+  // 또 꽝이면 남은 개수가 있는 한 계속 쓸 수 있다(같은 확인 메시지 자리에 다시 묻는다).
+  // 아니면 '사용했어요' 안내와 '돌리는 중' 안내를 지운다(결과는 채널 카드에 있다).
+  if (spin.kind === 'none' && message && await offerHack(interaction, { lobby, bet, channel: prompt.channel, message, hacks, root: prompt.root })) return;
+  if (message) await closePrompt(prompt, interaction);
 }
 
 async function handleRouletteButton(interaction) {
