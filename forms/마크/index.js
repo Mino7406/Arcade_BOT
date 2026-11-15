@@ -136,7 +136,6 @@ async function initRulesAgreementCache(client) {
     });
     users?.forEach(u => rulesAgreedUserIds.add(u.id));
   }
-  console.log(`✅ 렐름 규정집 동의자 캐시 초기화: ${rulesAgreedUserIds.size}명`);
 }
 
 // message/reaction이 partial일 수 있으므로(캐시에서 밀려난 메시지) 필요할 때만 fetch로 채운다.

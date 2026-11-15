@@ -336,6 +336,7 @@ async function onReady(c) {
   if (_readyDone) return;
   _readyDone = true;
   console.log(`✅ 봇 로그인 완료: ${c.user.tag}`);
+  console.log(require('./handlers/공통/버전').commitLine()); // 호스팅이 최신 푸시를 불러왔는지 확인용
   setLogClient(c); // 로그에 유저 이름을 적을 때 캐시에서 찾기 위함
   c.startedAt = new Date();
   // 카드 게임 썸네일(여백 넣어 65%)용 앱 이모지 확인·등록 — 복원하며 카드를 다시 그리기 전에 준비한다.
