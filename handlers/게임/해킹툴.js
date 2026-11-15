@@ -46,6 +46,8 @@ async function ensureHackToolEmoji(client) {
 // 글자 안에 넣는 이모지(<:이름:id>), 버튼 setEmoji 용 값
 const hackToolEmoji = () => (emojiId ? `<:${EMOJI_NAME}:${emojiId}>` : FALLBACK_EMOJI);
 const hackToolButtonEmoji = () => (emojiId ? { id: emojiId, name: EMOJI_NAME } : FALLBACK_EMOJI);
+// 화면 모음(tests/카드화면.js)처럼 봇 없이 그릴 때 이모지 자리를 채우는 용도
+const setHackToolEmojiId = (id) => { emojiId = id; };
 
 function loadHackTools() {
   try {
@@ -95,4 +97,4 @@ function useHackTool(guildId, userId) {
   return true;
 }
 
-module.exports = { HACK_TOOL_NAME, HACK_TOOL_MAX, hackToolEmoji, hackToolButtonEmoji, ensureHackToolEmoji, loadHackTools, saveHackTools, getHackTools, grantHackTool, useHackTool };
+module.exports = { HACK_TOOL_NAME, HACK_TOOL_MAX, hackToolEmoji, hackToolButtonEmoji, ensureHackToolEmoji, setHackToolEmojiId, EMOJI_NAME, EMOJI_FILE, loadHackTools, saveHackTools, getHackTools, grantHackTool, useHackTool };

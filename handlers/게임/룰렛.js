@@ -21,6 +21,7 @@ const MIN_BET = 10;
 const MAX_BET = 300;
 const BET_PRESETS = [10, 50, 100, 200, 300];
 const LOBBY_TIMEOUT_MS = 60 * 1000;
+const HACK_COLOR = 0x8B7CF6; // 해킹 툴 확인 메시지 띠 색(이모지와 맞춘 보라)
 const HACK_PROMPT_MS = 60 * 1000; // 꽝이 나온 뒤 해킹 툴을 쓸지 고르는 시간(지나면 결과 확정)
 
 // 릴 심볼별 가중치(합 100) — 값이 클수록 자주 나옴. 트리플 배당은 아래 PAYOUTS 참고.
@@ -218,7 +219,7 @@ function buildHackPromptPayload(prompt, have) {
     new ButtonBuilder().setCustomId(`roulette:keep:${prompt.id}`).setLabel('그냥 확정').setStyle(ButtonStyle.Secondary),
   );
   return payload(card({
-    color: COLORS.info,
+    color: HACK_COLOR,
     header: `${hackToolEmoji()} ${HACK_TOOL_NAME}`,
     sub: [`보유 ${have}/${HACK_TOOL_MAX}장`],
     blocks: [`😢 **꽝**이 나왔어요. ${HACK_TOOL_NAME}을 써서 결과를 번복할까요?\n-# 잃은 **${prompt.bet} XP**를 돌려받고 같은 베팅으로 한 번 더 돌려요`],

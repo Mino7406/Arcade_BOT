@@ -75,6 +75,8 @@ async function buildScreens() {
   const omok = req('handlers/게임/오목.js');
   const wc = req('handlers/게임/끝말잇기.js');
   const rl = req('handlers/게임/룰렛.js');
+  // 해킹 툴 앱 이모지는 봇이 켜져야 ID가 생기므로, 화면 모음에선 자리표시 ID를 넣고 그림은 로컬 파일로 보여 준다(LOCAL_EMOJI).
+  req('handlers/게임/해킹툴.js').setHackToolEmojiId('0');
   const xp = req('handlers/관리/XP.js').views;
   const panel = req('handlers/관리/패널.js');
   const rank = req('handlers/레벨/랭킹.js');
@@ -287,12 +289,19 @@ async function buildScreens() {
 module.exports = { buildScreens };
 
 // 직접 실행하면 그림용 data.js 를 만든다.
+// 봇이 등록하는 앱 이모지(아직 ID를 모름)를 로컬 그림으로 보여 주기 위한 이름 → data URI 표
+function localEmojiScript() {
+  const hack = require(path.join(ROOT, 'handlers/게임/해킹툴.js'));
+  const map = { [hack.EMOJI_NAME]: 'data:image/png;base64,' + fs.readFileSync(hack.EMOJI_FILE).toString('base64') };
+  return 'window.LOCAL_EMOJI = ' + JSON.stringify(map) + ';';
+}
+
 if (require.main === module && process.argv[2] === '--docs') {
   // 예시 페이지(docs/v2-화면모음.html)를 한 파일로 바로 갱신한다: node tests/카드화면.js --docs
   buildScreens().then(screens => {
     const plain = screens.map(({ payload, ...rest }) => rest);
     const html = fs.readFileSync(path.join(__dirname, '카드화면.html'), 'utf8');
-    const data = 'window.SCREENS = ' + JSON.stringify(plain) + ';';
+    const data = 'window.SCREENS = ' + JSON.stringify(plain) + ';' + localEmojiScript();
     fs.writeFileSync(path.join(ROOT, 'docs', 'v2-화면모음.html'), html.replace('<script src="data.js"></script>', () => '<script>' + data + '</script>'));
     console.log('예시 페이지 갱신: docs/v2-화면모음.html (' + plain.length + '장)');
     process.exit(0);
@@ -303,7 +312,7 @@ if (require.main === module && process.argv[2] === '--docs') {
   buildScreens().then(screens => {
     fs.mkdirSync(outDir, { recursive: true });
     const plain = screens.map(({ payload, ...rest }) => rest);
-    fs.writeFileSync(path.join(outDir, 'data.js'), 'window.SCREENS = ' + JSON.stringify(plain) + ';');
+    fs.writeFileSync(path.join(outDir, 'data.js'), 'window.SCREENS = ' + JSON.stringify(plain) + ';' + localEmojiScript());
     fs.copyFileSync(path.join(__dirname, '카드화면.html'), path.join(outDir, 'index.html'));
     console.log(`화면 ${plain.length}장 저장 → ${outDir}`);
     process.exit(0);
