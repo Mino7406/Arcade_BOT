@@ -299,7 +299,10 @@ module.exports = { buildScreens };
 function localEmojiScript() {
   const hack = require(path.join(ROOT, 'handlers/게임/해킹툴.js'));
   const map = Object.fromEntries(Object.values(hack.EMOJIS).map(e => [e.name, 'data:image/png;base64,' + fs.readFileSync(path.join(hack.EMOJI_DIR, e.file)).toString('base64')]));
-  return 'window.LOCAL_EMOJI = ' + JSON.stringify(map) + ';';
+  // 게임 썸네일도 봇이 켜져야 여백 넣은 앱 이모지 ID가 생기므로, 원래 이모지 ID → 여백 그림(LOCAL_THUMB)
+  const th = require(path.join(ROOT, 'handlers/공통/썸네일.js'));
+  const thumbs = Object.fromEntries(Object.entries(th.SOURCES).map(([id, name]) => [id, 'data:image/png;base64,' + fs.readFileSync(path.join(ROOT, 'assets/썸네일', `${name}.png`)).toString('base64')]));
+  return 'window.LOCAL_EMOJI = ' + JSON.stringify(map) + ';window.LOCAL_THUMB = ' + JSON.stringify(thumbs) + ';';
 }
 
 if (require.main === module && process.argv[2] === '--docs') {

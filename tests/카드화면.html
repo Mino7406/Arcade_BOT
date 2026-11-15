@@ -120,6 +120,8 @@ function renderComponent(c, files) {
     case 11: {
       let url = c.media.url;
       if (url.startsWith('attachment://')) url = (files && files[url.slice(13)]) || '';
+      const em = /\/emojis\/(\d+)\./.exec(url); // 게임 썸네일은 봇이 쓰는 여백 넣은 그림으로
+      if (em && (window.LOCAL_THUMB || {})[em[1]]) url = window.LOCAL_THUMB[em[1]];
       return url ? `<img class="thumb" src="${url}" alt="">` : '<div class="thumb"></div>';
     }
     case 12: return `<div class="gallery">${(c.items || []).map(it => {

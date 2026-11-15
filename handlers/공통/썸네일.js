@@ -13,7 +13,9 @@ const SOURCES = {
   '1510933684750913626': 'lol',
   '1510933698349109268': 'valorant',
   '1510933569554612324': 'overwatch',
-  '1510933567646203964': 'pubg',
+  // 배그는 내전/모집(검은 헬멧 이모지)도 패치노트와 같은 주황 배경 헬멧 그림으로 통일
+  '1510933567646203964': 'pubg_orange',
+  '1343826502604554281': 'pubg_orange',
   '1562830370368528384': 'cobblemon',
 };
 const DIR = path.join(__dirname, '..', '..', 'assets', '썸네일');
@@ -35,10 +37,11 @@ async function ensureThumbEmojis(client) {
   }
   lastError = null;
   let created = 0;
+  const byName = new Map(); // 같은 그림을 쓰는 이모지(배그 두 개)는 한 번만 등록
   for (const [srcId, name] of Object.entries(SOURCES)) {
     const emojiName = `${PREFIX}${name}`;
-    let emoji = list.find(e => e.name === emojiName);
-    if (!emoji) {
+    let emoji = byName.get(emojiName) ?? list.find(e => e.name === emojiName);
+    if (!emoji && !byName.has(emojiName)) {
       emoji = await manager.create({ attachment: path.join(DIR, `${name}.png`), name: emojiName }).catch(err => {
         lastError = `${emojiName} 등록 실패: ${err?.message ?? err}`;
         logError('처리 오류', `썸네일 이모지 등록 실패 (${emojiName})`, err);
@@ -46,6 +49,7 @@ async function ensureThumbEmojis(client) {
       });
       if (emoji) created++;
     }
+    byName.set(emojiName, emoji);
     if (emoji) padded.set(srcId, emoji.id);
   }
   if (created) logSystem({ 유형: '봇 상태', 내용: `카드 썸네일용 앱 이모지 ${created}개 등록` });
@@ -54,7 +58,7 @@ async function ensureThumbEmojis(client) {
 
 // 준비 상태: 여백 그림 몇 개가 준비됐는지와 마지막 실패 이유.
 function thumbStatus() {
-  return { ready: padded.size, total: Object.keys(SOURCES).length, error: lastError };
+  return { ready: padded.size, total: Object.keys(SOURCES).length, error: lastError }; // 원래 이모지 개수 기준
 }
 
 // 게임 이모지 ID 로 썸네일 주소. 여백 넣은 그림이 준비됐으면 그 주소, 아니면 원래 이모지 그림.

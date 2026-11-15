@@ -347,7 +347,8 @@ function rowsIn(list, acc = []) {
       create: async ({ attachment, name }) => { assert.ok(require('fs').existsSync(attachment), `그림 파일 ${attachment}`); created.push(name); return { id: `N_${name}`, name }; },
     } } };
     await th.ensureThumbEmojis(client);
-    assert.strictEqual(created.length, Object.keys(th.SOURCES).length - 1, '이미 있는 것(발로란트)은 다시 등록하지 않음');
+    assert.strictEqual(created.length, new Set(Object.values(th.SOURCES)).size - 1, '이미 있는 것(발로란트)은 다시 등록하지 않고, 같은 그림은 한 번만');
+    assert.strictEqual(th.thumbUrlFor('1510933567646203964'), th.thumbUrlFor('1343826502604554281'), '배그: 내전/모집도 패치노트와 같은 주황 헬멧 그림');
     assert.ok(th.thumbUrlFor(lolId).includes(`N_${th.PREFIX}lol`), '준비되면 여백 넣은 그림');
     assert.ok(th.thumbUrlFor('1510933698349109268').includes('E_VAL'));
     assert.strictEqual(th.upgradeThumbUrl(`https://cdn.discordapp.com/emojis/${lolId}.png?size=128`), th.thumbUrlFor(lolId), '옛 썸네일 주소 → 새 주소');

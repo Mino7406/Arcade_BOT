@@ -24,6 +24,7 @@ const {
 const { PATCHNOTE_CHANNEL_ID, PATCHNOTE_EMOJIS, ALLOWED_CHANNEL_IDS, isTestGuild } = require('../../config');
 const { logSystem, logErrorThrottled } = require('../공통/로그');
 const { writeJsonIfChanged } = require('../공통/저장');
+const { thumbUrlFor } = require('../공통/썸네일');
 
 const STORE_PATH = path.join(__dirname, '..', '..', 'DB', 'patchnote.json');
 
@@ -229,8 +230,8 @@ function buildPatchNotePayload(game, entry) {
 
   const container = new ContainerBuilder().setAccentColor(game.color);
   if (game.emojiId) {
-    // 아케이드 봇에 올려둔 게임 이모지를 썸네일로 쓴다(이미지 파일을 따로 들고 있거나 업로드할 필요 없음)
-    const thumb = new ThumbnailBuilder().setURL(`https://cdn.discordapp.com/emojis/${game.emojiId}.png?size=128`).setDescription(game.name);
+    // 내전/모집과 같은 여백 넣은 썸네일(공통/썸네일.js) — 준비 전이면 원래 이모지 그림
+    const thumb = new ThumbnailBuilder().setURL(thumbUrlFor(game.emojiId)).setDescription(game.name);
     container.addSectionComponents(new SectionBuilder().addTextDisplayComponents(...lines).setThumbnailAccessory(thumb));
   } else {
     container.addTextDisplayComponents(...lines);
