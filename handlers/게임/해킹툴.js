@@ -12,42 +12,55 @@ const { logSystem } = require('../공통/로그');
 
 // 아이템 이름은 아직 미정이라 한곳에서만 바꾸면 되게 상수로 둔다.
 const HACK_TOOL_NAME = '해킹 툴';
-// 이모지는 assets/이모지/hacktool.png 를 봇의 앱 이모지로 등록해 쓴다(봇이 켜질 때 ensureHackToolEmoji).
-// 등록 전이거나 실패하면 🛠️ 로 보인다. 그림을 바꾸면 EMOJI_NAME 을 바꿔 새로 등록되게 한다.
-const EMOJI_NAME = 'hacktool_v2';
-const EMOJI_FILE = path.join(__dirname, '..', '..', 'assets', '이모지', 'hacktool.png');
-const FALLBACK_EMOJI = '🛠️';
-let emojiId = null;
+// 이모지는 assets/이모지/*.png 를 봇의 앱 이모지로 등록해 쓴다(봇이 켜질 때 ensureHackToolEmoji).
+// 등록 전이거나 실패하면 대신할 유니코드 이모지로 보인다. 그림을 바꾸면 name 의 _v 숫자를 올려 새로 등록되게 한다.
+const EMOJI_DIR = path.join(__dirname, '..', '..', 'assets', '이모지');
+const EMOJIS = {
+  tool: { name: 'hacktool_v2', file: 'hacktool.png', fallback: '🛠️', id: null }, // 아이템 자체(글자 속)
+  use: { name: 'hackuse_v1', file: 'hackuse.png', fallback: '🛠️', id: null },    // 꽝 확인 메시지의 '사용' 버튼
+};
+const EMOJI_NAME = EMOJIS.tool.name;
+const EMOJI_FILE = path.join(EMOJI_DIR, EMOJIS.tool.file);
 const HACK_TOOL_MAX = 3; // 최대 보유 장수. 꽉 찬 상태에서 받으면 그 장은 버려진다
 
 const HACK_TOOL_PATH = path.join(__dirname, '..', '..', 'DB', 'hacktool.json');
 
 let tools = {}; // { [guildId]: { [userId]: 보유 장수 } }
 
-// 앱 이모지 목록에서 찾고, 없으면 등록한다(봇이 켜질 때 한 번).
+// 앱 이모지 목록에서 찾고, 없으면 등록한다(봇이 켜질 때 한 번, 목록 조회 1번 + 없는 것만 등록).
 async function ensureHackToolEmoji(client) {
   const manager = client.application?.emojis;
   if (!manager) return false;
+  let list;
   try {
-    const list = await manager.fetch();
-    let emoji = list.find(e => e.name === EMOJI_NAME);
-    if (!emoji) {
-      emoji = await manager.create({ attachment: EMOJI_FILE, name: EMOJI_NAME });
-      logSystem({ 유형: '봇 상태', 내용: `${HACK_TOOL_NAME} 앱 이모지 등록 (${EMOJI_NAME})` });
-    }
-    emojiId = emoji.id;
-    return true;
+    list = await manager.fetch();
   } catch (err) {
-    console.error(`${HACK_TOOL_NAME} 이모지 준비 실패(🛠️로 표시):`, err);
+    console.error(`${HACK_TOOL_NAME} 이모지 목록 조회 실패(대신 이모지로 표시):`, err);
     return false;
   }
+  for (const e of Object.values(EMOJIS)) {
+    try {
+      let emoji = list.find(x => x.name === e.name);
+      if (!emoji) {
+        emoji = await manager.create({ attachment: path.join(EMOJI_DIR, e.file), name: e.name });
+        logSystem({ 유형: '봇 상태', 내용: `${HACK_TOOL_NAME} 앱 이모지 등록 (${e.name})` });
+      }
+      e.id = emoji.id;
+    } catch (err) {
+      console.error(`${HACK_TOOL_NAME} 이모지 ${e.name} 준비 실패(대신 이모지로 표시):`, err);
+    }
+  }
+  return true;
 }
 
 // 글자 안에 넣는 이모지(<:이름:id>), 버튼 setEmoji 용 값
-const hackToolEmoji = () => (emojiId ? `<:${EMOJI_NAME}:${emojiId}>` : FALLBACK_EMOJI);
-const hackToolButtonEmoji = () => (emojiId ? { id: emojiId, name: EMOJI_NAME } : FALLBACK_EMOJI);
+const textEmoji = (e) => (e.id ? `<:${e.name}:${e.id}>` : e.fallback);
+const buttonEmoji = (e) => (e.id ? { id: e.id, name: e.name } : e.fallback);
+const hackToolEmoji = () => textEmoji(EMOJIS.tool);
+const hackToolButtonEmoji = () => buttonEmoji(EMOJIS.tool);
+const hackUseButtonEmoji = () => buttonEmoji(EMOJIS.use);
 // 화면 모음(tests/카드화면.js)처럼 봇 없이 그릴 때 이모지 자리를 채우는 용도
-const setHackToolEmojiId = (id) => { emojiId = id; };
+const setHackToolEmojiId = (id) => { for (const e of Object.values(EMOJIS)) e.id = id; };
 
 function loadHackTools() {
   try {
@@ -97,4 +110,4 @@ function useHackTool(guildId, userId) {
   return true;
 }
 
-module.exports = { HACK_TOOL_NAME, HACK_TOOL_MAX, hackToolEmoji, hackToolButtonEmoji, ensureHackToolEmoji, setHackToolEmojiId, EMOJI_NAME, EMOJI_FILE, loadHackTools, saveHackTools, getHackTools, grantHackTool, useHackTool };
+module.exports = { HACK_TOOL_NAME, HACK_TOOL_MAX, hackToolEmoji, hackToolButtonEmoji, hackUseButtonEmoji, ensureHackToolEmoji, EMOJIS, EMOJI_DIR, setHackToolEmojiId, EMOJI_NAME, EMOJI_FILE, loadHackTools, saveHackTools, getHackTools, grantHackTool, useHackTool };

@@ -12,7 +12,7 @@ const { kstDateString, timeUntilKstMidnight } = require('../공통/시간');
 const { logSystem, logAction, logError, userLabel } = require('../공통/로그');
 const { writeJsonIfChanged } = require('../공통/저장');
 const { card, payload, notice, COLORS, footerSide, pullButton } = require('../공통/카드');
-const { HACK_TOOL_NAME, HACK_TOOL_MAX, hackToolEmoji, hackToolButtonEmoji, getHackTools, useHackTool } = require('./해킹툴');
+const { HACK_TOOL_NAME, HACK_TOOL_MAX, hackToolEmoji, hackUseButtonEmoji, getHackTools, useHackTool } = require('./해킹툴');
 
 const ROULETTE_PATH = path.join(__dirname, '..', '..', 'DB', 'roulette.json');
 fs.mkdirSync(path.dirname(ROULETTE_PATH), { recursive: true });
@@ -215,7 +215,7 @@ function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multi
 // 꽝이 나왔을 때 돌린 사람에게만 보이는 해킹 툴 사용 확인(공개 결과 카드에는 버튼을 달지 않는다).
 function buildHackPromptPayload(prompt, have) {
   const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`roulette:hack:${prompt.id}`).setEmoji(hackToolButtonEmoji()).setLabel('사용').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`roulette:hack:${prompt.id}`).setEmoji(hackUseButtonEmoji()).setLabel('사용').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`roulette:keep:${prompt.id}`).setLabel('그냥 확정').setStyle(ButtonStyle.Secondary),
   );
   return payload(card({

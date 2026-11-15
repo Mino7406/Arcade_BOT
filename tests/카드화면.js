@@ -292,7 +292,7 @@ module.exports = { buildScreens };
 // 봇이 등록하는 앱 이모지(아직 ID를 모름)를 로컬 그림으로 보여 주기 위한 이름 → data URI 표
 function localEmojiScript() {
   const hack = require(path.join(ROOT, 'handlers/게임/해킹툴.js'));
-  const map = { [hack.EMOJI_NAME]: 'data:image/png;base64,' + fs.readFileSync(hack.EMOJI_FILE).toString('base64') };
+  const map = Object.fromEntries(Object.values(hack.EMOJIS).map(e => [e.name, 'data:image/png;base64,' + fs.readFileSync(path.join(hack.EMOJI_DIR, e.file)).toString('base64')]));
   return 'window.LOCAL_EMOJI = ' + JSON.stringify(map) + ';';
 }
 
