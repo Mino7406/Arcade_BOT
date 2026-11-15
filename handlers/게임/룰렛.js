@@ -130,6 +130,10 @@ const hackUnlimited = (guildId) => isTestGuild(guildId);
 const hackToolsOf = (guildId, userId) => (hackUnlimited(guildId) ? Infinity : getHackTools(guildId, userId));
 const hackHaveText = (have) => (have === Infinity ? '테스트 서버 · 무제한' : `${have}/${HACK_TOOL_MAX}개`);
 
+// 해킹된 카드의 안내 줄: 자모로 풀린 글자(ㄹㅣㄹ)와 깨진 블록(▒ █)을 섞어 깨진 글자처럼 보이게 한다.
+// (겹침 결합 문자는 글꼴에 따라 네모로 깨져 보여서 쓰지 않는다)
+const HACK_FOOTER = '⏰ 하루에 ▒한 번만 돌ㄹㅣㄹ 수 있어ㅇㅛ.█';
+
 // 해킹 툴을 쓴 횟수 표시(카드 부제)
 const hackLabel = (hacks) => (hacks > 0 ? `${hackUseEmoji()} ${HACK_TOOL_NAME} ${hacks}회 사용` : null);
 
@@ -215,7 +219,7 @@ function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multi
       { image: SLOT_URL, divider: true }, // 제목·결과 줄 아래 구분선
       `### ${resultLine}　${netLine}`, // 결과와 손익을 한 줄에
     ],
-    footer: '⏰ 하루에 한 번만 돌릴 수 있어요.',
+    footer: hacks > 0 ? HACK_FOOTER : '⏰ 하루에 한 번만 돌릴 수 있어요.',
   }), { files: [slotFile(png)], ...extra });
 }
 
