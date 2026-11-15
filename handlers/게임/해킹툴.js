@@ -14,7 +14,7 @@ const { logSystem } = require('../공통/로그');
 const HACK_TOOL_NAME = '해킹 툴';
 // 이모지는 assets/이모지/hacktool.png 를 봇의 앱 이모지로 등록해 쓴다(봇이 켜질 때 ensureHackToolEmoji).
 // 등록 전이거나 실패하면 🛠️ 로 보인다. 그림을 바꾸면 EMOJI_NAME 을 바꿔 새로 등록되게 한다.
-const EMOJI_NAME = 'hacktool_v1';
+const EMOJI_NAME = 'hacktool_v2';
 const EMOJI_FILE = path.join(__dirname, '..', '..', 'assets', '이모지', 'hacktool.png');
 const FALLBACK_EMOJI = '🛠️';
 let emojiId = null;
