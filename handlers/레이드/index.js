@@ -28,7 +28,7 @@ const { GUILD_ID, PLAYGROUND_CHANNEL_ID, ADMIN_IDS } = require('../../config');
 const { logSystem, logError, userLabel } = require('../공통/로그');
 const { card, payload: cardPayload, notice } = require('../공통/카드');
 const { writeJsonIfChanged } = require('../공통/저장');
-const { grantHackTool, HACK_TOOL_NAME, HACK_TOOL_EMOJI } = require('../게임/해킹툴');
+const { grantHackTool, HACK_TOOL_NAME, hackToolEmoji } = require('../게임/해킹툴');
 const { displayNameFromInteraction } = require('../공통/이름');
 const {
   PLAYER_MAX_HP, POTIONS_PER_BATTLE, POTION_HEAL, GUARD_DAMAGE_RATE, ROLES, ROLE_ORDER, ACTIONS, MONSTERS,
@@ -242,7 +242,7 @@ async function recruitView(r, { redraw = true } = {}) {
   });
   sections.push({
     // 이름표를 붙인 인용 블록 두 줄 — 보상과 시작 규칙을 한눈에
-    text: `> 🎁 **보상** : +${CLEAR_XP} XP · ${HACK_TOOL_EMOJI} ${HACK_TOOL_NAME} 1장\n` +
+    text: `> 🎁 **보상** : +${CLEAR_XP} XP · ${hackToolEmoji()} ${HACK_TOOL_NAME} 1장\n` +
       '> ▶️ **바로 시작** : 첫 참가자가 방장이 되며 시작 여부를 결정할 수 있어요.',
   });
   return assemble(ACCENT.recruit, image, sections);
@@ -428,8 +428,8 @@ function hackToolLines(r, rewards) {
   const got = rewards.filter(x => x.hackTool).map(nameOf).filter(Boolean);
   const full = rewards.filter(x => !x.hackTool).map(nameOf).filter(Boolean);
   const lines = [];
-  if (got.length) lines.push(`> ${HACK_TOOL_EMOJI} **${HACK_TOOL_NAME}** : ${got.join(', ')} · (+1장)`);
-  if (full.length) lines.push(`-# ${HACK_TOOL_EMOJI} ${full.join(', ')}님은 ${HACK_TOOL_NAME}을 최대로 갖고 있어 받지 못했어요`);
+  if (got.length) lines.push(`> ${hackToolEmoji()} **${HACK_TOOL_NAME}** : ${got.join(', ')} · (+1장)`);
+  if (full.length) lines.push(`-# ${hackToolEmoji()} ${full.join(', ')}님은 ${HACK_TOOL_NAME}을 최대로 갖고 있어 받지 못했어요`);
   return lines;
 }
 
@@ -470,7 +470,7 @@ async function endView(r, outcome, rewards = []) {
       body += `남은 HP **${b.hp.toLocaleString()}** / ${b.maxHp.toLocaleString()} · ${b.turn}턴\n\n` +
         b.members.map(mem => {
           const reward = rewards.find(x => x.userId === mem.userId);
-          const xp = reward ? ` · **+${reward.xp} XP**${reward.mvp ? ' 👑MVP' : ''}${reward.hackTool ? ` · ${HACK_TOOL_EMOJI}+1` : ''}` : '';
+          const xp = reward ? ` · **+${reward.xp} XP**${reward.mvp ? ' 👑MVP' : ''}${reward.hackTool ? ` · ${hackToolEmoji()}+1` : ''}` : '';
           const idle = outcome === 'clear' && !reward ? ' · *(직접 행동하지 않아 보상 없음)*' : '';
           return `${ROLES[mem.role].emoji} **${mem.name}** — 피해 ${mem.damage.toLocaleString()} · 회복 ${mem.healing} · 방어 ${mem.blocked ?? 0}${xp}${idle}`;
         }).join('\n');

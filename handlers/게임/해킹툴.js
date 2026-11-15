@@ -12,12 +12,40 @@ const { logSystem } = require('../공통/로그');
 
 // 아이템 이름은 아직 미정이라 한곳에서만 바꾸면 되게 상수로 둔다.
 const HACK_TOOL_NAME = '해킹 툴';
-const HACK_TOOL_EMOJI = '🛠️';
+// 이모지는 assets/이모지/hacktool.png 를 봇의 앱 이모지로 등록해 쓴다(봇이 켜질 때 ensureHackToolEmoji).
+// 등록 전이거나 실패하면 🛠️ 로 보인다. 그림을 바꾸면 EMOJI_NAME 을 바꿔 새로 등록되게 한다.
+const EMOJI_NAME = 'hacktool_v1';
+const EMOJI_FILE = path.join(__dirname, '..', '..', 'assets', '이모지', 'hacktool.png');
+const FALLBACK_EMOJI = '🛠️';
+let emojiId = null;
 const HACK_TOOL_MAX = 3; // 최대 보유 장수. 꽉 찬 상태에서 받으면 그 장은 버려진다
 
 const HACK_TOOL_PATH = path.join(__dirname, '..', '..', 'DB', 'hacktool.json');
 
 let tools = {}; // { [guildId]: { [userId]: 보유 장수 } }
+
+// 앱 이모지 목록에서 찾고, 없으면 등록한다(봇이 켜질 때 한 번).
+async function ensureHackToolEmoji(client) {
+  const manager = client.application?.emojis;
+  if (!manager) return false;
+  try {
+    const list = await manager.fetch();
+    let emoji = list.find(e => e.name === EMOJI_NAME);
+    if (!emoji) {
+      emoji = await manager.create({ attachment: EMOJI_FILE, name: EMOJI_NAME });
+      logSystem({ 유형: '봇 상태', 내용: `${HACK_TOOL_NAME} 앱 이모지 등록 (${EMOJI_NAME})` });
+    }
+    emojiId = emoji.id;
+    return true;
+  } catch (err) {
+    console.error(`${HACK_TOOL_NAME} 이모지 준비 실패(🛠️로 표시):`, err);
+    return false;
+  }
+}
+
+// 글자 안에 넣는 이모지(<:이름:id>), 버튼 setEmoji 용 값
+const hackToolEmoji = () => (emojiId ? `<:${EMOJI_NAME}:${emojiId}>` : FALLBACK_EMOJI);
+const hackToolButtonEmoji = () => (emojiId ? { id: emojiId, name: EMOJI_NAME } : FALLBACK_EMOJI);
 
 function loadHackTools() {
   try {
@@ -67,4 +95,4 @@ function useHackTool(guildId, userId) {
   return true;
 }
 
-module.exports = { HACK_TOOL_NAME, HACK_TOOL_EMOJI, HACK_TOOL_MAX, loadHackTools, saveHackTools, getHackTools, grantHackTool, useHackTool };
+module.exports = { HACK_TOOL_NAME, HACK_TOOL_MAX, hackToolEmoji, hackToolButtonEmoji, ensureHackToolEmoji, loadHackTools, saveHackTools, getHackTools, grantHackTool, useHackTool };

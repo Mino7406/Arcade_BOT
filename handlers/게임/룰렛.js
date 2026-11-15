@@ -12,7 +12,7 @@ const { kstDateString, timeUntilKstMidnight } = require('../공통/시간');
 const { logSystem, logAction, logError, userLabel } = require('../공통/로그');
 const { writeJsonIfChanged } = require('../공통/저장');
 const { card, payload, notice, COLORS, footerSide, pullButton } = require('../공통/카드');
-const { HACK_TOOL_NAME, HACK_TOOL_EMOJI, HACK_TOOL_MAX, getHackTools, useHackTool } = require('./해킹툴');
+const { HACK_TOOL_NAME, HACK_TOOL_MAX, hackToolEmoji, hackToolButtonEmoji, getHackTools, useHackTool } = require('./해킹툴');
 
 const ROULETTE_PATH = path.join(__dirname, '..', '..', 'DB', 'roulette.json');
 fs.mkdirSync(path.dirname(ROULETTE_PATH), { recursive: true });
@@ -125,7 +125,7 @@ function getHackPrompts(client) {
 }
 
 // 해킹 툴을 쓴 횟수 표시(카드 부제)
-const hackLabel = (hacks) => (hacks > 0 ? `${HACK_TOOL_EMOJI} ${HACK_TOOL_NAME} ${hacks}회 사용` : null);
+const hackLabel = (hacks) => (hacks > 0 ? `${hackToolEmoji()} ${HACK_TOOL_NAME} ${hacks}회 사용` : null);
 
 const SLOT_FILE = 'slot.png';
 const slotFile = (buf) => new AttachmentBuilder(buf, { name: SLOT_FILE });
@@ -157,7 +157,7 @@ function buildLobbyCard(lobby) {
   return card({
     color: COLORS.info,
     header: '🎰 룰렛머신',
-    sub: ['하루 1회', lobby.hackTools > 0 ? `${HACK_TOOL_EMOJI} ${HACK_TOOL_NAME} ${lobby.hackTools}/${HACK_TOOL_MAX}장` : null].filter(Boolean),
+    sub: ['하루 1회', lobby.hackTools > 0 ? `${hackToolEmoji()} ${HACK_TOOL_NAME} ${lobby.hackTools}/${HACK_TOOL_MAX}장` : null].filter(Boolean),
     blocks: [
       `<@${lobby.userId}>님, 베팅 XP를 고른 뒤 **🎰 돌리기**를 누르세요.`,
       { image: SLOT_URL },
@@ -185,7 +185,7 @@ function buildSpinningPayload(lobby, bet, reels, phase = 0, hacks = 0) {
     header: '🎰 룰렛머신',
     sub: [`<@${lobby.userId}>`, '릴이 돌아가는 중...', hackLabel(hacks)].filter(Boolean),
     blocks: [{ image: SLOT_URL, divider: true }], // 결과 카드와 같은 자리에 구분선(그림이 위아래로 움직이지 않게)
-    footer: hacks > 0 ? `${HACK_TOOL_EMOJI} ${HACK_TOOL_NAME}으로 결과를 번복! 다시 돌리는 중...` : '🎰 두근두근... 릴이 하나씩 멈춰요',
+    footer: hacks > 0 ? `${hackToolEmoji()} ${HACK_TOOL_NAME}으로 결과를 번복! 다시 돌리는 중...` : '🎰 두근두근... 릴이 하나씩 멈춰요',
   }), { files: [slotFile(png)] });
 }
 
@@ -214,12 +214,12 @@ function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multi
 // 꽝이 나왔을 때 돌린 사람에게만 보이는 해킹 툴 사용 확인(공개 결과 카드에는 버튼을 달지 않는다).
 function buildHackPromptPayload(prompt, have) {
   const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`roulette:hack:${prompt.id}`).setLabel(`${HACK_TOOL_EMOJI} 사용`).setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`roulette:hack:${prompt.id}`).setEmoji(hackToolButtonEmoji()).setLabel('사용').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`roulette:keep:${prompt.id}`).setLabel('그냥 확정').setStyle(ButtonStyle.Secondary),
   );
   return payload(card({
     color: COLORS.info,
-    header: `${HACK_TOOL_EMOJI} ${HACK_TOOL_NAME}`,
+    header: `${hackToolEmoji()} ${HACK_TOOL_NAME}`,
     sub: [`보유 ${have}/${HACK_TOOL_MAX}장`],
     blocks: [`😢 **꽝**이 나왔어요. ${HACK_TOOL_NAME}을 써서 결과를 번복할까요?\n-# 잃은 **${prompt.bet} XP**를 돌려받고 같은 베팅으로 한 번 더 돌려요`],
     footer: `⏰ ${HACK_PROMPT_MS / 1000}초 안에 고르지 않으면 결과가 그대로 확정돼요.`,
@@ -504,7 +504,7 @@ async function handleHackButton(interaction, action, promptId) {
     return;
   }
   const left = getHackTools(prompt.guildId, prompt.userId);
-  await interaction.update(notice(`${HACK_TOOL_EMOJI} **${HACK_TOOL_NAME}을 사용했어요!** 다시 돌리는 중...\n-# 남은 ${HACK_TOOL_NAME} ${left}/${HACK_TOOL_MAX}장`));
+  await interaction.update(notice(`${hackToolEmoji()} **${HACK_TOOL_NAME}을 사용했어요!** 다시 돌리는 중...\n-# 남은 ${HACK_TOOL_NAME} ${left}/${HACK_TOOL_MAX}장`));
 
   const { lobby, bet } = prompt;
   const hacks = prompt.hacks + 1;
