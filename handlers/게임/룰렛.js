@@ -130,9 +130,9 @@ const hackUnlimited = (guildId) => isTestGuild(guildId);
 const hackToolsOf = (guildId, userId) => (hackUnlimited(guildId) ? Infinity : getHackTools(guildId, userId));
 const hackHaveText = (have) => (have === Infinity ? '테스트 서버 · 무제한' : `${have}/${HACK_TOOL_MAX}개`);
 
-// 해킹된 카드의 안내 줄: 자모로 풀린 글자(ㄹㅣㄹ)와 깨진 블록(▒ █)을 섞어 깨진 글자처럼 보이게 한다.
+// 해킹된 카드의 안내 줄: 인코딩이 깨진 것처럼 대체 문자(�)와 오류 코드를 섞는다(읽을 수는 있게).
 // (겹침 결합 문자는 글꼴에 따라 네모로 깨져 보여서 쓰지 않는다)
-const HACK_FOOTER = '⏰ 하루에 ▒한 번만 돌ㄹㅣㄹ 수 있어ㅇㅛ.█';
+const HACK_FOOTER = '⏰ 하루에 한 번�만 돌릴 수 있��요. ▓▒░ ERR_0x7F';
 
 // 해킹 툴을 쓴 횟수 표시(카드 부제)
 const hackLabel = (hacks) => (hacks > 0 ? `${hackUseEmoji()} ${HACK_TOOL_NAME} ${hacks}회 사용` : null);
@@ -193,7 +193,7 @@ function buildSpinningPayload(lobby, bet, reels, phase = 0, hacks = 0) {
   return payload(card({
     color: hacks > 0 ? HACK_COLOR : COLORS.info,
     header: hacks > 0 ? `${hackToolEmoji()} 룰렛머신` : '🎰 룰렛머신',
-    sub: [`<@${lobby.userId}>`, '릴이 돌아가는 중...', hackLabel(hacks)].filter(Boolean),
+    sub: [`<@${lobby.userId}>`, hacks > 0 ? null : '릴이 돌아가는 중...', hackLabel(hacks)].filter(Boolean),
     blocks: [{ image: SLOT_URL, divider: true }], // 결과 카드와 같은 자리에 구분선(그림이 위아래로 움직이지 않게)
     footer: hacks > 0 ? `${hackToolEmoji()} ${HACK_TOOL_NAME}으로 결과를 다시 돌리는 중...` : '🎰 두근두근... 릴이 하나씩 멈춰요',
   }), { files: [slotFile(png)] });
@@ -214,7 +214,7 @@ function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multi
   return payload(card({
     color: hacks > 0 ? HACK_COLOR : win ? 0xFFD700 : COLORS.muted,
     header: hacks > 0 ? `${hackToolEmoji()} 룰렛머신` : '🎰 룰렛머신',
-    sub: [`<@${lobby.userId}>`, '결과', hackLabel(hacks)].filter(Boolean),
+    sub: [`<@${lobby.userId}>`, hacks > 0 ? null : '결과', hackLabel(hacks)].filter(Boolean),
     blocks: [
       { image: SLOT_URL, divider: true }, // 제목·결과 줄 아래 구분선
       `### ${resultLine}　${netLine}`, // 결과와 손익을 한 줄에
