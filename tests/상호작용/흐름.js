@@ -351,6 +351,63 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     console.log(`   (50명 동시: ${ms}ms, 메모리 +${grewMb.toFixed(1)}MB)`);
   });
 
+  // ── 해킹 툴: 레이드 보상(최대 3장) · 룰렛 꽝 번복 ──
+  const hack = require(path.join(root, 'handlers/게임/해킹툴.js'));
+  await flow('해킹 툴: 최대 3장 · 꽝이면 본인에게만 묻고 번복 · 그냥 확정', async () => {
+    assert(hack.grantHackTool('g1', 'h0') && hack.grantHackTool('g1', 'h0') && hack.grantHackTool('g1', 'h0'), '3장까지 못 받음');
+    assert(!hack.grantHackTool('g1', 'h0') && hack.getHackTools('g1', 'h0') === 3, '4장째를 받아 버림');
+
+    const realRandom = Math.random;
+    const queue = [];
+    Math.random = () => (queue.length ? queue.shift() : realRandom());
+    try {
+      lv.applyXp('g1', 'h1', 800, 'test');
+      hack.grantHackTool('g1', 'h1');
+      const xp0 = lv.getXp('g1', 'h1');
+      const s = mkInteraction({ user: 'h1', command: '룰렛' });
+      await roulette.startRouletteCommand(s);
+      assert(JSON.stringify(s._reply.components).includes('1/3장'), '로비에 해킹 툴 보유 수가 안 보임');
+      await roulette.handleRouletteButton(mkInteraction({ user: 'h1', customId: `roulette:bet:${s.id}:10`, message: s._reply }));
+      const spin = mkInteraction({ user: 'h1', customId: `roulette:spin:${s.id}`, message: s._reply });
+      queue.push(0.1, 0.4, 0.6); // 🍒 🍋 🍇 → 꽝
+      await roulette.handleRouletteButton(spin);
+      assert(lv.getXp('g1', 'h1') === xp0 - 10, `꽝인데 XP가 ${lv.getXp('g1', 'h1') - xp0} 바뀜`);
+      const prompt = client.rouletteHacks?.get(spin.id);
+      assert(prompt?.followUp, '꽝인데 해킹 툴 확인 메시지가 안 뜸');
+      assert(JSON.stringify(prompt.followUp.components).includes(`roulette:hack:${spin.id}`), '확인 메시지에 사용 버튼이 없음');
+      const resultCard = prompt.message;
+      assert(!JSON.stringify(resultCard.components).includes('roulette:hack'), '공개 결과 카드에 해킹 버튼이 붙음');
+
+      await roulette.handleRouletteButton(mkInteraction({ user: 'u2', customId: `roulette:hack:${spin.id}`, message: prompt.followUp }));
+      assert(hack.getHackTools('g1', 'h1') === 1, '남이 눌렀는데 해킹 툴이 쓰임');
+
+      queue.push(0.1, 0.1, 0.1); // 🍒 트리플 ×2 → 지급 20, 그날 손익 +10
+      const use = mkInteraction({ user: 'h1', customId: `roulette:hack:${spin.id}`, message: prompt.followUp });
+      await roulette.handleRouletteButton(use);
+      assert(hack.getHackTools('g1', 'h1') === 0, '해킹 툴이 안 줄어듦');
+      assert(lv.getXp('g1', 'h1') === xp0 + 10, `번복 후 손익 ${lv.getXp('g1', 'h1') - xp0}(+10 기대)`);
+      assert(JSON.stringify(resultCard.components).includes('1회 사용'), '공개 카드에 해킹 툴 사용 표시가 없음');
+      assert(!client.rouletteHacks.has(use.id), '꽝이 아닌데 또 물어봄');
+      await roulette.handleRouletteButton(mkInteraction({ user: 'h1', customId: `roulette:hack:${spin.id}`, message: prompt.followUp }));
+      assert(lv.getXp('g1', 'h1') === xp0 + 10, '같은 버튼을 다시 눌러 또 돌아감');
+
+      // 해킹 툴이 남아 있어도 '그냥 확정'이면 쓰지 않는다
+      lv.applyXp('g1', 'h2', 800, 'test');
+      hack.grantHackTool('g1', 'h2');
+      const s2 = mkInteraction({ user: 'h2', command: '룰렛' });
+      await roulette.startRouletteCommand(s2);
+      await roulette.handleRouletteButton(mkInteraction({ user: 'h2', customId: `roulette:bet:${s2.id}:10`, message: s2._reply }));
+      const spin2 = mkInteraction({ user: 'h2', customId: `roulette:spin:${s2.id}`, message: s2._reply });
+      queue.push(0.1, 0.4, 0.6);
+      await roulette.handleRouletteButton(spin2);
+      const p2 = client.rouletteHacks.get(spin2.id);
+      await roulette.handleRouletteButton(mkInteraction({ user: 'h2', customId: `roulette:keep:${spin2.id}`, message: p2.followUp }));
+      assert(hack.getHackTools('g1', 'h2') === 1 && !client.rouletteHacks.has(spin2.id), '그냥 확정인데 해킹 툴이 쓰이거나 판이 남음');
+    } finally {
+      Math.random = realRandom;
+    }
+  });
+
   // ── /관리 ──
   const home = require(path.join(root, 'handlers/관리/홈.js'));
   const panel = require(path.join(root, 'handlers/관리/패널.js'));

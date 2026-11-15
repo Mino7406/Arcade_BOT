@@ -154,7 +154,7 @@ async function buildScreens() {
   add('끝말잇기', '종료 + 내기 결과', '', wc.finishedPayload({ ...wcBase, status: 'finished', loser: '101', endReason: 'timeout', xpResult: { type: 'wager', loserId: '101', wager: 50, winnerResults: [{ userId: '100', amount: 50 }] } }));
   add('끝말잇기', '재대결 신청', '', wc.rematchRequestPayload(wcBase));
 
-  const rlb = { id: '1', userId: '100', bet: 100, maxAvailable: 300 };
+  const rlb = { id: '1', userId: '100', bet: 100, maxAvailable: 300, hackTools: 2 };
   const rlWith = (p) => ({ files: png(p.files) });
   const rlLobby = rl.buildLobbyPayload(rlb, { ephemeral: true, withImage: true });
   add('룰렛', '베팅 선택(본인에게만)', '그림으로 그린 슬롯머신(대기 화면은 한 번만 그려 재사용)', rlLobby, rlWith(rlLobby));
@@ -166,6 +166,9 @@ async function buildScreens() {
   add('룰렛', '결과 — 잭팟', '', rlJack, rlWith(rlJack));
   const rlLose = rl.buildResultPayload(rlb, { bet: 300, resultLine: '😢 **꽝**', netLine: '📉 **-300 XP**', net: -300, reels: ['💎', '🍒', '🍋'], multiplier: 0 });
   add('룰렛', '결과 — 꽝', '', rlLose, rlWith(rlLose));
+  add('룰렛', '꽝 → 해킹 툴 사용 확인(본인에게만)', '해킹 툴이 있을 때만 · 60초 지나면 결과 확정', rl.buildHackPromptPayload({ id: '1', bet: 300 }, 2));
+  const rlHack = rl.buildResultPayload(rlb, { bet: 300, resultLine: '**🍋 레몬 트리플 매칭!** (×2.5)', netLine: '📈 **+450 XP**', net: 450, reels: ['🍋', '🍋', '🍋'], multiplier: 2.5, hacks: 1 });
+  add('룰렛', '결과 — 해킹 툴로 번복', '공개 카드 부제에 해킹 툴 사용 횟수', rlHack, rlWith(rlHack));
 
   // ── 레벨 · 랭킹 · 퀴즈 ────────────────────────
   const guild = { id: 'g', members: { fetch: async ({ user }) => new Map(user.map((id, i) => [id, { displayName: ['민호', '지수', '하늘', '도윤', '서연', '준호', '예린', '태양', '나래', '현우', '다온', '시우'][i % 12] }])) } };
@@ -268,8 +271,8 @@ async function buildScreens() {
   const pb4 = await raidMod.battleView(rb);
   add('레이드', '전투 — 분노 상태', '', pb4, rf(pb4));
   const endR = (outcome, rewards) => { const rr = startBattle(m0); rr.phase = 'ended'; rr.endedAt = Date.now(); rr.frozenAt = Date.now() - 20 * 60e3; if (outcome === 'clear') rr.battle.hp = 0; return raidMod.endView(rr, outcome, rewards); };
-  const ec = await endR('clear', [{ userId: '100', xp: 150, mvp: true }, { userId: '101', xp: 100, mvp: false }]);
-  add('레이드', '종료 — 토벌 성공', 'MVP · 보상', ec, rf(ec));
+  const ec = await endR('clear', [{ userId: '100', xp: 150, mvp: true, hackTool: true }, { userId: '101', xp: 100, mvp: false, hackTool: false }]);
+  add('레이드', '종료 — 토벌 성공', 'MVP · 보상 · 해킹 툴(한 명은 보유 한도)', ec, rf(ec));
   for (const [oc, label] of [['wipe', '파티 전멸'], ['timeout', '시간 초과'], ['noshow', '아무도 안 옴'], ['admin', '관리자 종료']]) {
     const pe = await endR(oc, []);
     add('레이드', `종료 — ${label}`, '', pe, rf(pe));

@@ -12,6 +12,7 @@ const { kstDateString, timeUntilKstMidnight } = require('../공통/시간');
 const { logSystem, logAction, logError, userLabel } = require('../공통/로그');
 const { writeJsonIfChanged } = require('../공통/저장');
 const { card, payload, notice, COLORS, footerSide, pullButton } = require('../공통/카드');
+const { HACK_TOOL_NAME, HACK_TOOL_EMOJI, HACK_TOOL_MAX, getHackTools, useHackTool } = require('./해킹툴');
 
 const ROULETTE_PATH = path.join(__dirname, '..', '..', 'DB', 'roulette.json');
 fs.mkdirSync(path.dirname(ROULETTE_PATH), { recursive: true });
@@ -20,6 +21,7 @@ const MIN_BET = 10;
 const MAX_BET = 300;
 const BET_PRESETS = [10, 50, 100, 200, 300];
 const LOBBY_TIMEOUT_MS = 60 * 1000;
+const HACK_PROMPT_MS = 60 * 1000; // 꽝이 나온 뒤 해킹 툴을 쓸지 고르는 시간(지나면 결과 확정)
 
 // 릴 심볼별 가중치(합 100) — 값이 클수록 자주 나옴. 트리플 배당은 아래 PAYOUTS 참고.
 // 가중치를 살짝 평평하게(체리 35→33, 세븐 2→3 등) 조정해 "2개 일치" 확률을 52%→50%대로 소폭만 낮춤.
@@ -102,11 +104,11 @@ const SPIN_STEP_MS = 1300; // 릴이 하나씩 멈추는 간격(처음 그림 �
 // 실제 슬롯머신처럼 릴이 하나씩 순서대로 멈추는 연출. finalReels 는 이미 정해진 결과이고,
 // 첫 그림(전부 돌아감)은 호출하는 쪽에서 보내고, 여기서는 "첫 릴 멈춤 → 둘째 릴 멈춤"까지 고쳐 준다.
 // 마지막 결과 그림은 호출하는 쪽이 이어서 고친다. 수정은 총 3번(예전엔 6번)이라 디스코드 수정 제한에도 여유가 있다.
-async function animateSpin(message, lobby, bet, finalReels) {
+async function animateSpin(message, lobby, bet, finalReels, hacks = 0) {
   const stages = [[finalReels[0], null, null], [finalReels[0], finalReels[1], null]];
   for (let i = 0; i < stages.length; i++) {
     await sleep(SPIN_STEP_MS);
-    await message.edit(buildSpinningPayload(lobby, bet, stages[i], i + 1)).catch(() => {});
+    await message.edit(buildSpinningPayload(lobby, bet, stages[i], i + 1, hacks)).catch(() => {});
   }
   await sleep(SPIN_STEP_MS);
 }
@@ -115,6 +117,15 @@ function getLobbies(client) {
   if (!client.rouletteLobbies) client.rouletteLobbies = new Map();
   return client.rouletteLobbies;
 }
+
+// 꽝이 나와 해킹 툴 사용 여부를 묻는 중인 판들. { [promptId]: { id, guildId, userId, lobby, bet, message, channel, hacks, interaction, followUp, timeoutId } }
+function getHackPrompts(client) {
+  if (!client.rouletteHacks) client.rouletteHacks = new Map();
+  return client.rouletteHacks;
+}
+
+// 해킹 툴을 쓴 횟수 표시(카드 부제)
+const hackLabel = (hacks) => (hacks > 0 ? `${HACK_TOOL_EMOJI} ${HACK_TOOL_NAME} ${hacks}회 사용` : null);
 
 const SLOT_FILE = 'slot.png';
 const slotFile = (buf) => new AttachmentBuilder(buf, { name: SLOT_FILE });
@@ -146,7 +157,7 @@ function buildLobbyCard(lobby) {
   return card({
     color: COLORS.info,
     header: '🎰 룰렛머신',
-    sub: ['하루 1회'],
+    sub: ['하루 1회', lobby.hackTools > 0 ? `${HACK_TOOL_EMOJI} ${HACK_TOOL_NAME} ${lobby.hackTools}/${HACK_TOOL_MAX}장` : null].filter(Boolean),
     blocks: [
       `<@${lobby.userId}>님, 베팅 XP를 고른 뒤 **🎰 돌리기**를 누르세요.`,
       { image: SLOT_URL },
@@ -167,18 +178,18 @@ function buildLobbyPayload(lobby, extra = {}) {
 }
 
 // 릴이 도는 중: reels 에서 null 인 릴은 아직 돌고 있다(stage 가 오를수록 하나씩 멈춘다).
-function buildSpinningPayload(lobby, bet, reels, phase = 0) {
+function buildSpinningPayload(lobby, bet, reels, phase = 0, hacks = 0) {
   const png = renderSlot({ reels, bet, phase, right: '돌리는 중...', rightColor: '#c9b8a0' });
   return payload(card({
     color: COLORS.info,
     header: '🎰 룰렛머신',
-    sub: [`<@${lobby.userId}>`, '릴이 돌아가는 중...'],
+    sub: [`<@${lobby.userId}>`, '릴이 돌아가는 중...', hackLabel(hacks)].filter(Boolean),
     blocks: [{ image: SLOT_URL, divider: true }], // 결과 카드와 같은 자리에 구분선(그림이 위아래로 움직이지 않게)
-    footer: '🎰 두근두근... 릴이 하나씩 멈춰요',
+    footer: hacks > 0 ? `${HACK_TOOL_EMOJI} ${HACK_TOOL_NAME}으로 결과를 번복! 다시 돌리는 중...` : '🎰 두근두근... 릴이 하나씩 멈춰요',
   }), { files: [slotFile(png)] });
 }
 
-function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multiplier = 0 }) {
+function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multiplier = 0, hacks = 0 }, extra = {}) {
   const win = net > 0;
   const jackpot = reels[0] === reels[1] && reels[1] === reels[2] && reels[0] === '7️⃣';
   const png = renderSlot({
@@ -191,13 +202,29 @@ function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multi
   return payload(card({
     color: win ? 0xFFD700 : COLORS.muted,
     header: '🎰 룰렛머신',
-    sub: [`<@${lobby.userId}>`, '결과'],
+    sub: [`<@${lobby.userId}>`, '결과', hackLabel(hacks)].filter(Boolean),
     blocks: [
       { image: SLOT_URL, divider: true }, // 제목·결과 줄 아래 구분선
       `### ${resultLine}　${netLine}`, // 결과와 손익을 한 줄에
     ],
     footer: '⏰ 하루에 한 번만 돌릴 수 있어요.',
-  }), { files: [slotFile(png)] });
+  }), { files: [slotFile(png)], ...extra });
+}
+
+// 꽝이 나왔을 때 돌린 사람에게만 보이는 해킹 툴 사용 확인(공개 결과 카드에는 버튼을 달지 않는다).
+function buildHackPromptPayload(prompt, have) {
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`roulette:hack:${prompt.id}`).setLabel(`${HACK_TOOL_EMOJI} 사용`).setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`roulette:keep:${prompt.id}`).setLabel('그냥 확정').setStyle(ButtonStyle.Secondary),
+  );
+  return payload(card({
+    color: COLORS.info,
+    header: `${HACK_TOOL_EMOJI} ${HACK_TOOL_NAME}`,
+    sub: [`보유 ${have}/${HACK_TOOL_MAX}장`],
+    blocks: [`😢 **꽝**이 나왔어요. ${HACK_TOOL_NAME}을 써서 결과를 번복할까요?\n-# 잃은 **${prompt.bet} XP**를 돌려받고 같은 베팅으로 한 번 더 돌려요`],
+    footer: `⏰ ${HACK_PROMPT_MS / 1000}초 안에 고르지 않으면 결과가 그대로 확정돼요.`,
+    rows: [row],
+  }), { ephemeral: true });
 }
 
 function buildBetRow(lobby) {
@@ -281,6 +308,7 @@ async function startRouletteCommand(interaction) {
     userId,
     bet: null,
     maxAvailable: Math.min(MAX_BET, currentLevelXp),
+    hackTools: getHackTools(guildId, userId),
     interaction,
     timeoutId: null,
   };
@@ -330,16 +358,52 @@ async function spinLobby(interaction, lobby, lobbies) {
 
   if (!isTestGuild(lobby.guildId)) markPlayedToday(lobby.guildId, lobby.userId);
 
-  const reels = [spinReel(), spinReel(), spinReel()];
-  const { multiplier, kind, symbol } = resolvePayout(reels);
-  const payout = Math.round(bet * multiplier);
-  const net = payout - bet;
+  const spin = rollSpin(bet);
+  const net = spin.payout - bet;
 
   // 테스트 서버는 XP 시스템이 꺼져 있으므로 정산하지 않고 연출만 보여 준다.
-  const result = isTestGuild(lobby.guildId) ? { leveledUp: false } : applyXp(lobby.guildId, lobby.userId, net, `룰렛 (베팅 ${bet}, ${kind === 'triple' ? `${symbol} 트리플` : kind === 'two' ? '더블' : '꽝'} x${multiplier}, 지급 ${payout})`);
+  const result = isTestGuild(lobby.guildId) ? { leveledUp: false } : applyXp(lobby.guildId, lobby.userId, net, `룰렛 (베팅 ${bet}, ${spinLabel(spin)} x${spin.multiplier}, 지급 ${spin.payout})`);
 
+  // 베팅 과정은 본인에게만 보였지만, 결과는 채널 전체에 공개 메시지로 실제 슬롯머신처럼
+  // 릴이 하나씩 순서대로 멈추는 연출과 함께 알린다. XP 정산은 이미 끝났으므로, 채널 공개
+  // 과정에서 오류가 나더라도(권한 문제 등) 최소한 본인에게는 결과를 보여준다.
+  let shown = null;
+  try {
+    // content/embeds/components를 전부 비운 editReply는 디스코드가 "빈 메시지"로 보고 거부한다
+    // (DiscordAPIError[50006]) — 그냥 로비 메시지를 지워서 정리한다.
+    await interaction.deleteReply();
+    // interaction.channel은 캐시에 없으면 null일 수 있으므로(재시작 직후 등) fetch로 안전하게 가져온다.
+    const channel = interaction.channel ?? await interaction.client.channels.fetch(interaction.channelId);
+    const message = await revealSpin(channel, null, lobby, bet, spin, 0);
+    shown = { channel, message };
+  } catch (err) {
+    console.error('룰렛 결과 공개 실패:', err);
+    logError('게임 오류', `룰렛 결과 채널 공개 실패 — ${userLabel(lobby.userId)}에게만 결과 표시`, err);
+    await interaction.editReply(buildResultPayload(lobby, resultView(bet, spin, 0))).catch(() => {});
+  }
+
+  if (result.leveledUp) {
+    announceLevelUp(interaction.client, lobby.guildId, lobby.userId, result.newLevel).catch(() => {});
+  }
+
+  // 꽝이고 해킹 툴이 있으면 번복할지 본인에게만 묻는다(결과를 채널에 못 올렸으면 다시 돌릴 자리가 없어 묻지 않음).
+  if (spin.kind === 'none' && shown) await offerHack(interaction, { lobby, bet, ...shown, hacks: 0 });
+}
+
+// 릴 3개를 돌려 결과와 지급액을 정한다.
+function rollSpin(bet) {
+  const reels = [spinReel(), spinReel(), spinReel()];
+  const { multiplier, kind, symbol } = resolvePayout(reels);
+  return { reels, multiplier, kind, symbol, payout: Math.round(bet * multiplier) };
+}
+
+const spinLabel = (spin) => (spin.kind === 'triple' ? `${spin.symbol} 트리플` : spin.kind === 'two' ? '더블' : '꽝');
+
+// 결과 카드에 넘길 값(결과 줄·손익 줄). net 은 그날 판의 최종 손익(지급 - 베팅).
+function resultView(bet, spin, hacks) {
+  const { kind, symbol, multiplier, reels } = spin;
+  const net = spin.payout - bet;
   const symbolLabel = symbol ? `${symbol} ${SYMBOL_NAMES[symbol]}` : '';
-
   const resultLine =
     kind === 'triple'
       ? symbol === '7️⃣'
@@ -348,58 +412,136 @@ async function spinLobby(interaction, lobby, lobbies) {
       : kind === 'two'
         ? `🙂 **더블 매칭!** (×${multiplier})`
         : `😢 **꽝**`;
-
   const netLine = net >= 0 ? `📈 **+${net} XP**` : `📉 **${net} XP**`;
+  return { bet, resultLine, netLine, net, reels, multiplier, hacks };
+}
 
-  // 베팅 과정은 본인에게만 보였지만, 결과는 채널 전체에 공개 메시지로 실제 슬롯머신처럼
-  // 릴이 하나씩 순서대로 멈추는 연출과 함께 알린다. XP 정산은 이미 끝났으므로, 채널 공개
-  // 과정에서 오류가 나더라도(권한 문제 등) 최소한 본인에게는 결과를 보여준다.
+// 채널에 릴이 하나씩 멈추는 연출을 보여 주고 결과로 고친다. message 가 있으면(해킹 툴로 다시 돌릴 때) 그 카드를 그대로 다시 돌린다.
+// 결과가 실제로 올라간 메시지를 돌려준다(수정이 끝내 실패해 새로 보냈으면 새 메시지).
+async function revealSpin(channel, message, lobby, bet, spin, hacks) {
+  const first = buildSpinningPayload(lobby, bet, [null, null, null], 0, hacks);
+  if (message) {
+    try { await message.edit(first); } catch { message = null; } // 카드가 지워졌으면 새로 올린다
+  }
+  if (!message) message = await channel.send(first);
+
+  await animateSpin(message, lobby, bet, spin.reels, hacks);
+
+  // 결과 수정이 일시적 오류(네트워크/레이트리밋)로 한 번 실패하면 메시지가 "릴이 돌아가는 중..."에
+  // 영영 멈춰 보였다. 몇 번 재시도하고, 그래도 안 되면 결과를 새 메시지로 보낸다.
+  const finalPayload = buildResultPayload(lobby, resultView(bet, spin, hacks));
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      // 응답이 영영 오지 않고 매달리는 경우(재시도 로직이 못 도는 경우)도 있어 시간 제한을 둔다.
+      await Promise.race([
+        message.edit(finalPayload),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('edit timeout')), 8000)),
+      ]);
+      return message;
+    } catch (err) {
+      console.error(`룰렛 결과 수정 실패(${attempt + 1}/3):`, err);
+      await sleep(1000 * (attempt + 1));
+    }
+  }
+  return channel.send(finalPayload).catch(err => { console.error('룰렛 결과 새 메시지 전송 실패:', err); return message; });
+}
+
+// 꽝이 나왔을 때 해킹 툴이 있으면 본인에게만 보이는 확인 메시지를 띄운다. 시간이 지나면 결과 확정.
+async function offerHack(interaction, ctx) {
+  const have = getHackTools(ctx.lobby.guildId, ctx.lobby.userId);
+  if (have <= 0) return;
+  const prompts = getHackPrompts(interaction.client);
+  const prompt = { ...ctx, id: interaction.id, guildId: ctx.lobby.guildId, userId: ctx.lobby.userId, interaction, followUp: null, timeoutId: null };
+  prompts.set(prompt.id, prompt);
   try {
-    // content/embeds/components를 전부 비운 editReply는 디스코드가 "빈 메시지"로 보고 거부한다
-    // (DiscordAPIError[50006]) — 그냥 로비 메시지를 지워서 정리한다.
-    await interaction.deleteReply();
-    // interaction.channel은 캐시에 없으면 null일 수 있으므로(재시작 직후 등) fetch로 안전하게 가져온다.
-    const channel = interaction.channel ?? await interaction.client.channels.fetch(interaction.channelId);
-    const spinMessage = await channel.send(buildSpinningPayload(lobby, bet, [null, null, null], 0));
-
-    await animateSpin(spinMessage, lobby, bet, reels);
-
-    // 결과 수정이 일시적 오류(네트워크/레이트리밋)로 한 번 실패하면 메시지가 "릴이 돌아가는 중..."에
-    // 영영 멈춰 보였다. 몇 번 재시도하고, 그래도 안 되면 결과를 새 메시지로 보낸다.
-    const finalPayload = buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multiplier });
-    let edited = false;
-    for (let attempt = 0; attempt < 3 && !edited; attempt++) {
-      try {
-        // 응답이 영영 오지 않고 매달리는 경우(재시도 로직이 못 도는 경우)도 있어 시간 제한을 둔다.
-        await Promise.race([
-          spinMessage.edit(finalPayload),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('edit timeout')), 8000)),
-        ]);
-        edited = true;
-      } catch (err) {
-        console.error(`룰렛 결과 수정 실패(${attempt + 1}/3):`, err);
-        await sleep(1000 * (attempt + 1));
-      }
-    }
-    if (!edited) {
-      await channel.send(finalPayload).catch(err => console.error('룰렛 결과 새 메시지 전송 실패:', err));
-    }
+    prompt.followUp = await interaction.followUp(buildHackPromptPayload(prompt, have));
   } catch (err) {
-    console.error('룰렛 결과 공개 실패:', err);
-    logError('게임 오류', `룰렛 결과 채널 공개 실패 — ${userLabel(lobby.userId)}에게만 결과 표시`, err);
-    await interaction.editReply(buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multiplier })).catch(() => {});
+    prompts.delete(prompt.id);
+    console.error('해킹 툴 확인 메시지 전송 실패:', err);
+    return;
+  }
+  prompt.timeoutId = setTimeout(() => {
+    if (prompts.get(prompt.id) !== prompt) return;
+    prompts.delete(prompt.id);
+    // 본인에게만 보이는 후속 메시지는 그 상호작용의 editReply(message 지정)로만 고칠 수 있다.
+    interaction.editReply({ ...notice('⏰ **시간이 지나 결과가 그대로 확정됐어요.**'), message: prompt.followUp }).catch(() => {});
+  }, HACK_PROMPT_MS);
+}
+
+// 🛠️ 사용 / 그냥 확정 버튼
+async function handleHackButton(interaction, action, promptId) {
+  const prompts = getHackPrompts(interaction.client);
+  const prompt = prompts.get(promptId);
+  if (!prompt) {
+    await interaction.reply(notice('⚠️ **이미 확정된 결과예요.**', { ephemeral: true }));
+    return;
+  }
+  if (interaction.user.id !== prompt.userId) {
+    await interaction.reply(notice('⚠️ **본인 룰렛에만 쓸 수 있어요.**', { ephemeral: true }));
+    return;
+  }
+
+  // 아래 await 전에 판을 지워서, 연타해도 한 번만 처리되게 한다.
+  clearTimeout(prompt.timeoutId);
+  prompts.delete(promptId);
+
+  if (action === 'keep') {
+    await interaction.update(notice('✅ **결과를 확정했어요.**'));
+    return;
+  }
+
+  // 관리자 긴급정지·레이드로 미니게임 XP가 멈췄으면 쓰지 않고(해킹 툴도 그대로) 결과를 확정한다.
+  if (isMinigameXpFrozen()) {
+    const content = isRaidXpFrozen()
+      ? `👾 **몬스터 때문에 XP 시스템이 고장 나 ${HACK_TOOL_NAME}을 쓸 수 없습니다.**`
+      : `⚙️ **현재 관리자가 미니게임 XP를 일시 중지해 ${HACK_TOOL_NAME}을 쓸 수 없습니다.**`;
+    await interaction.update(notice(`${content}\n-# 결과는 그대로 확정되고 ${HACK_TOOL_NAME}은 쓰지 않았어요.`));
+    return;
+  }
+
+  if (!useHackTool(prompt.guildId, prompt.userId)) {
+    await interaction.update(notice(`⚠️ **${HACK_TOOL_NAME}이 없어요.** 결과가 그대로 확정됐어요.`));
+    return;
+  }
+  const left = getHackTools(prompt.guildId, prompt.userId);
+  await interaction.update(notice(`${HACK_TOOL_EMOJI} **${HACK_TOOL_NAME}을 사용했어요!** 다시 돌리는 중...\n-# 남은 ${HACK_TOOL_NAME} ${left}/${HACK_TOOL_MAX}장`));
+
+  const { lobby, bet } = prompt;
+  const hacks = prompt.hacks + 1;
+  const spin = rollSpin(bet);
+  // 꽝으로 이미 베팅만큼 빠졌으므로 이번 지급액을 그대로 더하면 그날 손익이 (지급 - 베팅)이 된다(또 꽝이면 0).
+  let result = { leveledUp: false };
+  if (!isTestGuild(prompt.guildId) && spin.payout > 0) {
+    result = applyXp(prompt.guildId, prompt.userId, spin.payout, `룰렛 ${HACK_TOOL_NAME} 재도전 ${hacks}회째 (베팅 ${bet}, ${spinLabel(spin)} x${spin.multiplier}, 꽝 번복 지급 ${spin.payout})`);
+  }
+  logSystem({ 유형: '룰렛', 유저: userLabel(prompt.userId), 내용: `${HACK_TOOL_NAME} 사용(${hacks}회째, 남은 ${left}장) — 베팅 ${bet}, ${spinLabel(spin)} x${spin.multiplier}` });
+
+  let message = null;
+  try {
+    message = await revealSpin(prompt.channel, prompt.message, lobby, bet, spin, hacks);
+  } catch (err) {
+    console.error('룰렛 해킹 툴 결과 공개 실패:', err);
+    logError('게임 오류', `룰렛 ${HACK_TOOL_NAME} 결과 채널 공개 실패 — ${userLabel(prompt.userId)}에게만 결과 표시`, err);
+    await interaction.followUp(buildResultPayload(lobby, resultView(bet, spin, hacks), { ephemeral: true })).catch(() => {});
   }
 
   if (result.leveledUp) {
-    announceLevelUp(interaction.client, lobby.guildId, lobby.userId, result.newLevel).catch(() => {});
+    announceLevelUp(interaction.client, prompt.guildId, prompt.userId, result.newLevel).catch(() => {});
   }
+
+  // 또 꽝이면 남은 장이 있는 한 계속 쓸 수 있다.
+  if (spin.kind === 'none' && message) await offerHack(interaction, { lobby, bet, channel: prompt.channel, message, hacks });
 }
 
 async function handleRouletteButton(interaction) {
   const { customId } = interaction;
   const lobbies = getLobbies(interaction.client);
   const parts = customId.split(':');
-  const action = parts[1]; // bet | max | spin | cancel
+  const action = parts[1]; // bet | max | spin | cancel | hack | keep
+  if (action === 'hack' || action === 'keep') {
+    await handleHackButton(interaction, action, parts[2]);
+    return;
+  }
   const lobbyId = parts[2];
   const lobby = lobbies.get(lobbyId);
 
@@ -447,4 +589,4 @@ async function handleRouletteButton(interaction) {
 }
 
 // buildLobbyPayload/buildResultPayload는 화면 모음·테스트에서 직접 그려 보려고 함께 내보낸다.
-module.exports = { buildLobbyPayload, buildSpinningPayload, buildResultPayload, startRouletteCommand, handleRouletteButton, loadRoulette, saveRoulette, MIN_BET, MAX_BET };
+module.exports = { buildLobbyPayload, buildSpinningPayload, buildResultPayload, buildHackPromptPayload, startRouletteCommand, handleRouletteButton, loadRoulette, saveRoulette, MIN_BET, MAX_BET };
