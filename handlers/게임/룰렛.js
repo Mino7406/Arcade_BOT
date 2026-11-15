@@ -180,10 +180,10 @@ function buildLobbyPayload(lobby, extra = {}) {
 
 // 릴이 도는 중: reels 에서 null 인 릴은 아직 돌고 있다(stage 가 오를수록 하나씩 멈춘다).
 function buildSpinningPayload(lobby, bet, reels, phase = 0, hacks = 0) {
-  const png = renderSlot({ reels, bet, phase, right: '돌리는 중...', rightColor: '#c9b8a0' });
+  const png = renderSlot({ reels, bet, phase, right: '돌리는 중...', rightColor: '#c9b8a0', hacked: hacks > 0 });
   return payload(card({
-    color: COLORS.info,
-    header: '🎰 룰렛머신',
+    color: hacks > 0 ? HACK_COLOR : COLORS.info,
+    header: hacks > 0 ? `${hackToolEmoji()} 룰렛머신 · HACKED` : '🎰 룰렛머신',
     sub: [`<@${lobby.userId}>`, '릴이 돌아가는 중...', hackLabel(hacks)].filter(Boolean),
     blocks: [{ image: SLOT_URL, divider: true }], // 결과 카드와 같은 자리에 구분선(그림이 위아래로 움직이지 않게)
     footer: hacks > 0 ? `${hackToolEmoji()} ${HACK_TOOL_NAME}으로 결과를 번복! 다시 돌리는 중...` : '🎰 두근두근... 릴이 하나씩 멈춰요',
@@ -199,10 +199,12 @@ function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multi
     rightColor: win ? '#7dff9d' : net === 0 ? '#ffe9a8' : '#ff9a9a',
     badge: multiplier > 0 ? `×${multiplier}` : '',
     badgeColor: jackpot ? '#ffd700' : win ? '#ffd23f' : '#c9b8a0',
+    hacked: hacks > 0,
+    phase: hacks > 0 ? 7 : 0, // 해킹 모드 결과 그림의 글리치 모양(프레임 번호)
   });
   return payload(card({
-    color: win ? 0xFFD700 : COLORS.muted,
-    header: '🎰 룰렛머신',
+    color: hacks > 0 ? HACK_COLOR : win ? 0xFFD700 : COLORS.muted,
+    header: hacks > 0 ? `${hackToolEmoji()} 룰렛머신 · HACKED` : '🎰 룰렛머신',
     sub: [`<@${lobby.userId}>`, '결과', hackLabel(hacks)].filter(Boolean),
     blocks: [
       { image: SLOT_URL, divider: true }, // 제목·결과 줄 아래 구분선

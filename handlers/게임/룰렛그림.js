@@ -10,7 +10,9 @@
 // 모양 규칙: 기계는 좌우·상하 대칭(위 판 / 릴 판 / 아래 판), 심볼은 모두 "진한 테두리 → 바탕 → 음영 → 빛 반사" 순서로
 // 그리고, 칸 안에서 위아래·좌우 가운데에 오도록 측정한 보정값(SYMBOL_OFFSET)을 쓴다.
 
+const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 const { Painter, loadFont } = require('../레이드/그림판');
 
 const W = 600;
@@ -31,6 +33,8 @@ const PLATE_H = 34;
 let font = null;
 let painter = null;
 let bg = null; // 배경 버퍼(RGB)
+let hackBg = null; // 해킹 툴로 번복할 때 쓰는 해킹된 기계 배경 버퍼(RGB)
+let skull = null; // 해킹 툴 해골 그림(크기별 RGBA 캐시)
 let idle = null; // 대기 화면 PNG 캐시
 
 function getFont() {
@@ -264,7 +268,7 @@ function getBg() {
 }
 
 // ── 변하는 부분 ────────────────────────────────────────────────
-function drawSpinningWindow(p, x, phase, reel) {
+function drawSpinningWindow(p, x, phase, reel, base = getBg()) {
   // 도는 릴: 릴 띠(심볼 여러 개가 세로로 이어진 것)를 그리고 세로로 길게 번지게(모션 블러) 해서 빠르게 돌아가는 느낌을 낸다.
   const sc = p.s;
   const gap = 104; // 심볼 사이 간격(설계 좌표)
@@ -275,7 +279,7 @@ function drawSpinningWindow(p, x, phase, reel) {
     drawSymbol(p, key, x + WIN_W / 2 + ox, WIN_CY + oy + shift + k * gap);
   }
   // 칸 밖으로 삐져나온 부분은 고정 배경으로 되돌린다(칸 위·아래 + 칸 좌우 틀).
-  const base = getBg(), W2 = p.w;
+  const W2 = p.w;
   const x0 = Math.round(x * sc), x1 = Math.round((x + WIN_W) * sc);
   const y0 = Math.round(WIN_Y * sc), y1 = Math.round((WIN_Y + WIN_H) * sc);
   for (let yy = 0; yy < p.h; yy++) {
@@ -297,6 +301,180 @@ function drawSpinningWindow(p, x, phase, reel) {
       const i = ((y0 + r) * W2 + xx) * 3;
       p.buf[i] = sr / n; p.buf[i + 1] = sg / n; p.buf[i + 2] = sb / n;
     }
+  }
+}
+
+// ── 해킹 모드(해킹 툴로 결과를 번복할 때) ─────────────────────────────
+// 기계가 해킹당한 것처럼 보이게: 몸체를 보라·네온 시안으로 바꾼 배경(한 번만 그려 보관) +
+// 위 판 양옆 해골(해킹 툴 이모지 그림) + 글리치 후처리(가로 줄 밀림·RGB 분리·스캔라인).
+const HACK = {
+  body: '#1d0b3a', border: '#3ee6ff', border2: '#b26bff', plate: '#07031a', reelBg: '#120726',
+  window: '#efe6ff', frame: '#7c4dff', arrow: '#3ee6ff', brand: '#c9a8ff', win: '#3ee6ff',
+};
+const SKULL_FILE = path.join(__dirname, '..', '..', 'assets', '이모지', 'hacktool.png');
+
+function drawHackBg(p) {
+  const f = getFont();
+  p.clear('#0a0418');
+  p.roundRect(20, 8, 560, 240, 26, HACK.body);
+  p.strokeRoundRect(20, 8, 560, 240, 26, 6, HACK.border);
+  p.strokeRoundRect(28, 16, 544, 224, 20, 2, HACK.border2);
+  p.roundRect(50, TOP_PLATE_Y, 500, PLATE_H, 12, HACK.plate);
+  p.roundRect(50, BOTTOM_PLATE_Y, 500, PLATE_H, 12, HACK.plate);
+  p.strokeRoundRect(50, TOP_PLATE_Y, 500, PLATE_H, 12, 2, HACK.border2);
+  p.strokeRoundRect(50, BOTTOM_PLATE_Y, 500, PLATE_H, 12, 2, HACK.border2);
+  p.text(f, 'SYSTEM  HACKED', 300, TOP_PLATE_Y + PLATE_H / 2, { size: 19, color: HACK.brand });
+  p.roundRect(50, 58, 500, 140, 16, HACK.reelBg);
+  for (const x of WIN_X) {
+    p.roundRect(x - 4, WIN_Y - 4, WIN_W + 8, WIN_H + 8, 14, HACK.frame);
+    p.roundRect(x, WIN_Y, WIN_W, WIN_H, 10, HACK.window);
+  }
+  const tri = [54, WIN_CY - 10, 72, WIN_CY, 54, WIN_CY + 10];
+  p.poly(tri, HACK.arrow);
+  p.poly(mirror(300, tri), HACK.arrow);
+}
+
+function getHackBg() {
+  if (!hackBg) {
+    const p = getPainter();
+    drawHackBg(p);
+    hackBg = Buffer.from(p.buf);
+  }
+  return hackBg;
+}
+
+// 8비트 RGBA/RGB PNG(인터레이스 없음)를 읽는다 — 해골 그림 하나만 쓰므로 필요한 만큼만 구현.
+function decodePng(buf) {
+  let off = 8, w = 0, h = 0, type = 0;
+  const idat = [];
+  while (off < buf.length) {
+    const len = buf.readUInt32BE(off), kind = buf.toString('ascii', off + 4, off + 8);
+    const data = buf.subarray(off + 8, off + 8 + len);
+    if (kind === 'IHDR') { w = data.readUInt32BE(0); h = data.readUInt32BE(4); type = data[9]; }
+    else if (kind === 'IDAT') idat.push(data);
+    off += 12 + len;
+  }
+  const bpp = type === 6 ? 4 : 3, stride = w * bpp;
+  const raw = zlib.inflateSync(Buffer.concat(idat));
+  const out = Buffer.alloc(w * h * 4);
+  const cur = Buffer.alloc(stride), prev = Buffer.alloc(stride);
+  for (let y = 0; y < h; y++) {
+    const ft = raw[y * (stride + 1)];
+    raw.copy(cur, 0, y * (stride + 1) + 1, (y + 1) * (stride + 1));
+    for (let i = 0; i < stride; i++) {
+      const a = i >= bpp ? cur[i - bpp] : 0, b = prev[i], c = i >= bpp ? prev[i - bpp] : 0;
+      let v = cur[i];
+      if (ft === 1) v += a;
+      else if (ft === 2) v += b;
+      else if (ft === 3) v += (a + b) >> 1;
+      else if (ft === 4) { const pp = a + b - c, pa = Math.abs(pp - a), pb = Math.abs(pp - b), pc = Math.abs(pp - c); v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c; }
+      cur[i] = v & 255;
+    }
+    for (let x = 0; x < w; x++) {
+      const o = (y * w + x) * 4;
+      out[o] = cur[x * bpp]; out[o + 1] = cur[x * bpp + 1]; out[o + 2] = cur[x * bpp + 2]; out[o + 3] = bpp === 4 ? cur[x * bpp + 3] : 255;
+    }
+    cur.copy(prev);
+  }
+  return { w, h, data: out };
+}
+
+// 해골 그림을 size(픽셀) 정사각형으로 줄여 둔다(상자 평균). 크기별로 한 번만 만든다.
+function getSkull(size) {
+  if (!skull) {
+    try { skull = { src: decodePng(fs.readFileSync(SKULL_FILE)), sized: new Map() }; } catch { skull = { src: null, sized: new Map() }; }
+  }
+  if (!skull.src) return null;
+  if (!skull.sized.has(size)) {
+    const { w, h, data } = skull.src, out = new Float32Array(size * size * 4);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const sx0 = Math.floor(x * w / size), sx1 = Math.max(sx0 + 1, Math.floor((x + 1) * w / size));
+        const sy0 = Math.floor(y * h / size), sy1 = Math.max(sy0 + 1, Math.floor((y + 1) * h / size));
+        let r = 0, g = 0, b = 0, a = 0, n = 0;
+        for (let yy = sy0; yy < sy1; yy++) for (let xx = sx0; xx < sx1; xx++) {
+          const i = (yy * w + xx) * 4, al = data[i + 3] / 255;
+          r += data[i] * al; g += data[i + 1] * al; b += data[i + 2] * al; a += al; n++;
+        }
+        const o = (y * size + x) * 4;
+        out[o] = a ? r / a : 0; out[o + 1] = a ? g / a : 0; out[o + 2] = a ? b / a : 0; out[o + 3] = a / n;
+      }
+    }
+    skull.sized.set(size, out);
+  }
+  return skull.sized.get(size);
+}
+
+// 설계 좌표 (cx, cy) 가운데에 해골을 찍는다. size 는 설계 크기.
+function drawSkull(p, cx, cy, size) {
+  const px = Math.round(size * p.s), img = getSkull(px);
+  if (!img) return;
+  const x0 = Math.round(cx * p.s - px / 2), y0 = Math.round(cy * p.s - px / 2);
+  for (let y = 0; y < px; y++) {
+    const yy = y0 + y;
+    if (yy < 0 || yy >= p.h) continue;
+    for (let x = 0; x < px; x++) {
+      const xx = x0 + x, o = (y * px + x) * 4, a = img[o + 3];
+      if (xx < 0 || xx >= p.w || a <= 0.01) continue;
+      p.blend((yy * p.w + xx) * 3, [img[o], img[o + 1], img[o + 2]], a);
+    }
+  }
+}
+
+// 프레임마다 다르지만 같은 프레임이면 늘 같은 모양이 나오게 하는 난수(그림 비교·테스트가 흔들리지 않게)
+function seeded(seed) {
+  let t = seed >>> 0;
+  return () => { t = (t + 0x6D2B79F5) >>> 0; let r = Math.imul(t ^ (t >>> 15), 1 | t); r ^= r + Math.imul(r ^ (r >>> 7), 61 | r); return ((r ^ (r >>> 14)) >>> 0) / 4294967296; };
+}
+
+// 글리치 후처리: ① 몇 줄 띠를 좌우로 밀기(아래 판 글자는 읽히게 빼고) ② 빨강·파랑 채널을 좌우로 살짝 어긋나게 ③ 스캔라인.
+function applyGlitch(p, phase) {
+  const rand = seeded(phase * 7919 + 17), W2 = p.w, H2 = p.h, buf = p.buf, rowBytes = W2 * 3;
+  const limit = Math.round((BOTTOM_PLATE_Y - 4) * p.s);
+  const row = Buffer.alloc(rowBytes);
+  const bands = 4 + Math.floor(rand() * 3);
+  for (let k = 0; k < bands; k++) {
+    const y0 = Math.floor(rand() * (limit - 10)), hgt = 2 + Math.floor(rand() * 7);
+    const dx = Math.round((rand() < 0.5 ? -1 : 1) * (3 + rand() * 9));
+    for (let y = y0; y < Math.min(limit, y0 + hgt); y++) {
+      const start = y * rowBytes;
+      buf.copy(row, 0, start, start + rowBytes);
+      for (let x = 0; x < W2; x++) {
+        const sx = Math.min(W2 - 1, Math.max(0, x - dx));
+        buf[start + x * 3] = row[sx * 3]; buf[start + x * 3 + 1] = row[sx * 3 + 1]; buf[start + x * 3 + 2] = row[sx * 3 + 2];
+      }
+      // 밀린 띠는 살짝 시안·보라로 물들인다
+      const tint = k % 2 ? [62, 230, 255] : [178, 107, 255];
+      for (let x = 0; x < W2; x++) p.blend(start + x * 3, tint, 0.18);
+    }
+  }
+  // RGB 분리: 빨강은 오른쪽, 파랑은 왼쪽으로 2px
+  const sh = 2;
+  for (let y = 0; y < H2; y++) {
+    const start = y * rowBytes;
+    buf.copy(row, 0, start, start + rowBytes);
+    for (let x = 0; x < W2; x++) {
+      buf[start + x * 3] = row[Math.max(0, x - sh) * 3];
+      buf[start + x * 3 + 2] = row[Math.min(W2 - 1, x + sh) * 3 + 2];
+    }
+  }
+  // 스캔라인: 세 줄에 한 줄씩 어둡게
+  for (let y = 0; y < H2; y += 3) {
+    const start = y * rowBytes;
+    for (let i = start; i < start + rowBytes; i++) buf[i] = buf[i] * 0.78;
+  }
+}
+
+// 해킹 모드 전구 자리: 위 판 양옆에 해골, 아래 판 양옆엔 깜빡이는 네온 점
+function drawHackDecor(p, phase) {
+  drawSkull(p, 76, TOP_PLATE_Y + PLATE_H / 2, 30);
+  drawSkull(p, 524, TOP_PLATE_Y + PLATE_H / 2, 30);
+  for (let k = 0; k < 2; k++) {
+    const lit = (k + phase) % 2 === 0;
+    const c = lit ? HACK.border : '#3b2a6b';
+    const y = BOTTOM_PLATE_Y + PLATE_H / 2;
+    p.circle(68 + k * 17, y, 5, c);
+    p.circle(532 - k * 17, y, 5, c);
   }
 }
 
@@ -324,23 +502,25 @@ function drawBulbs(p, phase) {
  * @param {number[]} [o.winIdx]         당첨 릴 번호(초록/금색 테두리)
  * @param {boolean} [o.jackpot]
  * @param {number} [o.phase]            돌아가는 연출 프레임 번호(0~)
+ * @param {boolean} [o.hacked]         해킹 툴로 번복 중 — 해킹된 기계(보라·시안 + 해골 + 글리치)로 그린다
  */
-function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = '#ffe9a8', badge = '', badgeColor = '#ffd23f', winIdx = [], jackpot = false, phase = 0 } = {}) {
+function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = '#ffe9a8', badge = '', badgeColor = '#ffd23f', winIdx = [], jackpot = false, phase = 0, hacked = false } = {}) {
   const p = getPainter();
-  getBg().copy(p.buf);
+  const base = hacked ? getHackBg() : getBg();
+  base.copy(p.buf);
   const f = getFont();
-  drawBulbs(p, phase);
+  if (hacked) drawHackDecor(p, phase); else drawBulbs(p, phase);
 
   for (let i = 0; i < 3; i++) {
     const x = WIN_X[i];
-    if (reels[i] === null) { drawSpinningWindow(p, x, phase, i); continue; }
+    if (reels[i] === null) { drawSpinningWindow(p, x, phase, i, base); continue; }
     const [ox, oy] = SYMBOL_OFFSET[reels[i]] || [0, 0];
     drawSymbol(p, reels[i], x + WIN_W / 2 + ox, WIN_CY + oy);
   }
 
   // 당첨 릴 테두리
   for (const i of winIdx) {
-    p.strokeRoundRect(WIN_X[i] - 2, WIN_Y - 2, WIN_W + 4, WIN_H + 4, 12, 6, jackpot ? '#ffd700' : '#37d67a');
+    p.strokeRoundRect(WIN_X[i] - 2, WIN_Y - 2, WIN_W + 4, WIN_H + 4, 12, 6, jackpot ? '#ffd700' : hacked ? HACK.win : '#37d67a');
   }
 
   // 아래 판
@@ -357,6 +537,7 @@ function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = 
     p.text(f, badge, rightX - w / 2, py, { size: 20, color: '#3a1a00' });
   }
 
+  if (hacked) applyGlitch(p, phase);
   return p.png();
 }
 
