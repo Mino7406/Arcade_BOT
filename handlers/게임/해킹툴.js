@@ -1,6 +1,6 @@
 // 해킹툴.js — 레이드 클리어 보상 아이템 "해킹 툴" 보유량 관리.
-// 해킹 툴 1장으로 룰렛에서 꽝이 나왔을 때 결과를 번복하고 같은 베팅으로 한 번 더 돌릴 수 있다(룰렛.js).
-// 받는 곳: 레이드 토벌 성공 시 XP 보상을 받는 파티원(직접 행동한 사람)에게 1장씩(레이드/index.js).
+// 해킹 툴 1개로 룰렛에서 꽝이 나왔을 때 결과를 번복하고 같은 베팅으로 한 번 더 돌릴 수 있다(룰렛.js).
+// 받는 곳: 레이드 토벌 성공 시 XP 보상을 받는 파티원(직접 행동한 사람)에게 1개씩(레이드/index.js).
 // 서버(길드)별로 따로 센다. 지급·사용이 드물어 바뀔 때마다 바로 저장한다(30초 자동 저장에 넣지 않음).
 //
 // 이 모듈은 저장·로그 도구만 require 한다(순환참조 방지).
@@ -21,11 +21,11 @@ const EMOJIS = {
 };
 const EMOJI_NAME = EMOJIS.tool.name;
 const EMOJI_FILE = path.join(EMOJI_DIR, EMOJIS.tool.file);
-const HACK_TOOL_MAX = 3; // 최대 보유 장수. 꽉 찬 상태에서 받으면 그 장은 버려진다
+const HACK_TOOL_MAX = 3; // 최대 보유 개수. 꽉 찬 상태에서 받으면 그 1개는 버려진다
 
 const HACK_TOOL_PATH = path.join(__dirname, '..', '..', 'DB', 'hacktool.json');
 
-let tools = {}; // { [guildId]: { [userId]: 보유 장수 } }
+let tools = {}; // { [guildId]: { [userId]: 보유 개수 } }
 
 // 앱 이모지 목록에서 찾고, 없으면 등록한다(봇이 켜질 때 한 번, 목록 조회 1번 + 없는 것만 등록).
 async function ensureHackToolEmoji(client) {
@@ -92,7 +92,7 @@ function setCount(guildId, userId, n) {
   else delete tools[guildId][userId];
 }
 
-// 1장 지급. 받았으면 true, 이미 최대 보유라 못 받았으면 false.
+// 1개 지급. 받았으면 true, 이미 최대 보유라 못 받았으면 false.
 function grantHackTool(guildId, userId) {
   const have = getHackTools(guildId, userId);
   if (have >= HACK_TOOL_MAX) return false;
@@ -101,7 +101,7 @@ function grantHackTool(guildId, userId) {
   return true;
 }
 
-// 1장 사용. 썼으면 true, 없으면 false.
+// 1개 사용. 썼으면 true, 없으면 false.
 function useHackTool(guildId, userId) {
   const have = getHackTools(guildId, userId);
   if (have <= 0) return false;

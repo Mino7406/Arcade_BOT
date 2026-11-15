@@ -351,11 +351,11 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     console.log(`   (50명 동시: ${ms}ms, 메모리 +${grewMb.toFixed(1)}MB)`);
   });
 
-  // ── 해킹 툴: 레이드 보상(최대 3장) · 룰렛 꽝 번복 ──
+  // ── 해킹 툴: 레이드 보상(최대 3개) · 룰렛 꽝 번복 ──
   const hack = require(path.join(root, 'handlers/게임/해킹툴.js'));
-  await flow('해킹 툴: 최대 3장 · 꽝이면 본인에게만 묻고 번복 · 넘기기', async () => {
-    assert(hack.grantHackTool('g1', 'h0') && hack.grantHackTool('g1', 'h0') && hack.grantHackTool('g1', 'h0'), '3장까지 못 받음');
-    assert(!hack.grantHackTool('g1', 'h0') && hack.getHackTools('g1', 'h0') === 3, '4장째를 받아 버림');
+  await flow('해킹 툴: 최대 3개 · 꽝이면 본인에게만 묻고 번복 · 넘기기', async () => {
+    assert(hack.grantHackTool('g1', 'h0') && hack.grantHackTool('g1', 'h0') && hack.grantHackTool('g1', 'h0'), '3개까지 못 받음');
+    assert(!hack.grantHackTool('g1', 'h0') && hack.getHackTools('g1', 'h0') === 3, '4개째를 받아 버림');
 
     const realRandom = Math.random;
     const queue = [];
@@ -366,7 +366,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
       const xp0 = lv.getXp('g1', 'h1');
       const s = mkInteraction({ user: 'h1', command: '룰렛' });
       await roulette.startRouletteCommand(s);
-      assert(JSON.stringify(s._reply.components).includes('1/3장'), '로비에 해킹 툴 보유 수가 안 보임');
+      assert(JSON.stringify(s._reply.components).includes('1/3개'), '로비에 해킹 툴 보유 수가 안 보임');
       await roulette.handleRouletteButton(mkInteraction({ user: 'h1', customId: `roulette:bet:${s.id}:10`, message: s._reply }));
       const spin = mkInteraction({ user: 'h1', customId: `roulette:spin:${s.id}`, message: s._reply });
       queue.push(0.1, 0.4, 0.6); // 🍒 🍋 🍇 → 꽝
@@ -403,6 +403,23 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
       const p2 = client.rouletteHacks.get(spin2.id);
       await roulette.handleRouletteButton(mkInteraction({ user: 'h2', customId: `roulette:keep:${spin2.id}`, message: p2.followUp }));
       assert(hack.getHackTools('g1', 'h2') === 1 && !client.rouletteHacks.has(spin2.id), '넘기기인데 해킹 툴이 쓰이거나 판이 남음');
+
+      // 테스트 서버: 해킹 툴이 없어도 무제한으로 쓸 수 있고 개수가 줄지 않는다
+      const TG = '1282694117255548960';
+      const s3 = mkInteraction({ user: 'h3', command: '룰렛', guildId: TG });
+      await roulette.startRouletteCommand(s3);
+      assert(JSON.stringify(s3._reply.components).includes('무제한'), '테스트 서버 로비에 무제한 표시가 없음');
+      await roulette.handleRouletteButton(mkInteraction({ user: 'h3', customId: `roulette:bet:${s3.id}:10`, message: s3._reply, guildId: TG }));
+      const spin3 = mkInteraction({ user: 'h3', customId: `roulette:spin:${s3.id}`, message: s3._reply, guildId: TG });
+      queue.push(0.1, 0.4, 0.6);
+      await roulette.handleRouletteButton(spin3);
+      const p3 = client.rouletteHacks.get(spin3.id);
+      assert(p3 && JSON.stringify(p3.followUp.components).includes('무제한'), '테스트 서버에서 꽝인데 해킹 툴을 안 물어봄');
+      queue.push(0.1, 0.4, 0.6); // 또 꽝 → 또 물어봐야 한다
+      const use3 = mkInteraction({ user: 'h3', customId: `roulette:hack:${spin3.id}`, message: p3.followUp, guildId: TG });
+      await roulette.handleRouletteButton(use3);
+      assert(hack.getHackTools(TG, 'h3') === 0 && client.rouletteHacks.has(use3.id), '테스트 서버에서 또 꽝인데 다시 안 물어봄');
+      clearTimeout(client.rouletteHacks.get(use3.id).timeoutId); client.rouletteHacks.delete(use3.id);
     } finally {
       Math.random = realRandom;
     }

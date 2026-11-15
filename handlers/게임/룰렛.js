@@ -125,6 +125,11 @@ function getHackPrompts(client) {
   return client.rouletteHacks;
 }
 
+// 테스트 서버에서는 해킹 툴을 무제한으로 쓸 수 있다(레이드를 깨지 않아도 시험해 볼 수 있게, 개수도 줄지 않음).
+const hackUnlimited = (guildId) => isTestGuild(guildId);
+const hackToolsOf = (guildId, userId) => (hackUnlimited(guildId) ? Infinity : getHackTools(guildId, userId));
+const hackHaveText = (have) => (have === Infinity ? '테스트 서버 · 무제한' : `${have}/${HACK_TOOL_MAX}개`);
+
 // 해킹 툴을 쓴 횟수 표시(카드 부제)
 const hackLabel = (hacks) => (hacks > 0 ? `${hackToolEmoji()} ${HACK_TOOL_NAME} ${hacks}회 사용` : null);
 
@@ -158,7 +163,7 @@ function buildLobbyCard(lobby) {
   return card({
     color: COLORS.info,
     header: '🎰 룰렛머신',
-    sub: ['하루 1회', lobby.hackTools > 0 ? `${hackToolEmoji()} ${HACK_TOOL_NAME} ${lobby.hackTools}/${HACK_TOOL_MAX}장` : null].filter(Boolean),
+    sub: ['하루 1회', lobby.hackTools > 0 ? `${hackToolEmoji()} ${HACK_TOOL_NAME} ${hackHaveText(lobby.hackTools)}` : null].filter(Boolean),
     blocks: [
       `<@${lobby.userId}>님, 베팅 XP를 고른 뒤 **🎰 돌리기**를 누르세요.`,
       { image: SLOT_URL },
@@ -223,7 +228,7 @@ function buildHackPromptPayload(prompt, have) {
   return payload(card({
     color: HACK_COLOR,
     header: `${hackToolEmoji()} ${HACK_TOOL_NAME}`,
-    sub: [`보유 ${have}/${HACK_TOOL_MAX}장`],
+    sub: [`보유 ${hackHaveText(have)}`],
     blocks: [`😢 **꽝**이 나왔어요. ${HACK_TOOL_NAME}을 써서 결과를 번복할까요?\n-# 잃은 **${prompt.bet} XP**를 돌려받고 같은 베팅으로 한 번 더 돌려요`],
     footer: `⏰ ${HACK_PROMPT_MS / 1000}초 안에 고르지 않으면 결과가 그대로 확정돼요.`,
     rows: [row],
@@ -311,7 +316,7 @@ async function startRouletteCommand(interaction) {
     userId,
     bet: null,
     maxAvailable: Math.min(MAX_BET, currentLevelXp),
-    hackTools: getHackTools(guildId, userId),
+    hackTools: hackToolsOf(guildId, userId),
     interaction,
     timeoutId: null,
   };
@@ -451,7 +456,7 @@ async function revealSpin(channel, message, lobby, bet, spin, hacks) {
 
 // 꽝이 나왔을 때 해킹 툴이 있으면 본인에게만 보이는 확인 메시지를 띄운다. 시간이 지나면 결과 확정.
 async function offerHack(interaction, ctx) {
-  const have = getHackTools(ctx.lobby.guildId, ctx.lobby.userId);
+  const have = hackToolsOf(ctx.lobby.guildId, ctx.lobby.userId);
   if (have <= 0) return;
   const prompts = getHackPrompts(interaction.client);
   const prompt = { ...ctx, id: interaction.id, guildId: ctx.lobby.guildId, userId: ctx.lobby.userId, interaction, followUp: null, timeoutId: null };
@@ -502,12 +507,12 @@ async function handleHackButton(interaction, action, promptId) {
     return;
   }
 
-  if (!useHackTool(prompt.guildId, prompt.userId)) {
+  if (!hackUnlimited(prompt.guildId) && !useHackTool(prompt.guildId, prompt.userId)) {
     await interaction.update(notice(`⚠️ **${HACK_TOOL_NAME}이 없어요.** 결과가 그대로 확정됐어요.`));
     return;
   }
-  const left = getHackTools(prompt.guildId, prompt.userId);
-  await interaction.update(notice(`${hackToolEmoji()} **${HACK_TOOL_NAME}을 사용했어요!** 다시 돌리는 중...\n-# 남은 ${HACK_TOOL_NAME} ${left}/${HACK_TOOL_MAX}장`));
+  const left = hackToolsOf(prompt.guildId, prompt.userId);
+  await interaction.update(notice(`${hackToolEmoji()} **${HACK_TOOL_NAME}을 사용했어요!** 다시 돌리는 중...\n-# 남은 ${HACK_TOOL_NAME} ${hackHaveText(left)}`));
 
   const { lobby, bet } = prompt;
   const hacks = prompt.hacks + 1;
@@ -517,7 +522,7 @@ async function handleHackButton(interaction, action, promptId) {
   if (!isTestGuild(prompt.guildId) && spin.payout > 0) {
     result = applyXp(prompt.guildId, prompt.userId, spin.payout, `룰렛 ${HACK_TOOL_NAME} 재도전 ${hacks}회째 (베팅 ${bet}, ${spinLabel(spin)} x${spin.multiplier}, 꽝 번복 지급 ${spin.payout})`);
   }
-  logSystem({ 유형: '룰렛', 유저: userLabel(prompt.userId), 내용: `${HACK_TOOL_NAME} 사용(${hacks}회째, 남은 ${left}장) — 베팅 ${bet}, ${spinLabel(spin)} x${spin.multiplier}` });
+  logSystem({ 유형: '룰렛', 유저: userLabel(prompt.userId), 내용: `${HACK_TOOL_NAME} 사용(${hacks}회째, 남은 ${left === Infinity ? '무제한' : `${left}개`}) — 베팅 ${bet}, ${spinLabel(spin)} x${spin.multiplier}` });
 
   let message = null;
   try {

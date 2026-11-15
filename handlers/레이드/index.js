@@ -242,7 +242,7 @@ async function recruitView(r, { redraw = true } = {}) {
   });
   sections.push({
     // 이름표를 붙인 인용 블록 두 줄 — 보상과 시작 규칙을 한눈에
-    text: `> 🎁 **보상** : +${CLEAR_XP} XP · ${hackToolEmoji()} ${HACK_TOOL_NAME} 1장\n` +
+    text: `> 🎁 **보상** : +${CLEAR_XP} XP · ${hackToolEmoji()} ${HACK_TOOL_NAME} 1개\n` +
       '> ▶️ **바로 시작** : 첫 참가자가 방장이 되며 시작 여부를 결정할 수 있어요.',
   });
   return assemble(ACCENT.recruit, image, sections);
@@ -422,15 +422,13 @@ function subjectJosa(name) {
   if (code < 0 || code > 11171) return '이(가)';
   return code % 28 ? '이' : '가';
 }
-// 토벌 보상 중 해킹 툴 줄: 받은 사람, 그리고 최대 보유라 못 받은 사람.
-function hackToolLines(r, rewards) {
-  const nameOf = (x) => r.battle?.members.find(mem => mem.userId === x.userId)?.name;
-  const got = rewards.filter(x => x.hackTool).map(nameOf).filter(Boolean);
-  const full = rewards.filter(x => !x.hackTool).map(nameOf).filter(Boolean);
-  const lines = [];
-  if (got.length) lines.push(`> ${hackToolEmoji()} **${HACK_TOOL_NAME}** : ${got.join(', ')} · (+1장)`);
-  if (full.length) lines.push(`-# ${hackToolEmoji()} ${full.join(', ')}님은 ${HACK_TOOL_NAME}을 최대로 갖고 있어 받지 못했어요`);
-  return lines;
+// 보상 괄호 안 글자: XP와 (받았으면) 해킹 툴을 한 줄에. 해킹 툴은 최대 보유면 못 받으므로 사람마다 다를 수 있다.
+const rewardText = (xp, hackTool) => `(+${xp} XP${hackTool ? ` · ${hackToolEmoji()} ${HACK_TOOL_NAME} 1개` : ''})`;
+
+// 해킹 툴을 최대로 갖고 있어 못 받은 사람 안내(작은 글씨). 없으면 null.
+function hackToolFullLine(r, rewards) {
+  const full = rewards.filter(x => !x.hackTool).map(x => r.battle?.members.find(mem => mem.userId === x.userId)?.name).filter(Boolean);
+  return full.length ? `-# ${hackToolEmoji()} ${full.join(', ')}님은 ${HACK_TOOL_NAME}을 최대로 갖고 있어 받지 못했어요` : null;
 }
 
 function endSummary(r, outcome, rewards) {
@@ -442,10 +440,14 @@ function endSummary(r, outcome, rewards) {
     lines.push(`${name} 토벌되어 XP 시스템이 복구되었습니다.`);
     const mvp = rewards.find(x => x.mvp);
     const mvpName = mvp && b?.members.find(mem => mem.userId === mvp.userId)?.name;
-    if (mvpName) lines.push(`> 👑 **MVP** : ${mvpName} · (+${mvp.xp} XP)`);
-    const others = rewards.filter(x => !x.mvp).map(x => b.members.find(mem => mem.userId === x.userId)?.name).filter(Boolean);
-    if (others.length) lines.push(`> 🎁 **보상** : ${others.join(', ')} · (+${CLEAR_XP} XP)`);
-    lines.push(...hackToolLines(r, rewards));
+    if (mvpName) lines.push(`> 👑 **MVP** : ${mvpName} · ${rewardText(mvp.xp, mvp.hackTool)}`);
+    // MVP 가 아닌 사람은 받은 것(해킹 툴 받았나)이 같은 사람끼리 한 줄로 묶는다 — 보통은 한 줄.
+    for (const got of [true, false]) {
+      const names = rewards.filter(x => !x.mvp && !!x.hackTool === got).map(x => b.members.find(mem => mem.userId === x.userId)?.name).filter(Boolean);
+      if (names.length) lines.push(`> 🎁 **보상** : ${names.join(', ')} · ${rewardText(CLEAR_XP, got)}`);
+    }
+    const full = hackToolFullLine(r, rewards);
+    if (full) lines.push(full);
     if (!rewards.length) lines.push('> 직접 행동한 파티원이 없어 보상이 없어요');
   } else if (outcome === 'wipe' || outcome === 'timeout' || outcome === 'noshow') {
     lines.push(`> 💨 ${outcome === 'wipe' ? '파티가 전멸하여 ' : ''}${r.monster.name}${subjectJosa(r.monster.name)} 도망쳤다...`);
@@ -864,7 +866,7 @@ function finishRaid(r, outcome) {
     const mvp = eligible.reduce((best, mem) => (!best || contribution(r.battle, mem) > contribution(r.battle, best) ? mem : best), null);
     for (const mem of eligible) {
       const xp = CLEAR_XP + (mem === mvp ? MVP_BONUS_XP : 0);
-      // 해킹 툴(룰렛 꽝 번복권)도 1장씩 — 레벨 시스템이 없는 테스트 서버에도 줘서 룰렛에서 시험해 볼 수 있게 한다.
+      // 해킹 툴(룰렛 꽝 번복권)도 1개씩 — 레벨 시스템이 없는 테스트 서버에도 줘서 룰렛에서 시험해 볼 수 있게 한다.
       const hackTool = grantHackTool(r.guildId, mem.userId); // 최대 보유면 false(못 받음)
       rewards.push({ userId: mem.userId, xp, mvp: mem === mvp, hackTool });
       if (isExcludedGuild(r.guildId)) continue;
