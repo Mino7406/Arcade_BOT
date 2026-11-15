@@ -188,7 +188,7 @@ function buildSpinningPayload(lobby, bet, reels, phase = 0, hacks = 0) {
   const png = renderSlot({ reels, bet, phase, right: '돌리는 중...', rightColor: '#c9b8a0', hacked: hacks > 0 });
   return payload(card({
     color: hacks > 0 ? HACK_COLOR : COLORS.info,
-    header: hacks > 0 ? `${hackToolEmoji()} 룰렛머신 (해킹됨)` : '🎰 룰렛머신',
+    header: hacks > 0 ? `${hackToolEmoji()} 룰렛머신` : '🎰 룰렛머신',
     sub: [`<@${lobby.userId}>`, '릴이 돌아가는 중...', hackLabel(hacks)].filter(Boolean),
     blocks: [{ image: SLOT_URL, divider: true }], // 결과 카드와 같은 자리에 구분선(그림이 위아래로 움직이지 않게)
     footer: hacks > 0 ? `${hackToolEmoji()} ${HACK_TOOL_NAME}으로 결과를 다시 돌리는 중...` : '🎰 두근두근... 릴이 하나씩 멈춰요',
@@ -209,7 +209,7 @@ function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multi
   });
   return payload(card({
     color: hacks > 0 ? HACK_COLOR : win ? 0xFFD700 : COLORS.muted,
-    header: hacks > 0 ? `${hackToolEmoji()} 룰렛머신 (해킹됨)` : '🎰 룰렛머신',
+    header: hacks > 0 ? `${hackToolEmoji()} 룰렛머신` : '🎰 룰렛머신',
     sub: [`<@${lobby.userId}>`, '결과', hackLabel(hacks)].filter(Boolean),
     blocks: [
       { image: SLOT_URL, divider: true }, // 제목·결과 줄 아래 구분선
