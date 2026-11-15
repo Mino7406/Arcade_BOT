@@ -478,6 +478,13 @@ function drawHackDecor(p, phase) {
   }
 }
 
+// 칸 하나(틀 포함)를 k배로 어둡게 — 당첨 칸이 아닌 릴을 눌러 당첨 칸이 한눈에 보이게 한다.
+function dimWindow(p, x, k) {
+  const x0 = Math.round((x - 4) * p.s), x1 = Math.round((x + WIN_W + 4) * p.s);
+  const y0 = Math.round((WIN_Y - 4) * p.s), y1 = Math.round((WIN_Y + WIN_H + 4) * p.s);
+  for (let y = y0; y < y1; y++) for (let i = (y * p.w + x0) * 3, e = (y * p.w + x1) * 3; i < e; i++) p.buf[i] *= k;
+}
+
 // 전구: 위 판·아래 판 양옆에 같은 모양으로 그려 상하 대칭을 맞춘다(프레임마다 번갈아 켜진다).
 function drawBulbs(p, phase) {
   for (const y of [TOP_PLATE_Y + PLATE_H / 2, BOTTOM_PLATE_Y + PLATE_H / 2]) {
@@ -518,9 +525,15 @@ function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = 
     drawSymbol(p, reels[i], x + WIN_W / 2 + ox, WIN_CY + oy);
   }
 
-  // 당첨 릴 테두리
-  for (const i of winIdx) {
-    p.strokeRoundRect(WIN_X[i] - 2, WIN_Y - 2, WIN_W + 4, WIN_H + 4, 12, 6, jackpot ? '#ffd700' : hacked ? HACK.win : '#37d67a');
+  // 당첨 릴 강조: 당첨 안 된 칸은 어둡게 눌러 대비를 키우고, 당첨 칸엔 굵고 밝은 테두리 + 바깥 빛 번짐.
+  if (winIdx.length) {
+    for (let i = 0; i < 3; i++) if (!winIdx.includes(i)) dimWindow(p, WIN_X[i], 0.42);
+    const [glow, mid, line] = jackpot ? ['#7a5a00', '#d9a400', '#ffe14d'] : hacked ? ['#0f4a5c', '#2bb5d6', '#7ff3ff'] : ['#0f5a2a', '#25c25a', '#5dff8f'];
+    for (const i of winIdx) {
+      p.strokeRoundRect(WIN_X[i] - 6, WIN_Y - 6, WIN_W + 12, WIN_H + 12, 16, 6, glow);
+      p.strokeRoundRect(WIN_X[i] - 4, WIN_Y - 4, WIN_W + 8, WIN_H + 8, 14, 5, mid);
+      p.strokeRoundRect(WIN_X[i] - 1, WIN_Y - 1, WIN_W + 2, WIN_H + 2, 11, 5, line);
+    }
   }
 
   // 아래 판
