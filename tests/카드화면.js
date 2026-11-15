@@ -168,7 +168,7 @@ async function buildScreens() {
   add('룰렛', '결과 — 잭팟', '', rlJack, rlWith(rlJack));
   const rlLose = rl.buildResultPayload(rlb, { bet: 300, resultLine: '😢 **꽝**', netLine: '📉 **-300 XP**', net: -300, reels: ['💎', '🍒', '🍋'], multiplier: 0 });
   add('룰렛', '결과 — 꽝', '', rlLose, rlWith(rlLose));
-  add('룰렛', '꽝 → 해킹 툴 사용 확인(본인에게만)', '해킹 툴이 있을 때만 · 60초 지나면 결과 확정', rl.buildHackPromptPayload({ id: '1', bet: 300 }, 2));
+  add('룰렛', '꽝 → 해킹 툴 사용 확인(본인에게만)', '해킹 툴이 있을 때만 · 60초 지나면 결과 확정', rl.buildHackPromptPayload({ id: '1', bet: 300 }, 2, { ephemeral: true }));
   const rlHack = rl.buildResultPayload(rlb, { bet: 300, resultLine: '**🍋 레몬 트리플 매칭!** (×2.5)', netLine: '📈 **+450 XP**', net: 450, reels: ['🍋', '🍋', '🍋'], multiplier: 2.5, hacks: 1 });
   const rlHackSpin = rl.buildSpinningPayload(rlb, 300, ['🍋', null, null], 1, 1);
   add('룰렛', '해킹 툴로 다시 돌리는 중', '해킹된 기계 — 보라·시안 + 해골 + 글리치', rlHackSpin, rlWith(rlHackSpin));

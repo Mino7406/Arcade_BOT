@@ -115,8 +115,8 @@ function mkInteraction({ user = 'u1', customId, values, fields = {}, message = n
       const t = this._reply ?? message;
       if (t) t.setFrom(p); else { lint('editReply', p); this._reply = new FakeMsg(p, channel); }
     },
-    async followUp(p) { lint('followUp', p); return new FakeMsg(p, channel); },
-    async deleteReply() {},
+    async followUp(p) { lint('followUp', p); this.followedUp = true; return new FakeMsg(p, channel); },
+    async deleteReply() { this.replyDeleted = true; },
     async fetchReply() { return this._reply ?? message; }, // update 로 응답했으면 그 메시지가 곧 응답 메시지
     async showModal() { this.modalShown = true; },
   };
@@ -373,22 +373,24 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
       await roulette.handleRouletteButton(spin);
       assert(lv.getXp('g1', 'h1') === xp0 - 10, `꽝인데 XP가 ${lv.getXp('g1', 'h1') - xp0} 바뀜`);
       const prompt = client.rouletteHacks?.get(spin.id);
-      assert(prompt?.followUp, '꽝인데 해킹 툴 확인 메시지가 안 뜸');
-      assert(JSON.stringify(prompt.followUp.components).includes(`roulette:hack:${spin.id}`), '확인 메시지에 사용 버튼이 없음');
+      assert(prompt, '꽝인데 해킹 툴 확인을 안 띄움');
+      assert(JSON.stringify(s._reply.components).includes(`roulette:hack:${spin.id}`), '로비 자리가 해킹 툴 확인으로 안 바뀜');
+      assert(!spin.followedUp && !spin.replyDeleted, '해킹 툴 확인을 후속 메시지로 보내거나 로비를 지움(답장 "메시지를 불러올 수 없어요" 원인)');
       const resultCard = prompt.message;
       assert(!JSON.stringify(resultCard.components).includes('roulette:hack'), '공개 결과 카드에 해킹 버튼이 붙음');
 
-      await roulette.handleRouletteButton(mkInteraction({ user: 'u2', customId: `roulette:hack:${spin.id}`, message: prompt.followUp }));
+      await roulette.handleRouletteButton(mkInteraction({ user: 'u2', customId: `roulette:hack:${spin.id}`, message: s._reply }));
       assert(hack.getHackTools('g1', 'h1') === 1, '남이 눌렀는데 해킹 툴이 쓰임');
 
       queue.push(0.1, 0.1, 0.1); // 🍒 트리플 ×2 → 지급 20, 그날 손익 +10
-      const use = mkInteraction({ user: 'h1', customId: `roulette:hack:${spin.id}`, message: prompt.followUp });
+      const use = mkInteraction({ user: 'h1', customId: `roulette:hack:${spin.id}`, message: s._reply });
       await roulette.handleRouletteButton(use);
       assert(hack.getHackTools('g1', 'h1') === 0, '해킹 툴이 안 줄어듦');
       assert(lv.getXp('g1', 'h1') === xp0 + 10, `번복 후 손익 ${lv.getXp('g1', 'h1') - xp0}(+10 기대)`);
       assert(JSON.stringify(resultCard.components).includes('1회 사용'), '공개 카드에 해킹 툴 사용 표시가 없음');
       assert(!client.rouletteHacks.has(use.id), '꽝이 아닌데 또 물어봄');
-      await roulette.handleRouletteButton(mkInteraction({ user: 'h1', customId: `roulette:hack:${spin.id}`, message: prompt.followUp }));
+      assert(use.replyDeleted, '다시 돌린 결과가 나왔는데 "해킹 툴을 사용했어요" 안내가 안 지워짐');
+      await roulette.handleRouletteButton(mkInteraction({ user: 'h1', customId: `roulette:hack:${spin.id}`, message: s._reply }));
       assert(lv.getXp('g1', 'h1') === xp0 + 10, '같은 버튼을 다시 눌러 또 돌아감');
 
       // 해킹 툴이 남아 있어도 '넘기기'이면 쓰지 않는다
@@ -401,7 +403,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
       queue.push(0.1, 0.4, 0.6);
       await roulette.handleRouletteButton(spin2);
       const p2 = client.rouletteHacks.get(spin2.id);
-      await roulette.handleRouletteButton(mkInteraction({ user: 'h2', customId: `roulette:keep:${spin2.id}`, message: p2.followUp }));
+      await roulette.handleRouletteButton(mkInteraction({ user: 'h2', customId: `roulette:keep:${spin2.id}`, message: s2._reply }));
       assert(hack.getHackTools('g1', 'h2') === 1 && !client.rouletteHacks.has(spin2.id), '넘기기인데 해킹 툴이 쓰이거나 판이 남음');
 
       // 테스트 서버: 해킹 툴이 없어도 무제한으로 쓸 수 있고 개수가 줄지 않는다
@@ -414,9 +416,9 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
       queue.push(0.1, 0.4, 0.6);
       await roulette.handleRouletteButton(spin3);
       const p3 = client.rouletteHacks.get(spin3.id);
-      assert(p3 && JSON.stringify(p3.followUp.components).includes('무제한'), '테스트 서버에서 꽝인데 해킹 툴을 안 물어봄');
+      assert(p3 && JSON.stringify(s3._reply.components).includes('무제한'), '테스트 서버에서 꽝인데 해킹 툴을 안 물어봄');
       queue.push(0.1, 0.4, 0.6); // 또 꽝 → 또 물어봐야 한다
-      const use3 = mkInteraction({ user: 'h3', customId: `roulette:hack:${spin3.id}`, message: p3.followUp, guildId: TG });
+      const use3 = mkInteraction({ user: 'h3', customId: `roulette:hack:${spin3.id}`, message: s3._reply, guildId: TG });
       await roulette.handleRouletteButton(use3);
       assert(hack.getHackTools(TG, 'h3') === 0 && client.rouletteHacks.has(use3.id), '테스트 서버에서 또 꽝인데 다시 안 물어봄');
       clearTimeout(client.rouletteHacks.get(use3.id).timeoutId); client.rouletteHacks.delete(use3.id);
