@@ -170,6 +170,10 @@ async function buildScreens() {
   add('룰렛', '결과 — 꽝', '', rlLose, rlWith(rlLose));
   add('룰렛', '꽝 → 해킹 툴 사용 확인(본인에게만)', '해킹 툴이 있을 때만 · 60초 지나면 결과 확정', rl.buildHackPromptPayload({ id: '1', bet: 300 }, 2, { ephemeral: true }));
   const rlHack = rl.buildResultPayload(rlb, { bet: 300, resultLine: '**🍋 레몬 트리플 매칭!** (×2.5)', netLine: '📈 **+450 XP**', net: 450, reels: ['🍋', '🍋', '🍋'], multiplier: 2.5, hacks: 1 });
+  ['보안 우회', '데이터 변조', '접속 성공'].forEach((label, step) => {
+    const intro = rl.buildHackIntroPayload(rlb, 300, ['💎', '🍒', '🍋'], step, 1);
+    add('룰렛', `해킹 침입 연출 ${step + 1}/3 — ${label}`, '해킹 툴을 쓰면 다시 돌리기 전에 약 1초씩(직전 꽝 결과 위)', intro, rlWith(intro));
+  });
   const rlHackSpin = rl.buildSpinningPayload(rlb, 300, ['🍋', null, null], 1, 1);
   add('룰렛', '해킹 툴로 다시 돌리는 중', '해킹된 기계 — 보라·시안 + 해골 + 글리치', rlHackSpin, rlWith(rlHackSpin));
   add('룰렛', '결과 — 해킹 툴로 번복', '해킹된 기계 그림 · 보라 띠 · 부제에 사용 횟수', rlHack, rlWith(rlHack));

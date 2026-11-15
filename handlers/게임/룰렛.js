@@ -5,7 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = require('discord.js');
-const { renderSlot, idleImage } = require('./룰렛그림');
+const { renderSlot, renderHackIntro, INTRO_STEP_COUNT, idleImage } = require('./룰렛그림');
 const { applyXp, getXp, levelFromXp, isLevelsLoaded, isExcludedGuild, announceLevelUp, isMinigameXpFrozen, isRaidXpFrozen } = require('../레벨/레벨링');
 const { isTestGuild } = require('../../config');
 const { kstDateString, timeUntilKstMidnight } = require('../공통/시간');
@@ -199,6 +199,19 @@ function buildSpinningPayload(lobby, bet, reels, phase = 0, hacks = 0) {
   }), { files: [slotFile(png)] });
 }
 
+// 해킹 침입 연출 카드(해킹 툴을 쓴 뒤 다시 돌리기 전). reels: 직전 꽝 결과, step: 단계 번호.
+const INTRO_STEP_MS = 1100; // 단계 사이 간격(3단계 ≈ 3.3초). 디스코드 메시지 수정 제한(약 5초에 5번) 안쪽
+function buildHackIntroPayload(lobby, bet, reels, step, hacks) {
+  const png = renderHackIntro({ reels, bet, step });
+  return payload(card({
+    color: HACK_COLOR,
+    header: `${hackToolEmoji()} 룰렛머신`,
+    sub: [`<@${lobby.userId}>`, hackLabel(hacks)].filter(Boolean),
+    blocks: [{ image: SLOT_URL, divider: true }],
+    footer: `${hackToolEmoji()} ${HACK_TOOL_NAME}으로 시스템에 침입하는 중...`,
+  }), { files: [slotFile(png)] });
+}
+
 function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multiplier = 0, hacks = 0 }, extra = {}) {
   const win = net > 0;
   const jackpot = reels[0] === reels[1] && reels[1] === reels[2] && reels[0] === '7️⃣';
@@ -387,7 +400,7 @@ async function spinLobby(interaction, lobby, lobbies) {
     // interaction.channel은 캐시에 없으면 null일 수 있으므로(재시작 직후 등) fetch로 안전하게 가져온다.
     const channel = interaction.channel ?? await interaction.client.channels.fetch(interaction.channelId);
     const message = await revealSpin(channel, null, lobby, bet, spin, 0);
-    shown = { channel, message };
+    shown = { channel, message, reels: spin.reels };
   } catch (err) {
     console.error('룰렛 결과 공개 실패:', err);
     logError('게임 오류', `룰렛 결과 채널 공개 실패 — ${userLabel(lobby.userId)}에게만 결과 표시`, err);
@@ -432,7 +445,14 @@ function resultView(bet, spin, hacks) {
 
 // 채널에 릴이 하나씩 멈추는 연출을 보여 주고 결과로 고친다. message 가 있으면(해킹 툴로 다시 돌릴 때) 그 카드를 그대로 다시 돌린다.
 // 결과가 실제로 올라간 메시지를 돌려준다(수정이 끝내 실패해 새로 보냈으면 새 메시지).
-async function revealSpin(channel, message, lobby, bet, spin, hacks) {
+async function revealSpin(channel, message, lobby, bet, spin, hacks, introReels = null) {
+  // 해킹 툴로 다시 돌릴 때는 바로 돌리지 않고 침입 연출부터(직전 꽝 결과 위로 글리치 + 진행 창).
+  if (hacks > 0 && introReels && message) {
+    for (let step = 0; step < INTRO_STEP_COUNT && message; step++) {
+      try { await message.edit(buildHackIntroPayload(lobby, bet, introReels, step, hacks)); } catch { message = null; }
+      if (message) await sleep(INTRO_STEP_MS);
+    }
+  }
   const first = buildSpinningPayload(lobby, bet, [null, null, null], 0, hacks);
   if (message) {
     try { await message.edit(first); } catch { message = null; } // 카드가 지워졌으면 새로 올린다
@@ -546,7 +566,7 @@ async function handleHackButton(interaction, action, promptId) {
 
   let message = null;
   try {
-    message = await revealSpin(prompt.channel, prompt.message, lobby, bet, spin, hacks);
+    message = await revealSpin(prompt.channel, prompt.message, lobby, bet, spin, hacks, prompt.reels);
   } catch (err) {
     console.error('룰렛 해킹 툴 결과 공개 실패:', err);
     logError('게임 오류', `룰렛 ${HACK_TOOL_NAME} 결과 채널 공개 실패 — ${userLabel(prompt.userId)}에게만 결과 표시`, err);
@@ -559,7 +579,7 @@ async function handleHackButton(interaction, action, promptId) {
 
   // 또 꽝이면 남은 개수가 있는 한 계속 쓸 수 있다(같은 확인 메시지 자리에 다시 묻는다).
   // 아니면 '사용했어요' 안내와 '돌리는 중' 안내를 지운다(결과는 채널 카드에 있다).
-  if (spin.kind === 'none' && message && await offerHack(interaction, { lobby, bet, channel: prompt.channel, message, hacks, root: prompt.root })) return;
+  if (spin.kind === 'none' && message && await offerHack(interaction, { lobby, bet, channel: prompt.channel, message, reels: spin.reels, hacks, root: prompt.root })) return;
   if (message) await closePrompt(prompt, interaction);
 }
 
@@ -619,4 +639,4 @@ async function handleRouletteButton(interaction) {
 }
 
 // buildLobbyPayload/buildResultPayload는 화면 모음·테스트에서 직접 그려 보려고 함께 내보낸다.
-module.exports = { buildLobbyPayload, buildSpinningPayload, buildResultPayload, buildHackPromptPayload, startRouletteCommand, handleRouletteButton, loadRoulette, saveRoulette, MIN_BET, MAX_BET };
+module.exports = { buildLobbyPayload, buildSpinningPayload, buildResultPayload, buildHackPromptPayload, buildHackIntroPayload, startRouletteCommand, handleRouletteButton, loadRoulette, saveRoulette, MIN_BET, MAX_BET };

@@ -428,14 +428,14 @@ function seeded(seed) {
 }
 
 // 글리치 후처리: ① 몇 줄 띠를 좌우로 밀기(아래 판 글자는 읽히게 빼고) ② 빨강·파랑 채널을 좌우로 살짝 어긋나게 ③ 스캔라인.
-function applyGlitch(p, phase) {
+function applyGlitch(p, phase, power = 1) {
   const rand = seeded(phase * 7919 + 17), W2 = p.w, H2 = p.h, buf = p.buf, rowBytes = W2 * 3;
   const limit = Math.round((BOTTOM_PLATE_Y - 4) * p.s);
   const row = Buffer.alloc(rowBytes);
-  const bands = 4 + Math.floor(rand() * 3);
+  const bands = Math.round((4 + Math.floor(rand() * 3)) * power);
   for (let k = 0; k < bands; k++) {
     const y0 = Math.floor(rand() * (limit - 10)), hgt = 2 + Math.floor(rand() * 7);
-    const dx = Math.round((rand() < 0.5 ? -1 : 1) * (3 + rand() * 9));
+    const dx = Math.round((rand() < 0.5 ? -1 : 1) * (3 + rand() * 9) * Math.min(power, 2));
     for (let y = y0; y < Math.min(limit, y0 + hgt); y++) {
       const start = y * rowBytes;
       buf.copy(row, 0, start, start + rowBytes);
@@ -554,6 +554,51 @@ function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = 
   return p.png();
 }
 
+// ── 해킹 침입 연출(해킹 툴을 쓰면 다시 돌리기 전에 짧게) ─────────────────────
+// 직전 꽝 결과를 해킹된 기계로 보여 주면서 단계마다 글리치가 심해지고, 가운데 창에 침입 진행 상황을 띄운다.
+const INTRO_STEPS = [
+  { title: 'SYSTEM  BREACH', sub: '보안 우회 중...', progress: 0.18, color: '#ff4d6d', power: 1.6 },
+  { title: 'HACKING...', sub: '결과 데이터 변조 중...', progress: 0.64, color: '#b26bff', power: 2.4 },
+  { title: 'ACCESS  GRANTED', sub: '릴 다시 돌리는 중!', progress: 1, color: '#3ee6ff', power: 1.2 },
+];
+const INTRO_STEP_COUNT = INTRO_STEPS.length;
+
+/**
+ * 해킹 침입 연출 그림 한 장(PNG).
+ * @param {object} o
+ * @param {Array<string>} o.reels  직전 결과 릴(꽝)
+ * @param {number} [o.bet]
+ * @param {number} o.step          0 ~ INTRO_STEP_COUNT-1
+ */
+function renderHackIntro({ reels, bet, step = 0 }) {
+  const st = INTRO_STEPS[Math.max(0, Math.min(INTRO_STEP_COUNT - 1, step))];
+  const p = getPainter();
+  getHackBg().copy(p.buf);
+  const f = getFont();
+  drawHackDecor(p, step);
+  for (let i = 0; i < 3; i++) {
+    if (!reels?.[i]) continue;
+    const [ox, oy] = SYMBOL_OFFSET[reels[i]] || [0, 0];
+    drawSymbol(p, reels[i], WIN_X[i] + WIN_W / 2 + ox, WIN_CY + oy);
+    dimWindow(p, WIN_X[i], 0.5);
+  }
+  const py = BOTTOM_PLATE_Y + PLATE_H / 2 - 1;
+  if (bet != null) p.text(f, `베팅 : ${bet} XP`, 108, py, { size: 20, color: '#ffe9a8', align: 'left' });
+  p.text(f, '해킹 중...', 492, py, { size: 22, color: st.color, align: 'right' });
+  applyGlitch(p, 11 + step * 5, st.power);
+
+  // 가운데 침입 창(글리치 위에 또렷하게)
+  const bx = 130, by = 84, bw = 340, bh = 88;
+  p.roundRect(bx - 3, by - 3, bw + 6, bh + 6, 14, st.color);
+  p.roundRect(bx, by, bw, bh, 12, '#05020f');
+  p.text(f, st.title, 300, by + 24, { size: 24, color: st.color });
+  p.text(f, st.sub, 300, by + 50, { size: 15, color: '#d9ccff' });
+  const barX = bx + 24, barY = by + 64, barW = bw - 48, barH = 10;
+  p.roundRect(barX, barY, barW, barH, 5, '#2a1a4a');
+  p.roundRect(barX, barY, Math.max(10, barW * st.progress), barH, 5, st.color);
+  return p.png();
+}
+
 // 대기(로비) 화면: 한 번만 그려 보관한다 — 로비를 열 때마다 새로 그리지 않는다.
 function idleImage() {
   if (!idle) idle = renderSlot({ reels: ['7️⃣', '7️⃣', '7️⃣'], right: '베팅을 골라 주세요', rightColor: '#c9b8a0' });
@@ -588,4 +633,4 @@ function symbolBounds(key) {
   return { ...box, dx: (box.left + box.right) / 2 - cx, dy: (box.top + box.bottom) / 2 - cy };
 }
 
-module.exports = { renderSlot, idleImage, warmUp, symbolBounds, drawSymbol, SYMBOLS };
+module.exports = { renderSlot, renderHackIntro, INTRO_STEP_COUNT, idleImage, warmUp, symbolBounds, drawSymbol, SYMBOLS };
