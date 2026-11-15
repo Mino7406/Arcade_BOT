@@ -132,7 +132,7 @@ const hackHaveText = (have) => (have === Infinity ? '테스트 서버 · 무제�
 
 // 해킹된 카드의 안내 줄: 인코딩이 깨진 것처럼 대체 문자(�)와 오류 코드를 섞는다(읽을 수는 있게).
 // (겹침 결합 문자는 글꼴에 따라 네모로 깨져 보여서 쓰지 않는다)
-const HACK_FOOTER = '⏰ 하루� 한 번�만 돌릴 ▓▒░ ERR_0x7F';
+const HACK_FOOTER = '⏰ 하루� 한 번�만 돌릴 ▓▒░ [ERR_0x7F]';
 
 // 해킹 툴을 쓴 횟수 표시(카드 부제)
 const hackLabel = (hacks) => (hacks > 0 ? `${hackUseEmoji()} ${HACK_TOOL_NAME} ${hacks}회 사용` : null);
