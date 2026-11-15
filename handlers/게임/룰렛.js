@@ -446,8 +446,8 @@ function resultView(bet, spin, hacks) {
 // 채널에 릴이 하나씩 멈추는 연출을 보여 주고 결과로 고친다. message 가 있으면(해킹 툴로 다시 돌릴 때) 그 카드를 그대로 다시 돌린다.
 // 결과가 실제로 올라간 메시지를 돌려준다(수정이 끝내 실패해 새로 보냈으면 새 메시지).
 async function revealSpin(channel, message, lobby, bet, spin, hacks, introReels = null) {
-  // 해킹 툴로 다시 돌릴 때는 바로 돌리지 않고 침입 연출부터(직전 꽝 결과 위로 글리치 + 진행 창).
-  if (hacks > 0 && introReels && message) {
+  // 해킹 툴을 처음 쓸 때만 바로 돌리지 않고 침입 연출부터(연속 2회째부터는 연출 없이 바로 돈다).
+  if (hacks === 1 && introReels && message) {
     for (let step = 0; step < INTRO_STEP_COUNT && message; step++) {
       try { await message.edit(buildHackIntroPayload(lobby, bet, introReels, step, hacks)); } catch { message = null; }
       if (message) await sleep(INTRO_STEP_MS);

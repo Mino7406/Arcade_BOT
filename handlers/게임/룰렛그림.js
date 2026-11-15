@@ -563,17 +563,26 @@ const INTRO_STEPS = [
   { final: true, skull: 140, dim: 0.25, power: 1.0 },
 ];
 
-// 깨진 위 판 글자: 빨강·시안 잔상이 좌우로 어긋나 겹치고, 글자 줄 몇 가닥이 잘려 밀리고, 노이즈 블록이 낀다.
-function drawBrokenBrand(p, f, text, color, level, seed) {
+// 글자 일부를 기호로 바꿔 깨뜨린다(단계가 높을수록 많이). 같은 seed 면 늘 같은 모양.
+function corruptText(str, level, seed) {
+  const rand = seeded(seed), glyphs = '#@%&$?/0';
+  return [...str].map(ch => (ch !== ' ' && rand() < level * 0.14 ? glyphs[Math.floor(rand() * glyphs.length)] : ch)).join('');
+}
+
+// 판(위·아래) 한 줄의 깨진 글자: 빨강·시안 잔상이 좌우로 어긋나 겹치고, 판 안 가로 줄 몇 가닥이 잘려 밀리고, 노이즈 블록이 낀다.
+// items: [{ text, x, align, size, color }]
+function drawBrokenPlate(p, f, plateY, items, level, seed) {
   const rand = seeded(seed);
-  const cy = TOP_PLATE_Y + PLATE_H / 2;
+  const cy = plateY + PLATE_H / 2 - (plateY === BOTTOM_PLATE_Y ? 1 : 0);
   const off = 1 + level * 1.5;
-  p.text(f, text, 300 - off, cy, { size: 19, color: '#ff2d55' });
-  p.text(f, text, 300 + off, cy, { size: 19, color: '#3ee6ff' });
-  p.text(f, text, 300, cy, { size: 19, color });
-  // 판 안쪽 가로 줄 잘라 밀기
+  for (const it of items) {
+    const o = { size: it.size, align: it.align };
+    p.text(f, it.text, it.x - off, cy, { ...o, color: '#ff2d55' });
+    p.text(f, it.text, it.x + off, cy, { ...o, color: '#3ee6ff' });
+    p.text(f, it.text, it.x, cy, { ...o, color: it.color });
+  }
   const x0 = Math.round(56 * p.s), x1 = Math.round(544 * p.s);
-  const y0 = Math.round((TOP_PLATE_Y + 4) * p.s), y1 = Math.round((TOP_PLATE_Y + PLATE_H - 4) * p.s);
+  const y0 = Math.round((plateY + 4) * p.s), y1 = Math.round((plateY + PLATE_H - 4) * p.s);
   const row = Buffer.alloc((x1 - x0) * 3);
   for (let k = 0; k < level * 2; k++) {
     const ys = y0 + Math.floor(rand() * (y1 - y0 - 2)), h = 1 + Math.floor(rand() * 3);
@@ -587,11 +596,10 @@ function drawBrokenBrand(p, f, text, color, level, seed) {
       }
     }
   }
-  // 노이즈 블록(글자 위·사이)
   const noise = ['#3ee6ff', '#b26bff', '#ff2d55', '#f5c542', '#ffffff'];
   for (let k = 0; k < 1 + level * 3; k++) {
     const w = 3 + Math.floor(rand() * 12), h = 2 + Math.floor(rand() * 4);
-    p.rect(150 + rand() * 300, TOP_PLATE_Y + 6 + rand() * (PLATE_H - 14), w, h, noise[Math.floor(rand() * noise.length)]);
+    p.rect(90 + rand() * 420, plateY + 6 + rand() * (PLATE_H - 14), w, h, noise[Math.floor(rand() * noise.length)]);
   }
 }
 const INTRO_STEP_COUNT = INTRO_STEPS.length;
@@ -625,7 +633,7 @@ function renderHackIntro({ reels, bet, step = 0 }) {
     mixInto(p, getBg(), getHackBg(), st.mix);
     // 위 판 글자를 깨진 글자로 다시 쓴다(판 안쪽만 덮어 테두리는 그대로)
     p.roundRect(53, TOP_PLATE_Y + 3, 494, PLATE_H - 6, 10, lerpHex('#150a14', '#07031a', st.mix));
-    drawBrokenBrand(p, f, st.brand, st.brandColor, st.broken, 31 + step * 7);
+    drawBrokenPlate(p, f, TOP_PLATE_Y, [{ text: st.brand, x: 300, align: 'center', size: 19, color: st.brandColor }], st.broken, 31 + step * 7);
     drawBulbs(p, step);
   }
   for (let i = 0; i < 3; i++) {
@@ -635,9 +643,11 @@ function renderHackIntro({ reels, bet, step = 0 }) {
     }
     if (st.dim < 1) dimWindow(p, WIN_X[i], st.dim);
   }
-  const py = BOTTOM_PLATE_Y + PLATE_H / 2 - 1;
-  if (bet != null) p.text(f, `베팅 : ${bet} XP`, 108, py, { size: 20, color: '#ffe9a8', align: 'left' });
-  p.text(f, '해킹 중...', 492, py, { size: 22, color: final ? HACK.border : lerpHex('#ff9a9a', '#3ee6ff', st.mix), align: 'right' });
+  // 아래 판: 직전 꽝 결과(베팅·손실)가 단계마다 점점 깨진다(글자가 기호로 바뀌는 건 2단계부터)
+  const lvl = step + 1;
+  const bottom = [{ text: corruptText(`-${bet ?? 0} XP`, step, 71 + step), x: 492, align: 'right', size: 22, color: '#ff9a9a' }];
+  if (bet != null) bottom.unshift({ text: corruptText(`베팅 : ${bet} XP`, step, 53 + step), x: 108, align: 'left', size: 20, color: '#ffe9a8' });
+  drawBrokenPlate(p, f, BOTTOM_PLATE_Y, bottom, lvl, 97 + step * 11);
   drawSkull(p, 300, WIN_CY, st.skull); // 정중앙 해골이 단계마다 커진다(글리치에 같이 흔들린다)
   applyGlitch(p, 11 + step * 5, st.power);
   return p.png();
