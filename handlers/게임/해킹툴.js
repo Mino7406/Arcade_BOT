@@ -12,6 +12,15 @@ const { logSystem } = require('../공통/로그');
 
 // 아이템 이름은 아직 미정이라 한곳에서만 바꾸면 되게 상수로 둔다.
 const HACK_TOOL_NAME = '해킹 툴';
+// 이름 뒤 조사를 받침에 맞춰 붙인다(이름이 바뀌어도 맞게): hackToolWith('을') → '해킹 툴을', hackToolWith('으로') → '해킹 툴로'
+function hackToolWith(josa) {
+  const code = HACK_TOOL_NAME.charCodeAt(HACK_TOOL_NAME.length - 1) - 0xAC00;
+  const jong = code >= 0 && code <= 11171 ? code % 28 : 0; // 0 = 받침 없음, 8 = ㄹ
+  const pick = { 을: ['를', '을'], 이: ['가', '이'], 은: ['는', '은'], 과: ['와', '과'] }[josa];
+  if (pick) return HACK_TOOL_NAME + pick[jong ? 1 : 0];
+  if (josa === '으로') return HACK_TOOL_NAME + (jong && jong !== 8 ? '으로' : '로');
+  return HACK_TOOL_NAME + josa;
+}
 // 이모지는 assets/이모지/*.png 를 봇의 앱 이모지로 등록해 쓴다(봇이 켜질 때 ensureHackToolEmoji).
 // 등록 전이거나 실패하면 대신할 유니코드 이모지로 보인다. 그림을 바꾸면 name 의 _v 숫자를 올려 새로 등록되게 한다.
 const EMOJI_DIR = path.join(__dirname, '..', '..', 'assets', '이모지');
@@ -111,4 +120,4 @@ function useHackTool(guildId, userId) {
   return true;
 }
 
-module.exports = { HACK_TOOL_NAME, HACK_TOOL_MAX, hackToolEmoji, hackToolButtonEmoji, hackUseButtonEmoji, hackUseEmoji, ensureHackToolEmoji, EMOJIS, EMOJI_DIR, setHackToolEmojiId, EMOJI_NAME, EMOJI_FILE, loadHackTools, saveHackTools, getHackTools, grantHackTool, useHackTool };
+module.exports = { HACK_TOOL_NAME, hackToolWith, HACK_TOOL_MAX, hackToolEmoji, hackToolButtonEmoji, hackUseButtonEmoji, hackUseEmoji, ensureHackToolEmoji, EMOJIS, EMOJI_DIR, setHackToolEmojiId, EMOJI_NAME, EMOJI_FILE, loadHackTools, saveHackTools, getHackTools, grantHackTool, useHackTool };

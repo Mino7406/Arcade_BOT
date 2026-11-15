@@ -12,7 +12,7 @@ const { kstDateString, timeUntilKstMidnight } = require('../공통/시간');
 const { logSystem, logAction, logError, userLabel } = require('../공통/로그');
 const { writeJsonIfChanged } = require('../공통/저장');
 const { card, payload, notice, COLORS, footerSide, pullButton } = require('../공통/카드');
-const { HACK_TOOL_NAME, HACK_TOOL_MAX, hackToolEmoji, hackUseButtonEmoji, hackUseEmoji, getHackTools, useHackTool } = require('./해킹툴');
+const { HACK_TOOL_NAME, hackToolWith, HACK_TOOL_MAX, hackToolEmoji, hackUseButtonEmoji, hackUseEmoji, getHackTools, useHackTool } = require('./해킹툴');
 
 const ROULETTE_PATH = path.join(__dirname, '..', '..', 'DB', 'roulette.json');
 fs.mkdirSync(path.dirname(ROULETTE_PATH), { recursive: true });
@@ -195,7 +195,7 @@ function buildSpinningPayload(lobby, bet, reels, phase = 0, hacks = 0) {
     header: hacks > 0 ? `${hackToolEmoji()} 룰렛머신` : '🎰 룰렛머신',
     sub: [`<@${lobby.userId}>`, hacks > 0 ? null : '릴이 돌아가는 중...', hackLabel(hacks)].filter(Boolean),
     blocks: [{ image: SLOT_URL, divider: true }], // 결과 카드와 같은 자리에 구분선(그림이 위아래로 움직이지 않게)
-    footer: hacks > 0 ? `${hackToolEmoji()} ${HACK_TOOL_NAME}으로 결과를 다시 돌리는 중...` : '🎰 두근두근... 릴이 하나씩 멈춰요',
+    footer: hacks > 0 ? `${hackToolEmoji()} ${hackToolWith('으로')} 결과를 다시 돌리는 중...` : '🎰 두근두근... 릴이 하나씩 멈춰요',
   }), { files: [slotFile(png)] });
 }
 
@@ -208,7 +208,7 @@ function buildHackIntroPayload(lobby, bet, reels, step, hacks) {
     header: `${hackToolEmoji()} 룰렛머신`,
     sub: [`<@${lobby.userId}>`, hackLabel(hacks)].filter(Boolean),
     blocks: [{ image: SLOT_URL, divider: true }],
-    footer: `${hackToolEmoji()} ${HACK_TOOL_NAME}으로 시스템에 침입하는 중...`,
+    footer: `${hackToolEmoji()} ${hackToolWith('으로')} 시스템에 침입하는 중...`,
   }), { files: [slotFile(png)] });
 }
 
@@ -246,7 +246,7 @@ function buildHackPromptPayload(prompt, have, extra = {}) {
     color: HACK_COLOR,
     header: `${hackToolEmoji()} ${HACK_TOOL_NAME}`,
     sub: [`보유 ${hackHaveText(have)}`],
-    blocks: [`😢 **꽝**이 나왔어요. ${HACK_TOOL_NAME}을 써서 결과를 번복할까요?\n-# 잃은 **${prompt.bet} XP**를 돌려받고 같은 베팅으로 한 번 더 돌려요`],
+    blocks: [`😢 **꽝**이 나왔어요. ${hackToolWith('을')} 써서 결과를 번복할까요?\n-# 잃은 **${prompt.bet} XP**를 돌려받고 같은 베팅으로 한 번 더 돌려요`],
     footer: `⏰ ${HACK_PROMPT_MS / 1000}초 안에 고르지 않으면 결과가 그대로 확정돼요.`,
     rows: [row],
   }), extra); // 이미 본인 전용인 메시지를 고쳐 쓰므로 ephemeral 플래그는 넣지 않는다(화면 모음은 extra로 넘김)
@@ -541,18 +541,18 @@ async function handleHackButton(interaction, action, promptId) {
   // 관리자 긴급정지·레이드로 미니게임 XP가 멈췄으면 쓰지 않고(해킹 툴도 그대로) 결과를 확정한다.
   if (isMinigameXpFrozen()) {
     const content = isRaidXpFrozen()
-      ? `👾 **몬스터 때문에 XP 시스템이 고장 나 ${HACK_TOOL_NAME}을 쓸 수 없습니다.**`
-      : `⚙️ **현재 관리자가 미니게임 XP를 일시 중지해 ${HACK_TOOL_NAME}을 쓸 수 없습니다.**`;
-    await interaction.update(notice(`${content}\n-# 결과는 그대로 확정되고 ${HACK_TOOL_NAME}은 쓰지 않았어요.`));
+      ? `👾 **몬스터 때문에 XP 시스템이 고장 나 ${hackToolWith('을')} 쓸 수 없습니다.**`
+      : `⚙️ **현재 관리자가 미니게임 XP를 일시 중지해 ${hackToolWith('을')} 쓸 수 없습니다.**`;
+    await interaction.update(notice(`${content}\n-# 결과는 그대로 확정되고 ${hackToolWith('은')} 쓰지 않았어요.`));
     return;
   }
 
   if (!hackUnlimited(prompt.guildId) && !useHackTool(prompt.guildId, prompt.userId)) {
-    await interaction.update(notice(`⚠️ **${HACK_TOOL_NAME}이 없어요.** 결과가 그대로 확정됐어요.`));
+    await interaction.update(notice(`⚠️ **${hackToolWith('이')} 없어요.** 결과가 그대로 확정됐어요.`));
     return;
   }
   const left = hackToolsOf(prompt.guildId, prompt.userId);
-  await interaction.update(notice(`${hackToolEmoji()} **${HACK_TOOL_NAME}을 사용했어요!** 다시 돌리는 중...\n-# 남은 ${HACK_TOOL_NAME} ${hackHaveText(left)}`));
+  await interaction.update(notice(`${hackToolEmoji()} **${hackToolWith('을')} 사용했어요!** 다시 돌리는 중...\n-# 남은 ${HACK_TOOL_NAME} ${hackHaveText(left)}`));
 
   const { lobby, bet } = prompt;
   const hacks = prompt.hacks + 1;

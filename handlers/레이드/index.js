@@ -28,7 +28,7 @@ const { GUILD_ID, PLAYGROUND_CHANNEL_ID, ADMIN_IDS } = require('../../config');
 const { logSystem, logError, userLabel } = require('../공통/로그');
 const { card, payload: cardPayload, notice } = require('../공통/카드');
 const { writeJsonIfChanged } = require('../공통/저장');
-const { grantHackTool, HACK_TOOL_NAME, hackToolEmoji } = require('../게임/해킹툴');
+const { grantHackTool, HACK_TOOL_NAME, hackToolWith, hackToolEmoji } = require('../게임/해킹툴');
 const { displayNameFromInteraction } = require('../공통/이름');
 const {
   PLAYER_MAX_HP, POTIONS_PER_BATTLE, POTION_HEAL, GUARD_DAMAGE_RATE, ROLES, ROLE_ORDER, ACTIONS, MONSTERS,
@@ -428,7 +428,7 @@ const rewardText = (xp, hackTool) => `(+${xp} XP${hackTool ? ` · ${hackToolEmoj
 // 해킹 툴을 최대로 갖고 있어 못 받은 사람 안내(작은 글씨). 없으면 null.
 function hackToolFullLine(r, rewards) {
   const full = rewards.filter(x => !x.hackTool).map(x => r.battle?.members.find(mem => mem.userId === x.userId)?.name).filter(Boolean);
-  return full.length ? `-# ${hackToolEmoji()} ${full.join(', ')}님은 ${HACK_TOOL_NAME}을 최대로 갖고 있어 받지 못했어요` : null;
+  return full.length ? `-# ${hackToolEmoji()} ${full.join(', ')}님은 ${hackToolWith('을')} 최대로 갖고 있어 받지 못했어요` : null;
 }
 
 function endSummary(r, outcome, rewards) {
