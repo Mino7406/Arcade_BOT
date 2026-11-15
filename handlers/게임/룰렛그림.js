@@ -555,13 +555,45 @@ function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = 
 }
 
 // ── 해킹 침입 연출(해킹 툴을 쓰면 다시 돌리기 전에 짧게) ─────────────────────
-// 1·2단계: 평범한 룰렛 기계가 점점 해킹된 기계 색으로 물들고, 위 판의 'ARCADE ROULETTE' 글자가 깨지며 'SYSTEM HACKED'로 바뀌어 간다.
-// 3단계: 완전히 해킹된 기계 — 직전 꽝 결과(어둡게) 위 정중앙에 해킹 툴 해골이 크게 뜬다.
+// 1·2단계: 평범한 룰렛 기계가 점점 해킹된 기계 색으로 물들고, 위 판의 'ARCADE ROULETTE' 글자가 점점 더 깨진다(3단계에서 SYSTEM HACKED).
+// 세 단계 모두 직전 꽝 결과(점점 어둡게) 위 정중앙에 해킹 툴 해골이 점점 크게 뜬다. 3단계는 완전히 해킹된 기계.
 const INTRO_STEPS = [
-  { mix: 0.15, brand: 'ARC4DE  RO#LET7E', brandColor: '#f5c542', dim: 1, power: 0.7 },
-  { mix: 0.6, brand: 'SY5T#M  H@CK#D', brandColor: '#c9a8ff', dim: 0.75, power: 1.6 },
-  { skull: 140, dim: 0.25, power: 1.0 },
+  { mix: 0.15, brand: 'ARC4DE  RO#LET7E', brandColor: '#f5c542', broken: 1, skull: 70, dim: 0.7, power: 0.9 },
+  { mix: 0.6, brand: 'A#C4D3  R0U#L37E', brandColor: '#e8b86a', broken: 2, skull: 112, dim: 0.45, power: 1.6 },
+  { final: true, skull: 140, dim: 0.25, power: 1.0 },
 ];
+
+// 깨진 위 판 글자: 빨강·시안 잔상이 좌우로 어긋나 겹치고, 글자 줄 몇 가닥이 잘려 밀리고, 노이즈 블록이 낀다.
+function drawBrokenBrand(p, f, text, color, level, seed) {
+  const rand = seeded(seed);
+  const cy = TOP_PLATE_Y + PLATE_H / 2;
+  const off = 1 + level * 1.5;
+  p.text(f, text, 300 - off, cy, { size: 19, color: '#ff2d55' });
+  p.text(f, text, 300 + off, cy, { size: 19, color: '#3ee6ff' });
+  p.text(f, text, 300, cy, { size: 19, color });
+  // 판 안쪽 가로 줄 잘라 밀기
+  const x0 = Math.round(56 * p.s), x1 = Math.round(544 * p.s);
+  const y0 = Math.round((TOP_PLATE_Y + 4) * p.s), y1 = Math.round((TOP_PLATE_Y + PLATE_H - 4) * p.s);
+  const row = Buffer.alloc((x1 - x0) * 3);
+  for (let k = 0; k < level * 2; k++) {
+    const ys = y0 + Math.floor(rand() * (y1 - y0 - 2)), h = 1 + Math.floor(rand() * 3);
+    const dx = Math.round((rand() < 0.5 ? -1 : 1) * (3 + rand() * 4) * level);
+    for (let y = ys; y < Math.min(y1, ys + h); y++) {
+      const base = (y * p.w + x0) * 3;
+      p.buf.copy(row, 0, base, base + row.length);
+      for (let x = 0; x < x1 - x0; x++) {
+        const sx = Math.min(x1 - x0 - 1, Math.max(0, x - dx)) * 3;
+        p.buf[base + x * 3] = row[sx]; p.buf[base + x * 3 + 1] = row[sx + 1]; p.buf[base + x * 3 + 2] = row[sx + 2];
+      }
+    }
+  }
+  // 노이즈 블록(글자 위·사이)
+  const noise = ['#3ee6ff', '#b26bff', '#ff2d55', '#f5c542', '#ffffff'];
+  for (let k = 0; k < 1 + level * 3; k++) {
+    const w = 3 + Math.floor(rand() * 12), h = 2 + Math.floor(rand() * 4);
+    p.rect(150 + rand() * 300, TOP_PLATE_Y + 6 + rand() * (PLATE_H - 14), w, h, noise[Math.floor(rand() * noise.length)]);
+  }
+}
 const INTRO_STEP_COUNT = INTRO_STEPS.length;
 
 // 두 배경 버퍼를 t 만큼 섞어 painter 버퍼에 넣는다(0 = 평범한 기계, 1 = 해킹된 기계)
@@ -585,7 +617,7 @@ function renderHackIntro({ reels, bet, step = 0 }) {
   const st = INTRO_STEPS[Math.max(0, Math.min(INTRO_STEP_COUNT - 1, step))];
   const p = getPainter();
   const f = getFont();
-  const final = !!st.skull;
+  const final = !!st.final;
   if (final) {
     getHackBg().copy(p.buf);
     drawHackDecor(p, step);
@@ -593,7 +625,7 @@ function renderHackIntro({ reels, bet, step = 0 }) {
     mixInto(p, getBg(), getHackBg(), st.mix);
     // 위 판 글자를 깨진 글자로 다시 쓴다(판 안쪽만 덮어 테두리는 그대로)
     p.roundRect(53, TOP_PLATE_Y + 3, 494, PLATE_H - 6, 10, lerpHex('#150a14', '#07031a', st.mix));
-    p.text(f, st.brand, 300, TOP_PLATE_Y + PLATE_H / 2, { size: 19, color: st.brandColor });
+    drawBrokenBrand(p, f, st.brand, st.brandColor, st.broken, 31 + step * 7);
     drawBulbs(p, step);
   }
   for (let i = 0; i < 3; i++) {
@@ -606,7 +638,7 @@ function renderHackIntro({ reels, bet, step = 0 }) {
   const py = BOTTOM_PLATE_Y + PLATE_H / 2 - 1;
   if (bet != null) p.text(f, `베팅 : ${bet} XP`, 108, py, { size: 20, color: '#ffe9a8', align: 'left' });
   p.text(f, '해킹 중...', 492, py, { size: 22, color: final ? HACK.border : lerpHex('#ff9a9a', '#3ee6ff', st.mix), align: 'right' });
-  if (final) drawSkull(p, 300, WIN_CY, st.skull); // 정중앙 해골(글리치에 같이 흔들린다)
+  drawSkull(p, 300, WIN_CY, st.skull); // 정중앙 해골이 단계마다 커진다(글리치에 같이 흔들린다)
   applyGlitch(p, 11 + step * 5, st.power);
   return p.png();
 }

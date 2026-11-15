@@ -172,7 +172,7 @@ async function buildScreens() {
   const rlHack = rl.buildResultPayload(rlb, { bet: 300, resultLine: '**🍋 레몬 트리플 매칭!** (×2.5)', netLine: '📈 **+450 XP**', net: 450, reels: ['🍋', '🍋', '🍋'], multiplier: 2.5, hacks: 1 });
   [0, 1, 2].forEach(step => {
     const intro = rl.buildHackIntroPayload(rlb, 300, ['💎', '🍒', '🍋'], step, 1);
-    add('룰렛', `해킹 침입 연출 ${step + 1}/3`, ['기계가 물들고 ARCADE ROULETTE 글자가 깨지기 시작', '글자가 SYSTEM HACKED 쪽으로 바뀌어 감', '해킹된 기계 정중앙에 큰 해골'][step], intro, rlWith(intro));
+    add('룰렛', `해킹 침입 연출 ${step + 1}/3`, ['기계가 물들고 ARCADE ROULETTE 글자가 깨지기 시작 · 해골 등장', 'ARCADE ROULETTE 글자가 더 깨짐 · 해골 커짐', '해킹된 기계 정중앙에 큰 해골'][step], intro, rlWith(intro));
   });
   const rlHackSpin = rl.buildSpinningPayload(rlb, 300, ['🍋', null, null], 1, 1);
   add('룰렛', '해킹 툴로 다시 돌리는 중', '해킹된 기계 — 보라·시안 + 해골 + 글리치', rlHackSpin, rlWith(rlHackSpin));
