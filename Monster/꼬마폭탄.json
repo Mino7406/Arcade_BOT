@@ -302,7 +302,7 @@
       "fuse": {
         "turns": 4,
         "rageTurns": 3,
-        "need": 0.13,
+        "need": 0.15,
         "boom": "boom"
       }
     },
