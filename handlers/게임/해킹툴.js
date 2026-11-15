@@ -59,6 +59,7 @@ const buttonEmoji = (e) => (e.id ? { id: e.id, name: e.name } : e.fallback);
 const hackToolEmoji = () => textEmoji(EMOJIS.tool);
 const hackToolButtonEmoji = () => buttonEmoji(EMOJIS.tool);
 const hackUseButtonEmoji = () => buttonEmoji(EMOJIS.use);
+const hackUseEmoji = () => textEmoji(EMOJIS.use); // '해킹 툴 N회 사용' 표시
 // 화면 모음(tests/카드화면.js)처럼 봇 없이 그릴 때 이모지 자리를 채우는 용도
 const setHackToolEmojiId = (id) => { for (const e of Object.values(EMOJIS)) e.id = id; };
 
@@ -110,4 +111,4 @@ function useHackTool(guildId, userId) {
   return true;
 }
 
-module.exports = { HACK_TOOL_NAME, HACK_TOOL_MAX, hackToolEmoji, hackToolButtonEmoji, hackUseButtonEmoji, ensureHackToolEmoji, EMOJIS, EMOJI_DIR, setHackToolEmojiId, EMOJI_NAME, EMOJI_FILE, loadHackTools, saveHackTools, getHackTools, grantHackTool, useHackTool };
+module.exports = { HACK_TOOL_NAME, HACK_TOOL_MAX, hackToolEmoji, hackToolButtonEmoji, hackUseButtonEmoji, hackUseEmoji, ensureHackToolEmoji, EMOJIS, EMOJI_DIR, setHackToolEmojiId, EMOJI_NAME, EMOJI_FILE, loadHackTools, saveHackTools, getHackTools, grantHackTool, useHackTool };
