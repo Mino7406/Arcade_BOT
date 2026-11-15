@@ -1,0 +1,14 @@
+#!/bin/sh
+# 커밋할 때마다 version.json(커밋 제목·시각)을 같은 커밋에 넣는다.
+# 호스팅은 .git 없이 파일만 받아서 봇이 커밋 정보를 못 읽는다 — 그래서 커밋 정보를 파일로 같이 올린다(handlers/공통/버전.js가 읽음).
+# 이 폴더를 git 훅으로 쓰는 설정은 scripts/훅설치.js 가 해 준다(npm install·테스트 실행 때 자동).
+[ -n "$ARCADE_VERSION_HOOK" ] && exit 0
+gitdir=$(git rev-parse --git-dir) || exit 0
+# 리베이스·병합·체리픽 중에는 커밋을 고치지 않는다
+for f in rebase-merge rebase-apply MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD; do
+  [ -e "$gitdir/$f" ] && exit 0
+done
+root=$(git rev-parse --show-toplevel) || exit 0
+node "$root/.githooks/version.js" || exit 0
+git add -- "$root/version.json" || exit 0
+ARCADE_VERSION_HOOK=1 git commit -q --amend --no-edit --no-verify || true

@@ -1,7 +1,7 @@
 // 버전.js — 지금 실행 중인 코드가 어느 커밋인지 알아낸다(봇 시작 때 콘솔에 한 줄로 보여 주려고).
 // 호스팅에서 최신 푸시를 제대로 불러왔는지 확인하는 용도.
 // 1) git 명령이 있으면 그걸로, 2) 없으면(호스팅) .git 폴더의 커밋 데이터를 직접 읽어서 — 둘 다 짧은 해시·제목·커밋 시각.
-// 3) .git 이 없으면 null.
+// 3) .git 이 없으면(파일만 받는 호스팅) 커밋 때 훅이 같이 올려 둔 version.json(.githooks/post-commit)에서 제목·시각. 4) 그것도 없으면 null.
 //
 // 이 모듈은 다른 핸들러를 require 하지 않는다(fs·zlib·child_process만 사용).
 
@@ -149,16 +149,26 @@ function fromGitFiles() {
   }
 }
 
+// 호스팅용: 커밋할 때 .githooks/post-commit 이 같이 넣어 둔 version.json(해시는 없음 — 넣는 순간 해시가 바뀌므로)
+function fromVersionFile() {
+  try {
+    const v = JSON.parse(fs.readFileSync(path.join(ROOT, 'version.json'), 'utf8'));
+    return v?.subject ? { hash: null, subject: v.subject, date: v.date ?? null } : null;
+  } catch {
+    return null;
+  }
+}
+
 function getCommitInfo() {
-  return fromGitCommand() ?? fromGitFiles();
+  return fromGitCommand() ?? fromGitFiles() ?? fromVersionFile();
 }
 
 // 콘솔에 찍을 한 줄. 예: "📦 실행 중인 커밋: 1961ab2 — 해킹 툴 사용 이모지 테두리를… (11/15 18:40)"
 function commitLine() {
   const c = getCommitInfo();
-  if (!c) return '📦 실행 중인 커밋: 알 수 없음(.git 정보를 찾지 못함)';
+  if (!c) return '📦 실행 중인 커밋: 알 수 없음(.git·version.json 을 찾지 못함)';
   const subject = c.subject ? ` — ${c.subject.length > 60 ? `${c.subject.slice(0, 60)}…` : c.subject}` : '';
-  return `📦 실행 중인 커밋: ${c.hash}${subject}${c.date ? ` (${c.date})` : ''}`;
+  return `📦 실행 중인 커밋: ${c.hash ?? ''}${c.hash ? subject : subject.replace(/^ — /, '')}${c.date ? ` (${c.date})` : ''}`;
 }
 
 module.exports = { getCommitInfo, commitLine };

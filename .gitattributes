@@ -1,0 +1,2 @@
+# git 훅은 셸 스크립트라 어느 컴퓨터에서 받아도 LF 줄바꿈이어야 한다(CRLF면 sh 가 못 읽음)
+.githooks/* text eol=lf

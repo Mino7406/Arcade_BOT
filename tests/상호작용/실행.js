@@ -7,6 +7,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const repo = path.join(__dirname, '..', '..');
+require(path.join(repo, 'scripts', '훅설치.js')).installHooks(); // 이 컴퓨터에 커밋 정보 훅(.githooks) 설정이 없으면 걸어 둔다
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'flowtest-'));
 try {
   for (const dir of ['handlers', 'commands', 'forms', 'assets']) fs.cpSync(path.join(repo, dir), path.join(tmp, dir), { recursive: true });
