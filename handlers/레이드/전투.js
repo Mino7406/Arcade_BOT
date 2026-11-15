@@ -163,6 +163,7 @@ function monsterProblems(m) {
       const f = move.fuse;
       if (!int(f?.turns, 1) || (f.rageTurns !== undefined && !int(f.rageTurns, 1)) || !rate(f?.need)) problems.push(`moves.${key}.fuse는 turns(1 이상)·need(0~1) 필요`);
       if (m.moves?.[f?.boom]?.target !== 'all') problems.push(`moves.${key}.fuse.boom "${f?.boom}"은 target all 기술이어야 함`);
+      if (f?.needByParty !== undefined && (typeof f.needByParty !== 'object' || !Object.entries(f.needByParty).every(([n, v]) => int(Number(n), 1) && rate(v)))) problems.push(`moves.${key}.fuse.needByParty는 { 인원: need(0~1) }`);
     }
     if (move.chillOnHit !== undefined) {
       if (move.effect !== 'shield' || !m.chill || !int(move.chillOnHit, 1)) problems.push(`moves.${key}.chillOnHit은 shield 기술에만, 1 이상 정수, chill 블록 필요`);
@@ -741,7 +742,9 @@ function resolveTurn(battle, rng = Math.random) {
     if (battle.fuse && battle.intent === battle.fuse.boom) { battle.fuse = null; battle.sinceSmash = 0; battle.fuseEnded = true; } // 대폭발로 카운트다운 끝 — 필살기 카운트 새로
     if (move.fuse) {
       const turns = battle.rage ? (move.fuse.rageTurns ?? move.fuse.turns) : move.fuse.turns;
-      battle.fuse = { until: battle.turn + turns, need: Math.round(battle.maxHp * move.fuse.need), dealt: 0, boom: move.fuse.boom };
+      // needByParty: 인원별 불발 기준(없는 인원은 need) — 2~3인은 치유사가 없어 불을 못 끄면 너무 자주 전멸해서 낮춘다
+      const need = move.fuse.needByParty?.[battle.members.length] ?? move.fuse.need;
+      battle.fuse = { until: battle.turn + turns, need: Math.round(battle.maxHp * need), dealt: 0, boom: move.fuse.boom };
       log.push(`🔥 도화선에 불이 붙었다! **${turns}턴** 안에 **${battle.fuse.need.toLocaleString()}** 피해를 넣어 불을 꺼라!`);
     }
   }

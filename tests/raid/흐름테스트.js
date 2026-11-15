@@ -838,7 +838,15 @@ let ok4;
       const fuse = bomb.moves.smash.fuse;
       b = E.createBattle(bomb, party, rng);
       turnWith('smash', { x: 'attack', y: 'attack' });
-      assert(b.fuse && b.fuse.need === Math.round(b.maxHp * fuse.need) && b.fuse.dealt === 0 && !Object.keys(b.lastTurn.hits).length && b.log.join().includes('도화선'), '점화: 피해 없이 카운트다운 시작(기준 = 최대 HP × need)');
+      const need2 = fuse.needByParty?.[2] ?? fuse.need;
+      assert(b.fuse && b.fuse.need === Math.round(b.maxHp * need2) && b.fuse.dealt === 0 && !Object.keys(b.lastTurn.hits).length && b.log.join().includes('도화선'), '점화: 피해 없이 카운트다운 시작(기준 = 최대 HP × 인원별 need)');
+      {
+        // needByParty에 없는 인원(4인)은 기본 need
+        const four = E.ROLE_ORDER.map((role, i) => ({ userId: 'f' + i, name: 'F' + i, role }));
+        const b4 = E.createBattle(bomb, four, rng);
+        b4.intent = 'smash'; E.resolveTurn(b4, rng);
+        assert(b4.fuse && b4.fuse.need === Math.round(b4.maxHp * fuse.need) && (fuse.needByParty?.[4] === undefined), '점화: 4인은 기본 need');
+      }
       const lit = b.turn - 1;
       let intents = [];
       for (let i = 1; i < fuse.turns; i++) { intents.push(b.intent); turnWith(null, { x: 'attack', y: 'attack' }); }
