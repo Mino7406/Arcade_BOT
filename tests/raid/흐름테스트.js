@@ -866,6 +866,16 @@ let ok4;
       b.members.forEach(m => { m.hp = 100; });
       turnWith('combo', { x: 'guard', t: 'guard', y: 'guard' });
       assert(b.lastTurn.minionsJoined && !b.log.join().includes(monkey.minions.attack.name) && b.log.join().includes(monkey.moves.combo.name), '합동 필살기 턴엔 부하가 따로 바나나를 던지지 않음');
+      // 바나나 껍질 → 다음 턴 반드시 구린 방귀 → 악취(회복약 못 씀, 치유사 회복 감소 · 씻어내지 못함)
+      b.minions = []; b.members.forEach(m => { m.hp = 60; m.cooldown = 0; });
+      turnWith('peel', { x: 'guard', t: 'guard', y: 'guard' });
+      assert(b.intent === 'fart', '바나나 껍질 뿌리기 다음 행동은 반드시 구린 방귀(연계)');
+      turnWith(null, { x: 'guard', t: 'guard', y: 'guard' });
+      assert(E.isStenched(b, M('x')) && E.stenchTurnsLeft(b, M('x')) === monkey.moves.fart.effectTurns && E.checkChoice(b, 'x', 'potion')?.includes('악취'), '구린 방귀: 방어해도 악취, 회복약 사용 불가');
+      const hx = M('x').hp;
+      turnWith('attack', { y: 'skill', x: 'guard', t: 'guard' });
+      assert(E.isStenched(b, M('x')) && b.log.join().includes('치유의 빛'), '치유사 스킬로 악취를 씻어내지 못함');
+      void hx;
     }
   }
   // 14-4) 꼬마 폭탄(Monster-all): 점화 카운트다운(불끄기 성공 → 기절, 실패 → 대폭발) · 화상 · 연막

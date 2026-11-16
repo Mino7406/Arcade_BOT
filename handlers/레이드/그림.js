@@ -10,7 +10,7 @@
 
 const path = require('path');
 const { Painter, loadFont } = require('./그림판');
-const { ROLES, ROLE_ORDER, PLAYER_MAX_HP, ACTIONS, createBattle, choose, resolveTurn, isStunned, slowTurnsLeft, isShielded, isPowered, poisonStacks, isConfused, chillStacks, isFeared, isPhased, isIntentHidden, isWarnIntent, telegraphText, moveFx, isWeak, weakTurnsLeft } = require('./전투');
+const { ROLES, ROLE_ORDER, PLAYER_MAX_HP, ACTIONS, createBattle, choose, resolveTurn, isStunned, slowTurnsLeft, isShielded, isPowered, poisonStacks, isConfused, chillStacks, isFeared, isPhased, isIntentHidden, isWarnIntent, telegraphText, moveFx, isWeak, weakTurnsLeft, isStenched, stenchTurnsLeft } = require('./전투');
 
 const W = 900; // 설계 크기(좌표는 전부 이 기준)
 const H = 640;
@@ -280,6 +280,29 @@ const STATUS_ICONS = {
     palette: { d: '#2a1410', w: '#ffffff', s: '#b9c6d6', y: '#f0b84a', b: '#8b5a2b', g: '#7ccf5a' },
   },
 };
+// 냄새 줄: 위로 구불구불 올라가는 초록 선 세 개(구린 방귀·악취 배지)
+function stinkLines(cx, cy, s = 1, color = '#9acd4a') {
+  for (const dx of [-8, 0, 8]) {
+    const pts = [0, 1, 2, 3, 4].map(i => [cx + dx * s + (i % 2 ? 3 : -3) * s, cy + 12 * s - i * 6 * s]);
+    for (let i = 0; i < 4; i++) p.line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], 2.5 * s, color);
+  }
+}
+// 악취 기운(카드 아이콘 위): 구불구불 피어오르는 갈색 냄새 줄기 + 맴도는 파리 두 마리
+function stenchAura(cx, cy) {
+  for (const dx of [-26, 26]) stinkLines(cx + dx, cy - 22, 0.9, '#a07a48');
+  for (const [fx, fy] of [[-34, -40], [36, -8]]) {
+    p.rect(fx + cx - 2, fy + cy - 2, 5, 5, '#1a120a');
+    p.rect(fx + cx - 5, fy + cy - 6, 4, 3, '#d8e4ee');
+    p.rect(fx + cx + 2, fy + cy - 6, 4, 3, '#d8e4ee');
+  }
+}
+// 악취: 갈색 냄새 구름 배지 + 냄새 줄 + 남은 턴
+function stenchBadge(cx, cy, turns) {
+  haze(cx, cy + 2, 12, '#6b4a24', 0.95);
+  haze(cx - 4, cy - 2, 7, '#a07a48', 0.95);
+  stinkLines(cx, cy - 14, 0.6, '#c49a62');
+  text(`${turns}턴`, cx, cy + 24, 15, '#e0c49a');
+}
 // 카드 왼쪽 위 상태 아이콘: 기절(별). 점액는 아이콘 없이 점액 얼룩으로 표시한다.
 // 카드 왼쪽 상태 배지: 기절(별) · 독(거품). 환각은 배지 대신 아이콘 위 소용돌이(카드 그리는 곳에서, 점액처럼).
 // 냉기는 독 아래(같은 자리 규칙). 빙결(stunStatus.fx 'ice')은 별 대신 아이콘 위 얼음 덮개(iceCover)로 보인다.
@@ -294,7 +317,9 @@ function statusBadges(b, mem, x, y) {
   const slowLeft = slowTurnsLeft(b, mem);
   if (slowLeft > 0) { slowBadge(x, by, slowLeft, b.monster.sprite?.palette?.o || '#7fdc8c'); by += 44; }
   const chill = chillStacks(b, mem);
-  if (chill) chillBadge(x, by, chill);
+  if (chill) { chillBadge(x, by, chill); by += 44; }
+  const stench = stenchTurnsLeft(b, mem);
+  if (stench) stenchBadge(x, by, stench);
 }
 // 점액: 독 거품처럼 방울 세 개(어두운 테두리 → 점액색 → 흰 반사광) + 아래에 남은 턴
 function slowBadge(cx, cy, turns, color) {
@@ -505,6 +530,20 @@ function gooBlob(x, y, r, color) {
 function haze(x, y, r, color, alpha) { p.roundRect(x - r, y - r, r * 2, r * 2, r, color, alpha); }
 function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
   if (!move) return;
+  if (move === 'fart' && layer === 'front') {
+    // 구린 방귀: 뒤돌아선 엉덩이 아래에서 파티 쪽(아래)으로 부채꼴로 넓게 퍼지는 가스 — 멀수록 크고 옅은 구름 + 냄새 줄
+    for (let k = 0; k < 9; k++) {
+      const ang = ((22 + k * 17) * Math.PI) / 180; // 22°~158°: 아래쪽 부채꼴
+      for (let i = 1; i <= 5; i++) {
+        const d = 26 + i * 44;
+        const x = cx + Math.cos(ang) * d * 1.25, y = cy + 44 + Math.sin(ang) * d * 0.5;
+        haze(x, y, 6 + i * 3.5, '#b6e06a', 0.3 - i * 0.03);
+        if (i % 2) dot(x + 4, y - 3, 4, '#e2f7b0');
+      }
+    }
+    for (const [dx, dy] of [[-200, 70], [206, 72], [-90, 96], [96, 98]]) stinkLines(cx + dx, cy + dy - 30, 0.8);
+    return;
+  }
   if (move === 'peel' && layer === 'front') {
     // 바나나 껍질 뿌리기: 몸 둘레로 흩날리는 바나나 껍질 + 작은 노란 조각
     for (const [dx, dy] of [[-150, -46], [156, -40], [-182, 30], [188, 36], [-96, 70], [104, 74]]) drawPixels(PEEL, cx + dx, cy + dy, 6);
@@ -758,6 +797,11 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
 }
 // 맞은 파티원 카드 아이콘 위 타격 표시: 박치기는 할퀸 자국, 흩뿌리기는 점액 얼룩, 짓누르기는 충격 별.
 function hitFx(move, cx, cy, color, spore = color, accent = spore) {
+  if (move === 'fart') {
+    // 구린 방귀에 맞음: 아이콘 둘레 초록 구름 + 냄새 줄
+    stenchAura(cx, cy);
+    return;
+  }
   if (move === 'peel') {
     // 바나나 껍질에 맞음: 아이콘 옆에 껍질 두 개 + 미끄러진 자국
     drawPixels(PEEL, cx - 30, cy + 20, 5);
@@ -1179,6 +1223,7 @@ function renderBattle(r) {
       // 상태 효과 아이콘(카드 왼쪽, 리본 아래): 점액(남은 턴) · 기절
       if (!down) statusBadges(b, mem, x + 32, y + 66);
       // 환각(최면) 상태는 점액처럼 카드 아이콘 위에 소용돌이로 보여 준다. 최면술에 막 맞은 결과 화면은 타격 표시(작은 최면 물결)만.
+      if (!down && isStenched(b, mem) && !(usedFx === 'fart' && hit)) stenchAura(x + w / 2, y + 86);
       if (!down && isConfused(b, mem) && !(usedFx === 'hypno' && hit)) confuseSwirl(x + w / 2 + 14, y + 98); // 아이콘 오른쪽 아래에 걸쳐 아이콘도 보이게
       // 기절(별): 환각과 같은 자리(아이콘 오른쪽 아래). 빙결은 얼음 덮개라 그리지 않는다.
       // 기절: 아이콘 머리 위를 도는 별(사용자 요청 — 아이콘 옆 별은 점액 얼룩과 겹쳤음)

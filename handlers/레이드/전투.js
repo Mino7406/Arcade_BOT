@@ -95,8 +95,10 @@ const MONSTER_DIR = path.join(__dirname, '..', '..', 'Monster');
 const REQUIRED_MOVES = ['attack', 'smash'];
 // 그림(레이드그림.js)이 아는 연출 종류. 새 연출은 레이드그림.js의 monsterFx·hitFx에 그리고 여기에 이름을 더한다.
 const MOVE_FX = ['attack', 'sweep', 'charge', 'smash', 'heal', 'spore', 'hypno', 'absorb', 'burst', 'frost', 'icefall',
-  'curse', 'wail', 'phase', 'storm', 'dust', 'smoke', 'ignite', 'boom', 'summon', 'peel'];
-const EFFECTS = ['slow', 'stun', 'shield', 'poison', 'confuse', 'chill', 'fear', 'phase', 'smoke', 'summon'];
+  'curse', 'wail', 'phase', 'storm', 'dust', 'smoke', 'ignite', 'boom', 'summon', 'peel', 'fart'];
+const EFFECTS = ['slow', 'stun', 'shield', 'poison', 'confuse', 'chill', 'fear', 'phase', 'smoke', 'summon', 'stench'];
+// stench(악취 — 원숭이 대장 구린 방귀): 맞은 사람(guardBlocks면 방어한 사람 제외)은 effectTurns턴 동안 회복약을 못 쓰고,
+//   치유사 스킬 회복량 × effectRate(씻어내지 못함). followUp: 이 기술을 쓴 다음 턴엔 반드시 그 기술(바나나 껍질 → 구린 방귀).
 // 부하(minions 블록이 있는 몬스터만 — 원숭이 대장):
 //   summon(효과): 부하 count마리를 불러낸다(HP = 몬스터 최대 HP × hpRate). 살아 있는 부하가 있으면 그 기술은 고르지 않는다.
 //   부하가 살아 있으면 아군 공격·스킬 피해는 자동으로 첫 번째 살아 있는 부하에게 가고, 넘친 피해는 사라진다.
@@ -179,6 +181,8 @@ function monsterProblems(m) {
       if (move.rageStacks !== undefined && !int(move.rageStacks, 1)) problems.push(`moves.${key}.rageStacks는 1 이상 정수`);
     }
     if (move.effect === 'fear' && !named(move.status)) problems.push(`moves.${key}.status.name·emoji 필요`);
+    if (move.effect === 'stench' && (!named(move.status) || !int(move.effectTurns, 1) || !rate(move.effectRate))) problems.push(`moves.${key}: stench는 status.name·emoji, effectTurns(1 이상), effectRate(치유사 회복 배율 0~1) 필요`);
+    if (move.followUp !== undefined && !m.moves?.[move.followUp]) problems.push(`moves.${key}.followUp "${move.followUp}"이 moves에 없음`);
     if (move.effect === 'summon' && (!m.minions || move.target !== 'none')) problems.push(`moves.${key}: summon은 target none 기술에만, minions 블록 필요`);
     if (move.needMinions && !m.minions) problems.push(`moves.${key}: needMinions는 minions 블록 필요`);
     if (move.perMinion !== undefined && !range(move.perMinion)) problems.push(`moves.${key}.perMinion은 [최소, 최대] 숫자`);
@@ -261,6 +265,9 @@ function pickNextIntent(battle, rng) {
   const combo = battle.rage && battle.monster.rage?.afterPoison;
   if (combo && battle.monster.moves[combo] && Object.values(battle.lastTurn?.effects ?? {}).includes('poison')) return combo;
   // 점화 카운트다운(꼬마 폭탄): 마지막 턴엔 대폭발, 그 전엔 점화를 다시 고르지 않는다(필살기 보장도 쉼)
+  // 연계(followUp): 방금 쓴 기술에 이어지는 기술이 있으면 다음은 반드시 그것(원숭이 대장: 바나나 껍질 → 구린 방귀)
+  const follow = battle.monster.moves[battle.lastTurn?.monsterMoveKey]?.followUp;
+  if (follow && battle.monster.moves[follow]) return follow;
   const fz = battle.fuse;
   if (fz && battle.turn + 1 >= fz.until && battle.monster.moves[fz.boom]) return fz.boom;
   // 부하 몬스터: 필살기 1(smash = 부하 부르기)을 못 쓰는 때(부하가 살아 있음)는 필살기 2(ultimate — 부하 합동 필살기)로 보장한다
@@ -367,6 +374,9 @@ function createBattle(monster, party, rng = Math.random, { minParty = HP_MIN_PAR
       chillStacks: 0,   // 냉기 중첩(chill 블록이 있는 몬스터만)
       fearTurn: 0,      // 이 턴에 공포(스킬 못 씀)
       fearStatus: null, // 걸린 fear 상태이상의 이름·이모지(예: 😱공포)
+      stenchUntil: 0,   // 이 턴까지 악취(회복약 못 씀, 치유사 회복 감소)
+      stenchRate: 1,    // 악취 중 치유사 스킬 회복 배율
+      stenchStatus: null,
     })),
   };
   battle.intent = pickNextIntent(battle, rng);
@@ -399,6 +409,8 @@ function poisonDamage(battle, m) {
 function isConfused(battle, m) { return m.confuseTurn === battle.turn; }
 function isFeared(battle, m) { return m.fearTurn === battle.turn; }
 function isPhased(battle) { return battle.phaseTurn === battle.turn; }
+function isStenched(battle, m) { return m.hp > 0 && battle.turn <= (m.stenchUntil ?? 0); }
+function stenchTurnsLeft(battle, m) { return isStenched(battle, m) ? m.stenchUntil - battle.turn + 1 : 0; }
 // 부하(원숭이 대장): 살아 있는 부하 목록 · 체면 구김(부하를 다 잃은 다음 턴 받는 피해 증가). 예전 기록엔 칸이 없을 수 있다.
 function minionsAlive(battle) { return (battle.minions ?? []).filter(x => x.hp > 0); }
 function isWeak(battle) { return battle.turn <= (battle.weakUntil ?? 0); }
@@ -491,6 +503,7 @@ function checkChoice(battle, userId, action) {
   if (!ACTIONS[action]) return '알 수 없는 행동이에요.';
   if (action === 'skill' && isFeared(battle, m)) return `${m.fearStatus.emoji} ${m.fearStatus.name} 상태라 이번 턴엔 스킬을 쓸 수 없어요.`;
   if (action === 'skill' && m.cooldown > 0) return `스킬은 ${m.cooldown}턴 뒤에 다시 쓸 수 있어요.`;
+  if (action === 'potion' && isStenched(battle, m)) return `${m.stenchStatus.emoji} ${m.stenchStatus.name} 때문에 회복약을 쓸 수 없어요.`;
   if (action === 'potion' && m.potions <= 0) return '회복약을 다 썼어요.';
   // HP가 가득해도 독에 걸렸으면 해독하려고 마실 수 있다
   if (action === 'potion' && m.hp >= PLAYER_MAX_HP && !poisonStacks(battle, m) && !chillStacks(battle, m)) return '이미 HP가 가득 차 있어요.';
@@ -633,7 +646,7 @@ function resolveTurn(battle, rng = Math.random) {
         const revived = [];
         const cleansed = new Set(); // 씻어낸 상태이상 이름(점액 등)
         for (const t of battle.members) {
-          if (t.hp > 0) healed += heal(t, 30);
+          if (t.hp > 0) healed += heal(t, isStenched(battle, t) ? Math.round(30 * (t.stenchRate ?? 1)) : 30); // 악취 중엔 회복 감소(씻어내지 못함)
           else { t.hp = 25; healed += 25; revived.push(t.name); }
           if (slowTurnsLeft(battle, t) > 0) { t.slowUntil = 0; cleansed.add(t.slowStatus.name); } // 점액(slow)도 씻어낸다
           if (poisonStacks(battle, t) > 0) { t.poisonStacks = 0; t.poisonUntil = 0; cleansed.add(t.poisonStatus.name); } // 독도 씻어낸다
@@ -794,6 +807,7 @@ function resolveTurn(battle, rng = Math.random) {
           last.effects[t.userId] = 'chill';
           tag = ` ${st.emoji}${st.name}×${t.chillStacks}`;
         }
+        if (t.hp > 0 && move.effect === 'stench' && !blocked) { t.stenchUntil = battle.turn + move.effectTurns; t.stenchRate = move.effectRate; t.stenchStatus = move.status; last.effects[t.userId] = 'stench'; tag = ` ${move.status.emoji}${move.status.name}`; }
         if (t.hp > 0 && move.effect === 'fear' && !blocked) { t.fearTurn = battle.turn + 1; t.fearStatus = move.status; last.effects[t.userId] = 'fear'; tag = ` ${move.status.emoji}${move.status.name}`; }
         if (t.hp > 0 && move.effect === 'stun' && !t.guarding) { t.stunTurn = battle.turn + 1; t.stunStatus = move.status; last.effects[t.userId] = 'stun'; tag = ` ${move.status.emoji}${move.status.name}`; }
         return `${t.name} -${dmg}${t.hp <= 0 ? ' 💀' : tag}`;
@@ -912,6 +926,8 @@ module.exports = {
   isConfused,
   isFeared,
   isPhased,
+  isStenched,
+  stenchTurnsLeft,
   minionsAlive,
   isWeak,
   weakTurnsLeft,
