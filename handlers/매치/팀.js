@@ -8,7 +8,7 @@
 //  - 🏅 내 티어 설정: 내 티어를 골라 저장한다(롤·발로만). 팀 입력에 "승훈 불2"처럼 적어도 자동으로 저장된다.
 // 팀이 바뀔 때마다 카드는 지우고 맨 아래에 다시 올린다(채팅에 묻히지 않게). 티어만 바뀌면 그 자리에서 고친다.
 //
-// 카드는 내전이 마감되면 자동으로 올라가고(공용.js markClosed → setCloseHook), /팀으로 다시 끌어올릴 수도 있다.
+// 카드는 내전이 마감되면 자동으로 올라가고(공용.js markClosed → setCloseHook), 주최자 관리 메뉴의 📌 팀 불러오기로 끌어올릴 수 있다.
 // 기록: match.board = { channelId, messageId, current: { teams, at, by, how } | null, history: [같은 모양 …] }
 // 팀원은 사람이 적은 이름 글자 그대로 두고, 그릴 때 참가자 이름과 맞춰 보며 티어를 붙인다.
 
@@ -39,6 +39,7 @@ const MAX_MEMBERS = 15;
 const HISTORY_KEPT = 10;
 const HISTORY_SHOWN = 3;
 const TEAM_ICONS = ['🔵', '🔴', '🟢', '🟡', '🟣', '🟠', '⚪', '🟤', '⚫', '🩷'];
+const OLD_UI_NOTE = '⚠️ **팀 짜기 방식이 바뀌었어요.** 내전이 마감되면 내전채팅에 팀 짜기 카드가 자동으로 올라가요.';
 const HOW_TEXT = { input: '📝 입력', balance: '⚖️ 밸런스', random: '🎲 랜덤' };
 
 // ── 이름 ────────────────────────────────────────────────────
@@ -416,7 +417,7 @@ async function commitTeams(interaction, matchMsgId, match, teams, how, extraNote
     await postBoard(interaction.client, matchMsgId, match);
   } catch (err) {
     logError('처리 오류', `팀 짜기 카드 다시 올리기 실패 (${matchMsgId})`, err);
-    await interaction.editReply(notice('⚠️ **팀은 저장했지만 카드를 다시 올리지 못했어요.** /팀으로 다시 올려 주세요.'));
+    await interaction.editReply(notice('⚠️ **팀은 저장했지만 카드를 다시 올리지 못했어요.** 주최자 관리 메뉴의 📌 팀 불러오기를 눌러 주세요.'));
     return;
   }
   const head = { input: '✅ **팀을 올렸어요.**', balance: '⚖️ **티어로 밸런스를 맞춰 나눴어요.**', random: '🎲 **무작위로 나눴어요.**' }[how];
@@ -515,54 +516,9 @@ async function saveMyTier(interaction, game, tier, matchMsgId) {
   if (match) await refreshBoard(interaction.client, matchMsgId, match);
 }
 
-// ── /팀 : 내전 고르기 → 카드 다시 올리기 ─────────────────────
-
-function buildMatchSelectMenu(matches) {
-  const options = matches.map(([id, m]) => {
-    const emojiStr = m.data.gameInfo.emoji;
-    const cm = emojiStr.match(/^<a?:(\w+):(\d+)>$/);
-    const emoji = cm ? { id: cm[2], name: cm[1] } : emojiStr;
-    const max = parseInt(m.data.players) || 0;
-    const statusIcon = m.closed ? '🔒' : '🟢';
-    const hasTeams = !!(m.board?.current || m.board?.rounds?.length);
-    return {
-      label: m.data.title.slice(0, 100),
-      description: `${statusIcon} ${m.participants.length}/${max}명${hasTeams ? ' · ⚔️ 팀 있음' : ''} · ${m.data.datetime}`.slice(0, 100),
-      value: id,
-      emoji,
-    };
-  });
-  return new StringSelectMenuBuilder()
-    .setCustomId('team:match_select')
-    .setPlaceholder('팀을 짤 내전을 선택하세요')
-    .addOptions(options.slice(0, 25));
-}
-
-async function handleTeamMatchSelect(interaction) {
-  const matchMsgId = interaction.values[0];
-  const match = getMatches(interaction.client).get(matchMsgId);
-  if (!match || match.guildId !== interaction.guildId) {
-    await interaction.update(notice('⚠️ **만료된 내전입니다.**'));
-    return;
-  }
-  if (!canEdit(match, interaction.user.id)) {
-    await interaction.update(notice('❌ **이 내전의 참가자·주최자만 팀을 짤 수 있습니다.**'));
-    return;
-  }
-  await interaction.deferUpdate();
-  try {
-    const msg = await postBoard(interaction.client, matchMsgId, match);
-    await interaction.editReply(notice('✅ **팀 짜기 카드를 올렸어요.**', { rows: [linkRow(msg.url)] }));
-  } catch (err) {
-    logError('처리 오류', `팀 짜기 카드 게시 실패 (${matchMsgId})`, err);
-    await interaction.editReply(notice('⚠️ **팀 짜기 카드를 올리지 못했어요.** 잠시 뒤 다시 시도해 주세요.'));
-  }
-}
-
-// /팀 메뉴와 🏅 내 티어 설정 선택 메뉴
+// 🏅 내 티어 설정 선택 메뉴
 async function handleTeamSelect(interaction) {
   const { customId } = interaction;
-  if (customId === 'team:match_select') return handleTeamMatchSelect(interaction);
 
   if (customId.startsWith('team:tier_pick:')) {
     const [, , game, matchMsgId] = customId.split(':');
@@ -581,7 +537,7 @@ async function handleTeamSelect(interaction) {
   }
 
   // 예전 팀 관리 화면의 선택 메뉴
-  await interaction.reply(notice('⚠️ **팀 관리 방식이 바뀌었어요.** `/팀`을 다시 실행해 주세요.', { ephemeral: true }));
+  await interaction.reply(notice(OLD_UI_NOTE, { ephemeral: true }));
 }
 
 // ── 카드 버튼 ───────────────────────────────────────────────
@@ -641,7 +597,7 @@ async function handleTeamButton(interaction) {
   }
 
   // 예전 팀 관리 화면(임시 메시지)에 남아 있던 버튼
-  await interaction.reply(notice('⚠️ **팀 관리 방식이 바뀌었어요.** `/팀`을 다시 실행해 주세요.', { ephemeral: true }));
+  await interaction.reply(notice(OLD_UI_NOTE, { ephemeral: true }));
 }
 
 async function handleTeamModal(interaction) {
@@ -660,7 +616,7 @@ async function handleTeamModal(interaction) {
 
 // 예전 팀 관리 화면의 선택 메뉴(index.js 가 예전 customId 를 여기로 보낸다)
 async function handleTeamAssignSelect(interaction) {
-  await interaction.reply(notice('⚠️ **팀 관리 방식이 바뀌었어요.** `/팀`을 다시 실행해 주세요.', { ephemeral: true }));
+  await interaction.reply(notice(OLD_UI_NOTE, { ephemeral: true }));
 }
 
 module.exports = {
@@ -672,8 +628,6 @@ module.exports = {
   buildBoardPayload, // 화면 모음·테스트용
   buildTierGamePayload,
   postBoard,
-  buildMatchSelectMenu,
-  handleTeamMatchSelect,
   handleTeamSelect,
   handleTeamButton,
   handleTeamModal,

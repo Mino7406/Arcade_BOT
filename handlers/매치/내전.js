@@ -160,7 +160,7 @@ function buildManageMenu(match, matchMsgId) {
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`team:open:${matchMsgId}`)
-          .setLabel('⚔️ 팀 짜기')
+          .setLabel('📌 팀 불러오기')
           .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
           .setCustomId(`naejeon:match_mention:${matchMsgId}`)

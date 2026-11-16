@@ -1,10 +1,9 @@
-// 메뉴.js — 내전/모집/팀/불러오기의 "처음 뜨는 선택 화면"(게임 고르기, 내전 고르기, 다시 올릴 항목 고르기).
+// 메뉴.js — 내전/모집/불러오기의 "처음 뜨는 선택 화면"(게임 고르기, 내전 고르기, 다시 올릴 항목 고르기).
 // 슬래시 명령(commands/매치/)과 안내 패널 버튼(index.js)이 같은 화면을 쓰도록 한곳에 모았다.
 
 const { ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
 const { menu, notice } = require('../공통/카드');
 const { GAME_EMOJIS, OWNER_IDS } = require('../../config');
-const { buildMatchSelectMenu } = require('./팀');
 
 // 안내 패널의 "내전 생성" 버튼(index.js)에서도 재사용하기 위해 페이로드 생성 로직을 분리.
 // 코블몬 토너먼트는 OWNER_IDS에 든 사람이 열었을 때만 선택지에 넣는다.
@@ -40,23 +39,6 @@ function buildMojipGameSelectPayload() {
     ]);
 
   return menu({ header: '📋 모집 생성', note: '어떤 게임의 모집을 만들까요?', rows: [new ActionRowBuilder().addComponents(selectMenu)], ephemeral: true });
-}
-
-// 안내 패널의 "팀 관리" 버튼(index.js)에서도 재사용하기 위해 페이로드 생성 로직을 분리.
-function buildTeamMatchListPayload(interaction) {
-  const matches = interaction.client.naejeonMatches;
-
-  if (!matches || matches.size === 0) {
-    return notice('⚠️ **활성화된 내전이 없습니다.**', { ephemeral: true });
-  }
-
-  const validMatches = [...matches.entries()].filter(([, m]) => m.guildId === interaction.guildId && m.participants.length >= 2);
-
-  if (validMatches.length === 0) {
-    return notice('⚠️ **참가자가 2명 이상인 내전이 없습니다.**', { ephemeral: true });
-  }
-
-  return menu({ header: '⚔️ 팀 짜기', note: '어느 내전의 팀을 짤까요? 고르면 내전채팅에 팀 짜기 카드가 올라가요.', rows: [new ActionRowBuilder().addComponents(buildMatchSelectMenu(validMatches))], ephemeral: true });
 }
 
 // 안내 패널의 "불러오기" 버튼(index.js)에서도 재사용하기 위해 페이로드 생성 로직을 분리.
@@ -105,6 +87,5 @@ function buildReloadListPayload(interaction) {
 module.exports = {
   buildNaejeonGameSelectPayload,
   buildMojipGameSelectPayload,
-  buildTeamMatchListPayload,
   buildReloadListPayload,
 };

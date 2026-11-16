@@ -810,7 +810,7 @@ function buildMatchCard({ label, data, participants, closed = false, teams = nul
   const max = parseInt(players) || 0;
   const isFull = participants.length >= max;
   const statusText = matchStatusText({ closed, isFull, notifyOn });
-  const color = closed ? COLORS.ok : gameInfo.color;
+  const color = gameInfo.color; // 마감돼도 게임 고유색 유지(취소됨만 빨간색 — buildCancelledCard)
   return card({
     color,
     top: roleMention.trim() || undefined, // 게임 역할 멘션 줄(카드 안 맨 위)

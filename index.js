@@ -34,7 +34,7 @@ const RAID_PAUSED_COMMANDS = {
   레벨: '레벨을 확인할', 랭킹: '랭킹을 확인할',
 };
 const { handleQuizAdminButton, handleQuizCreateModal } = require('./handlers/관리/퀴즈관리');
-const { buildNaejeonGameSelectPayload, buildMojipGameSelectPayload, buildReloadListPayload, buildTeamMatchListPayload } = require('./handlers/매치/메뉴');
+const { buildNaejeonGameSelectPayload, buildMojipGameSelectPayload, buildReloadListPayload } = require('./handlers/매치/메뉴');
 const { buildCommandListPayload, buildAdminMenuPayload, handlePanelButton, handlePanelMatchDeleteSelect, handlePanelBotMessageDeleteModal, handlePanelSelectButton } = require('./handlers/관리/패널');
 const { handleRealmButton, handleRealmModal, handleRealmRosterModal, initRulesAgreementCache, handleRealmRulesReactionAdd, handleRealmRulesReactionRemove } = require('./forms/마크');
 const { handleCobblemonButton, startCobblemonOpenTimer } = require('./forms/코블몬');
@@ -453,7 +453,7 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     const isChannelExempt =
-      (interaction.isChatInputCommand() && ['관리', '팀'].includes(interaction.commandName)) || // /팀은 내전채팅에서도 쓴다
+      (interaction.isChatInputCommand() && ['관리'].includes(interaction.commandName)) ||
       interaction.customId?.startsWith('team:') || // 팀 짜기 카드는 내전채팅에 올라간다(참가자·주최자만 누를 수 있음)
       isWordchainOrRanking ||
       isReload ||
@@ -494,7 +494,7 @@ client.on('interactionCreate', async (interaction) => {
       if (interaction.customId === 'naejeon:game_select') {
         await handleGameSelect(interaction);
       } else if (interaction.customId.startsWith('naejeon:team_assign:') || interaction.customId.startsWith('team:assign_setup:') || interaction.customId.startsWith('team:pub_assign:')) {
-        await handleTeamAssignSelect(interaction); // 예전 팀 배정 메뉴 → "/팀을 다시 실행" 안내
+        await handleTeamAssignSelect(interaction); // 예전 팀 배정 메뉴 → 바뀐 방식 안내
       } else if (interaction.customId.startsWith('naejeon:member_remove_select:')) {
         await handleNaejeonMemberRemove(interaction);
       } else if (interaction.customId === 'mojip:game_select') {
@@ -502,7 +502,7 @@ client.on('interactionCreate', async (interaction) => {
       } else if (interaction.customId.startsWith('mojip:member_remove_select:')) {
         await handleMojipMemberRemove(interaction);
       } else if (interaction.customId === 'team:match_select' || interaction.customId.startsWith('team:tier_')) {
-        await handleTeamSelect(interaction); // /팀 내전 고르기, 🏅 내 티어 고르기
+        await handleTeamSelect(interaction); // 🏅 내 티어 설정 고르기(예전 /팀 메뉴는 안내만)
       } else if (interaction.customId === 'reload:select') {
         await handleRMatchSelect(interaction);
       } else if (interaction.customId.startsWith('panel:match_delete_select:')) {
@@ -578,7 +578,8 @@ client.on('interactionCreate', async (interaction) => {
       } else if (interaction.customId === 'recruit:불러오기') {
         await interaction.reply(buildReloadListPayload(interaction));
       } else if (interaction.customId === 'recruit:팀') {
-        await interaction.reply(buildTeamMatchListPayload(interaction));
+        // 새로고침 전 예전 패널의 ⚔️ 팀 짜기 버튼
+        await interaction.reply(notice('⚔️ **팀 짜기 카드는 내전이 마감되면 내전채팅에 자동으로 올라가요.**\n-# 카드가 묻혔으면 주최자 관리 메뉴의 📌 팀 불러오기를 눌러 주세요.', { ephemeral: true }));
       } else if (interaction.customId === 'recruit:티어') {
         await interaction.reply(require('./handlers/매치/팀').buildTierGamePayload());
       } else if (interaction.customId === 'recruit:명령어') {

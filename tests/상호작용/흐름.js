@@ -226,9 +226,9 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await new Promise(r => setTimeout(r, 20));
     assert(channel.sent.length === before, '다시 마감됐는데 카드를 또 올림');
 
-    const sel = mkInteraction({ user: 'u3', customId: 'team:match_select', values: [id], message: new FakeMsg(require(path.join(root, 'handlers/공통/카드.js')).notice('s'), channel) });
-    await team.handleTeamSelect(sel);
-    assert(boardMsg() && !boardMsg().deleted, '/팀으로 카드를 다시 못 올림');
+    const sel = mkInteraction({ user: 'u3', customId: `team:open:${id}` });
+    await team.handleTeamButton(sel);
+    assert(boardMsg() && !boardMsg().deleted, '📌 팀 불러오기로 카드를 다시 못 올림');
     common.clearNotifyTimer?.(match);
     client.naejeonMatches.delete(id);
   });
