@@ -282,8 +282,16 @@ const STATUS_ICONS = {
 };
 // 악취 기운(카드 아이콘 위): 작은 방귀 구름 + 맴도는 파리 두 마리(냄새 줄은 X자처럼 보여 뺌 — 사용자 요청)
 function stenchAura(cx, cy) {
-  drawPixels(FART_CLOUD, cx + 30, cy + 22, 3);
+  stenchHaze(cx, cy, 0.8);
   stenchFlies(cx, cy);
+}
+// 악취 기운: 악취 아이콘 색(갈색·주황·밝은 주황)의 반투명 기운이 아이콘 아래쪽에 은은하게 깔리고 작은 방울이 피어오름.
+// k로 진하기(맞은 순간 1.4 · 남아 있는 동안 0.8)
+function stenchHaze(cx, cy, k = 1) {
+  haze(cx, cy + 14, 36, '#8a4f1e', 0.2 * k);
+  haze(cx - 14, cy + 6, 22, '#c47a32', 0.18 * k);
+  haze(cx + 16, cy, 18, '#eaa860', 0.14 * k);
+  for (const [dx, dy, r] of [[-22, -32, 6], [18, -42, 5], [-4, -54, 4]]) haze(cx + dx, cy + dy, r, '#c47a32', 0.4 * k);
 }
 // 악취 파리 두 마리(검은 몸 + 흰 날개)
 function stenchFlies(cx, cy) {
@@ -798,13 +806,8 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
 // 맞은 파티원 카드 아이콘 위 타격 표시: 박치기는 할퀸 자국, 흩뿌리기는 점액 얼룩, 짓누르기는 충격 별.
 function hitFx(move, cx, cy, color, spore = color, accent = spore) {
   if (move === 'fart') {
-    // 구린 방귀에 맞음: 가스 구름이 아이콘 양옆을 감싸고(이름은 가리지 않게) 위로 작은 구름이 피어오름 + 파리
-    // 왼쪽 상태 배지(약 cx-88~-50)와 오른쪽 피해 숫자(cx+63 부근)는 가리지 않는 폭으로
-    drawPixels(FART_CLOUD, cx - 28, cy + 12, 3);
-    drawPixels(FART_CLOUD, cx + 28, cy + 8, 3);
-    drawPixels(FART_CLOUD, cx, cy + 20, 3);
-    drawPixels(FART_CLOUD, cx - 22, cy - 34, 2);
-    drawPixels(FART_CLOUD, cx + 22, cy - 40, 2);
+    // 구린 방귀에 맞음: 악취 아이콘과 같은 갈색·주황 기운이 아이콘 둘레에 은은하게 퍼지고 파리가 꼬인다
+    stenchHaze(cx, cy, 1.4);
     stenchFlies(cx, cy);
     return;
   }
