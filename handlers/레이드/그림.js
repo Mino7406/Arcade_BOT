@@ -64,6 +64,50 @@ const R = () => fonts.regular;
 function text(s, x, y, size, color, opts = {}) {
   p.text(opts.regular ? R() : B(), s, x, y, { size, color, align: opts.align || 'center', maxWidth: opts.maxWidth });
 }
+// ── 깨진 글자(오염 테마) ──
+// 글자가 깨진 것처럼: 일부 글자를 �(대체 문자)·▒로 바꿔 그리고, errCode면 끝에 ERR_0x?? 오류 코드를 흐리게 붙인다.
+// 같은 글자는 매번 같은 모양으로 깨지게(seed). 나눔고딕에 �·▓·█가 없어 �는 마름모 + ?로 직접 그린다(▒는 글꼴에 있음).
+function seeded(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1103515245 + 12345) >>> 0) / 4294967296); }
+function isCorrupt(monster) { return monster?.theme === 'corrupt'; }
+const REPLACEMENT = '\uFFFD';
+// 깨질 글자 고르기: 공백·문장부호는 빼고 rate 비율(최소 1개)만 �나 ▒로
+function corruptChars(s, seed, rate) {
+  const rnd = seeded(seed * 7919 + s.length);
+  const chars = [...s];
+  const idx = chars.map((ch, i) => (/[\s!?.,()]/.test(ch) ? -1 : i)).filter(i => i >= 0);
+  const n = Math.max(1, Math.round(idx.length * rate));
+  for (let k = 0; k < n && idx.length; k++) {
+    const i = idx.splice(Math.floor(rnd() * idx.length), 1)[0];
+    chars[i] = rnd() < 0.65 ? REPLACEMENT : '▒';
+  }
+  return { chars, code: 'ERR_0x' + Math.floor(rnd() * 256).toString(16).toUpperCase().padStart(2, '0') };
+}
+function glitchText(s, x, y, size, color, { seed = 1, rate = 0.15, errCode = false, maxWidth } = {}) {
+  const { chars, code } = corruptChars(s, seed, rate);
+  const repW = size * 0.86;
+  const charW = (ch) => (ch === ' ' ? size * 0.3 : p.textWidth(B(), ch, size));
+  const widthOf = (ch) => (ch === REPLACEMENT ? repW : charW(ch));
+  const codeSize = Math.round(size * 0.72);
+  const codeW = errCode ? p.textWidth(B(), code, codeSize) + size * 0.4 : 0;
+  let total = chars.reduce((sum, ch) => sum + widthOf(ch), 0) + codeW;
+  const scale = maxWidth && total > maxWidth ? maxWidth / total : 1; // 넘치면 글자 크기를 줄인다
+  const fs_ = size * scale;
+  total *= scale;
+  let cx = x - total / 2;
+  for (const ch of chars) {
+    const w = widthOf(ch) * scale;
+    if (ch === REPLACEMENT) {
+      // 대체 문자 �: 글자색 마름모 + 가운데 배경색 ?
+      const r = fs_ * 0.42, mx = cx + w / 2;
+      p.poly([mx, y - r, mx + r, y, mx, y + r, mx - r, y], color);
+      text('?', mx, y + fs_ * 0.02, Math.round(fs_ * 0.62), C.bg);
+    } else if (ch !== ' ') {
+      text(ch, cx, y, fs_, color, { align: 'left' });
+    }
+    cx += w;
+  }
+  if (errCode) text(code, cx + size * 0.4 * scale, y + fs_ * 0.06, Math.round(codeSize * scale), C.dim, { align: 'left' });
+}
 function bar(x, y, w, h, ratio, color) {
   p.roundRect(x, y, w, h, h / 2, C.hpBack);
   const fw = Math.max(0, Math.min(1, ratio)) * w;
@@ -907,6 +951,7 @@ function cards(members, drawCard, border = () => ({ color: C.gold, width: 2 })) 
 // 다음부터는 복사만 한다. 큰 도형 칠하기가 그림 시간의 대부분이었다(장면당 약 1.7MB × 3장면).
 const backgrounds = new Map();
 function background(key, boxY, boxH) {
+  key += themeKey;
   const cached = backgrounds.get(key);
   if (cached) { cached.copy(painter.buf); return; }
   frame();
@@ -922,12 +967,56 @@ function background(key, boxY, boxH) {
 // render 공통: 엔진 준비 → 그리기 → PNG. 실패하면 null(레이드.js가 글자 화면으로 대신).
 // 전부 동기라 중간에 다른 처리가 끼지 않고, 호출부(레이드.js의 화면 대기열)가 한 번에 하나씩만 부른다.
 // (async인 건 호출부와의 약속일 뿐 — 그리기 시간 측정에 다른 작업이 섞이지 않게 await 없이 끝낸다)
-async function render(scene, draw) {
+// 오염 테마 색: 화면 틀(배경·테두리·상자·제목·리본)만 붉게. 직업 아이콘(ROLE_SPRITES)·HP 바(hpColor)는 자기 색이라 그대로.
+const CORRUPT_C = {
+  bg: '#120507', frame: '#8a1c24', gold: '#ff3a4a', box: '#080203', card: '#1e0a0d', cardEmpty: '#3a1418',
+  orange: '#ff6a5a', sub: '#f2dada', dim: '#7a5a5e', muted: '#b08a8a', hpBack: '#2e1418',
+};
+let themeKey = ''; // 배경 캐시 키 뒤에 붙는다(테마마다 배경을 따로 저장)
+// 모서리 디지털 오염: 화면 네 귀퉁이부터 8px 블록이 붉게 물들거나 까맣게 빠지고, 회로 막대·테두리를 따라 흐르는 세로 줄기.
+// 귀퉁이에서 멀수록 듬성듬성. keep(지킬 상자: 글자·HP 바·배지·카드)에 닿는 블록은 그리지 않는다. 매번 같은 모양(seed).
+function corruptCorners(seed, keep) {
+  const rnd = seeded(seed);
+  const S = 8, R = 118;
+  const hits = (x, y, w, h) => keep.some(([kx, ky, kw, kh]) => x < kx + kw && x + w > kx && y < ky + kh && y + h > ky);
+  for (const [cx, cy, sx, sy] of [[0, 0, 1, 1], [W, 0, -1, 1], [0, H, 1, -1], [W, H, -1, -1]]) {
+    for (let by = 0; by < R; by += S) for (let bx = 0; bx < R; bx += S) {
+      const d = Math.hypot(bx, by) / R;
+      if (d > 1 || rnd() > (1 - d) ** 1.4) continue;
+      const x = sx > 0 ? cx + bx : cx - bx - S, y = sy > 0 ? cy + by : cy - by - S;
+      if (hits(x, y, S, S)) continue;
+      const r = rnd();
+      if (r < 0.45) p.rect(x, y, S, S, ['#96101e', '#5a0812', '#dc2234'][Math.floor(rnd() * 3)]);
+      else if (r < 0.65) p.rect(x, y, S, S, '#060204');
+      else if (r < 0.8) { const w = S * (1 + Math.floor(rnd() * 3)); if (!hits(x, y, w, S)) p.rect(x, y + S / 2 - 1, w, 2, '#ff3c4c'); }
+    }
+    for (let i = 0; i < 4; i++) {
+      const x = sx > 0 ? cx + 6 + rnd() * R * 0.5 : cx - 6 - rnd() * R * 0.5;
+      const len = R * (0.5 + rnd() * 0.7);
+      for (let tt = 0; tt < len; tt += 4) {
+        const y = sy > 0 ? cy + tt : cy - tt - 3;
+        if (rnd() < 0.85 && !hits(x, y, 2, 3)) p.rect(x, y, 2, 3, rnd() < 0.85 ? '#ff2e40' : '#ffc8cc');
+      }
+    }
+  }
+}
+// 장면별 지킬 상자(설계 좌표 900×640) — 모서리 오염이 덮지 않는다
+const CORRUPT_KEEP = {
+  모집: [[90, 10, 720, 92], [280, 262, 340, 66], [20, 362, 860, 260]],
+  전투: [[26, 16, 128, 50], [240, 12, 420, 58], [46, 70, 808, 40], [20, 362, 860, 260], [176, 272, 548, 54], [W - 232, 126, 214, 210]],
+  결과: [[90, 8, 720, 136], [20, 150, 860, 472]],
+};
+async function render(scene, draw, monster = null) {
   if (!load()) return null;
   p = painter;
+  const corrupt = isCorrupt(monster);
+  const savedC = corrupt ? { ...C } : null;
+  const savedRibbon = corrupt ? RIBBON.pending.fill : null;
+  if (corrupt) { Object.assign(C, CORRUPT_C); RIBBON.pending.fill = '#b81c2a'; themeKey = ':corrupt'; }
   try {
     const t0 = process.hrtime.bigint();
     draw();
+    if (corrupt) corruptCorners(scene.length * 31 + 7, CORRUPT_KEEP[scene] ?? []);
     const t1 = process.hrtime.bigint();
     const png = painter.png();
     logRender(scene, Number(t1 - t0) / 1e6, Number(process.hrtime.bigint() - t1) / 1e6, png.length);
@@ -935,6 +1024,8 @@ async function render(scene, draw) {
   } catch (err) {
     console.error(`레이드 ${scene} 그림 실패:`, err);
     return null;
+  } finally {
+    if (corrupt) { Object.assign(C, savedC); RIBBON.pending.fill = savedRibbon; themeKey = ''; }
   }
 }
 
@@ -944,11 +1035,15 @@ function renderRecruit(r) {
     background('recruit', 102, 240);
     const title = '몬스터 출현!';
     const tw = p.textWidth(B(), title, 46);
-    text(title, W / 2, 47, 46, C.gold);
+    if (isCorrupt(r.monster)) glitchText(title, W / 2, 47, 46, C.gold, { seed: 1, rate: 0.2 });
+    else text(title, W / 2, 47, 46, C.gold);
     titleIcon(W / 2 - tw / 2 - 46, 47); titleIcon(W / 2 + tw / 2 + 46, 47);
-    text(`${r.monster.name}${subjectJosa(r.monster.name)} XP 시스템을 망가뜨렸어요!`, W / 2, 84, 21, '#ff8f7a', { maxWidth: W - 120 });
+    const sub = `${r.monster.name}${subjectJosa(r.monster.name)} XP 시스템을 망가뜨렸어요!`;
+    if (isCorrupt(r.monster)) glitchText(sub, W / 2, 84, 21, '#ff8f7a', { seed: 2, rate: 0.1, errCode: true, maxWidth: W - 120 });
+    else text(sub, W / 2, 84, 21, '#ff8f7a', { maxWidth: W - 120 });
     drawMonster(r.monster, W / 2, 206, 112);
-    text(r.monster.name, W / 2, 298, 38, C.gold);
+    if (isCorrupt(r.monster)) glitchText(r.monster.name, W / 2, 298, 38, C.gold, { seed: 3 });
+    else text(r.monster.name, W / 2, 298, 38, C.gold);
     cards(r.party, (x, y, w, h, roleKey, m) => {
       const role = ROLES[roleKey];
       roleIcon(roleKey, x + w / 2, y + 50, !m);
@@ -959,7 +1054,7 @@ function renderRecruit(r) {
       pill(x + 14, y + 176, w - 28, 34, role.skill.name, 20);
       text(m ? '참가 완료' : '참가 대기', x + w / 2, y + 234, 22, m ? C.ok : C.muted);
     });
-  });
+  }, r.monster);
 }
 
 // 카드 상태: 아직 고르지 않음(주황 리본·굵은 금테) / 고름(초록 리본·초록테, 고른 행동 표시) / 쓰러짐(회색).
@@ -1041,7 +1136,8 @@ function renderBattle(r) {
     const name = b.rage ? m.rageName : m.name;
     const NAME_MAX = 420;
     const nw = Math.min(p.textWidth(B(), name, 36), NAME_MAX);
-    text(name, W / 2, 41, 36, b.rage ? C.red : C.gold, { maxWidth: NAME_MAX });
+    if (isCorrupt(m)) glitchText(name, W / 2, 41, 36, b.rage ? C.red : C.gold, { seed: 4, maxWidth: NAME_MAX });
+    else text(name, W / 2, 41, 36, b.rage ? C.red : C.gold, { maxWidth: NAME_MAX });
     if (b.rage) {
       p.roundRect(W / 2 + nw / 2 + 12, 24, 64, 34, 8, '#5c1410');
       text('분노', W / 2 + nw / 2 + 44, 41, 22, '#ffb4a8');
@@ -1273,7 +1369,7 @@ function renderBattle(r) {
     }, (mem) => {
       const state = memberState(b, mem, r.showingResult);
       if (usedMove && last?.hits[mem.userId]) return { color: '#ff4a3a', width: 4 }; // 이번 턴에 맞은 카드
-      if (state === 'pending') return { color: '#ffb52e', width: 4 };
+      if (state === 'pending') return { color: isCorrupt(m) ? '#ff3a4a' : '#ffb52e', width: 4 }; // 오염 테마는 붉은 테두리
       if (state === 'ready') return { color: '#3ecf6e', width: 2.5 };
       if (state === 'stunned') return { color: '#ffd23f', width: 2.5 };
       return null;
@@ -1287,7 +1383,7 @@ function renderBattle(r) {
         curseLink(W / 2, monsterY, 20 + i * (CARD_W + CARD_GAP) + CARD_W / 2, CARD_Y + 86);
       }
     }
-  });
+  }, r.battle?.monster ?? r.monster);
 }
 
 // ── 종료 화면 ──────────────────────────────────────────────────
@@ -1355,7 +1451,8 @@ function renderEnd(r, outcome, rewards = []) {
       p.roundRect(mcx - 34, 172, 68, 28, 8, '#5c1410');
       text('도주', mcx, 186, 17, '#ffb4a8');
     }
-    text(r.monster.name, mcx, 362, 28, C.gold, { maxWidth: LP.w - 30 });
+    if (isCorrupt(r.monster)) glitchText(r.monster.name, mcx, 362, 28, C.gold, { seed: 5, maxWidth: LP.w - 30 });
+    else text(r.monster.name, mcx, 362, 28, C.gold, { maxWidth: LP.w - 30 });
     if (b) {
       statRow('턴', `${b.turn}턴`, 420);
       statRow('걸린 시간', r.battleStartedAt ? formatDuration((r.endedAt || Date.now()) - r.battleStartedAt) : '-', 470);
@@ -1401,7 +1498,7 @@ function renderEnd(r, outcome, rewards = []) {
       if (reward) pill(COL.reward - 34, y + 27, 68, 32, `+${reward.xp}`, 20, mvp ? '#6b4e12' : '#1f4a2c', mvp ? '#ffe39a' : '#bff0cf');
       else text('-', COL.reward, y + 43, 22, C.dim);
     });
-  });
+  }, r.monster);
 }
 
 // ── 미리 데우기 ────────────────────────────────────────────────

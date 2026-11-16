@@ -142,6 +142,8 @@ function clock(deadline, withHours = false) {
 }
 // 컨테이너(임베드 창) 왼쪽 색 줄: 모집 빨강 · 전투 금색 · 분노 빨강 · 클리어 초록 · 그 외 종료 회색
 const ACCENT = { recruit: 0xED4245, battle: 0xD9A93F, rage: 0xED4245, clear: 0x57F287, end: 0x4E5058 };
+// 오염 테마 몬스터(monster.theme 'corrupt')는 모집·전투·결과 카드 색 띠를 전부 짙은 붉은색으로
+const accentOf = (r, accent) => (r?.monster?.theme === 'corrupt' ? 0xB81C2A : accent);
 
 function bar(value, max, length) {
   const filled = Math.max(0, Math.min(length, Math.round((value / max) * length)));
@@ -245,7 +247,7 @@ async function recruitView(r, { redraw = true } = {}) {
     text: `> 🎁 **보상** : +${CLEAR_XP} XP · ${hackToolEmoji()} ${HACK_TOOL_NAME} 1개\n` +
       '> ▶️ **바로 시작** : 첫 참가자가 방장이 되며 시작 여부를 결정할 수 있어요.',
   });
-  return assemble(ACCENT.recruit, image, sections);
+  return assemble(accentOf(r, ACCENT.recruit), image, sections);
 }
 
 function memberStatus(b, mem) {
@@ -364,7 +366,7 @@ async function battleView(r, { redraw = true } = {}) {
   });
   // 전투 전체 제한 시간은 턴 타이머와 헷갈리지 않게 버튼 아래 작은 글씨로 따로 둔다.
   sections.push({ text: `-# ⌛ 전투 종료까지 ${clock(r.battleEndsAt)}` });
-  return assemble(b.rage ? ACCENT.rage : ACCENT.battle, image, sections);
+  return assemble(accentOf(r, b.rage ? ACCENT.rage : ACCENT.battle), image, sections);
 }
 
 const OUTCOME_TEXT = {
@@ -488,7 +490,7 @@ async function endView(r, outcome, rewards = []) {
   } else {
     sections.push({ text: endSummary(r, outcome, rewards) });
   }
-  return assemble(outcome === 'clear' ? ACCENT.clear : ACCENT.end, image, sections);
+  return assemble(accentOf(r, outcome === 'clear' ? ACCENT.clear : ACCENT.end), image, sections);
 }
 
 // ❔ 플레이 방법(본인에게만). 모든 몬스터에 공통인 규칙만 담는다 — 점액·단단해지기·재생처럼 몬스터마다
