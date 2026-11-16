@@ -598,6 +598,17 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     assert(shown.includes('JACKPOT') && shown.includes('블랙월 게이트웨이 사용'), '게이트웨이를 사용하고 돌리면 결과가 JACKPOT + 발동 표시');
     const left = gw.getGateways('g1', 'gwuser');
     assert(left === 1 || left === Infinity, '아이템은 돌릴 때 1개만 소모됨(남은 ' + left + '개)');
+    // 사용 버튼을 누르면 걸 수 있는 최댓값으로 자동 베팅 — 베팅을 따로 고르지 않아도 바로 돌릴 수 있다
+    // (룰렛은 하루 1회라 위에서 돌린 gwuser 와 다른 유저로)
+    lv.applyXp('g1', 'gwuser2', 800, 'test'); gw.grantGateway('g1', 'gwuser2');
+    const s2 = mkInteraction({ user: 'gwuser2', command: '룰렛' });
+    await roulette.startRouletteCommand(s2);
+    channel.sent.length = 0;
+    await roulette.handleRouletteButton(mkInteraction({ user: 'gwuser2', customId: `roulette:gate:${s2.id}`, message: s2._reply }));
+    const spin2 = mkInteraction({ user: 'gwuser2', customId: `roulette:spin:${s2.id}`, message: s2._reply });
+    await roulette.handleRouletteButton(spin2);
+    const shown2 = channel.sent.map(m => JSON.stringify(m.components || [])).join(' ');
+    assert(shown2.includes('JACKPOT') && !JSON.stringify(spin2._replied ?? '').includes('먼저 베팅'), '게이트웨이 사용 버튼만 눌러도 최대 베팅으로 자동 베팅 → 바로 돌려 JACKPOT');
   });
 
   // ── 룰렛 동시 사용 부하: 여러 명이 한꺼번에 돌려도 모두 결과를 받고 서버가 버텨야 한다 ──

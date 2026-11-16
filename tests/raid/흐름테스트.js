@@ -1132,7 +1132,7 @@ let ok4;
         const mV = raidMsg();
         const t0 = mV ? textOf(mV) : '';
         assert(!errV && lv.isRaidXpFrozen(), '??? 출현 → XP 정지');
-        assert(t0.includes('ERR_0x7F') && t0.includes('지금까지 잃은 XP :** ' + '`-0.0 XP`') && !/## ⏳ \d\d:\d\d:\d\d/.test(t0) && t0.includes('패배 0회') && t0.includes('보상** : +1000 XP') && !t0.includes('MVP는 여기에'), '??? 모집 화면: 전용 문구 · 잃은 XP · 깨진 시계(남은 시간 없음) · 보상은 +1000 XP만');
+        assert(t0.includes('ERR_0x7F') && t0.includes('지금까지 잃은 XP :** ' + '`-0.0 XP`') && !/## ⏳ \d\d:\d\d:\d\d/.test(t0) && t0.includes('패배 0회') && t0.includes('보상** : +2000 XP') && !t0.includes('MVP는 여기에'), '??? 모집 화면: 전용 문구 · 잃은 XP · 깨진 시계(남은 시간 없음) · 보상은 +1000 XP만');
         await runTimers(); await settle();
         assert(mod.getRaidStatus('gMain').active && mod.getRaidStatus('gMain').monsterName === '???', '모집 시간이 지나도 도주하지 않음(마감 타이머 없음)');
         // 대기 차감: 10분 흐른 것으로 하고 틱 → 분당 3~5 XP × 10분 = -30~-50(소수점은 이월되므로 29 이상)
@@ -1166,7 +1166,7 @@ let ok4;
         assert(modW.isPlaygroundPaused('gMain') && textOf(mW).includes('TURN 1'), '재시작 후 ??? 전투 이어가기');
         await press(modW, mW, 'v1', 'raid:act:attack');
         await press(modW, mW, 'v2', 'raid:act:attack'); // 둘 다 골라야 턴이 진행된다(검사가 먼저 쓰러뜨리면 궁수는 행동하지 않아 보상 없음)
-        assert(lv.getXp('gMain', 'v1') === before.v1 + 1000 && lv.getXp('gMain', 'v2') === before.v2, '토벌 보상: 1000 XP(MVP도 같음, 직접 행동한 사람만)');
+        assert(lv.getXp('gMain', 'v1') === before.v1 + 2000 && lv.getXp('gMain', 'v2') === before.v2, '토벌 보상: 2000 XP(MVP도 같음, 직접 행동한 사람만)');
         assert(gw.getGateways('gMain', 'v1') === 1 && gw.getGateways('gMain', 'v2') === 0 && ht.getHackTools('gMain', 'v1') === 0 , 'MVP에게만 블랙월 게이트웨이(MVP는 해킹 툴 대신 게이트웨이)');
         assert(textOf(mW).includes('블랙월 게이트웨이') && !lv.isRaidXpFrozen(), '결과 화면에 아이템 표시 + XP 시스템 복구');
         // 블랙월 게이트웨이 아이템 사용은 개수만큼만(룰렛에서 발동하면 100% 잭팟 — 룰렛 쪽은 상호작용 테스트)

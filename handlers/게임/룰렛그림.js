@@ -601,6 +601,7 @@ function mixErosion(p, A, erosion, seed) {
 
 // 룰렛 그림 한 장(PNG). wall 이고 erosion(0~1 미만)이 있으면 평범한 룰렛이 블랙월로 침식당하는 중간 모습.
 function renderSlot(o = {}) {
+  if (o.wall && o.erosion === 0) return paintSlot({ ...o, wall: false, hacked: false }).png(); // 잠식 0단계: 멀쩡한 평범한 룰렛
   if (o.wall && o.erosion != null && o.erosion < 1) {
     const normal = paintSlot({ ...o, wall: false, hacked: false });
     const A = Buffer.from(normal.buf);

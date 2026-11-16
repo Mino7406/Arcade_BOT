@@ -19,11 +19,11 @@ const ROULETTE_PATH = path.join(__dirname, '..', '..', 'DB', 'roulette.json');
 fs.mkdirSync(path.dirname(ROULETTE_PATH), { recursive: true });
 
 const MIN_BET = 10;
-const MAX_BET = 500; // 300에서 상향(유저 평균 레벨이 올라 한 레벨에 필요한 XP가 커짐 — 중앙값 820·상위 25% 2,180)
-const BET_PRESETS = [10, 100, 300, 500]; // 한 줄 버튼 최대 5개
+const MAX_BET = 300;
+const BET_PRESETS = [10, 50, 100, 200, 300]; // 한 줄 버튼 최대 5개
 const LOBBY_TIMEOUT_MS = 60 * 1000;
 const WALL_COLOR = 0xB81C2A; // 블랙월 게이트웨이를 발동한 룰렛 카드 띠 색(붉은)
-const WALL_FOOTER = '⏰ 블랙월 ▓▒░ [ACCESS_GRANTED] 잭팟 확정';
+const wallFooter = () => `${gatewayEmoji()} 블랙월 프로토콜 업로드 완료. [ACCESS_GRANTED]`; // 이모지는 봇이 켜진 뒤에야 정해지므로 쓸 때마다 만든다
 const HACK_COLOR = 0x8B7CF6; // 해킹 툴 확인 메시지 띠 색(이모지와 맞춘 보라)
 const HACK_PROMPT_MS = 60 * 1000; // 꽝이 나온 뒤 해킹 툴을 쓸지 고르는 시간(지나면 결과 확정)
 
@@ -213,15 +213,16 @@ function buildSpinningPayload(lobby, bet, reels, phase = 0, hacks = 0, wall = fa
 }
 
 // 블랙월 게이트웨이 발동: 돌리기 전에 평범한 룰렛이 가장자리부터 블랙월에 잠식당하는 장면(step 0~3, erosion 은 번진 정도).
-const WALL_EROSION = [0.2, 0.45, 0.7, 0.92];
+const WALL_EROSION = [0, 0.2, 0.45, 0.7, 0.92]; // 0단계는 잠식 전 멀쩡한 룰렛, 1~4단계가 잠식
 function buildWallErosionPayload(lobby, bet, step) {
-  const png = renderSlot({ reels: [null, null, null], bet, phase: step, right: '잠식 중...', rightColor: '#ff6a78', hacked: true, wall: true, erosion: WALL_EROSION[step] });
+  const intact = step === 0;
+  const png = renderSlot({ reels: [null, null, null], bet, phase: step, right: intact ? '' : '잠식 중...', rightColor: '#ff6a78', hacked: !intact, wall: true, erosion: WALL_EROSION[step] });
   return payload(card({
     color: WALL_COLOR,
     header: `${gatewayEmoji()} 룰렛머신`,
     sub: [`<@${lobby.userId}>`, `${gatewayEmoji()} ${GATEWAY_NAME} 사용`],
     blocks: [{ image: SLOT_URL, divider: true }],
-    footer: `${gatewayEmoji()} 블랙월이 룰렛을 잠식하는 중... ${'▓'.repeat(step + 1)}${'░'.repeat(Math.max(0, 3 - step))}`,
+    footer: intact ? `${gatewayEmoji()} ${GATEWAY_NAME} 가동...` : `${gatewayEmoji()} 블랙월이 룰렛을 잠식하는 중... ${'▓'.repeat(step)}${'░'.repeat(Math.max(0, WALL_EROSION.length - 1 - step))}`,
   }), { files: [slotFile(png)] });
 }
 
@@ -259,7 +260,7 @@ function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multi
       { image: SLOT_URL, divider: true }, // 제목·결과 줄 아래 구분선
       `### ${resultLine}　${netLine}`, // 결과와 손익을 한 줄에
     ],
-    footer: gateway ? WALL_FOOTER : hacks > 0 ? HACK_FOOTER : '⏰ 하루에 한 번만 돌릴 수 있어요.',
+    footer: gateway ? wallFooter() : hacks > 0 ? HACK_FOOTER : '⏰ 하루에 한 번만 돌릴 수 있어요.',
   }), { files: [slotFile(png)], ...extra });
 }
 
@@ -673,6 +674,7 @@ async function handleRouletteButton(interaction) {
   if (action === 'gate') {
     if (!(lobby.gateways > 0)) { await interaction.reply(notice(`⚠️ **${GATEWAY_NAME}가 없어요.**`, { ephemeral: true })); return; }
     lobby.gatewayArmed = !lobby.gatewayArmed;
+    if (lobby.gatewayArmed && lobby.maxAvailable >= MIN_BET) lobby.bet = lobby.maxAvailable; // 사용하면 걸 수 있는 최댓값으로 자동 베팅(바로 🎰 돌리기가 켜짐)
     await interaction.update(buildLobbyPayload(lobby));
     return;
   }

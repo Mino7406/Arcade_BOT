@@ -236,7 +236,7 @@ async function buildScreens() {
   add('룰렛', '게이트웨이 — 로비(사용됨)', '사용하면 버튼이 초록 "사용됨"으로 바뀜(다시 누르면 취소)', gwL1, rlWith(gwL1));
   for (let step = 0; step < rl.WALL_EROSION.length; step++) {
     const er = rl.buildWallErosionPayload(rlb, 300, step);
-    add('룰렛', `게이트웨이 — 돌리기 전 잠식 ${step + 1}/${rl.WALL_EROSION.length}`, ['평범한 룰렛이 가장자리부터 붉은 선·막대·테두리 사각형으로 잠식당함', '잠식이 번져 나감', '대부분 블랙월로 덮임', '거의 다 덮임 — 곧 블랙월 룰렛이 돌아감'][step], er, rlWith(er));
+    add('룰렛', `게이트웨이 — 돌리기 전 잠식 ${step}/${rl.WALL_EROSION.length - 1}`, ['사용 직후 — 아직 멀쩡한 평범한 룰렛', '평범한 룰렛이 가장자리부터 붉은 선·막대·테두리 사각형으로 잠식당함', '잠식이 번져 나감', '대부분 블랙월로 덮임', '거의 다 덮임 — 곧 블랙월 룰렛이 돌아감'][step], er, rlWith(er));
   }
   const gwSpin = rl.buildSpinningPayload(rlb, 300, ['7️⃣', null, null], 1, 0, true);
   add('룰렛', '게이트웨이 — 잠식이 끝난 뒤 도는 중', '완전히 블랙월이 된 룰렛 · 릴엔 7️⃣만 돎', gwSpin, rlWith(gwSpin));
@@ -430,11 +430,11 @@ async function buildScreens() {
     add('레이드', '??? — 패배 채널 안내', '도주하지 않음 · 모든 유저 -200 XP · 지금까지 1인당 잃은 XP', defeatNote);
     const er = vb('attack'); er.phase = 'ended'; er.endedAt = Date.now(); er.frozenAt = Date.now() - 5 * H; er.battle.hp = 0;
     const ev = await raidMod.endView(er, 'clear', [
-      { userId: '100', xp: 1000, mvp: true, hackTool: false, gateway: true },
-      { userId: '101', xp: 1000, mvp: false, hackTool: true, gateway: false },
-      { userId: '102', xp: 1000, mvp: false, hackTool: true, gateway: false },
+      { userId: '100', xp: 2000, mvp: true, hackTool: false, gateway: true },
+      { userId: '101', xp: 2000, mvp: false, hackTool: true, gateway: false },
+      { userId: '102', xp: 2000, mvp: false, hackTool: true, gateway: false },
     ]);
-    add('레이드', '??? — 토벌 성공 결과', '파티원 +1000 XP + 해킹 툴 1개 · MVP는 +1000 XP + 🌐 블랙월 게이트웨이(MVP는 해킹 툴 대신)', ev, rf(ev));
+    add('레이드', '??? — 토벌 성공 결과', '파티원 +2000 XP + 해킹 툴 1개 · MVP는 +2000 XP + 🌐 블랙월 게이트웨이(MVP는 해킹 툴 대신)', ev, rf(ev));
     void pn;
   }
   const endR = (outcome, rewards) => { const rr = startBattle(m0); rr.phase = 'ended'; rr.endedAt = Date.now(); rr.frozenAt = Date.now() - 20 * 60e3; if (outcome === 'clear') rr.battle.hp = 0; return raidMod.endView(rr, outcome, rewards); };
