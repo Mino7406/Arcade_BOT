@@ -783,6 +783,14 @@ function tierLine(game, tier) {
   return `${id ? `<:t:${id}> ` : ''}**${tiers.tierLabel(game, tier)}**`;
 }
 
+// 버튼 줄: 기능 버튼들은 첫 줄, ↩️ 뒤로는 늘 따로 둘째 줄(내 티어 설정 모든 화면 공통)
+function buttonRows(main = [], back = null) {
+  const rows = [];
+  if (main.length) rows.push(new ActionRowBuilder().addComponents(...main));
+  if (back) rows.push(new ActionRowBuilder().addComponents(back));
+  return rows;
+}
+
 function backButton(id, label) {
   return new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(ButtonStyle.Secondary);
 }
@@ -880,10 +888,10 @@ function buildResetAllConfirmPayload() {
     header: '🗑️ 전체 초기화',
     sub: '🏅 내 티어 설정',
     blocks: ['저장한 **모든 게임의 티어와 포지션(역할)** 을 지울까요?\n-# 지우면 되돌릴 수 없어요.'],
-    rows: [new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('team:tier_resetall_ok:panel').setLabel('🗑️ 모두 지우기').setStyle(ButtonStyle.Danger),
+    rows: buttonRows(
+      [new ButtonBuilder().setCustomId('team:tier_resetall_ok:panel').setLabel('🗑️ 모두 지우기').setStyle(ButtonStyle.Danger)],
       backButton('team:tier_games:panel', '↩️ 뒤로'),
-    )],
+    ),
   }), { ephemeral: true });
 }
 
@@ -898,7 +906,7 @@ function buildOwRolesPayload(matchMsgId, userId) {
       .setStyle(rt[r.key] ? ButtonStyle.Success : ButtonStyle.Secondary);
     return emoji ? b.setEmoji(emoji) : b;
   });
-  if (matchMsgId === 'panel') buttons.push(backButton('team:tier_games:panel', '↩️ 뒤로'));
+  const back = matchMsgId === 'panel' ? backButton('team:tier_games:panel', '↩️ 뒤로') : null;
   return payload(tierCard('overwatch', {
     header: '🏅 내 티어 설정',
     thumbTier: tiers.getTier(userId, 'overwatch'),
@@ -906,7 +914,7 @@ function buildOwRolesPayload(matchMsgId, userId) {
       `**역할별 티어**\n${tiers.OW_ROLES.map(r => `${tiers.positionIcon('overwatch', r.key)} **${r.name}**　${tierLine(`overwatch.${r.key}`, rt[r.key])}`).join('\n')}`,
       `**어느 역할 티어를 설정할까요?**\n-# 하는 역할만 저장하면 돼요 · 6vs6은 ${tiers.positionIcon('overwatch', 'open')} 자유 티어를 써요`, // 안내를 질문과 같은 칸에(사이 구분선 없이)
     ],
-    rows: [new ActionRowBuilder().addComponents(...buttons)],
+    rows: buttonRows(buttons, back),
   }), { ephemeral: true });
 }
 
@@ -968,9 +976,9 @@ function buildTierPickPayload(gk, matchMsgId, userId) {
   // 🔄 초기화: 이 게임(오버워치는 이 롤)의 티어와 포지션을 한 번에 지운다. 저장된 게 있을 때만.
   const hasSaved = mine || (tiers.POSITIONS[game] && tiers.getPositions(userId, game).length);
   if (hasSaved) buttons.push(new ButtonBuilder().setCustomId(`team:tier_reset:${gk}:${matchMsgId}`).setLabel('🔄 초기화').setStyle(ButtonStyle.Danger));
-  if (role) buttons.push(backButton(`team:tier_roles:${matchMsgId}`, '↩️ 뒤로'));
-  else if (matchMsgId === 'panel') buttons.push(backButton('team:tier_games:panel', '↩️ 뒤로'));
-  if (buttons.length) rows.push(new ActionRowBuilder().addComponents(...buttons));
+  const back = role ? backButton(`team:tier_roles:${matchMsgId}`, '↩️ 뒤로')
+    : matchMsgId === 'panel' ? backButton('team:tier_games:panel', '↩️ 뒤로') : null;
+  rows.push(...buttonRows(buttons, back));
   const blocks = [savedSummary(gk, userId)];
   return payload(tierCard(gk, {
     header: '🏅 내 티어 설정',
@@ -1011,11 +1019,10 @@ function buildTierScoreAskPayload(game, key, matchMsgId) {
     header: t.name,
     thumbTier: { tier: key },
     blocks: [`점수(${unit})를 적으면 팀이 더 고르게 나뉘어요.\n-# 안 적어도 돼요.`],
-    rows: [new ActionRowBuilder().addComponents(
+    rows: buttonRows([
       new ButtonBuilder().setCustomId(`team:tier_score:${game}:${key}:${matchMsgId}`).setLabel(`✏️ ${unit} 적기`).setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId(`team:tier_save:${game}:${key}:${matchMsgId}`).setLabel('점수 없이 저장').setStyle(ButtonStyle.Primary),
-      backButton(`team:tier_back:${game}:${matchMsgId}`, '↩️ 뒤로'),
-    )],
+    ], backButton(`team:tier_back:${game}:${matchMsgId}`, '↩️ 뒤로')),
   }));
 }
 
@@ -1037,7 +1044,7 @@ function buildTierSavedPayload(gk, tier, matchMsgId, userId) {
   const buttons = [];
   const askPos = tier && tiers.POSITIONS[game];
   if (askPos) buttons.push(new ButtonBuilder().setCustomId(`team:tier_posset:${game}:${matchMsgId}`).setLabel(`🧭 ${tiers.POSITION_WORD[game]} 설정`).setStyle(ButtonStyle.Primary));
-  buttons.push(backButton(backId, '↩️ 뒤로'));
+  const back = backButton(backId, '↩️ 뒤로');
   const blocks = [tier ? `## ${tierLine(gk, tier)}` : '-# 다시 설정하려면 ↩️ 뒤로를 눌러 주세요.'];
   if (askPos && !tiers.getPositions(userId, game).length) blocks.push(`-# 🧭 ${tiers.POSITION_WORD[game]}도 정해 두면 ${game === 'lol' ? '팀을 나눌 때 겹치지 않게 맞춰 줘요' : '팀 카드에 보여요'}.`);
   return payload(tierCard(gk, {
@@ -1045,7 +1052,7 @@ function buildTierSavedPayload(gk, tier, matchMsgId, userId) {
     thumbTier: tier,
     blocks,
     footer: tier ? '내전 팀 설정에 바로 적용돼요' : undefined,
-    rows: [new ActionRowBuilder().addComponents(...buttons)],
+    rows: buttonRows(buttons, back),
   }));
 }
 
