@@ -32,7 +32,7 @@ const { grantHackTool, HACK_TOOL_NAME, hackToolWith, hackToolEmoji } = require('
 const { GATEWAY_NAME, gatewayEmoji, grantGateway } = require('../게임/블랙월게이트웨이');
 const { displayNameFromInteraction } = require('../공통/이름');
 const {
-  PLAYER_MAX_HP, POTIONS_PER_BATTLE, POTION_HEAL, GUARD_DAMAGE_RATE, ROLES, ROLE_ORDER, ACTIONS, MONSTERS,
+  PLAYER_MAX_HP, POTIONS_PER_BATTLE, POTION_HEAL, GUARD_DAMAGE_RATE, ROLES, ROLE_ORDER, ACTIONS, MONSTERS, ALL_MONSTERS,
   createBattle, checkChoice, choose, allChosen, resolveTurn,
   isErrored, errorTurnsLeft, isVulnerable, vulnTurnsLeft, isDoomed,
   isStunned, slowTurnsLeft, isShielded, isPowered, poisonTurnsLeft, poisonStacks, poisonDamage, isConfused, chillStacks, isFeared, isPhased, isStenched, stenchTurnsLeft, minionsAlive, isWeak, weakTurnsLeft, telegraphText, isWarnIntent, minusPct, contribution,
@@ -794,7 +794,10 @@ function startCountdown(r) {
 async function spawnRaid(client, channel, { forced = false, monsterId = null } = {}) {
   if (raids.has(channel.guildId)) return '이 서버에 이미 진행 중인 레이드가 있어요.';
   if (!MONSTERS.length) return '등록된 몬스터가 없어요. Monster 폴더의 JSON 파일과 콘솔 오류를 확인하세요.';
-  const monster = monsterId ? MONSTERS.find(m => m.id === monsterId) : MONSTERS[Math.floor(Math.random() * MONSTERS.length)];
+  // 꺼 둔 몬스터(???)는 테스트 서버에서 관리자가 직접 고를 때만 소환된다(무작위·자동 출현·본서버는 제외)
+  const monster = monsterId
+    ? (MONSTERS.find(m => m.id === monsterId) ?? (isExcludedGuild(channel.guildId) ? ALL_MONSTERS.find(m => m.id === monsterId) : undefined))
+    : MONSTERS[Math.floor(Math.random() * MONSTERS.length)];
   if (!monster) return '그 몬스터를 찾을 수 없어요. 다시 골라 주세요.';
   const now = Date.now();
   const r = {
@@ -1190,7 +1193,7 @@ async function resumeRaid(client, message, saved) {
   const info = saved?.phase ? saved : readLegacyRecruit(message);
   if (!info || (info.phase !== 'recruit' && info.phase !== 'battle')) return false;
   if (info.phase === 'battle' && !info.battle) return false;
-  const monster = MONSTERS.find(x => x.id === info.monsterId) ?? MONSTERS[0];
+  const monster = MONSTERS.find(x => x.id === info.monsterId) ?? ALL_MONSTERS.find(x => x.id === info.monsterId) ?? MONSTERS[0]; // 이미 출현한 레이드는 꺼 둔 몬스터여도 이어간다
   const now = Date.now();
   const r = {
     client,

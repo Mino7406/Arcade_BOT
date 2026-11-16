@@ -28,7 +28,7 @@ const {
 const { logAction } = require('../공통/로그');
 const { HACK_TOOL_NAME, HACK_TOOL_MAX, getHackTools, grantHackTool, useHackTool, hackToolEmoji, hackToolButtonEmoji } = require('../게임/해킹툴');
 const { getRaidStatus, setAutoSpawn, setNextSpawnAt, setNextMonster, forceSpawnRaid, forceEndRaid } = require('../레이드');
-const { MONSTERS } = require('../레이드/전투');
+const { MONSTERS, ALL_MONSTERS } = require('../레이드/전투');
 const { kstDateTimeString, parseKstDateTime } = require('../공통/시간');
 const { displayNameFromMember } = require('../공통/이름');
 
@@ -169,7 +169,8 @@ function raidButton(raid) {
 function buildRaidPickView(guildId, notice) {
   const buttons = [
     new ButtonBuilder().setCustomId('xp:summon:random').setEmoji('🎲').setLabel('무작위').setStyle(ButtonStyle.Primary),
-    ...MONSTERS.map(m => new ButtonBuilder().setCustomId(`xp:summon:${m.id}`).setEmoji(m.emoji).setLabel(m.name).setStyle(ButtonStyle.Danger)),
+    ...(isExcludedGuild(guildId) ? ALL_MONSTERS : MONSTERS).map(m => new ButtonBuilder().setCustomId(`xp:summon:${m.id}`) // 테스트 서버는 꺼 둔 몬스터(???)도 고를 수 있다
+    .setEmoji(m.emoji).setLabel(m.name).setStyle(ButtonStyle.Danger)),
   ];
   const rows = [];
   for (let i = 0; i < buttons.length && rows.length < 4; i += 5) rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
