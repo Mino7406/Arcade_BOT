@@ -241,7 +241,7 @@ async function recruitView(r, { redraw = true } = {}) {
     });
     sections.push({
       text: `## ⏳ \`${glitchClock()}\` ░TIME_ERR\n` +
-        `📉 **지금까지 잃은 XP : -${Math.round(r.lostPerUser || 0).toLocaleString()} XP** *(1인당)*\n` +
+        `📉 **지금까지 잃은 XP :** \`-${Math.round(r.lostPerUser || 0).toLocaleString()} XP\` *(1인당)*\n` +
         `💀 **패배 ${r.defeatStacks || 0}회** · 패배 1회마다 모든 유저 **-${rules.defeatPenaltyXp ?? 0} XP**\n` +
         `**파티 ${r.party.length} / ${PARTY_MAX}** · 역할 버튼을 눌러 참가하세요`,
     });

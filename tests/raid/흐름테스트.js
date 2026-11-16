@@ -1132,7 +1132,7 @@ let ok4;
         const mV = raidMsg();
         const t0 = mV ? textOf(mV) : '';
         assert(!errV && lv.isRaidXpFrozen(), '??? 출현 → XP 정지');
-        assert(t0.includes('ERR_0x7F') && t0.includes('지금까지 잃은 XP : -0 XP') && !/## ⏳ \d\d:\d\d:\d\d/.test(t0) && t0.includes('패배 0회') && t0.includes('보상** : +1000 XP') && !t0.includes('MVP는 여기에'), '??? 모집 화면: 전용 문구 · 잃은 XP · 깨진 시계(남은 시간 없음) · 보상은 +1000 XP만');
+        assert(t0.includes('ERR_0x7F') && t0.includes('지금까지 잃은 XP :** ' + '`-0 XP`') && !/## ⏳ \d\d:\d\d:\d\d/.test(t0) && t0.includes('패배 0회') && t0.includes('보상** : +1000 XP') && !t0.includes('MVP는 여기에'), '??? 모집 화면: 전용 문구 · 잃은 XP · 깨진 시계(남은 시간 없음) · 보상은 +1000 XP만');
         await runTimers(); await settle();
         assert(mod.getRaidStatus('gMain').active && mod.getRaidStatus('gMain').monsterName === '???', '모집 시간이 지나도 도주하지 않음(마감 타이머 없음)');
         // 대기 차감: 10분 흐른 것으로 하고 틱 → 5초마다 3~5 XP × 120번 = -360~-600
@@ -1140,7 +1140,7 @@ let ok4;
         await at(10 * 60_000, async () => { await runTimers(); await settle(); });
         const lost10 = v1a - lv.getXp('gMain', 'v1');
         assert(lost10 >= 360 && lost10 <= 600 && lv.getXp('gMain', 'v2') === Math.max(0, v2a - lost10), `대기 10분 → 모든 유저 같은 양 -${lost10} XP(5초마다 3~5, 360~600 범위)`);
-        assert(textOf(raidMsg()).includes(`지금까지 잃은 XP : -${lost10} XP`) && !textOf(raidMsg()).includes('도주하지 않아요'), '대기창에 지금까지 잃은 XP 표시(차감 속도·도주 안내 문구는 없음)');
+        assert(textOf(raidMsg()).includes('지금까지 잃은 XP :** ' + '`-' + lost10 + ' XP`') && !textOf(raidMsg()).includes('도주하지 않아요'), '대기창에 지금까지 잃은 XP 표시(차감 속도·도주 안내 문구는 없음)');
         // 전투 시작(차감 멈춤) → 시간 초과 패배 → 도주하지 않고 다시 모집 + 모든 유저 -200
         await press(mod, raidMsg(), '11', 'raid:role:sword'); await press(mod, raidMsg(), '12', 'raid:role:archer');
         await press(mod, raidMsg(), '11', 'raid:start'); await settle();
