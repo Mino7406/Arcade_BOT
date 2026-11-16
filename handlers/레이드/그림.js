@@ -1376,10 +1376,13 @@ function renderBattle(r) {
       const tele = telegraphText(b); // 표식 대상 이름·연막을 반영한 예고 문구
       const boxW = 540, boxH = 46, boxX = (W - boxW) / 2, boxY = 276;
       const midY = boxY + boxH / 2;
-      p.roundRect(boxX, boxY, boxW, boxH, 11, warn ? '#4a1410' : '#201810');
-      p.strokeRoundRect(boxX, boxY, boxW, boxH, 11, 1.5, warn ? C.red : C.frame);
-      p.roundRect(boxX + 9, boxY + 9, 94, 28, 7, warn ? '#7a1f16' : '#3a2f22');
-      text('다음 행동', boxX + 56, midY, 16, warn ? '#ffd0c4' : C.muted);
+      // ??? 같은 터미널 몬스터(ui.moveBanner)는 검은 명령줄 칸 + '> NEXT' 칩 + 깜빡이는 커서
+      const term = m.ui?.moveBanner === 'terminal';
+      p.roundRect(boxX, boxY, boxW, boxH, term ? 3 : 11, term ? '#0a0204' : warn ? '#4a1410' : '#201810');
+      p.strokeRoundRect(boxX, boxY, boxW, boxH, term ? 3 : 11, 1.5, term ? (warn ? '#ff2a3c' : '#8a1424') : warn ? C.red : C.frame);
+      if (term) p.rect(boxX + 3, boxY + 3, boxW - 6, 3, '#3a0a12');
+      p.roundRect(boxX + 9, boxY + 9, 94, 28, term ? 2 : 7, term ? (warn ? '#7a0f1c' : '#3a0a12') : warn ? '#7a1f16' : '#3a2f22');
+      text(term ? '> NEXT' : '다음 행동', boxX + 56, midY, 16, term ? '#ff6a78' : warn ? '#ffd0c4' : C.muted);
       const tx = boxX + 112 + (boxW - 120) / 2;
       if (warn) {
         const tw = p.textWidth(B(), tele, 22);
@@ -1388,7 +1391,8 @@ function renderBattle(r) {
         p.rect(ix - 1.5, midY - 4, 3, 7, '#4a1410');
         p.rect(ix - 1.5, midY + 4, 3, 3, '#4a1410');
       }
-      text(tele, tx, midY, 22, warn ? '#ffc4b8' : C.sub, { maxWidth: boxW - 170 });
+      text(tele, tx, midY, 22, term ? (warn ? '#ffd0d4' : '#ff8a96') : warn ? '#ffc4b8' : C.sub, { maxWidth: boxW - 170 });
+      if (term) { const tw = Math.min(p.textWidth(B(), tele, 22), boxW - 170); p.rect(tx + tw / 2 + 8, midY - 9, 9, 18, '#ff2a3c'); }
     }
 
     cards(b.members, (x, y, w, h, roleKey, mem) => {

@@ -511,12 +511,12 @@ function drawBulbs(p, phase) {
  * @param {number} [o.phase]            돌아가는 연출 프레임 번호(0~)
  * @param {boolean} [o.hacked]         해킹 툴로 번복 중 — 해킹된 기계(보라·시안 + 해골 + 글리치)로 그린다
  */
-function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = '#ffe9a8', badge = '', badgeColor = '#ffd23f', winIdx = [], jackpot = false, phase = 0, hacked = false } = {}) {
+function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = '#ffe9a8', badge = '', badgeColor = '#ffd23f', winIdx = [], jackpot = false, phase = 0, hacked = false, wall = false } = {}) {
   const p = getPainter();
-  const base = hacked ? getHackBg() : getBg();
+  const base = hacked && !wall ? getHackBg() : getBg();
   base.copy(p.buf);
   const f = getFont();
-  if (hacked) drawHackDecor(p, phase); else drawBulbs(p, phase);
+  if (hacked && !wall) drawHackDecor(p, phase); else drawBulbs(p, phase);
 
   for (let i = 0; i < 3; i++) {
     const x = WIN_X[i];
@@ -528,7 +528,7 @@ function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = 
   // 당첨 릴 강조: 당첨 안 된 칸은 어둡게 눌러 대비를 키우고, 당첨 칸엔 굵고 밝은 테두리 + 바깥 빛 번짐.
   if (winIdx.length) {
     for (let i = 0; i < 3; i++) if (!winIdx.includes(i)) dimWindow(p, WIN_X[i], 0.42);
-    const [glow, mid, line] = jackpot ? ['#7a5a00', '#d9a400', '#ffe14d'] : hacked ? ['#0f4a5c', '#2bb5d6', '#7ff3ff'] : ['#0f5a2a', '#25c25a', '#5dff8f'];
+    const [glow, mid, line] = jackpot ? ['#7a5a00', '#d9a400', '#ffe14d'] : hacked && !wall ? ['#0f4a5c', '#2bb5d6', '#7ff3ff'] : ['#0f5a2a', '#25c25a', '#5dff8f'];
     for (const i of winIdx) {
       p.strokeRoundRect(WIN_X[i] - 6, WIN_Y - 6, WIN_W + 12, WIN_H + 12, 16, 6, glow);
       p.strokeRoundRect(WIN_X[i] - 4, WIN_Y - 4, WIN_W + 8, WIN_H + 8, 14, 5, mid);
@@ -550,8 +550,59 @@ function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = 
     p.text(f, badge, rightX - w / 2, py, { size: 20, color: '#3a1a00' });
   }
 
-  if (hacked) applyGlitch(p, phase);
+  if (hacked && !wall) applyGlitch(p, phase);
+  if (wall) { wallPlate(p, phase); tintBlackwall(p, phase + 3); }
   return p.png();
+}
+
+// 블랙월 게이트웨이 룰렛의 위 판: 'ARCADE ROULETTE' 대신 깨진 'BLACKWALL GATEWAY'
+function wallPlate(p, seed = 0, level = 2) {
+  const f = getFont();
+  p.roundRect(53, TOP_PLATE_Y + 3, 494, PLATE_H - 6, 10, '#0a0204');
+  drawBrokenPlate(p, f, TOP_PLATE_Y, [{ text: 'BLACKWALL GATEWAY', x: 300, align: 'center', size: 19, color: '#ff3a4a' }], level, 31 + seed * 7);
+}
+// 붉은 외눈(우리가 디자인한 ??? 몬스터의 눈): 아몬드 모양 + 분홍 흰자 + 세로 동공. r 은 가로 반지름.
+function drawWallEye(p, cx, cy, r) {
+  const h = r * 0.5;
+  p.poly([cx - r - 6, cy, cx - r * 0.5, cy - h - 4, cx + r * 0.5, cy - h - 4, cx + r + 6, cy, cx + r * 0.5, cy + h + 4, cx - r * 0.5, cy + h + 4], '#7a0f1c');
+  p.poly([cx - r, cy, cx - r * 0.5, cy - h, cx + r * 0.5, cy - h, cx + r, cy, cx + r * 0.5, cy + h, cx - r * 0.5, cy + h], '#ff2a3c');
+  p.poly([cx - r * 0.75, cy, cx - r * 0.4, cy - h * 0.7, cx + r * 0.4, cy - h * 0.7, cx + r * 0.75, cy, cx + r * 0.4, cy + h * 0.7, cx - r * 0.4, cy + h * 0.7], '#ffc4ca');
+  p.poly([cx - r * 0.1, cy - h * 0.75, cx + r * 0.1, cy - h * 0.75, cx + r * 0.1, cy + h * 0.75, cx - r * 0.1, cy + h * 0.75], '#12040a');
+}
+// 블랙월 게이트웨이 침입 연출: 평범한 기계 위로 붉은 외눈이 단계마다 커지고, 위 판은 점점 깨지며, 아래 판엔 터미널 문구.
+function renderWallIntro(p, f, step, bet) {
+  getBg().copy(p.buf);
+  drawBulbs(p, step);
+  wallPlate(p, step, step + 1);
+  p.roundRect(53, BOTTOM_PLATE_Y + 3, 494, PLATE_H - 6, 10, '#0a0204');
+  const lines = ['> OPEN GATEWAY ...', '> BREACH 63% ▓▓▓░░', '> ACCESS: JACKPOT'];
+  drawBrokenPlate(p, f, BOTTOM_PLATE_Y, [{ text: lines[Math.max(0, Math.min(2, step))], x: 300, align: 'center', size: 20, color: '#ff6a78' }], step, 97 + step * 11);
+  drawWallEye(p, 300, WIN_CY, 34 + step * 22);
+  applyGlitch(p, 11 + step * 5, 0.35);
+  tintBlackwall(p, 40 + step);
+  return p.png();
+}
+
+// ── 블랙월 물들이기(블랙월 게이트웨이를 발동한 룰렛) ──────────────────────
+// 해킹된 기계 그림을 검정+붉은 단색으로 바꾸고, 주사선·붉은 세로 데이터 줄기·모서리 블록·가로 띠 어긋남을 얹는다. seed 로 모양이 정해진다(같은 장면은 같은 모양).
+function tintBlackwall(p, seed = 0) {
+  const b = p.buf;
+  for (let i = 0; i < b.length; i += 3) {
+    const r = b[i], g = b[i + 1], bl = b[i + 2];
+    const lum = 0.3 * r + 0.59 * g + 0.11 * bl;
+    const mx = Math.max(r, g, bl);
+    b[i] = Math.min(255, Math.round(lum * 0.55 + mx * 0.7));
+    b[i + 1] = Math.round(lum * 0.14);
+    b[i + 2] = Math.round(lum * 0.18);
+  }
+  let st = (seed * 2654435761 + 12345) >>> 0;
+  const rnd = () => ((st = (st * 1103515245 + 12345) >>> 0) / 4294967296);
+  const W = p.w / p.s, H = p.h / p.s;
+  for (let y = 0; y < H; y += 4) p.rect(0, y, W, 1, '#000000'); // 주사선
+  for (let i = 0; i < 14; i++) { const x = rnd() * W, y = rnd() * H * 0.6, len = 30 + rnd() * H * 0.5; p.rect(x, y, 2, len, rnd() < 0.8 ? '#ff2a3c' : '#ffc8cc'); } // 세로 데이터 줄기
+  for (const [cx, cy, sx, sy] of [[0, 0, 1, 1], [W, 0, -1, 1], [0, H, 1, -1], [W, H, -1, -1]]) { // 모서리 블록
+    for (let k = 0; k < 9; k++) { const bx = rnd() * 46, by = rnd() * 36, bw = 6 + rnd() * 12; p.rect(sx > 0 ? cx + bx : cx - bx - bw, sy > 0 ? cy + by : cy - by - 6, bw, 6, ['#96101e', '#5a0812', '#dc2234', '#060204'][Math.floor(rnd() * 4)]); }
+  }
 }
 
 // ── 해킹 침입 연출(해킹 툴을 쓰면 다시 돌리기 전에 짧게) ─────────────────────
@@ -621,11 +672,12 @@ const lerpHex = (h1, h2, t) => {
  * @param {number} [o.bet]
  * @param {number} o.step          0 ~ INTRO_STEP_COUNT-1
  */
-function renderHackIntro({ reels, bet, step = 0 }) {
+function renderHackIntro({ reels, bet, step = 0, wall = false }) {
   const st = INTRO_STEPS[Math.max(0, Math.min(INTRO_STEP_COUNT - 1, step))];
   const p = getPainter();
   const f = getFont();
   const final = !!st.final;
+  if (wall) return renderWallIntro(p, f, step, bet);
   if (final) {
     getHackBg().copy(p.buf);
     drawHackDecor(p, step);
@@ -650,6 +702,7 @@ function renderHackIntro({ reels, bet, step = 0 }) {
   drawBrokenPlate(p, f, BOTTOM_PLATE_Y, bottom, lvl, 97 + step * 11);
   drawSkull(p, 300, WIN_CY, st.skull); // 정중앙 해골이 단계마다 커진다(글리치에 같이 흔들린다)
   applyGlitch(p, 11 + step * 5, st.power);
+  if (wall) tintBlackwall(p, 40 + step);
   return p.png();
 }
 

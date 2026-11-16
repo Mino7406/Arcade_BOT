@@ -22,6 +22,8 @@ const MIN_BET = 10;
 const MAX_BET = 300;
 const BET_PRESETS = [10, 50, 100, 200, 300];
 const LOBBY_TIMEOUT_MS = 60 * 1000;
+const WALL_COLOR = 0xB81C2A; // 블랙월 게이트웨이를 발동한 룰렛 카드 띠 색(붉은)
+const WALL_FOOTER = '⏰ 블랙월 ▓▒░ [ACCESS_GRANTED] 잭팟 확정';
 const HACK_COLOR = 0x8B7CF6; // 해킹 툴 확인 메시지 띠 색(이모지와 맞춘 보라)
 const HACK_PROMPT_MS = 60 * 1000; // 꽝이 나온 뒤 해킹 툴을 쓸지 고르는 시간(지나면 결과 확정)
 
@@ -106,11 +108,11 @@ const SPIN_STEP_MS = 1300; // 릴이 하나씩 멈추는 간격(처음 그림 �
 // 실제 슬롯머신처럼 릴이 하나씩 순서대로 멈추는 연출. finalReels 는 이미 정해진 결과이고,
 // 첫 그림(전부 돌아감)은 호출하는 쪽에서 보내고, 여기서는 "첫 릴 멈춤 → 둘째 릴 멈춤"까지 고쳐 준다.
 // 마지막 결과 그림은 호출하는 쪽이 이어서 고친다. 수정은 총 3번(예전엔 6번)이라 디스코드 수정 제한에도 여유가 있다.
-async function animateSpin(message, lobby, bet, finalReels, hacks = 0) {
+async function animateSpin(message, lobby, bet, finalReels, hacks = 0, wall = false) {
   const stages = [[finalReels[0], null, null], [finalReels[0], finalReels[1], null]];
   for (let i = 0; i < stages.length; i++) {
     await sleep(SPIN_STEP_MS);
-    await message.edit(buildSpinningPayload(lobby, bet, stages[i], i + 1, hacks)).catch(() => {});
+    await message.edit(buildSpinningPayload(lobby, bet, stages[i], i + 1, hacks, wall)).catch(() => {});
   }
   await sleep(SPIN_STEP_MS);
 }
@@ -192,8 +194,15 @@ function buildLobbyPayload(lobby, extra = {}) {
 }
 
 // 릴이 도는 중: reels 에서 null 인 릴은 아직 돌고 있다(stage 가 오를수록 하나씩 멈춘다).
-function buildSpinningPayload(lobby, bet, reels, phase = 0, hacks = 0) {
-  const png = renderSlot({ reels, bet, phase, right: '돌리는 중...', rightColor: '#c9b8a0', hacked: hacks > 0 });
+function buildSpinningPayload(lobby, bet, reels, phase = 0, hacks = 0, wall = false) {
+  const png = renderSlot({ reels, bet, phase, right: '돌리는 중...', rightColor: '#c9b8a0', hacked: hacks > 0 || wall, wall });
+  if (wall) return payload(card({
+    color: WALL_COLOR,
+    header: `${gatewayEmoji()} 룰렛머신`,
+    sub: [`<@${lobby.userId}>`, `${gatewayEmoji()} ${GATEWAY_NAME} 발동`],
+    blocks: [{ image: SLOT_URL, divider: true }],
+    footer: `${gatewayEmoji()} 블랙월 너머에서 결과를 가져오는 중...`,
+  }), { files: [slotFile(png)] });
   return payload(card({
     color: hacks > 0 ? HACK_COLOR : COLORS.info,
     header: hacks > 0 ? `${hackToolEmoji()} 룰렛머신` : '🎰 룰렛머신',
@@ -205,8 +214,15 @@ function buildSpinningPayload(lobby, bet, reels, phase = 0, hacks = 0) {
 
 // 해킹 침입 연출 카드(해킹 툴을 쓴 뒤 다시 돌리기 전). reels: 직전 꽝 결과, step: 단계 번호.
 const INTRO_STEP_MS = 900; // 단계 사이 간격(3단계 ≈ 2.7초). 디스코드 메시지 수정 제한(약 5초에 5번) 안쪽
-function buildHackIntroPayload(lobby, bet, reels, step, hacks) {
-  const png = renderHackIntro({ reels, bet, step });
+function buildHackIntroPayload(lobby, bet, reels, step, hacks, wall = false) {
+  const png = renderHackIntro({ reels, bet, step, wall });
+  if (wall) return payload(card({
+    color: WALL_COLOR,
+    header: `${gatewayEmoji()} 룰렛머신`,
+    sub: [`<@${lobby.userId}>`, `${gatewayEmoji()} ${GATEWAY_NAME} 발동`],
+    blocks: [{ image: SLOT_URL, divider: true }],
+    footer: `${gatewayEmoji()} 블랙월 방화벽을 뚫는 중... ${'▓'.repeat(step + 1)}${'░'.repeat(Math.max(0, 2 - step))}`,
+  }), { files: [slotFile(png)] });
   return payload(card({
     color: HACK_COLOR,
     header: `${hackToolEmoji()} 룰렛머신`,
@@ -225,18 +241,19 @@ function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multi
     rightColor: win ? '#7dff9d' : net === 0 ? '#ffe9a8' : '#ff9a9a',
     badge: multiplier > 0 ? `×${multiplier}` : '',
     badgeColor: jackpot ? '#ffd700' : win ? '#ffd23f' : '#c9b8a0',
-    hacked: hacks > 0,
-    phase: hacks > 0 ? 7 : 0, // 해킹 모드 결과 그림의 글리치 모양(프레임 번호)
+    hacked: hacks > 0 || gateway,
+    wall: gateway,
+    phase: hacks > 0 || gateway ? 7 : 0, // 해킹 모드 결과 그림의 글리치 모양(프레임 번호)
   });
   return payload(card({
-    color: hacks > 0 ? HACK_COLOR : win ? 0xFFD700 : COLORS.muted,
-    header: hacks > 0 ? `${hackToolEmoji()} 룰렛머신` : '🎰 룰렛머신',
-    sub: [`<@${lobby.userId}>`, hacks > 0 ? null : '결과', hackLabel(hacks), gateway ? `${gatewayEmoji()} ${GATEWAY_NAME} 발동` : null].filter(Boolean),
+    color: gateway ? WALL_COLOR : hacks > 0 ? HACK_COLOR : win ? 0xFFD700 : COLORS.muted,
+    header: gateway ? `${gatewayEmoji()} 룰렛머신` : hacks > 0 ? `${hackToolEmoji()} 룰렛머신` : '🎰 룰렛머신',
+    sub: [`<@${lobby.userId}>`, hacks > 0 || gateway ? null : '결과', hackLabel(hacks), gateway ? `${gatewayEmoji()} ${GATEWAY_NAME} 발동` : null].filter(Boolean),
     blocks: [
       { image: SLOT_URL, divider: true }, // 제목·결과 줄 아래 구분선
       `### ${resultLine}　${netLine}`, // 결과와 손익을 한 줄에
     ],
-    footer: hacks > 0 ? HACK_FOOTER : '⏰ 하루에 한 번만 돌릴 수 있어요.',
+    footer: gateway ? WALL_FOOTER : hacks > 0 ? HACK_FOOTER : '⏰ 하루에 한 번만 돌릴 수 있어요.',
   }), { files: [slotFile(png)], ...extra });
 }
 
@@ -469,6 +486,15 @@ function resultView(bet, spin, hacks) {
 // 채널에 릴이 하나씩 멈추는 연출을 보여 주고 결과로 고친다. message 가 있으면(해킹 툴로 다시 돌릴 때) 그 카드를 그대로 다시 돌린다.
 // 결과가 실제로 올라간 메시지를 돌려준다(수정이 끝내 실패해 새로 보냈으면 새 메시지).
 async function revealSpin(channel, message, lobby, bet, spin, hacks, introReels = null) {
+  const wall = !!spin.gateway; // 블랙월 게이트웨이 발동: 침입 연출 + 붉은 블랙월 테마
+  if (wall) {
+    for (let step = 0; step < INTRO_STEP_COUNT; step++) {
+      const pl = buildHackIntroPayload(lobby, bet, null, step, 0, true);
+      if (!message) message = await channel.send(pl);
+      else { try { await message.edit(pl); } catch { message = null; } }
+      if (message) await sleep(INTRO_STEP_MS);
+    }
+  }
   // 해킹 툴을 처음 쓸 때만 바로 돌리지 않고 침입 연출부터(연속 2회째부터는 연출 없이 바로 돈다).
   if (hacks === 1 && introReels && message) {
     for (let step = 0; step < INTRO_STEP_COUNT && message; step++) {
@@ -476,13 +502,13 @@ async function revealSpin(channel, message, lobby, bet, spin, hacks, introReels 
       if (message) await sleep(INTRO_STEP_MS);
     }
   }
-  const first = buildSpinningPayload(lobby, bet, [null, null, null], 0, hacks);
+  const first = buildSpinningPayload(lobby, bet, [null, null, null], 0, hacks, wall);
   if (message) {
     try { await message.edit(first); } catch { message = null; } // 카드가 지워졌으면 새로 올린다
   }
   if (!message) message = await channel.send(first);
 
-  await animateSpin(message, lobby, bet, spin.reels, hacks);
+  await animateSpin(message, lobby, bet, spin.reels, hacks, wall);
 
   // 결과 수정이 일시적 오류(네트워크/레이트리밋)로 한 번 실패하면 메시지가 "릴이 돌아가는 중..."에
   // 영영 멈춰 보였다. 몇 번 재시도하고, 그래도 안 되면 결과를 새 메시지로 보낸다.
