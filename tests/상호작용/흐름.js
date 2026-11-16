@@ -144,6 +144,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await naejeon.handleNaejeonModal(mkInteraction({ user: ADMIN, customId: 'naejeon:modal:lol', fields: { title: '롤 내전', datetime: '내일 8시', players: '2', description: '메모' } }));
     const pub = mkInteraction({ user: ADMIN, customId: 'naejeon:publish', message: new FakeMsg(require(path.join(root, 'handlers/공통/카드.js')).notice('미리보기'), channel) });
     await naejeon.handleNaejeonButton(pub);
+    assert(pub.replyDeleted, '게시했는데 미리보기가 안 지워짐');
     const match = [...client.naejeonMatches.values()][0];
     assert(match, '매치가 만들어지지 않음');
     if (!match) return;

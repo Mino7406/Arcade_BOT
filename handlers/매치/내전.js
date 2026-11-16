@@ -264,7 +264,9 @@ async function handleNaejeonModal(interaction) {
   if (autoNotify) Object.assign(data, autoNotify, { notifyAuto: true, notifyAutoSrc: datetime });
   getPending(interaction.client).set(interaction.user.id, data);
 
-  await interaction.reply(buildPreviewPayload('naejeon', data, { ephemeral: true }));
+  // 게임 고르기 메뉴에서 연 입력창이면 그 메뉴 메시지를 미리보기로 바꾼다(나만 보이는 메시지가 하나만 남게).
+  if (interaction.isFromMessage()) await interaction.update(buildPreviewPayload('naejeon', data));
+  else await interaction.reply(buildPreviewPayload('naejeon', data, { ephemeral: true }));
 }
 
 async function handleNaejeonEditModal(interaction) {
@@ -329,7 +331,9 @@ async function handleNaejeonButton(interaction) {
     logAction(interaction, '매치 생성', `내전 '${data.title}'(${msg.id}) 공개 게시 — ${data.gameInfo?.name ?? data.game}, 정원 ${maxPlayers}명`);
     // 게시 전 미리보기 단계에서 이미 알림 예약을 해뒀다면, 그때는 매치가 없어 타이머를 못 걸었으므로 지금 건다.
     if (data.notifyAt) armNotifyReminder(getMatches(interaction.client), msg.id, match, '내전');
-    await interaction.update(notice('✅ **채널에 공개 게시되었습니다!**'));
+    // 게시가 끝나면 미리보기(나만 보이는 메시지)는 지운다. 못 지우면 완료 안내로 바꾼다.
+    await interaction.deferUpdate();
+    await interaction.deleteReply().catch(() => interaction.editReply(notice('✅ **채널에 공개 게시되었습니다!**')).catch(() => {}));
     return;
   }
 

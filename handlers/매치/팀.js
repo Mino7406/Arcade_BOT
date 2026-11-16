@@ -221,25 +221,33 @@ function normalizeBoard(match) {
   return b;
 }
 
-function teamLines(teams, match) {
+// 팀 하나 = 카드 한 칸. 큰 팀 제목 → 평균 티어 → 한 명씩 한 줄(티어 이모지 + 굵은 이름 + 티어 칩).
+// 팀이 많으면(5팀 이상) 카드 부품 수 제한에 걸리지 않게 한 칸에 몰아 짧게 쓴다.
+function teamBlocks(teams, match) {
   const game = match.data.game;
   const withTiers = tiers.hasTiers(game);
-  return teams.map((t, i) => {
+  const compact = teams.length > 4;
+  const tick = '`';
+  const texts = teams.map((t, i) => {
     const resolved = t.members.map(n => resolveMember(n, match.participants));
-    let avg = '';
-    if (withTiers) {
-      const scores = resolved.map(u => u && tiers.tierScore(game, tiers.getTier(u.id, game))).filter(s => s !== null && s !== undefined);
-      if (scores.length) {
-        const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
-        avg = ` · 평균 ${tiers.tierLabel(game, tiers.tierFromScore(game, mean))}`;
-      }
+    const memberTiers = resolved.map(u => (withTiers && u ? tiers.getTier(u.id, game) : null));
+    const scores = memberTiers.map(tr => tiers.tierScore(game, tr)).filter(x => x !== null && x !== undefined);
+    const avg = scores.length ? tiers.tierLabel(game, tiers.tierFromScore(game, scores.reduce((a, b) => a + b, 0) / scores.length)) : '';
+    const title = `${TEAM_ICONS[i] ?? '▫️'} ${t.name ?? `팀 ${i + 1}`}`;
+    if (compact) {
+      const names = t.members.map((n, k) => `${memberTiers[k] ? `${tiers.tierBadge(game, memberTiers[k])} ` : ''}${n}`);
+      return `**${title}**${avg ? ` · 평균 ${avg}` : ''}\n${names.join(' · ')}`;
     }
-    const names = t.members.map((n, k) => {
-      const tier = withTiers && resolved[k] ? tiers.getTier(resolved[k].id, game) : null;
-      return `${tier ? `${tiers.tierBadge(game, tier)} ` : ''}${n}`;
+    const lines = t.members.map((n, k) => {
+      const tr = memberTiers[k];
+      if (!withTiers) return `▸ **${n}**`;
+      if (!tr) return `❔ **${n}**`;
+      const id = tiers.tierEmojiId(game, tr);
+      return `${id ? `<:t:${id}>` : '▸'} **${n}**　${tick}${tiers.tierLabel(game, tr)}${tick}`;
     });
-    return `${TEAM_ICONS[i] ?? '▫️'} **${t.name ?? `팀 ${i + 1}`}**${avg}\n${names.join(' · ')}`;
-  }).join('\n\n');
+    return `### ${title}${avg ? `\n-# 평균 ${avg}` : ''}\n${lines.join('\n')}`;
+  });
+  return compact ? [texts.join('\n\n')] : texts;
 }
 
 function buildBoardRows(match, matchMsgId) {
@@ -259,9 +267,11 @@ function buildBoardPayload(match, matchMsgId) {
 
   if (cur) {
     const when = cur.at ? ` · <t:${Math.floor(cur.at / 1000)}:t>` : '';
-    blocks.push(`### ⚔️ 지금 팀\n-# ${HOW_TEXT[cur.how] ?? HOW_TEXT.input}${when}\n${teamLines(cur.teams, match)}`);
+    blocks.push(`## ⚔️ 지금 팀\n-# ${HOW_TEXT[cur.how] ?? HOW_TEXT.input}${when}`);
+    blocks.push(...teamBlocks(cur.teams, match));
   } else {
-    blocks.push(`### 📝 초안 · ${match.participants.length}명\n-# 참가 순서대로 반씩 나눠 둔 거예요. 📝 팀 입력에서 자리만 바꾸거나${tiers.hasTiers(game) ? ' ⚖️ 밸런스를 누르세요.' : ' 🎲 랜덤을 누르세요.'}\n${teamLines(draftTeams(match.participants), match)}`);
+    blocks.push(`## 📝 초안 · ${match.participants.length}명\n-# 참가 순서대로 반씩 나눠 둔 거예요. 📝 팀 입력에서 자리만 바꾸거나${tiers.hasTiers(game) ? ' ⚖️ 밸런스를 누르세요.' : ' 🎲 랜덤을 누르세요.'}`);
+    blocks.push(...teamBlocks(draftTeams(match.participants), match));
   }
 
   if (tiers.hasTiers(game)) {
