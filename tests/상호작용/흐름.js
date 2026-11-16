@@ -59,7 +59,7 @@ let seq = 1000;
 class FakeMsg {
   constructor(payload, channel) {
     this.id = String(++seq);
-    this.channel = channel; this.channelId = channel?.id ?? 'c1'; this.guildId = 'g1';
+    this.channel = channel; this.channelId = channel?.id ?? 'c1'; this.guildId = 'g1'; this.client = channel?.client;
     this.url = `https://discord.com/channels/g1/${this.channelId}/${this.id}`;
     this.author = { id: 'bot' };
     this.setFrom(payload, true);
@@ -155,14 +155,60 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await naejeon.handleNaejeonButton(manage);
     const menuMsg = manage._reply;
     assert(menuMsg, '관리 메뉴가 안 뜸');
-    for (const cid of [`naejeon:match_reopen:${id}`, `naejeon:match_close:${id}`, `naejeon:manage_back:${id}`, `naejeon:team_builder:${id}`, `naejeon:match_mention:${id}`, `naejeon:match_cancel:${id}`, `naejeon:manage_back:${id}`]) {
+    for (const cid of [`naejeon:match_reopen:${id}`, `naejeon:match_close:${id}`, `naejeon:manage_back:${id}`, `naejeon:match_mention:${id}`, `naejeon:match_cancel:${id}`, `naejeon:manage_back:${id}`]) {
       await naejeon.handleNaejeonButton(mkInteraction({ user: ADMIN, customId: cid, message: menuMsg }));
     }
-    await naejeon.handleTeamAssign(mkInteraction({ user: ADMIN, customId: `naejeon:team_assign:${id}`, values: ['u1', 'u2'].filter(x => match.participants.some(p => p.id === x)), message: menuMsg }));
-    await team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:shuffle_start:${id}`, message: menuMsg }));
+    await team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:open:${id}`, message: menuMsg }));
     await naejeon.handleNaejeonButton(mkInteraction({ user: ADMIN, customId: `naejeon:match_cancel_confirm:${id}`, message: menuMsg }));
     assert(!client.naejeonMatches.has(id), '취소했는데 매치가 남아 있음');
     assert(match.message.isV2, '게시글이 v2가 아님');
+  });
+
+  await flow('내전: 마감되면 팀 짜기 카드 → 팀 입력 → 다음 판 → 랜덤', async () => {
+    await naejeon.handleNaejeonModal(mkInteraction({ user: ADMIN, customId: 'naejeon:modal:lol', fields: { title: '팀 내전', datetime: '내일 8시', players: '4', description: '' } }));
+    await naejeon.handleNaejeonButton(mkInteraction({ user: ADMIN, customId: 'naejeon:publish', message: new FakeMsg(require(path.join(root, 'handlers/공통/카드.js')).notice('p'), channel) }));
+    const match = [...client.naejeonMatches.values()].at(-1);
+    const id = match.message.id;
+    for (const u of ['u1', 'u2', 'u3', 'u4']) await naejeon.handleNaejeonButton(mkInteraction({ user: u, customId: 'naejeon:join', message: match.message }));
+    await new Promise(r => setTimeout(r, 20)); // 마감 훅은 비동기로 돈다
+    assert(match.board?.messageId, '마감했는데 팀 짜기 카드가 안 올라감');
+    const boardMsg = () => channel.sent.find(m => m.id === match.board.messageId);
+    assert(boardMsg() && !boardMsg().deleted, '카드 메시지를 못 찾음');
+
+    const input = mkInteraction({ user: 'u2', customId: `team:input:${id}` });
+    await team.handleTeamButton(input);
+    assert(input.modalShown, '팀 입력 창이 안 뜸');
+    const outsider = mkInteraction({ user: 'u9', customId: `team:input:${id}` });
+    await team.handleTeamButton(outsider);
+    assert(!outsider.modalShown, '참가자가 아닌데 입력 창이 뜸');
+
+    const first = boardMsg();
+    await team.handleTeamModal(mkInteraction({ user: 'u2', customId: `team:modal:${id}`, fields: { teams: ['이름u1-이름u2', '이름u3-이름u4'].join('\n') } }));
+    assert(match.board.rounds.length === 1, `1판이 저장되지 않음(${match.board.rounds.length})`);
+    assert(first.deleted && boardMsg() !== first, '카드가 맨 아래로 다시 올라오지 않음');
+    assert(JSON.stringify(boardMsg().components).includes('1판'), '카드에 1판 표시가 없음');
+
+    await team.handleTeamModal(mkInteraction({ user: 'u2', customId: `team:modal:${id}`, fields: { teams: ['이름u1-이름u3', '이름u2-이름u4'].join('\n') } }));
+    assert(match.board.rounds.length === 1, '10분 안에 다시 입력하면 같은 판을 고쳐야 함');
+    match.board.rounds[0].at -= 11 * 60 * 1000;
+    await team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:random:${id}` }));
+    assert(match.board.rounds.length === 2, '10분이 지나면 다음 판으로 쌓여야 함');
+
+    const bad = mkInteraction({ user: 'u2', customId: `team:modal:${id}`, fields: { teams: '혼자 한 줄' } });
+    await team.handleTeamModal(bad);
+    assert(match.board.rounds.length === 2, '잘못된 입력인데 판이 늘어남');
+
+    match.closed = false; // 마감 해제 후 다시 마감돼도 카드를 또 올리지 않는다
+    const before = channel.sent.length;
+    common.markClosed(client.naejeonMatches, id, match, '내전', false);
+    await new Promise(r => setTimeout(r, 20));
+    assert(channel.sent.length === before, '다시 마감됐는데 카드를 또 올림');
+
+    const sel = mkInteraction({ user: 'u3', customId: 'team:match_select', values: [id], message: new FakeMsg(require(path.join(root, 'handlers/공통/카드.js')).notice('s'), channel) });
+    await team.handleTeamMatchSelect(sel);
+    assert(boardMsg() && !boardMsg().deleted, '/팀으로 카드를 다시 못 올림');
+    common.clearNotifyTimer?.(match);
+    client.naejeonMatches.delete(id);
   });
 
   await flow('내전: 권한 없음·만료·잘못된 입력 안내', async () => {

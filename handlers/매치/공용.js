@@ -648,6 +648,13 @@ async function notifyOrganizerOnClose(match, label) {
 // 마감(🔒 마감됨) 상태로 전환하면서 자동 삭제 타이머를 건다(마감·시작 시각 중 늦은 쪽 + AUTO_CLOSE_DELAY_MS, autoEndAt).
 // notify=false를 넘기면 주최자 DM을 보내지 않는다 — 주최자 본인이 직접
 // "마감하기" 버튼을 눌러 마감한 경우(이미 알고 있으므로 불필요)에 사용.
+// 마감될 때 따로 할 일(내전 → 내전채팅에 팀 짜기 카드 올리기). 팀.js가 등록한다 — 팀.js가 이 파일을
+// 불러오므로 여기서 거꾸로 불러오면 순환 참조가 돼서, setPublicPayloadBuilder처럼 등록 방식으로 받는다.
+const closeHooks = {};
+function setCloseHook(label, fn) {
+  closeHooks[label] = fn;
+}
+
 function markClosed(matchesMap, msgId, match, label, notify = true) {
   match.closed = true;
   match.closedAt = Date.now();
@@ -658,6 +665,12 @@ function markClosed(matchesMap, msgId, match, label, notify = true) {
   });
   armAutoEnd(matchesMap, msgId, match, label);
   if (notify) notifyOrganizerOnClose(match, label).catch(() => {});
+  if (closeHooks[label]) {
+    Promise.resolve().then(() => closeHooks[label](msgId, match)).catch(err => {
+      console.error('마감 후 처리 중 오류:', err);
+      logError('매치 마감', `${matchTag(match, label)} 마감 후 처리(팀 짜기 카드) 실패`, err, { 채널: matchChannelName(match) });
+    });
+  }
   // 알림 예약 시각이 이미 지나 있는데(마감 전이라 건너뛰었던 경우) 지금 막 마감됐다면 바로 발송.
   // 아직 시각이 안 지났으면 armNotifyReminder로 걸어둔 타이머가 그때 가서 처리하므로 여기선 아무것도 안 함.
   trySendNotify(match, label).catch(err => {
@@ -1218,6 +1231,8 @@ module.exports = {
   buildMatchCard,
   isNotifyPending,
   setPublicPayloadBuilder,
+  setCloseHook,
+  gameThumb,
   findMatchRole,
   ensureMatchRole,
   roleIdOf,

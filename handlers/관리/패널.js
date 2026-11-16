@@ -113,7 +113,7 @@ function buildSetupPanelPayload(interaction) {
     new ButtonBuilder().setCustomId('recruit:내전').setLabel('⚔️ 내전 생성').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('recruit:모집').setLabel('📋 모집 생성').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId('recruit:불러오기').setLabel('🔎 불러오기').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId('recruit:팀').setLabel('🛠️ 팀 관리').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('recruit:팀').setLabel('⚔️ 팀 짜기').setStyle(ButtonStyle.Primary),
   );
   const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('recruit:명령어').setLabel('📖 명령어 보기').setStyle(ButtonStyle.Secondary),
@@ -138,7 +138,7 @@ function buildSetupPanelPayload(interaction) {
       '> **⚔️ 내전 생성**\n팀 배정까지 포함된 정식 내전 모집을 만들어요.\n\n' +
         '> **📋 모집 생성**\n팀 배정 없는 가벼운 인원 모집을 만들어요.\n\n' +
         '> **🔎 불러오기**\n채팅에 묻힌 내전/모집 게시글을 다시 끌어올려요.\n\n' +
-        '> **🛠️ 팀 관리**\n진행 중인 내전의 팀을 수동/자동으로 배정해요.\n\n' +
+        '> **⚔️ 팀 짜기**\n내전채팅에 팀 짜기 카드를 올려요. 메모장에 쓰던 팀을 그대로 붙여넣으면 돼요.\n\n' +
         '> **🔔 DM 알림 설정**\n내전/모집 시작·마감 DM 알림을 받을지 직접 정해요. (기본값은 ON)',
       '> **📖 명령어가 궁금하신가요?**\n**명령어 보기** 버튼을 누르면 전체 명령어 목록을 바로 확인할 수 있어요.',
     ],

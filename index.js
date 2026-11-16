@@ -12,10 +12,10 @@ const fs = require('fs');
 // 가장 먼저 실행한다. 옮길 파일이 없으면 아무 일도 하지 않는다(migrate.js 참고).
 require('./migrate').migrateOldDbFiles();
 
-const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleNaejeonNotifyModal, handleTeamAssign, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload: buildNaejeonMessagePayload } = require('./handlers/매치/내전');
+const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleNaejeonNotifyModal, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload: buildNaejeonMessagePayload } = require('./handlers/매치/내전');
 const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipNotifyModal, handleMojipMemberAdd, handleMojipMemberRemove, buildMojipMessagePayload } = require('./handlers/매치/모집');
 const { armAutoEnd, autoEndAt, AUTO_CLOSE_DELAY_MS, GENERAL_MESSAGE_DELETE_DELAY_MS, announceMatchCompletionXp, scheduleCancelledDelete, scheduleMessageDelete, deleteMentionMessage, armNotifyReminder, ADMIN_IDS, saveAll, enableSaveNow, loadRows, recoverCancelledEmbeds, ensureMatchRole } = require('./handlers/매치/공용');
-const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect } = require('./handlers/매치/팀');
+const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect, handleTeamModal } = require('./handlers/매치/팀');
 const { handleRMatchSelect } = require('./handlers/매치/불러오기');
 const { handleWcButton, handleWcMessage } = require('./handlers/게임/끝말잇기');
 const { handleTttButton } = require('./handlers/게임/틱택토');
@@ -452,7 +452,8 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     const isChannelExempt =
-      (interaction.isChatInputCommand() && ['관리'].includes(interaction.commandName)) ||
+      (interaction.isChatInputCommand() && ['관리', '팀'].includes(interaction.commandName)) || // /팀은 내전채팅에서도 쓴다
+      interaction.customId?.startsWith('team:') || // 팀 짜기 카드는 내전채팅에 올라간다(참가자·주최자만 누를 수 있음)
       isWordchainOrRanking ||
       isReload ||
       interaction.customId?.startsWith('quiz:') ||
@@ -491,8 +492,8 @@ client.on('interactionCreate', async (interaction) => {
     } else if (interaction.isStringSelectMenu()) {
       if (interaction.customId === 'naejeon:game_select') {
         await handleGameSelect(interaction);
-      } else if (interaction.customId.startsWith('naejeon:team_assign:')) {
-        await handleTeamAssign(interaction);
+      } else if (interaction.customId.startsWith('naejeon:team_assign:') || interaction.customId.startsWith('team:assign_setup:') || interaction.customId.startsWith('team:pub_assign:')) {
+        await handleTeamAssignSelect(interaction); // 예전 팀 배정 메뉴 → "/팀을 다시 실행" 안내
       } else if (interaction.customId.startsWith('naejeon:member_remove_select:')) {
         await handleNaejeonMemberRemove(interaction);
       } else if (interaction.customId === 'mojip:game_select') {
@@ -501,8 +502,6 @@ client.on('interactionCreate', async (interaction) => {
         await handleMojipMemberRemove(interaction);
       } else if (interaction.customId === 'team:match_select') {
         await handleTeamMatchSelect(interaction);
-      } else if (interaction.customId.startsWith('team:assign_setup:') || interaction.customId.startsWith('team:pub_assign:')) {
-        await handleTeamAssignSelect(interaction);
       } else if (interaction.customId === 'reload:select') {
         await handleRMatchSelect(interaction);
       } else if (interaction.customId.startsWith('panel:match_delete_select:')) {
@@ -510,7 +509,9 @@ client.on('interactionCreate', async (interaction) => {
       }
 
     } else if (interaction.isModalSubmit()) {
-      if (interaction.customId.startsWith('naejeon:modal:')) {
+      if (interaction.customId.startsWith('team:modal:')) {
+        await handleTeamModal(interaction);
+      } else if (interaction.customId.startsWith('naejeon:modal:')) {
         await handleNaejeonModal(interaction);
       } else if (interaction.customId.startsWith('naejeon:modal_edit:')) {
         await handleNaejeonEditModal(interaction);

@@ -56,7 +56,7 @@ function buildTeamMatchListPayload(interaction) {
     return notice('⚠️ **참가자가 2명 이상인 내전이 없습니다.**', { ephemeral: true });
   }
 
-  return menu({ header: '🛠️ 팀 관리', note: '어느 내전의 팀을 관리할까요?', rows: [new ActionRowBuilder().addComponents(buildMatchSelectMenu(validMatches))], ephemeral: true });
+  return menu({ header: '⚔️ 팀 짜기', note: '어느 내전의 팀을 짤까요? 고르면 내전채팅에 팀 짜기 카드가 올라가요.', rows: [new ActionRowBuilder().addComponents(buildMatchSelectMenu(validMatches))], ephemeral: true });
 }
 
 // 안내 패널의 "불러오기" 버튼(index.js)에서도 재사용하기 위해 페이로드 생성 로직을 분리.
