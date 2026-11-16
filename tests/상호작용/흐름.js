@@ -188,7 +188,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await team.handleTeamModal(mkInteraction({ user: 'u2', customId: `team:modal:${id}`, fields: { teams: ['이름u1 다2-이름u2 골1', '이름u3-이름u4 마스터'].join(String.fromCharCode(10)) } }));
     assert(match.board.current?.teams?.length === 2, '입력한 팀이 저장되지 않음');
     assert(first.deleted && boardMsg() !== first, '카드가 맨 아래로 다시 올라오지 않음');
-    assert(JSON.stringify(boardMsg().components).includes('지금 팀'), '카드에 지금 팀 표시가 없음');
+    assert(JSON.stringify(boardMsg().components).includes('팀 현황'), '카드에 팀 현황 표시가 없음');
     const tierMod = require(path.join(root, 'handlers/매치/티어.js'));
     assert(tierMod.getTier('u1', 'lol')?.tier === 'diamond' && tierMod.getTier('u1', 'lol')?.div === 2, '팀 입력의 티어(다2)가 저장되지 않음');
     assert(tierMod.getTier('u4', 'lol')?.tier === 'master', '팀 입력의 티어(마스터)가 저장되지 않음');

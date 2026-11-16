@@ -233,7 +233,7 @@ function teamBlocks(teams, match) {
     const memberTiers = resolved.map(u => (withTiers && u ? tiers.getTier(u.id, game) : null));
     const scores = memberTiers.map(tr => tiers.tierScore(game, tr)).filter(x => x !== null && x !== undefined);
     const avg = scores.length ? tiers.tierLabel(game, tiers.tierFromScore(game, scores.reduce((a, b) => a + b, 0) / scores.length)) : '';
-    const title = `${TEAM_ICONS[i] ?? '▫️'} ${t.name ?? `팀 ${i + 1}`}`;
+    const title = `${TEAM_ICONS[i] ?? '▫️'} ${t.name ?? `${i + 1} 팀`}`;
     if (compact) {
       const names = t.members.map((n, k) => `${memberTiers[k] ? `${tiers.tierBadge(game, memberTiers[k])} ` : ''}${n}`);
       return `**${title}**${avg ? ` · 평균 ${avg}` : ''}\n${names.join(' · ')}`;
@@ -241,7 +241,7 @@ function teamBlocks(teams, match) {
     const lines = t.members.map((n, k) => {
       const tr = memberTiers[k];
       if (!withTiers) return `▸ **${n}**`;
-      if (!tr) return `❔ **${n}**`;
+      if (!tr) return `❓ **${n}**`;
       const id = tiers.tierEmojiId(game, tr);
       return `${id ? `<:t:${id}>` : '▸'} **${n}**　${tick}${tiers.tierLabel(game, tr)}${tick}`;
     });
@@ -267,7 +267,7 @@ function buildBoardPayload(match, matchMsgId) {
 
   if (cur) {
     const when = cur.at ? ` · <t:${Math.floor(cur.at / 1000)}:t>` : '';
-    blocks.push(`## ⚔️ 지금 팀\n-# ${HOW_TEXT[cur.how] ?? HOW_TEXT.input}${when}`);
+    blocks.push(`## 🔍 팀 현황\n-# ${HOW_TEXT[cur.how] ?? HOW_TEXT.input}${when}`);
     blocks.push(...teamBlocks(cur.teams, match));
   } else {
     blocks.push(`## 📝 초안 · ${match.participants.length}명\n-# 참가 순서대로 반씩 나눠 둔 거예요. 📝 팀 입력에서 자리만 바꾸거나${tiers.hasTiers(game) ? ' ⚖️ 밸런스를 누르세요.' : ' 🎲 랜덤을 누르세요.'}`);
@@ -276,19 +276,22 @@ function buildBoardPayload(match, matchMsgId) {
 
   if (tiers.hasTiers(game)) {
     const unknown = match.participants.filter(u => !tiers.getTier(u.id, game)).map(u => u.displayName);
-    if (unknown.length) blocks.push({ text: `-# 티어 모름: ${unknown.join(', ')} — 🏅 내 티어로 저장하면 밸런스가 정확해져요`, noDivider: true });
+    if (unknown.length) blocks.push({ text: `-# 티어 미지정 : ${unknown.join(', ')} (티어를 저장하면 밸런스가 정확해져요)`, noDivider: true });
   }
 
+  // 내전 내역: 예전 팀마다 시각·방식 한 줄 + 팀별 인용 줄(🔵 …)로 또렷하게
   const history = board.history.slice(0, HISTORY_SHOWN).map(h => {
-    const when = h.at ? `<t:${Math.floor(h.at / 1000)}:t> · ` : '';
-    return `-# ${when}${h.teams.map(t => t.members.join(' ')).join('  vs  ')}`;
+    const when = h.at ? `**<t:${Math.floor(h.at / 1000)}:t>**` : '**이전**';
+    const how = HOW_TEXT[h.how] ? ` · ${HOW_TEXT[h.how]}` : '';
+    const teams = h.teams.map((t, i) => `> ${TEAM_ICONS[i] ?? '▫️'} ${t.members.join(' · ')}`).join('\n');
+    return `${when}${how}\n${teams}`;
   });
-  if (history.length) blocks.push(`-# 이전 팀표\n${history.join('\n')}`);
+  if (history.length) blocks.push(`### 📜 내전 내역\n${history.join('\n\n')}`);
 
   return payload(card({
     color: gameInfo.color,
-    header: '⚔️ 팀 짜기',
-    sub: [title, match.closed ? '🔒 마감됨' : '🟢 모집 중'],
+    header: title,
+    sub: [gameInfo.name, '⚔️ 팀 설정'],
     thumb: gameThumb(gameInfo),
     thumbAlt: gameInfo.name,
     blocks,
@@ -414,7 +417,7 @@ function buildInputModal(match, matchMsgId) {
   const prefill = teamsToText(cur ? cur.teams : draftTeams(match.participants));
   const input = new TextInputBuilder()
     .setCustomId('teams')
-    .setLabel(tiers.hasTiers(match.data.game) ? '한 줄에 한 팀 · 승훈 불2 처럼 쓰면 티어도 저장' : '한 줄에 한 팀 (- 나 띄어쓰기로 구분)')
+    .setLabel(tiers.hasTiers(match.data.game) ? '한 줄에 한 팀 · (ex.승훈 불2)처럼 쓰면 티어도 저장' : '한 줄에 한 팀 (- 나 띄어쓰기로 구분)')
     .setStyle(TextInputStyle.Paragraph)
     .setPlaceholder('윤진-승훈-시형-연우-강현\n현호-찬영-찬우-승민-채원')
     .setRequired(true)
