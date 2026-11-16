@@ -483,8 +483,7 @@ const rewardText = (xp, hackTool, gateway, gatewayFull) => `(+${xp} XP${hackTool
 
 // 해킹 툴을 최대로 갖고 있어 못 받은 사람 안내(작은 글씨). 없으면 null.
 function hackToolFullLine(r, rewards) {
-  if (isPersistent(r)) return null; // 남아 있는 몬스터는 해킹 툴을 주지 않는다
-  const full = rewards.filter(x => !x.hackTool).map(x => r.battle?.members.find(mem => mem.userId === x.userId)?.name).filter(Boolean);
+  const full = rewards.filter(x => !x.hackTool && !x.gateway && !x.gatewayFull).map(x => r.battle?.members.find(mem => mem.userId === x.userId)?.name).filter(Boolean);
   return full.length ? `-# ${hackToolEmoji()} ${full.join(', ')}님은 ${hackToolWith('을')} 최대로 갖고 있어 받지 못했어요` : null;
 }
 
@@ -499,7 +498,7 @@ function endSummary(r, outcome, rewards) {
     const mvpName = mvp && b?.members.find(mem => mem.userId === mvp.userId)?.name;
     if (mvpName) lines.push(`> 👑 **MVP** : ${mvpName} · ${rewardText(mvp.xp, mvp.hackTool, mvp.gateway, mvp.gatewayFull)}`);
     // MVP 가 아닌 사람은 받은 것(해킹 툴 받았나)이 같은 사람끼리 한 줄로 묶는다 — 보통은 한 줄.
-    for (const got of isPersistent(r) ? [false] : [true, false]) {
+    for (const got of [true, false]) {
       const names = rewards.filter(x => !x.mvp && !!x.hackTool === got).map(x => b.members.find(mem => mem.userId === x.userId)?.name).filter(Boolean);
       if (names.length) lines.push(`> 🎁 **보상** : ${names.join(', ')} · ${rewardText(clearXpOf(r), got)}`);
     }
@@ -977,10 +976,9 @@ function finishRaid(r, outcome) {
     for (const mem of eligible) {
       const xp = clearXpOf(r) + (mem === mvp ? mvpBonusOf(r) : 0);
       // 해킹 툴(룰렛 꽝 번복권)도 1개씩 — 레벨 시스템이 없는 테스트 서버에도 줘서 룰렛에서 시험해 볼 수 있게 한다.
-      // 남아 있는 몬스터(???)는 해킹 툴 대신 MVP에게 자기 아이템(블랙월 게이트웨이)을 준다.
-      const special = isPersistent(r);
-      const hackTool = special ? false : grantHackTool(r.guildId, mem.userId); // 최대 보유면 false(못 받음)
-      const wantsGateway = special && mem === mvp && raidRules(r).mvpItem === 'gateway';
+      // 남아 있는 몬스터(???)는 MVP에게 해킹 툴 대신 자기 아이템(블랙월 게이트웨이)을 주고, 일반 파티원은 해킹 툴 1개씩.
+      const wantsGateway = isPersistent(r) && mem === mvp && raidRules(r).mvpItem === 'gateway';
+      const hackTool = wantsGateway ? false : grantHackTool(r.guildId, mem.userId); // 최대 보유면 false(못 받음)
       const gateway = wantsGateway ? grantGateway(r.guildId, mem.userId) : false; // 최대 보유면 false(못 받음)
       rewards.push({ userId: mem.userId, xp, mvp: mem === mvp, hackTool, gateway, gatewayFull: wantsGateway && !gateway });
       if (isExcludedGuild(r.guildId)) continue;
@@ -1001,7 +999,7 @@ function finishRaid(r, outcome) {
     유형: '레이드',
     내용: `레이드 종료 — ${r.monster.name} / ${OUTCOME_TEXT[outcome]}` +
       (r.battle ? ` / ${r.battle.turn}턴, 남은 HP ${r.battle.hp}/${r.battle.maxHp}` : '') +
-      (rewards.length ? ` / 보상: ${rewards.map(x => `${userLabel(x.userId)} +${x.xp}${x.gateway ? ` +${GATEWAY_NAME}` : x.gatewayFull ? ` (${GATEWAY_NAME} 보유 한도)` : x.hackTool ? ` +${HACK_TOOL_NAME}` : isPersistent(r) ? '' : ` (${HACK_TOOL_NAME} 보유 한도)`}`).join(', ')}` : '') +
+      (rewards.length ? ` / 보상: ${rewards.map(x => `${userLabel(x.userId)} +${x.xp}${x.gateway ? ` +${GATEWAY_NAME}` : x.gatewayFull ? ` (${GATEWAY_NAME} 보유 한도)` : x.hackTool ? ` +${HACK_TOOL_NAME}` : ` (${HACK_TOOL_NAME} 보유 한도)`}`).join(', ')}` : '') +
       (penalized ? ` / 벌칙: 모든 유저 -${penaltyXp} XP (${penalized}명)` : ''),
   });
 
