@@ -243,6 +243,30 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await team.handleTeamSelect(mkInteraction({ user: 'u3', customId: `team:tier_div:overwatch:champion:${id}`, values: ['5'], message: tierBtn._reply }));
     assert(tierMod.getTier('u3', 'overwatch')?.div === 5, '오버워치 챔피언5가 저장되지 않음');
 
+    // 오버워치 롤별 티어: 🏅(오버워치) → 롤 고르기 → 🛡️ 탱커 → 티어 → 단계 → 저장 → ↩️ 롤 고르기
+    const owBtn = mkInteraction({ user: 'u2', customId: `team:tier:overwatch:${id}` });
+    await team.handleTeamButton(owBtn);
+    assert(JSON.stringify(owBtn._reply.components).includes('team:tier:overwatch.tank'), '오버워치 롤 고르기 화면이 안 뜸');
+    await team.handleTeamButton(mkInteraction({ user: 'u2', customId: `team:tier:overwatch.tank:${id}`, message: owBtn._reply }));
+    await team.handleTeamSelect(mkInteraction({ user: 'u2', customId: `team:tier_pick:overwatch.tank:${id}`, values: ['diamond'], message: owBtn._reply }));
+    await team.handleTeamSelect(mkInteraction({ user: 'u2', customId: `team:tier_div:overwatch.tank:diamond:${id}`, values: ['2'], message: owBtn._reply }));
+    assert(tierMod.getTier('u2', 'overwatch.tank')?.tier === 'diamond', '오버워치 탱커 티어가 저장되지 않음');
+    assert(!tierMod.getTier('u2', 'overwatch.support'), '저장 안 한 롤(힐러)에 티어가 생김');
+    assert(tierMod.getTier('u2', 'overwatch')?.tier === 'diamond', '오버워치 대표 티어(가장 높은 롤)가 안 나옴');
+    await team.handleTeamButton(mkInteraction({ user: 'u2', customId: `team:tier_roles:${id}`, message: owBtn._reply }));
+    assert(JSON.stringify(owBtn._reply.components).includes('탱커'), '↩️ 뒤로가 롤 고르기로 안 돌아감');
+
+    // 롤 포지션: 🧭 포지션 설정 → 주(미드) → 부(정글) → 주를 지우면 부도 지워짐
+    await team.handleTeamButton(mkInteraction({ user: 'u3', customId: `team:tier_posset:lol:${id}`, message: tierBtn._reply }));
+    await team.handleTeamSelect(mkInteraction({ user: 'u3', customId: `team:tier_pos:main:lol:${id}`, values: ['mid'], message: tierBtn._reply }));
+    await team.handleTeamSelect(mkInteraction({ user: 'u3', customId: `team:tier_pos:sub:lol:${id}`, values: ['jungle'], message: tierBtn._reply }));
+    assert(tierMod.getPositions('u3', 'lol').join() === 'mid,jungle', `포지션 저장이 안 됨(${tierMod.getPositions('u3', 'lol')})`);
+    assert(tierMod.getTier('u3', 'lol')?.tier === 'master', '포지션을 저장했더니 티어가 사라짐');
+    await team.handleTeamSelect(mkInteraction({ user: 'u3', customId: `team:tier_pos:main:lol:${id}`, values: ['jungle'], message: tierBtn._reply }));
+    assert(tierMod.getPositions('u3', 'lol').join() === 'jungle', '주를 부와 같게 바꾸면 하나만 남아야 함');
+    await team.handleTeamSelect(mkInteraction({ user: 'u3', customId: `team:tier_pos:main:lol:${id}`, values: ['none'], message: tierBtn._reply }));
+    assert(tierMod.getPositions('u3', 'lol').length === 0, '포지션 지우기가 안 됨');
+
     match.closed = false; // 마감 해제 후 다시 마감돼도 카드를 또 올리지 않는다
     const before = channel.sent.length;
     common.markClosed(client.naejeonMatches, id, match, '내전', false);

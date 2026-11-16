@@ -182,7 +182,62 @@ function participantScores(participants, game) {
   return known.map(s => (s === null ? median : s));
 }
 
-// 두 팀 점수 합 차이가 가장 작은 조합(같은 차이가 여럿이면 그중 무작위). 20명까지는 전부 비교한다.
+// ── 포지션 배정 ─────────────────────────────────────────────
+// 롤·오버워치에서 한 팀이 딱 5명이면 자리를 하나씩 맡긴다(롤: 탑~서폿, 오버워치: 탱1·딜2·힐2).
+// 맡긴 자리가 그 사람 생각과 얼마나 다른지를 "비용"으로 매겨, 밸런스 때 티어 차이에 더해 함께 줄인다(티어 한 단계 = 1).
+const LINEUP_SLOTS = {
+  lol: ['top', 'jungle', 'mid', 'adc', 'support'],
+  overwatch: ['tank', 'damage', 'damage', 'support', 'support'],
+};
+const POS_SUB_COST = 0.5; // 롤: 부 포지션을 맡음
+const POS_OFF_COST = 1.5; // 롤: 주·부 둘 다 아닌 자리 / 오버워치: 티어를 저장 안 한 롤
+const OW_OFF_ROLE = 2;    // 오버워치: 저장 안 한 롤을 맡으면 가장 높은 롤 티어에서 이만큼 낮춰 계산
+
+function uniquePerms(list) {
+  const out = [];
+  const walk = (rest, acc) => {
+    if (!rest.length) { out.push(acc); return; }
+    const used = new Set();
+    rest.forEach((x, i) => {
+      if (used.has(x)) return;
+      used.add(x);
+      walk([...rest.slice(0, i), ...rest.slice(i + 1)], [...acc, x]);
+    });
+  };
+  walk(list, []);
+  return out;
+}
+const SLOT_PERMS = Object.fromEntries(Object.entries(LINEUP_SLOTS).map(([g, slots]) => [g, uniquePerms(slots)]));
+
+// 자리 하나에서의 { cost, score }. base 는 그 사람의 기본 점수(티어 모르면 중간값).
+function slotFit(user, game, slot, base) {
+  if (game === 'lol') {
+    const prefs = user?.id ? tiers.getPositions(user.id, 'lol') : [];
+    const cost = !prefs.length || prefs[0] === slot ? 0 : prefs[1] === slot ? POS_SUB_COST : POS_OFF_COST;
+    return { cost, score: base };
+  }
+  const roleTier = user?.id ? tiers.getTier(user.id, `overwatch.${slot}`) : null;
+  if (roleTier) return { cost: 0, score: tiers.tierScore(game, roleTier) };
+  const hasRoles = !!user?.id && Object.values(tiers.getRoleTiers(user.id)).some(Boolean);
+  return hasRoles ? { cost: POS_OFF_COST, score: base - OW_OFF_ROLE } : { cost: 0, score: base };
+}
+
+// 한 팀(users, 같은 순서의 기본 점수 bases)의 가장 잘 맞는 자리 배정. 해당 없으면 null.
+// → { slots: [사람마다 자리], cost, sum: 그 자리 기준 점수 합 }
+function lineup(users, game, bases) {
+  const perms = SLOT_PERMS[game];
+  if (!perms || users.length !== LINEUP_SLOTS[game].length) return null;
+  const fits = users.map((u, i) => Object.fromEntries(LINEUP_SLOTS[game].map(slot => [slot, slotFit(u, game, slot, bases[i])])));
+  let best = null;
+  for (const perm of perms) {
+    let cost = 0; let sum = 0;
+    perm.forEach((slot, i) => { cost += fits[i][slot].cost; sum += fits[i][slot].score; });
+    if (!best || cost < best.cost - 1e-9) best = { slots: perm, cost, sum };
+  }
+  return best;
+}
+
+// 두 팀 점수 합 차이(+ 포지션 비용)가 가장 작은 조합(같은 값이 여럿이면 그중 무작위). 20명까지는 전부 비교한다.
 function balanceTeams(participants, game) {
   const n = participants.length;
   const order = shuffle(participants.map((u, i) => i)); // 같은 차이 중 고를 때 매번 다르게
@@ -190,6 +245,13 @@ function balanceTeams(participants, game) {
   const scores = participantScores(users, game);
   const total = scores.reduce((a, b) => a + b, 0);
   const size = Math.ceil(n / 2);
+  const withLineup = !!LINEUP_SLOTS[game] && (size === 5 || n - size === 5);
+
+  // 한 팀의 { sum, cost }: 5명이면 자리를 맡긴 기준(오버워치는 그 롤 티어), 아니면 그냥 합
+  const evalTeam = idxs => {
+    const lu = lineup(idxs.map(i => users[i]), game, idxs.map(i => scores[i]));
+    return lu ? { sum: lu.sum, cost: lu.cost } : { sum: idxs.reduce((a, i) => a + scores[i], 0), cost: 0 };
+  };
 
   let best = [];
   let bestDiff = Infinity;
@@ -197,9 +259,17 @@ function balanceTeams(participants, game) {
     const pick = [];
     const walk = (start, sum) => {
       if (pick.length === size) {
-        const diff = Math.abs(total - 2 * sum);
-        if (diff < bestDiff) { bestDiff = diff; best = [[...pick]]; }
-        else if (diff === bestDiff && best.length < 50) best.push([...pick]);
+        let diff;
+        if (withLineup) {
+          const inA = new Set(pick);
+          const a = evalTeam(pick);
+          const b = evalTeam(users.map((u, i) => i).filter(i => !inA.has(i)));
+          diff = Math.abs(a.sum - b.sum) + a.cost + b.cost;
+        } else {
+          diff = Math.abs(total - 2 * sum);
+        }
+        if (diff < bestDiff - 1e-9) { bestDiff = diff; best = [[...pick]]; }
+        else if (Math.abs(diff - bestDiff) < 1e-9 && best.length < 50) best.push([...pick]);
         return;
       }
       for (let i = start; i <= n - (size - pick.length); i++) {
@@ -264,7 +334,27 @@ function makeDraft(match) {
   return { teams, how: canBalance ? 'balance' : 'random', at: Date.now(), draft: true };
 }
 
-// 팀 하나 = 카드 한 칸. 큰 팀 제목 옆에 팀 평균 티어(이모지 + 티어) → 한 명씩 한 줄(티어 이모지 + 굵은 이름 + 티어 칩).
+// 카드에 보여 줄 팀의 자리 배정. 롤·오버워치 5명 팀에서 누구라도 포지션(오버워치는 롤 티어)을 저장했을 때만.
+function teamLineup(resolved, game, match) {
+  if (!LINEUP_SLOTS[game] || resolved.length !== LINEUP_SLOTS[game].length) return null;
+  const hasData = resolved.some(u => u && (game === 'lol' ? tiers.getPositions(u.id, 'lol').length : Object.values(tiers.getRoleTiers(u.id)).some(Boolean)));
+  if (!hasData) return null;
+  const allScores = participantScores(match.participants, game);
+  const byId = new Map(match.participants.map((u, i) => [u.id, allScores[i]]));
+  const median = [...allScores].sort((a, b) => a - b)[Math.floor(allScores.length / 2)] ?? 0;
+  return lineup(resolved, game, resolved.map(u => (u ? byId.get(u.id) ?? median : median)));
+}
+
+// 이름 뒤에 붙일 자리 글자: 롤 "미드", 오버워치 "🛡️ 탱커", 발로 주 역할 "감시자"
+function slotLabel(game, slot, user) {
+  if (game === 'lol' && slot) return tiers.positionName('lol', slot);
+  if (game === 'overwatch' && slot) { const r = tiers.owRole(slot); return r ? `${r.icon} ${r.name}` : ''; }
+  if (game === 'valorant' && user) { const main = tiers.getPositions(user.id, 'valorant')[0]; return main ? tiers.positionName('valorant', main) : ''; }
+  return '';
+}
+
+// 팀 하나 = 카드 한 칸. 큰 팀 제목 옆에 팀 평균 티어(이모지 + 티어) → 한 명씩 한 줄(티어 이모지 + 굵은 이름 + 티어 + 자리).
+// 롤·오버워치 5명 팀은 맡은 자리 순서(탑→서폿, 탱→딜→힐)로 줄을 세우고, 오버워치는 맡은 롤의 티어를 보여 준다.
 // 팀이 많으면(5팀 이상) 카드 부품 수 제한에 걸리지 않게 한 칸에 몰아 짧게 쓴다.
 function teamBlocks(teams, match) {
   const game = match.data.game;
@@ -272,7 +362,12 @@ function teamBlocks(teams, match) {
   const compact = teams.length > 4;
   const texts = teams.map((t, i) => {
     const resolved = t.members.map(n => resolveMember(n, match.participants));
-    const memberTiers = resolved.map(u => (withTiers && u ? tiers.getTier(u.id, game) : null));
+    const lu = withTiers && !compact ? teamLineup(resolved, game, match) : null;
+    const memberTiers = resolved.map((u, k) => {
+      if (!withTiers || !u) return null;
+      if (game === 'overwatch' && lu) return tiers.getTier(u.id, `overwatch.${lu.slots[k]}`) ?? tiers.getTier(u.id, game);
+      return tiers.getTier(u.id, game);
+    });
     const scores = memberTiers.map(tr => tiers.tierScore(game, tr)).filter(x => x !== null && x !== undefined);
     const avgTier = scores.length ? tiers.tierFromScore(game, scores.reduce((a, b) => a + b, 0) / scores.length) : null;
     const avgEmoji = avgTier && tiers.tierEmojiId(game, avgTier);
@@ -282,12 +377,17 @@ function teamBlocks(teams, match) {
       const names = t.members.map((n, k) => `${memberTiers[k] ? `${tiers.tierBadge(game, memberTiers[k])} ` : ''}${escapeMarkdown(n)}`);
       return `**${title}**${avg ? `　·　${avg}` : ''}\n${names.join(' · ')}`;
     }
-    const lines = t.members.map((n, k) => {
+    const order = t.members.map((n, k) => k);
+    if (lu) order.sort((a, b) => LINEUP_SLOTS[game].indexOf(lu.slots[a]) - LINEUP_SLOTS[game].indexOf(lu.slots[b]));
+    const lines = order.map(k => {
+      const n = t.members[k];
       const tr = memberTiers[k];
+      const slot = slotLabel(game, lu?.slots[k], resolved[k]);
+      const tail = slot ? ` · ${slot}` : '';
       if (!withTiers) return `▸ **${escapeMarkdown(n)}**`;
-      if (!tr) return `❓ **${escapeMarkdown(n)}**`;
+      if (!tr) return `❓ **${escapeMarkdown(n)}**${tail}`;
       const id = tiers.tierEmojiId(game, tr);
-      return `${id ? `<:t:${id}>` : '▸'} **${escapeMarkdown(n)}** · *${tiers.tierLabel(game, tr)}*`; // 이름 · 기울임 티어
+      return `${id ? `<:t:${id}>` : '▸'} **${escapeMarkdown(n)}** · *${tiers.tierLabel(game, tr)}*${tail}`; // 이름 · 기울임 티어 · 자리
     });
     return `### ${title}${avg ? `　·　${avg}` : ''}\n${lines.length ? `>>> ${lines.join('\n')}` : '-# 없음'}`; // 팀원은 인용 블록(왼쪽 세로 막대)으로 묶는다, 빈 팀은 "없음"
   });
@@ -521,16 +621,33 @@ function backButton(id, label) {
   return new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(ButtonStyle.Secondary);
 }
 
-function tierCard(game, { header, thumbTier = null, blocks, rows, footer }) {
+// gk 는 'lol' 같은 게임 키, 또는 오버워치 롤별 티어면 'overwatch.tank'
+function tierCard(gk, { header, thumbTier = null, blocks, rows, footer }) {
+  const { game, role } = tiers.splitKey(gk);
+  const r = role && tiers.owRole(role);
   return card({
     color: GAME_COLORS[game] ?? 0x5865F2,
     header,
-    sub: [tiers.LADDERS[game]?.name ?? '', '🏅 내 티어 설정'],
-    thumb: tierIconUrl(game, thumbTier),
+    sub: [`${tiers.LADDERS[game]?.name ?? ''}${r ? ` · ${r.icon} ${r.name}` : ''}`, '🏅 내 티어 설정'],
+    thumb: tierIconUrl(gk, thumbTier) ?? gameIconUrl(game),
     blocks,
     footer,
     rows,
   });
+}
+
+// 저장된 포지션 한 줄: "미드 · 정글(부)" / 없으면 "아직 저장 안 함"
+function positionLine(game, userId) {
+  const [main, sub] = tiers.getPositions(userId, game);
+  if (!main) return '*아직 저장 안 함*';
+  return `**${tiers.positionName(game, main)}**${sub ? ` · ${tiers.positionName(game, sub)}(부)` : ''}`;
+}
+
+// 오버워치 롤별 티어 한 줄 요약: "🛡️ <이모지>다이아2 · ⚔️ 골드1 · 💉 -"
+function roleSummary(userId) {
+  const rt = tiers.getRoleTiers(userId);
+  if (!Object.values(rt).some(Boolean)) return null;
+  return tiers.OW_ROLES.map(r => `${r.icon} ${rt[r.key] ? tierLine(`overwatch.${r.key}`, rt[r.key]) : '-'}`).join('　');
 }
 
 // 게임모집 패널의 🏅 내 티어 설정: 저장된 티어가 있으면 바로 보여 주고, 아래에서 게임을 고른다.
@@ -539,7 +656,13 @@ function buildTierGamePayload(userId) {
   const saved = games.filter(g => userId && tiers.getTier(userId, g));
   const blocks = [];
   if (saved.length) {
-    blocks.push(`### 📋 내 티어 정보\n${games.map(g => `${GAME_EMOJIS[g] ? `<:g:${GAME_EMOJIS[g]}> ` : ''}**${tiers.LADDERS[g].name}** : ${tierLine(g, tiers.getTier(userId, g))}`).join('\n')}`);
+    const line = g => {
+      const head = `${GAME_EMOJIS[g] ? `<:g:${GAME_EMOJIS[g]}> ` : ''}**${tiers.LADDERS[g].name}** : `;
+      if (g === 'overwatch') return head + (roleSummary(userId) ?? tierLine(g, tiers.getTier(userId, g)));
+      const pos = tiers.POSITIONS[g] && tiers.getPositions(userId, g).map(k => tiers.positionName(g, k));
+      return head + tierLine(g, tiers.getTier(userId, g)) + (pos?.length ? ` · ${pos.join('/')}` : '');
+    };
+    blocks.push(`### 📋 내 티어 정보\n${games.map(line).join('\n')}`);
   } else {
     blocks.push('아직 저장한 티어가 없어요.\n티어를 저장해 두면 내전 팀 짜기에서 **⚖️ 밸런스**로 팀을 고르게 나눠 줘요.');
   }
@@ -558,9 +681,62 @@ function buildTierGamePayload(userId) {
   }), { ephemeral: true });
 }
 
-function buildTierPickPayload(game, matchMsgId, userId) {
-  const ladder = tiers.LADDERS[game];
-  const mine = tiers.getTier(userId, game);
+// 오버워치: 롤(탱커·딜러·힐러)마다 랭크가 따로라 먼저 롤을 고른다.
+function buildOwRolesPayload(matchMsgId, userId) {
+  const rt = tiers.getRoleTiers(userId);
+  const buttons = tiers.OW_ROLES.map(r => new ButtonBuilder()
+    .setCustomId(`team:tier:overwatch.${r.key}:${matchMsgId}`)
+    .setLabel(`${r.icon} ${r.name}`)
+    .setStyle(rt[r.key] ? ButtonStyle.Success : ButtonStyle.Secondary));
+  if (matchMsgId === 'panel') buttons.push(backButton('team:tier_games:panel', '↩️ 뒤로'));
+  return payload(tierCard('overwatch', {
+    header: '🏅 내 티어 설정',
+    thumbTier: tiers.getTier(userId, 'overwatch'),
+    blocks: [
+      `**롤별 티어**\n${tiers.OW_ROLES.map(r => `${r.icon} **${r.name}** : ${tierLine(`overwatch.${r.key}`, rt[r.key])}`).join('\n')}`,
+      '**어느 롤 티어를 설정할까요?**',
+    ],
+    rows: [new ActionRowBuilder().addComponents(...buttons)],
+    footer: '하는 롤만 저장하면 돼요 · ⚖️ 밸런스 때 탱1·딜2·힐2로 맡기고 그 롤 티어로 계산해요',
+  }), { ephemeral: true });
+}
+
+// 롤·발로: 주/부 포지션(역할) 고르기. 고르면 바로 저장되고 이 화면이 새로 그려진다.
+function buildPositionPayload(game, matchMsgId, userId) {
+  const word = tiers.POSITION_WORD[game];
+  const [main, sub] = tiers.getPositions(userId, game);
+  const opts = (current, extra) => [
+    ...tiers.POSITIONS[game].map(p => ({ label: p.name, value: p.key, default: p.key === current })),
+    extra,
+  ];
+  const mainMenu = new StringSelectMenuBuilder()
+    .setCustomId(`team:tier_pos:main:${game}:${matchMsgId}`)
+    .setPlaceholder(`주 ${word}을 고르세요`)
+    .addOptions(opts(main, { label: '상관없음(지우기)', value: 'none', emoji: '🗑️' }));
+  const subMenu = new StringSelectMenuBuilder()
+    .setCustomId(`team:tier_pos:sub:${game}:${matchMsgId}`)
+    .setPlaceholder(main ? `부 ${word}을 고르세요(선택)` : `주 ${word}을 먼저 골라 주세요`)
+    .setDisabled(!main)
+    .addOptions(opts(sub, { label: '없음', value: 'none' }).filter(o => o.value !== main));
+  const note = game === 'lol'
+    ? '⚖️ 밸런스 때 팀마다 탑~서폿이 겹치지 않게 맡기고, 되도록 주 → 부 포지션 순서로 넣어 줘요.'
+    : '팀 짜기 카드의 이름 옆에 주 역할이 보여요.';
+  return payload(tierCard(game, {
+    header: `🧭 ${word} 설정`,
+    thumbTier: tiers.getTier(userId, game),
+    blocks: [`**지금 저장된 ${word}**\n${positionLine(game, userId)}`, `-# ${note}`],
+    rows: [
+      new ActionRowBuilder().addComponents(mainMenu),
+      new ActionRowBuilder().addComponents(subMenu),
+      new ActionRowBuilder().addComponents(backButton(`team:tier_back:${game}:${matchMsgId}`, '↩️ 뒤로')),
+    ],
+  }), { ephemeral: true });
+}
+
+function buildTierPickPayload(gk, matchMsgId, userId) {
+  const { game, role } = tiers.splitKey(gk);
+  const ladder = tiers.ladderOf(gk);
+  const mine = tiers.getTier(userId, gk);
   const options = [...ladder.tiers].reverse().map(t => {
     const o = { label: t.name, value: t.key };
     const desc = t.scored ? `점수(${ladder.scoreUnit})로 순위` : t.divs ? `${t.divs}단계` : null;
@@ -571,22 +747,28 @@ function buildTierPickPayload(game, matchMsgId, userId) {
   });
   if (mine) options.push({ label: '저장한 티어 지우기', value: 'none', emoji: '🗑️' });
   const menu = new StringSelectMenuBuilder()
-    .setCustomId(`team:tier_pick:${game}:${matchMsgId}`)
+    .setCustomId(`team:tier_pick:${gk}:${matchMsgId}`)
     .setPlaceholder('티어를 고르세요')
     .addOptions(options);
   const rows = [new ActionRowBuilder().addComponents(menu)];
-  if (matchMsgId === 'panel') rows.push(new ActionRowBuilder().addComponents(backButton('team:tier_games:panel', '↩️ 뒤로')));
-  return payload(tierCard(game, {
+  const buttons = [];
+  if (tiers.POSITIONS[game]) buttons.push(new ButtonBuilder().setCustomId(`team:tier_posset:${game}:${matchMsgId}`).setLabel(`🧭 ${tiers.POSITION_WORD[game]} 설정`).setStyle(ButtonStyle.Primary));
+  if (role) buttons.push(backButton(`team:tier_roles:${matchMsgId}`, '↩️ 뒤로'));
+  else if (matchMsgId === 'panel') buttons.push(backButton('team:tier_games:panel', '↩️ 뒤로'));
+  if (buttons.length) rows.push(new ActionRowBuilder().addComponents(...buttons));
+  const blocks = [`**지금 저장된 티어**\n${tierLine(gk, mine)}`];
+  if (tiers.POSITIONS[game]) blocks.push(`**${tiers.POSITION_WORD[game]}**\n${positionLine(game, userId)}`);
+  return payload(tierCard(gk, {
     header: '🏅 내 티어 설정',
     thumbTier: mine,
-    blocks: [`**지금 저장된 티어**\n${tierLine(game, mine)}`],
+    blocks,
     rows,
     footer: '한 번 저장하면 다음 내전에도 그대로 써요',
   }), { ephemeral: true });
 }
 
 function buildTierDivPayload(game, tierKey, matchMsgId) {
-  const ladder = tiers.LADDERS[game];
+  const ladder = tiers.ladderOf(game);
   const t = tiers.findTier(game, tierKey);
   const divs = Array.from({ length: t.divs }, (_, i) => (ladder.divOrder === 'desc' ? i + 1 : t.divs - i)); // 높은 단계부터
   const menu = new StringSelectMenuBuilder()
@@ -610,7 +792,7 @@ function buildTierDivPayload(game, tierKey, matchMsgId) {
 // 점수제 티어(마스터 이상·레디언트 등): 점수를 적을지 묻는다. 안 적어도 저장된다.
 function buildTierScoreAskPayload(game, key, matchMsgId) {
   const t = tiers.findTier(game, key);
-  const unit = tiers.LADDERS[game].scoreUnit || '점';
+  const unit = tiers.ladderOf(game).scoreUnit || '점';
   return payload(tierCard(game, {
     header: t.name,
     thumbTier: { tier: key },
@@ -625,7 +807,7 @@ function buildTierScoreAskPayload(game, key, matchMsgId) {
 
 function buildTierScoreModal(game, key, matchMsgId) {
   const t = tiers.findTier(game, key);
-  const unit = tiers.LADDERS[game].scoreUnit || '점';
+  const unit = tiers.ladderOf(game).scoreUnit || '점';
   return new ModalBuilder()
     .setCustomId(`team:tier_modal:${game}:${key}:${matchMsgId}`)
     .setTitle(`${t.name} 점수`)
@@ -634,22 +816,29 @@ function buildTierScoreModal(game, key, matchMsgId) {
     ));
 }
 
-function buildTierSavedPayload(game, tier, matchMsgId) {
-  // 뒤로: 패널에서 열었으면 게임 고르기(내 티어 목록)로, 카드에서 열었으면 티어 고르기로
-  const buttons = [backButton(matchMsgId === 'panel' ? 'team:tier_games:panel' : `team:tier_back:${game}:${matchMsgId}`, '↩️ 뒤로')];
-  return payload(tierCard(game, {
+function buildTierSavedPayload(gk, tier, matchMsgId, userId) {
+  const { game, role } = tiers.splitKey(gk);
+  // 뒤로: 오버워치 롤 티어면 롤 고르기로, 패널에서 열었으면 게임 고르기(내 티어 목록)로, 카드에서 열었으면 티어 고르기로
+  const backId = role ? `team:tier_roles:${matchMsgId}` : matchMsgId === 'panel' ? 'team:tier_games:panel' : `team:tier_back:${game}:${matchMsgId}`;
+  const buttons = [];
+  const askPos = tier && tiers.POSITIONS[game];
+  if (askPos) buttons.push(new ButtonBuilder().setCustomId(`team:tier_posset:${game}:${matchMsgId}`).setLabel(`🧭 ${tiers.POSITION_WORD[game]} 설정`).setStyle(ButtonStyle.Primary));
+  buttons.push(backButton(backId, '↩️ 뒤로'));
+  const blocks = [tier ? `## ${tierLine(gk, tier)}` : '-# 다시 설정하려면 ↩️ 뒤로를 눌러 주세요.'];
+  if (askPos && !tiers.getPositions(userId, game).length) blocks.push(`-# 🧭 ${tiers.POSITION_WORD[game]}도 설정해 두면 ${game === 'lol' ? '팀마다 포지션이 겹치지 않게 나눠 줘요' : '팀 짜기 카드에 보여요'}.`);
+  return payload(tierCard(gk, {
     header: tier ? '✅ 티어를 저장했어요' : '🗑️ 저장한 티어를 지웠어요',
     thumbTier: tier,
-    blocks: [tier ? `## ${tierLine(game, tier)}` : '-# 다시 설정하려면 ↩️ 뒤로를 눌러 주세요.'],
+    blocks,
     footer: tier ? '팀 짜기 카드의 이름 옆 이모지와 ⚖️ 밸런스에 바로 반영돼요' : undefined,
     rows: [new ActionRowBuilder().addComponents(...buttons)],
   }));
 }
 
-async function saveMyTier(interaction, game, tier, matchMsgId) {
-  tiers.setTier(interaction.user.id, game, tier);
+async function saveMyTier(interaction, gk, tier, matchMsgId) {
+  tiers.setTier(interaction.user.id, gk, tier);
   const match = getMatches(interaction.client).get(matchMsgId);
-  await interaction.update(buildTierSavedPayload(game, tier, matchMsgId));
+  await interaction.update(buildTierSavedPayload(gk, tier, matchMsgId, interaction.user.id));
   if (match) await refreshBoard(interaction.client, matchMsgId, match);
 }
 
@@ -672,6 +861,22 @@ async function handleTeamSelect(interaction) {
     const [, , game, key, matchMsgId] = customId.split(':');
     const div = Number(interaction.values[0]);
     return saveMyTier(interaction, game, { tier: key, div }, matchMsgId);
+  }
+
+  // 🧭 포지션(역할) 고르기: team:tier_pos:<main|sub>:<게임>:<매치>
+  if (customId.startsWith('team:tier_pos:')) {
+    const [, , which, game, matchMsgId] = customId.split(':');
+    if (!tiers.POSITIONS[game]) return interaction.update(notice('⚠️ **이 게임은 포지션을 저장하지 않아요.**'));
+    const value = interaction.values[0];
+    const [main, sub] = tiers.getPositions(interaction.user.id, game);
+    let next;
+    if (which === 'main') next = value === 'none' ? [] : [value, sub === value ? null : sub]; // 주를 지우면 부도 같이 지운다
+    else next = [main, value === 'none' ? null : value];
+    tiers.setPositions(interaction.user.id, game, next.filter(Boolean));
+    await interaction.update(buildPositionPayload(game, matchMsgId, interaction.user.id));
+    const match = getMatches(interaction.client).get(matchMsgId);
+    if (match) await refreshBoard(interaction.client, matchMsgId, match);
+    return;
   }
 
   // 예전 팀 관리 화면의 선택 메뉴
@@ -710,7 +915,17 @@ async function handleTeamButton(interaction) {
   if (customId.startsWith('team:tier_back:')) {
     const [, , game, matchMsgId] = customId.split(':');
     if (!tiers.hasTiers(game)) return interaction.update(notice('⚠️ **이 게임은 티어를 저장하지 않아요.**'));
+    if (game === 'overwatch') return interaction.update(buildOwRolesPayload(matchMsgId, interaction.user.id)); // 오버워치는 롤 고르기부터
     return interaction.update(buildTierPickPayload(game, matchMsgId, interaction.user.id));
+  }
+  if (customId.startsWith('team:tier_roles:')) {
+    const matchMsgId = customId.slice('team:tier_roles:'.length);
+    return interaction.update(buildOwRolesPayload(matchMsgId, interaction.user.id));
+  }
+  if (customId.startsWith('team:tier_posset:')) {
+    const [, , game, matchMsgId] = customId.split(':');
+    if (!tiers.POSITIONS[game]) return interaction.update(notice('⚠️ **이 게임은 포지션을 저장하지 않아요.**'));
+    return interaction.update(buildPositionPayload(game, matchMsgId, interaction.user.id));
   }
   if (customId.startsWith('team:tier_score:') || customId.startsWith('team:tier_save:')) {
     const [, action, game, key, matchMsgId] = customId.split(':');
@@ -725,9 +940,13 @@ async function handleTeamButton(interaction) {
       await interaction.reply(notice('⚠️ **이 게임은 티어를 저장하지 않아요.**', { ephemeral: true }));
       return;
     }
-    // 게임모집 패널에서 게임을 고른 경우(matchMsgId 'panel')엔 그 안내 메시지를 그대로 바꾼다
-    if (matchMsgId === 'panel') await interaction.update(buildTierPickPayload(game, matchMsgId, interaction.user.id));
-    else await interaction.reply(buildTierPickPayload(game, matchMsgId, interaction.user.id));
+    const { role } = tiers.splitKey(game);
+    if (role && !tiers.owRole(role)) return interaction.update(notice('⚠️ **알 수 없는 롤이에요.**'));
+    // 오버워치는 롤 고르기부터, 롤을 고른 뒤엔 그 롤 티어 고르기
+    const view = game === 'overwatch' ? buildOwRolesPayload(matchMsgId, interaction.user.id) : buildTierPickPayload(game, matchMsgId, interaction.user.id);
+    // 게임모집 패널에서 게임을 고른 경우(matchMsgId 'panel')나 롤 고르기 화면에서 누른 경우엔 그 메시지를 그대로 바꾼다
+    if (matchMsgId === 'panel' || role) await interaction.update(view);
+    else await interaction.reply(view);
     return;
   }
 
@@ -788,6 +1007,9 @@ module.exports = {
   resolveMember,
   buildBoardPayload, // 화면 모음·테스트용
   buildTierGamePayload,
+  buildTierPickPayload, // 화면 모음용
+  buildPositionPayload,
+  buildOwRolesPayload,
   postBoard,
   handleTeamSelect,
   handleTeamButton,

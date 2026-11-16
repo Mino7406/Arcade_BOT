@@ -120,6 +120,47 @@ async function buildScreens() {
   add('내전 · 모집', '팀 배정 완료 알림', '팀을 나누면 채널에 올라오는 카드', card.payload(common.buildTeamResultCard(base('lol'), { team1: users(10).slice(0, 5), team2: users(10).slice(5) })));
   add('내전 · 모집', '팀 짜기 카드(처음)', '내전이 마감되면 내전채팅에 자동으로 올라가는 카드', team.buildBoardPayload({ data: base('lol'), participants: users(10), closed: true }, '1'));
   add('내전 · 모집', '팀 짜기 카드(팀 정한 뒤)', '지금 팀은 크게, 이전 팀표는 작게', team.buildBoardPayload({ data: base('lol'), participants: users(10), closed: true, board: { current: { how: 'balance', at: Date.now(), teams: [{ name: null, members: users(10).slice(0, 5).map(u => u.displayName) }, { name: '맵', members: users(10).slice(5).map(u => u.displayName) }] }, history: [1, 2].map(n => ({ at: Date.now() - n * 3600e3, how: 'input', teams: [{ name: null, members: users(10).slice(0, 5).map(u => u.displayName) }, { name: null, members: users(10).slice(5).map(u => u.displayName) }] })) } }, '1'));
+  // 포지션: 저장 파일을 건드리지 않게 티어 조회 함수만 잠깐 바꿔 끼워 그린다.
+  {
+    const tm = req('handlers/매치/티어.js');
+    const orig = { getTier: tm.getTier, getPositions: tm.getPositions, getRoleTiers: tm.getRoleTiers };
+    const LOL = ['top', 'jungle', 'mid', 'adc', 'support'];
+    const lolTiers = [['diamond', 2], ['emerald', 1], ['platinum', 3], ['diamond', 4], ['gold', 1], ['emerald', 3], ['diamond', 1], ['platinum', 1], ['emerald', 4], ['gold', 2]];
+    const owTiers = { 100: { tank: ['diamond', 2] }, 101: { damage: ['master', 4], support: ['diamond', 1] }, 102: { damage: ['platinum', 2] }, 103: { support: ['emerald', 3] }, 104: { support: ['gold', 1], tank: ['platinum', 5] }, 105: { tank: ['emerald', 2] }, 106: { damage: ['diamond', 3] }, 107: { damage: ['emerald', 1] }, 108: { support: ['diamond', 5] }, 109: { support: ['platinum', 1] } };
+    const fake = (uid, gk) => {
+      const i = Number(uid) - 100;
+      const [game, role] = String(gk).split('.');
+      if (game === 'lol' && lolTiers[i]) return { tier: lolTiers[i][0], div: lolTiers[i][1] };
+      if (game === 'overwatch') {
+        const rt = owTiers[uid] || {};
+        if (role) return rt[role] ? { tier: rt[role][0], div: rt[role][1] } : null;
+        const best = Object.values(rt).map(([tier, div]) => ({ tier, div })).sort((a, b) => tm.tierScore('overwatch', b) - tm.tierScore('overwatch', a))[0];
+        return best || null;
+      }
+      if (uid === 'me') return orig.getTier(uid, gk);
+      return null;
+    };
+    tm.getTier = fake;
+    tm.getRoleTiers = uid => Object.fromEntries(tm.OW_ROLES.map(r => [r.key, fake(uid, `overwatch.${r.key}`)]));
+    tm.getPositions = (uid, game) => {
+      const i = Number(uid) - 100;
+      if (uid === 'me') return game === 'lol' ? ['mid', 'jungle'] : [];
+      if (game === 'lol' && i >= 0 && i !== 4 && i !== 9) return [LOL[(i * 2) % 5], LOL[(i * 2 + 1) % 5]]; // 두 명은 포지션 없음
+      return [];
+    };
+    const owInfo = { name: '오버워치', emoji: '🎮', color: 0xF99E1A };
+    const halves = us => [{ name: null, members: us.slice(0, 5).map(u => u.displayName) }, { name: null, members: us.slice(5).map(u => u.displayName) }];
+    const named = users(10);
+    add('내전 · 모집', '팀 짜기 카드(롤 포지션)', '포지션을 저장한 사람이 있으면 5명 팀마다 탑~서폿을 맡기고 그 순서로 줄을 세움', team.buildBoardPayload({ data: base('lol'), participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 2, teams: halves(named) }, history: [] } }, '1'));
+    add('내전 · 모집', '팀 짜기 카드(오버워치 롤별 티어)', '탱1·딜2·힐2로 맡기고, 맡은 롤의 티어를 보여 줌', team.buildBoardPayload({ data: { ...base('lol'), game: 'overwatch', gameInfo: owInfo, title: '오버워치 내전' }, participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: halves(named) }, history: [] } }, '1'));
+    tm.getTier = (uid, gk) => (uid === 'me' ? fake('100', gk) ?? fake('101', gk) : fake(uid, gk));
+    tm.getRoleTiers = uid => Object.fromEntries(tm.OW_ROLES.map(r => [r.key, fake(uid === 'me' ? '104' : uid, `overwatch.${r.key}`)]));
+    add('나만 보이는 메시지', '🏅 내 티어 설정 — 롤(포지션 버튼)', '티어 고르기 아래 🧭 포지션 설정', team.buildTierPickPayload('lol', '1', 'me'));
+    add('나만 보이는 메시지', '🧭 포지션 설정', '주/부 포지션을 고르면 바로 저장', team.buildPositionPayload('lol', '1', 'me'));
+    add('나만 보이는 메시지', '🏅 내 티어 설정 — 오버워치 롤 고르기', '탱커·딜러·힐러 티어를 따로 저장(저장한 롤은 초록)', team.buildOwRolesPayload('1', 'me'));
+    add('나만 보이는 메시지', '🏅 내 티어 설정 — 오버워치 탱커 티어', '', team.buildTierPickPayload('overwatch.tank', '1', 'me'));
+    Object.assign(tm, orig);
+  }
   add('내전 · 모집', '안내 한 줄 — 만료', '모든 짧은 안내가 같은 카드 모양', card.notice('⚠️ **만료된 내전입니다.**', { ephemeral: true }));
   add('내전 · 모집', '안내 한 줄 — 완료', '', card.notice('✅ **채널에 공개 게시되었습니다!**', { ephemeral: true }));
 

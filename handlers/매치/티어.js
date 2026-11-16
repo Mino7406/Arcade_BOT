@@ -86,17 +86,59 @@ const LADDERS = {
 const SCORE_PER_STEP = 200;
 const SCORE_CAP = 3000;
 
+// 게임 키: 'lol' 처럼 게임 이름만, 또는 오버워치 롤별 티어는 'overwatch.tank' 처럼 점 뒤에 롤을 붙인다.
+function splitKey(gk) {
+  const [game, role = null] = String(gk ?? '').split('.');
+  return { game, role };
+}
+const baseGame = gk => splitKey(gk).game;
+const ladderOf = gk => LADDERS[baseGame(gk)] ?? null;
+
 function hasTiers(game) {
-  return !!LADDERS[game];
+  return !!ladderOf(game);
 }
 
 function findTier(game, key) {
-  return LADDERS[game]?.tiers.find(t => t.key === key) ?? null;
+  return ladderOf(game)?.tiers.find(t => t.key === key) ?? null;
+}
+
+// ── 포지션 ──────────────────────────────────────────────────
+// 롤: 주/부 포지션을 저장해 두면 팀마다 탑~서폿을 겹치지 않게 맡긴다(밸런스에도 반영).
+// 발로: 주/부 역할은 카드에 보여 주기만 한다(역할이 롤만큼 고정되지 않아서 밸런스엔 안 넣음).
+// 오버워치: 포지션별로 랭크가 따로라 탱커·딜러·힐러 티어를 각각 저장하고, 팀마다 탱1·딜2·힐2로 맡겨 그 롤 티어로 계산한다.
+const POSITIONS = {
+  lol: [
+    { key: 'top', name: '탑' },
+    { key: 'jungle', name: '정글' },
+    { key: 'mid', name: '미드' },
+    { key: 'adc', name: '원딜' },
+    { key: 'support', name: '서폿' },
+  ],
+  valorant: [
+    { key: 'duelist', name: '타격대' },
+    { key: 'initiator', name: '척후대' },
+    { key: 'controller', name: '전략가' },
+    { key: 'sentinel', name: '감시자' },
+  ],
+};
+const POSITION_WORD = { lol: '포지션', valorant: '역할' };
+const OW_ROLES = [
+  { key: 'tank', name: '탱커', icon: '🛡️', slots: 1 },
+  { key: 'damage', name: '딜러', icon: '⚔️', slots: 2 },
+  { key: 'support', name: '힐러', icon: '💉', slots: 2 },
+];
+
+function positionName(game, key) {
+  return POSITIONS[game]?.find(p => p.key === key)?.name ?? '';
+}
+
+function owRole(key) {
+  return OW_ROLES.find(r => r.key === key) ?? null;
 }
 
 // 낮은 칸부터 0, 1, 2 … 로 센 점수. 롤 아이언4 = 0, 골드1 = 15 / 발로 아이언1 = 0, 레디언트 = 24
 function tierScore(game, tier) {
-  const ladder = LADDERS[game];
+  const ladder = ladderOf(game);
   if (!ladder || !tier) return null;
   let score = 0;
   for (const t of ladder.tiers) {
@@ -112,7 +154,7 @@ function tierScore(game, tier) {
 
 // 점수 → { tier, div } (평균 티어 표시용)
 function tierFromScore(game, score) {
-  const ladder = LADDERS[game];
+  const ladder = ladderOf(game);
   if (!ladder || score === null || score === undefined) return null;
   let s = Math.max(0, Math.round(score));
   for (const t of ladder.tiers) {
@@ -127,13 +169,13 @@ function tierFromScore(game, score) {
 function tierLabel(game, tier, { short = false } = {}) {
   const t = findTier(game, tier?.tier);
   if (!t) return '';
-  const unit = LADDERS[game].scoreUnit || '점';
+  const unit = ladderOf(game).scoreUnit || '점';
   return `${short ? t.short : t.name}${t.divs && tier.div ? tier.div : ''}${t.scored && tier.score ? ` ${tier.score}${unit}` : ''}`;
 }
 
 // 팀 입력의 낱말 하나를 티어로 읽는다. "다3" "다이아3" "불멸1" "마스터" "챌" "레디" → { tier, div } / 아니면 null
 function parseTierToken(game, token) {
-  const ladder = LADDERS[game];
+  const ladder = ladderOf(game);
   if (!ladder) return null;
   const m = /^([가-힣]+)([1-5])?$/.exec(String(token).trim());
   if (!m) return null;
@@ -152,7 +194,8 @@ function parseTierToken(game, token) {
 }
 
 // ── 저장 ────────────────────────────────────────────────────
-// DB/tier.json: { 유저ID: { lol: { tier, div, at }, valorant: { ... } } }
+// DB/tier.json: { 유저ID: { lol: { tier, div, at, pos: ['mid', 'jungle'] }, overwatch: { roles: { tank: { tier, div } … }, at }, … } }
+// pos 는 [주, 부] 순서. 오버워치 맨 위의 tier 는 롤을 모르는 티어(팀 입력에 "승훈 다2"처럼 적은 것)다.
 
 const DB_DIR = path.join(__dirname, '..', '..', 'DB');
 const DB_PATH = path.join(DB_DIR, 'tier.json');
@@ -184,16 +227,68 @@ function save() {
   }
 }
 
-function getTier(userId, game) {
-  const tier = store[userId]?.[game] ?? null;
-  return tier && findTier(game, tier.tier) ? tier : null; // 티어 목록이 바뀌어 없어진 값은 없는 것으로
+const tierOnly = t => ({ tier: t.tier, ...(t.div ? { div: t.div } : {}), ...(t.score ? { score: t.score } : {}) });
+
+// 저장된 티어. 'overwatch.tank' 는 그 롤 티어, 'overwatch' 는 롤 티어 중 가장 높은 것(없으면 롤 모르는 티어).
+function getTier(userId, gk) {
+  const { game, role } = splitKey(gk);
+  const entry = store[userId]?.[game];
+  if (!entry || !LADDERS[game]) return null;
+  const valid = t => (t && findTier(game, t.tier) ? t : null); // 티어 목록이 바뀌어 없어진 값은 없는 것으로
+  if (role) return valid(entry.roles?.[role]);
+  if (game === 'overwatch') {
+    const best = OW_ROLES.map(r => valid(entry.roles?.[r.key])).filter(Boolean)
+      .sort((a, b) => tierScore(game, b) - tierScore(game, a))[0];
+    if (best) return best;
+  }
+  return valid(entry);
 }
 
-function setTier(userId, game, tier) {
-  if (!hasTiers(game)) return;
+function getRoleTiers(userId) {
+  return Object.fromEntries(OW_ROLES.map(r => [r.key, getTier(userId, `overwatch.${r.key}`)]));
+}
+
+function getPositions(userId, game) {
+  const list = store[userId]?.[game]?.pos;
+  return Array.isArray(list) ? list.filter(k => positionName(game, k)) : [];
+}
+
+function cleanEntry(userId, game) {
+  const e = store[userId]?.[game];
+  if (!e) return;
+  if (e.roles && !Object.keys(e.roles).length) delete e.roles;
+  if (e.pos && !e.pos.length) delete e.pos;
+  if (!e.tier && !e.roles && !e.pos) delete store[userId][game];
+  if (store[userId] && !Object.keys(store[userId]).length) delete store[userId];
+}
+
+// 티어를 저장한다(null 이면 지운다). 포지션·다른 롤 티어는 그대로 둔다.
+function setTier(userId, gk, tier) {
+  const { game, role } = splitKey(gk);
+  if (!LADDERS[game] || (role && (game !== 'overwatch' || !owRole(role)))) return;
   if (!store[userId]) store[userId] = {};
-  if (tier) store[userId][game] = { tier: tier.tier, ...(tier.div ? { div: tier.div } : {}), ...(tier.score ? { score: tier.score } : {}), at: Date.now() };
-  else delete store[userId][game];
+  const e = (store[userId][game] = store[userId][game] || {});
+  if (role) {
+    e.roles = { ...(e.roles || {}) };
+    if (tier) e.roles[role] = tierOnly(tier); else delete e.roles[role];
+  } else {
+    delete e.tier; delete e.div; delete e.score;
+    if (tier) Object.assign(e, tierOnly(tier));
+  }
+  e.at = Date.now();
+  cleanEntry(userId, game);
+  save();
+}
+
+// 포지션 저장: [주, 부] (빈 배열이면 지움)
+function setPositions(userId, game, list) {
+  if (!POSITIONS[game]) return;
+  const clean = [...new Set((list || []).filter(k => positionName(game, k)))].slice(0, 2);
+  if (!store[userId]) store[userId] = {};
+  const e = (store[userId][game] = store[userId][game] || {});
+  e.pos = clean;
+  e.at = Date.now();
+  cleanEntry(userId, game);
   save();
 }
 
@@ -202,7 +297,8 @@ function setTier(userId, game, tier) {
 const EMOJI_DIR = path.join(__dirname, '..', '..', 'assets', '티어');
 const emojiIds = new Map(); // 파일 이름(lol_gold, val_imm2 …) → 앱 이모지 ID
 
-function emojiFileName(game, tier) {
+function emojiFileName(gk, tier) {
+  const game = baseGame(gk);
   if (game === 'lol') return `lol_${tier.tier}`;
   if (game === 'overwatch') return `ow_${tier.tier}`;
   if (game === 'valorant' || game === 'pubg') { // 발로·배그는 단계마다 그림이 따로 있다
@@ -249,7 +345,8 @@ function tierEmojiId(game, tier) {
 }
 
 // 이름 앞에 붙일 글자. 이모지가 준비됐으면 이모지(롤은 단계 숫자를 뒤에), 아니면 "[다2]" 같은 글자.
-function tierBadge(game, tier) {
+function tierBadge(gk, tier) {
+  const game = baseGame(gk);
   if (!tier || !findTier(game, tier.tier)) return '';
   const id = tierEmojiId(game, tier);
   if (!id) return `\`${tierLabel(game, tier, { short: true })}\``;
@@ -260,6 +357,13 @@ function tierBadge(game, tier) {
 
 module.exports = {
   LADDERS,
+  POSITIONS,
+  POSITION_WORD,
+  OW_ROLES,
+  splitKey,
+  ladderOf,
+  positionName,
+  owRole,
   hasTiers,
   findTier,
   tierScore,
@@ -267,7 +371,10 @@ module.exports = {
   tierLabel,
   parseTierToken,
   getTier,
+  getRoleTiers,
+  getPositions,
   setTier,
+  setPositions,
   ensureTierEmojis,
   tierEmojiId,
   tierBadge,

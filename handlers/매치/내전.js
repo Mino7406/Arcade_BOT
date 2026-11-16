@@ -690,7 +690,21 @@ async function handleNaejeonButton(interaction) {
           const t = list[(match.participants.length * 3) % (list.length - 1)];
           tier = t.divs ? { tier: t.key, div: (match.participants.length % t.divs) + 1 } : { tier: t.key, score: 250 };
         }
+        if (game === 'overwatch') { // 오버워치는 롤별 티어로: 사람마다 1~2개 롤
+          tiers.setTier(id, game, null);
+          const k = match.participants.length;
+          const roles = tiers.OW_ROLES.map(r => r.key);
+          const mine = tier ? [roles[k % 3], ...(k % 2 ? [roles[(k + 1) % 3]] : [])] : [];
+          for (const r of roles) tiers.setTier(id, `overwatch.${r}`, mine.includes(r) ? tier : null);
+          continue;
+        }
         tiers.setTier(id, game, tier);
+      }
+      // 포지션(롤)·역할(발로): 이름 순서로 주/부를 돌려 가며 넣는다(티어 없는 사람은 포지션도 없음)
+      const k = match.participants.length;
+      for (const game of Object.keys(tiers.POSITIONS)) {
+        const keys = tiers.POSITIONS[game].map(p => p.key);
+        tiers.setPositions(id, game, saved ? [keys[k % keys.length], keys[(k + 2) % keys.length]] : []);
       }
     }
     for (let n = 1; match.participants.length < max; n++) { // 준비한 이름보다 정원이 크면 번호로
