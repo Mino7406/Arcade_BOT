@@ -134,13 +134,70 @@ function validateTeams(teams) {
 }
 
 // ✏️ 직접 입력의 팀별 칸(칸 하나 = 팀 하나, 한 줄에 한 명)을 읽는다.
-//   탑 승훈 다2   ← 맨 앞 역할(그 자리로 고정) · 이름 · 티어(저장). 역할·티어는 둘 다 빼도 된다.
+//   탑 승훈 다2   ← 역할(그 자리로 고정) · 이름 · 티어(저장). 역할·티어는 둘 다 빼도 된다.
+//   구분은 띄어쓰기·없음·- , / · | : . 괄호 등 아무거나: "탑승훈다2" "탑-승훈-다2" "탑,승훈" "승훈(다2)" "승훈 탑"(역할을 뒤에)
 //   [공수]        ← 첫 줄을 대괄호로 쓰면 팀 이름
-// 한 칸에 "윤진-승훈-…"처럼 예전 방식으로 여러 팀을 붙여넣으면 예전처럼 읽는다.
+// 참가자 이름과 정확히 같은 글자는 쪼개지 않는다(이름이 "미드라"여도 미드+라 로 읽지 않게).
+// 한 칸에만 "윤진-승훈-…"처럼 한 줄에 여러 명씩 예전 방식으로 붙여넣으면 줄마다 한 팀으로 예전처럼 읽는다.
 // 성공: { teams: [{ name, members, pos? }], hints } / 실패: { error }
-function parseTeamBoxes(boxes, { game } = {}) {
+const LINE_SPLIT_RE = /[\s,，、\-–—·•|/:：.~=()（）]+/;
+
+// 역할 글자 목록(긴 것부터) — 붙여 쓴 "탑승훈"에서 앞을 떼어 낼 때
+function positionAliases(game) {
+  const list = game === 'overwatch' ? tiers.OW_ROLES : tiers.POSITIONS[game] || [];
+  return list.flatMap(p => p.aliases.map(a => ({ alias: a, key: p.key }))).sort((a, b) => b.alias.length - a.alias.length);
+}
+
+// 낱말 하나 → { name, slot, tier }. 앞에 붙은 역할, 뒤에 붙은 티어를 떼어 낸다(참가자 이름과 같으면 그대로).
+function splitGlued(token, game, isName) {
+  let name = token; let slot = null; let tier = null;
+  if (isName(name)) return { name, slot, tier };
+  if (tiers.hasPositions(game)) {
+    const hit = positionAliases(game).find(({ alias }) => name.startsWith(alias) && name.length > alias.length);
+    if (hit) { slot = hit.key; name = name.slice(hit.alias.length); }
+  }
+  if (!isName(name) && tiers.hasTiers(game)) {
+    for (let i = 1; i < name.length; i++) { // 가장 긴 티어 꼬리부터: "승훈다이아2" → 승훈 + 다이아2
+      const tr = tiers.parseTierToken(game, name.slice(i));
+      if (tr) { tier = tr; name = name.slice(0, i); break; }
+    }
+  }
+  return { name, slot, tier };
+}
+
+// 한 줄 → [{ name, slot }] (보통 한 명, "윤진 승훈"처럼 여러 명이면 여러 개). 티어는 hints 에 쌓는다.
+function parseMemberLine(line, game, hints, isName) {
+  const words = line.split(LINE_SPLIT_RE).filter(Boolean);
+  const out = [];
+  let pendingSlot = null;
+  words.forEach((w, i) => {
+    const asSlot = tiers.hasPositions(game) && !isName(w) ? tiers.parsePositionToken(game, w) : null;
+    if (asSlot && (words.length > 1)) { // 따로 적은 역할: 이름 앞이면 다음 사람, 뒤면 바로 앞 사람
+      const last = out[out.length - 1];
+      if (last && !last.slot && i > 0 && !pendingSlot) last.slot = asSlot; else pendingSlot = asSlot;
+      return;
+    }
+    const asTier = !isName(w) ? tiers.parseTierToken(game, w) : null;
+    if (asTier && out.length) { hints.push({ name: out[out.length - 1].name, tier: asTier }); return; }
+    const g = splitGlued(w, game, isName);
+    if (!g.name) return;
+    out.push({ name: g.name, slot: pendingSlot || g.slot });
+    pendingSlot = null;
+    if (g.tier) hints.push({ name: g.name, tier: g.tier });
+  });
+  return out;
+}
+
+function parseTeamBoxes(boxes, { game, participants = [] } = {}) {
+  const names = new Set(participants.map(u => nameToken(u.displayName)));
+  const isName = w => names.has(w);
   const filled = boxes.map(b => String(b || '').trim()).filter(Boolean);
-  if (filled.length === 1 && /[-/]|\svs\s/i.test(filled[0])) return parseTeamsText(filled[0], { game });
+  // 예전 방식: 칸 하나에만 적었고, 줄마다 이름이 둘 이상(팀 한 줄)이거나 / vs 로 팀을 나눴을 때
+  if (filled.length === 1) {
+    const lines = filled[0].split(/\r?\n/).map(l => l.trim()).filter(l => l && !/^\[[^\]]+\]$/.test(l));
+    const teamLike = lines.length > 0 && lines.every(l => parseMemberLine(l, game, [], isName).length >= 2);
+    if (teamLike || /\s\/\s|\svs\s/i.test(filled[0])) return parseTeamsText(filled[0], { game });
+  }
 
   const hints = [];
   const teams = filled.map(box => {
@@ -151,11 +208,7 @@ function parseTeamBoxes(boxes, { game } = {}) {
     const members = [];
     const pos = [];
     for (const line of lines) {
-      const words = line.split(/\s+/);
-      const slot = words.length >= 2 && tiers.hasPositions(game) ? tiers.parsePositionToken(game, words[0]) : null;
-      const rest = slot ? words.slice(1).join(' ') : line;
-      const got = parseTeamLine(rest, game, hints).members; // 한 줄에 여러 명·"승훈(불2)"·"승훈 불2" 모두 예전처럼
-      got.forEach((m, i) => { members.push(m); pos.push(i === 0 ? slot : null); });
+      for (const m of parseMemberLine(line, game, hints, isName)) { members.push(m.name); pos.push(m.slot); }
     }
     return { name, members, ...(pos.some(Boolean) ? { pos } : {}) };
   }).filter(t => t.members.length > 0);
@@ -1115,7 +1168,7 @@ async function handleTeamModal(interaction) {
   const field = id => { try { return interaction.fields.getTextInputValue(id) ?? ''; } catch { return ''; } };
   const boxes = [0, 1, 2, 3, 4].map(i => field(`team${i}`));
   const parsed = boxes.some(b => b.trim())
-    ? parseTeamBoxes(boxes, { game: match.data.game })
+    ? parseTeamBoxes(boxes, { game: match.data.game, participants: match.participants })
     : parseTeamsText(field('teams'), { game: match.data.game });
   if (parsed.error) {
     await interaction.reply(notice(`⚠️ ${parsed.error}`, { ephemeral: true }));

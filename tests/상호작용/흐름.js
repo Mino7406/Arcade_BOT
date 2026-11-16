@@ -221,6 +221,13 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     assert(team.buildInputModal(match, id).toJSON().components[0].components[0].value.includes('미드 이름u1'), '다시 열면 고정 역할이 채워져 있어야 함');
     assert(team.parseTeamBoxes(['윤진-승훈' + NL + '시형-연우', ''], { game: 'lol' }).teams.length === 2, '한 칸에 예전 방식으로 붙여넣으면 예전처럼 읽어야 함');
     assert(team.parseTeamBoxes(['돌격 가' + NL + '힐 나', '딜 다' + NL + '라'], { game: 'overwatch' }).teams[0].pos.join() === 'tank,support', '오버워치 줄임말(돌격·힐)을 못 읽음');
+    // 구분 글자 아무거나·붙여 쓰기·역할을 뒤에, 참가자 이름과 같으면 쪼개지 않음
+    const P = ['민호', '미드라', '승훈', '지수'].map((n, i) => ({ id: 'x' + i, displayName: n }));
+    const flex = team.parseTeamBoxes(['탑민호' + NL + '미드라' + NL + '정글-승훈-다2', '서포터,지수' + NL + '가 바텀'], { game: 'lol', participants: P });
+    assert(flex.teams[0].members.join() === '민호,미드라,승훈' && flex.teams[0].pos.join() === 'top,,jungle', `붙여 쓴 역할·구분 글자를 못 읽음(${JSON.stringify(flex.teams)})`);
+    assert(flex.teams[1].pos.join() === 'support,adc' && flex.hints.some(h => h.name === '승훈' && h.tier.div === 2), `쉼표·역할 뒤에 쓰기·티어를 못 읽음(${JSON.stringify(flex)})`);
+    const glued = team.parseTeamBoxes(['민호다이아2' + NL + '승훈(골1)', '지수/미드' + NL + '나'], { game: 'lol', participants: P });
+    assert(glued.teams[0].members.join() === '민호,승훈' && glued.hints.length === 2 && glued.teams[1].pos[0] === 'mid', `이름에 붙인 티어·괄호·/ 를 못 읽음(${JSON.stringify(glued)})`);
 
     await team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:balance:${id}` }));
     assert(match.board.current.how === 'balance' && match.board.history.length === 3, '밸런스 후 이전 팀표로 안 밀림');
