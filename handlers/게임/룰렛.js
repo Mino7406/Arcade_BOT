@@ -13,14 +13,14 @@ const { logSystem, logAction, logError, userLabel } = require('../공통/로그'
 const { writeJsonIfChanged } = require('../공통/저장');
 const { card, payload, notice, COLORS, footerSide, pullButton } = require('../공통/카드');
 const { HACK_TOOL_NAME, hackToolWith, HACK_TOOL_MAX, hackToolEmoji, hackUseButtonEmoji, hackUseEmoji, getHackTools, useHackTool } = require('./해킹툴');
-const { GATEWAY_NAME, gatewayEmoji, gatewayButtonEmoji, getGateways, useGateway } = require('./블랙월게이트웨이');
+const { GATEWAY_NAME, gatewayEmoji, gatewayButtonEmoji, getGateways, useGateway, GATEWAY_MAX } = require('./블랙월게이트웨이');
 
 const ROULETTE_PATH = path.join(__dirname, '..', '..', 'DB', 'roulette.json');
 fs.mkdirSync(path.dirname(ROULETTE_PATH), { recursive: true });
 
 const MIN_BET = 10;
-const MAX_BET = 1000; // 300에서 상향(유저 평균 레벨이 올라 한 레벨에 필요한 XP가 커짐 — 중앙값 820·상위 25% 2,180)
-const BET_PRESETS = [10, 100, 300, 500, 1000]; // 한 줄 버튼 최대 5개
+const MAX_BET = 500; // 300에서 상향(유저 평균 레벨이 올라 한 레벨에 필요한 XP가 커짐 — 중앙값 820·상위 25% 2,180)
+const BET_PRESETS = [10, 100, 300, 500]; // 한 줄 버튼 최대 5개
 const LOBBY_TIMEOUT_MS = 60 * 1000;
 const WALL_COLOR = 0xB81C2A; // 블랙월 게이트웨이를 발동한 룰렛 카드 띠 색(붉은)
 const WALL_FOOTER = '⏰ 블랙월 ▓▒░ [ACCESS_GRANTED] 잭팟 확정';
@@ -133,7 +133,7 @@ const hackUnlimited = (guildId) => isTestGuild(guildId);
 const hackToolsOf = (guildId, userId) => (hackUnlimited(guildId) ? Infinity : getHackTools(guildId, userId));
 // 블랙월 게이트웨이(??? 레이드 MVP 보상): 돌리기 전에 발동해 두면 이번 판이 100% 잭팟. 테스트 서버에서는 무제한.
 const gatewaysOf = (guildId, userId) => (hackUnlimited(guildId) ? Infinity : getGateways(guildId, userId));
-const gatewayHaveText = (have) => (have === Infinity ? '테스트 서버 · 무제한' : `${have}개`);
+const gatewayHaveText = (have) => (have === Infinity ? '테스트 서버 · 무제한' : `${have}/${GATEWAY_MAX}개`);
 const hackHaveText = (have) => (have === Infinity ? '테스트 서버 · 무제한' : `${have}/${HACK_TOOL_MAX}개`);
 
 // 해킹된 카드의 안내 줄: 인코딩이 깨진 것처럼 대체 문자(�)와 오류 코드를 섞는다(읽을 수는 있게).
@@ -297,7 +297,7 @@ function buildControlRow(lobby) {
   // 블랙월 게이트웨이를 갖고 있으면 '발동' 버튼(누르면 켜고 끔). 켜 두고 돌리면 이번 판이 100% 잭팟.
   const gate = lobby.gateways > 0
     ? [new ButtonBuilder().setCustomId(`roulette:gate:${lobby.id}`).setEmoji(gatewayButtonEmoji())
-        .setLabel(lobby.gatewayArmed ? '사용됨 · 이번 판 100% 잭팟 (다시 누르면 취소)' : `${GATEWAY_NAME} 사용`)
+        .setLabel(lobby.gatewayArmed ? '사용됨 (다시 누르면 취소)' : `${GATEWAY_NAME} 사용`)
         .setStyle(lobby.gatewayArmed ? ButtonStyle.Success : ButtonStyle.Danger)]
     : [];
   return new ActionRowBuilder().addComponents(

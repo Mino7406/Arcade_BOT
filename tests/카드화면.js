@@ -233,7 +233,7 @@ async function buildScreens() {
   const gwL0 = rl.buildLobbyPayload(gwLobby, { ephemeral: true, withImage: true });
   add('룰렛', '게이트웨이 — 로비(사용 전)', '게이트웨이가 있으면 로비에 보유 수와 🌐 사용 버튼이 보임', gwL0, rlWith(gwL0));
   const gwL1 = rl.buildLobbyPayload({ ...gwLobby, gatewayArmed: true }, { ephemeral: true, withImage: true });
-  add('룰렛', '게이트웨이 — 로비(사용됨)', '사용하면 버튼이 초록 "사용됨 · 이번 판 100% 잭팟"으로 바뀜(다시 누르면 취소)', gwL1, rlWith(gwL1));
+  add('룰렛', '게이트웨이 — 로비(사용됨)', '사용하면 버튼이 초록 "사용됨"으로 바뀜(다시 누르면 취소)', gwL1, rlWith(gwL1));
   for (let step = 0; step < rl.WALL_EROSION.length; step++) {
     const er = rl.buildWallErosionPayload(rlb, 300, step);
     add('룰렛', `게이트웨이 — 돌리기 전 잠식 ${step + 1}/${rl.WALL_EROSION.length}`, ['평범한 룰렛이 가장자리부터 붉은 선·막대·테두리 사각형으로 잠식당함', '잠식이 번져 나감', '대부분 블랙월로 덮임', '거의 다 덮임 — 곧 블랙월 룰렛이 돌아감'][step], er, rlWith(er));

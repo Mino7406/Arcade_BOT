@@ -62,8 +62,11 @@ function setCount(guildId, userId, n) {
   if (!items[guildId]) items[guildId] = {};
   if (n > 0) items[guildId][userId] = n; else delete items[guildId][userId];
 }
+const GATEWAY_MAX = 3; // 해킹 툴과 같은 최대 보유량
 function grantGateway(guildId, userId) {
-  setCount(guildId, userId, getGateways(guildId, userId) + 1);
+  const have = getGateways(guildId, userId);
+  if (have >= GATEWAY_MAX) return false; // 최대 보유면 못 받음
+  setCount(guildId, userId, have + 1);
   saveGateways();
   return true;
 }
@@ -76,4 +79,4 @@ function useGateway(guildId, userId) {
   return true;
 }
 
-module.exports = { GATEWAY_EMOJI: EMOJI, EMOJI_DIR, GATEWAY_NAME, gatewayEmoji, gatewayButtonEmoji, ensureGatewayEmoji, setGatewayEmojiId, loadGateways, saveGateways, getGateways, grantGateway, useGateway };
+module.exports = { GATEWAY_MAX, GATEWAY_EMOJI: EMOJI, EMOJI_DIR, GATEWAY_NAME, gatewayEmoji, gatewayButtonEmoji, ensureGatewayEmoji, setGatewayEmojiId, loadGateways, saveGateways, getGateways, grantGateway, useGateway };
