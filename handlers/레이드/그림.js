@@ -993,7 +993,10 @@ function actLabel(act) {
 // (결과 화면엔 리본이 없어 비어 있음)에만 작게 띄운다. 치유의 빛은 회복받은 카드마다, 부활하면 빛기둥.
 const SKILL_SPRITES = {
   slash: { rows: ['....wwwwwwww....', '..wwbb....bbww..', '.wb..........bw.', 'w..............w'], palette: { w: '#ffffff', b: '#9fd8ff' } },
-  shot: { rows: ['........wwww....', '.y..wwwwwwwwwww.', 'yyy.............', '.y..wwwwwwwwwww.', '........wwww....'], palette: { w: '#ffffff', y: '#ffd23f' } }, // 발사: 왼쪽 섬광 + 오른쪽으로 뻗는 속도선
+  // 궁수·수호자·치유사는 검사 반달 베기와 같은 그림체(가는 흰 선 + 옅은 색 테두리, 가운데 하나) — 사용자 요청
+  shot: { rows: ['...........w....', 'bbbbwwwwwwwwww..', '...........w....'], palette: { w: '#ffffff', b: '#ffe9a0' } },
+  guard: { rows: ['.bwwwwwb.', 'w.......w', 'w.......w', 'b.......b', '.w.....w.', '..b...b..', '...www...'], palette: { w: '#ffffff', b: '#9fd8ff' } },
+  twinkle: { rows: ['....w....', '....b....', '...bwb...', 'wbbwwwbbw', '...bwb...', '....b....', '....w....'], palette: { w: '#ffffff', b: '#9ff0b0' } },
   shield: { rows: ['.aaaaaaa.', 'abbbbbbba', 'abwbbbbba', 'abwbbbbba', 'abbbbbbba', '.abbbbba.', '..abbba..', '...aba...', '....a....'], palette: { a: '#1c2a38', b: '#5a9be0', w: '#ffffff' } },
   cross: { rows: ['..g..', '.ggg.', 'ggwgg', '.ggg.', '..g..'], palette: { g: '#5fe08a', w: '#ffffff' } },
   spark: { rows: ['.y.', 'yyy', '.y.'], palette: { y: '#ffd23f' } },
@@ -1005,18 +1008,22 @@ function cardSkillFx(b, last, mem, x, y, w) {
   const act = last.acts?.[mem.userId];
   if (act?.skill && mem.role === 'sword') drawPixels(SKILL_SPRITES.slash, cx, top, 4);
   if (act?.skill && mem.role === 'archer') {
-    drawPixels(SKILL_SPRITES.shot, cx, top, 4); // 검사 반달 베기처럼 가운데 하나: 발사 섬광 + 속도선(화살 대신 '쏜 느낌' — 사용자 요청)
+    drawPixels(SKILL_SPRITES.shot, cx, top, 4);
     if (act.crit) drawPixels(SKILL_SPRITES.spark, cx + 40, top, 4);
   }
   if (act?.skill && mem.role === 'tank') {
-    // 치유사 십자처럼 양옆에 작은 방패 둘, 반격한 턴엔 노랗게
-    const gold = last.reflect?.userId === mem.userId ? { colors: { a: '#5a3a08', b: '#ffd23f' } } : {};
-    for (const dx of [-30, 30]) drawPixels(SKILL_SPRITES.shield, cx + dx, top, 2.2, gold);
+    // 속이 빈 방패 윤곽선, 반격한 턴엔 테두리가 노랗게
+    drawPixels(SKILL_SPRITES.guard, cx, top, 4, last.reflect?.userId === mem.userId ? { colors: { b: '#ffd23f' } } : {});
   }
   const healer = b.members.find(m => m.role === 'healer' && last.acts?.[m.userId]?.skill);
   if (healer && last.healed?.includes(mem.userId)) {
-    if (last.revivedIds?.includes(mem.userId)) for (let i = 0; i < 4; i++) p.rect(cx - 5, y + 12 + i * 8, 10, 5, i % 2 ? '#d8ffd0' : '#ffffff');
-    for (const dx of [-30, 30]) drawPixels(SKILL_SPRITES.cross, cx + dx, top, 3);
+    const revived = last.revivedIds?.includes(mem.userId);
+    // 부활: 카드 위에서 아이콘까지 내려오는 빛기둥(가운데)
+    if (revived) for (let i = 0; i < 7; i++) p.rect(cx - 8, y + 10 + i * 8, 16, 5, i % 2 ? '#9ff0b0' : '#ffffff');
+    // 자기 스킬 연출이 있거나 부활했으면 반짝임은 오른쪽에 작게(같은 자리에 겹치지 않게), 아니면 가운데
+    const own = (act?.skill && mem.role !== 'healer') || revived;
+    if (own) drawPixels(SKILL_SPRITES.twinkle, cx + 70, top - 2, 2.6);
+    else drawPixels(SKILL_SPRITES.twinkle, cx, top, 4);
   }
 }
 
