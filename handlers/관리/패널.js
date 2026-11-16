@@ -11,7 +11,7 @@ const {
 
 const { ADMIN_IDS, autoEndAt, disarmAutoEnd, clearNotifyTimer, deleteMentionMessage, announceMatchCompletionXp, getCancelledDeletions } = require('../매치/공용');
 // 끝말잇기/틱택토/레벨/랭킹은 이 채널(놀이터)에서만 사용 가능.
-const { PLAYGROUND_CHANNEL_ID, RECRUIT_CHANNEL_ID, isTestGuild } = require('../../config');
+const { PLAYGROUND_CHANNEL_ID, RECRUIT_CHANNEL_ID, isTestGuild, REALM_OPEN } = require('../../config');
 const { card, payload, menu, footerSide, COLORS, notice: quick } = require('../공통/카드');
 const { buildRealmPanelPayload } = require('../../forms/마크');
 const { rememberRecruitPanel } = require('./최신화');
@@ -49,7 +49,7 @@ const PANELS = {
 
 function buildPanelSelectPayload({ withBack = false } = {}) {
   const row = new ActionRowBuilder().addComponents(
-    ...Object.entries(PANELS).map(([type, panel]) =>
+    ...Object.entries(PANELS).filter(([type]) => type !== 'realm' || REALM_OPEN).map(([type, panel]) =>
       new ButtonBuilder()
         .setCustomId(`form:publish:${type}`)
         .setLabel(panel.label)
@@ -70,7 +70,7 @@ async function handlePanelSelectButton(interaction) {
 
   const type = interaction.customId.split(':')[2];
   const panel = PANELS[type];
-  if (!panel) return;
+  if (!panel || (type === 'realm' && !REALM_OPEN)) return; // 닫힌 렐름 패널은 옛 메뉴로도 올리지 않는다
 
   const message = await interaction.channel.send(panel.build(interaction));
   panel.posted?.(message);
