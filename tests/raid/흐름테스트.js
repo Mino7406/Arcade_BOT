@@ -1115,7 +1115,7 @@ let ok4;
     }
     assert(!lv.isRaidXpFrozen() && !mod.isPlaygroundPaused('gMain'), '전멸 후 XP 정지 해제');
 
-    // (마) ??? 남아 있는 몬스터: 모집 마감 없음 · 대기 XP 분당 3~5 차감(5초 단위로 쪼갬) · 패배해도 도주 안 함(-200) · 승리 보상(MVP +아이템)
+    // (마) ??? 남아 있는 몬스터: 모집 마감 없음 · 대기 XP 분당 12~18 차감(5초 단위로 쪼갬) · 패배해도 도주 안 함(-200) · 승리 보상(MVP +아이템)
     {
       const voidM = E.loadMonsters(path.join(root, 'Monster-all')).find(m => m.id === 'void');
       E.MONSTERS.push(voidM); // 테스트용 Monster 폴더엔 슬라임만 있어 잠깐 등록한다
@@ -1135,11 +1135,11 @@ let ok4;
         assert(t0.includes('ERR_0x7F') && t0.includes('지금까지 잃은 XP :** ' + '`-0.0 XP`') && !/## ⏳ \d\d:\d\d:\d\d/.test(t0) && t0.includes('패배 0회') && t0.includes('보상** : +1000 XP') && !t0.includes('MVP는 여기에'), '??? 모집 화면: 전용 문구 · 잃은 XP · 깨진 시계(남은 시간 없음) · 보상은 +1000 XP만');
         await runTimers(); await settle();
         assert(mod.getRaidStatus('gMain').active && mod.getRaidStatus('gMain').monsterName === '???', '모집 시간이 지나도 도주하지 않음(마감 타이머 없음)');
-        // 대기 차감: 10분 흐른 것으로 하고 틱 → 분당 3~5 XP × 10분 = -30~-50(소수점은 이월되므로 29 이상)
+        // 대기 차감: 10분 흐른 것으로 하고 틱 → 분당 12~18 XP × 10분 = -120~-180(소수점은 이월되므로 119 이상)
         const v1a = lv.getXp('gMain', 'v1'), v2a = lv.getXp('gMain', 'v2');
         await at(10 * 60_000, async () => { await runTimers(); await settle(); });
         const lost10 = v1a - lv.getXp('gMain', 'v1');
-        assert(lost10 >= 29 && lost10 <= 50 && lv.getXp('gMain', 'v2') === Math.max(0, v2a - lost10), `대기 10분 → 모든 유저 같은 양 -${lost10} XP(분당 3~5, 약 30~50 범위)`);
+        assert(lost10 >= 119 && lost10 <= 180 && lv.getXp('gMain', 'v2') === Math.max(0, v2a - lost10), `대기 10분 → 모든 유저 같은 양 -${lost10} XP(분당 12~18, 약 120~180 범위)`);
         assert(textOf(raidMsg()).includes('지금까지 잃은 XP :** ' + '`-' + lost10 + '.') && !textOf(raidMsg()).includes('도주하지 않아요'), '대기창에 지금까지 잃은 XP 표시(차감 속도·도주 안내 문구는 없음)');
         // 전투 시작(차감 멈춤) → 시간 초과 패배 → 도주하지 않고 다시 모집 + 모든 유저 -200
         await press(mod, raidMsg(), '11', 'raid:role:sword'); await press(mod, raidMsg(), '12', 'raid:role:archer');

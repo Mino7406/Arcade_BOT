@@ -377,7 +377,7 @@ async function buildScreens() {
       add('레이드', `??? — ${title}`, sub, v, rf(v));
     };
     await wait('대기창 (막 출현)', '전용 디자인: 깨진 시계 · 잃은 XP · 패배 횟수 · 보상(MVP 아이템)', { waitedMs: 0, lostPerUser: 0, defeatStacks: 0 });
-    await wait('대기창 (3시간 경과)', '분당 -3~5 XP 차감(숫자가 계속 움직임) · 1인당 잃은 XP가 계속 늘어남', { waitedMs: 3 * H, lostPerUser: 720, defeatStacks: 0 });
+    await wait('대기창 (3시간 경과)', '분당 -12~18 XP 차감(숫자가 계속 움직임) · 1인당 잃은 XP가 계속 늘어남', { waitedMs: 3 * H, lostPerUser: 2700, defeatStacks: 0 });
     await wait('대기창 (패배 2회 후)', '졌어도 도주하지 않고 다시 모집 · 패배 1회마다 모든 유저 -200 XP', { waitedMs: 5 * H, lostPerUser: 1500, defeatStacks: 2 }, 0);
     // 전투 장면들
     const vb = (intent, choice = 'attack', n = 4) => {
