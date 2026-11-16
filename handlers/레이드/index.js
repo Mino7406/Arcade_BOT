@@ -236,7 +236,7 @@ async function recruitView(r, { redraw = true } = {}) {
     const rules = raidRules(r);
     sections.push({
       text: '>>> ## ⚠️ ░ERR_0x7F░ XP 시스템 오류\n' +
-        `${m.name}${subjectJosa(m.name)} XP 시스템을 ▓▓하고 있습니다. **채팅 · 통화방 · 미니게임 XP 지급이 정지**되었습니다.\n` +
+        `${m.name}${subjectJosa(m.name)} XP 시스템을 ▓▓하고 있습니다.\n**채팅 · 통화방 · 미니게임 XP 지급이 정지**되었습니다.\n` +
         '-# 토벌하지 않으면 사라지지 않아요 · 기다리는 동안 모두의 XP가 계속 줄어요',
     });
     sections.push({
