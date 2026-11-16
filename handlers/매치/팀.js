@@ -564,7 +564,7 @@ function buildTierDivPayload(game, tierKey, matchMsgId) {
   return payload(tierCard(game, {
     header: `${t.name} 몇 단계인가요?`,
     thumbTier: { tier: tierKey, div: divs[0] },
-    blocks: [`-# ${ladder.divOrder === 'desc' ? '숫자가 작을수록 높아요' : '숫자가 클수록 높아요'} (${t.name} ${divs[0]}이 가장 높음)`],
+    blocks: [],
     rows: [
       new ActionRowBuilder().addComponents(menu),
       new ActionRowBuilder().addComponents(backButton(`team:tier_back:${game}:${matchMsgId}`, '↩️ 뒤로')),
