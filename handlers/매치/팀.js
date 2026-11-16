@@ -904,7 +904,7 @@ function buildOwRolesPayload(matchMsgId, userId) {
     thumbTier: tiers.getTier(userId, 'overwatch'),
     blocks: [
       `**역할별 티어**\n${tiers.OW_ROLES.map(r => `${tiers.positionIcon('overwatch', r.key)} **${r.name}**　${tierLine(`overwatch.${r.key}`, rt[r.key])}`).join('\n')}`,
-      '**어느 역할 티어를 설정할까요?**\n-# 하는 역할만 저장하면 돼요 · 6vs6은 🔓 자유 티어를 써요', // 안내를 질문과 같은 칸에(사이 구분선 없이)
+      `**어느 역할 티어를 설정할까요?**\n-# 하는 역할만 저장하면 돼요 · 6vs6은 ${tiers.positionIcon('overwatch', 'open')} 자유 티어를 써요`, // 안내를 질문과 같은 칸에(사이 구분선 없이)
     ],
     rows: [new ActionRowBuilder().addComponents(...buttons)],
   }), { ephemeral: true });

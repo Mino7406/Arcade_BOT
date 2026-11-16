@@ -126,7 +126,7 @@ const OW_ROLES = [
   { key: 'tank', name: '돌격', icon: '🛡️', slots: 1, aliases: ['돌격', '탱', '탱커'] },
   { key: 'damage', name: '공격', icon: '⚔️', slots: 2, aliases: ['공격', '딜', '딜러'] },
   { key: 'support', name: '지원', icon: '💉', slots: 2, aliases: ['지원', '힐', '힐러', '서폿'] },
-  // 자유(오픈 큐): 6vs6 은 역할 제한이 없어서 이 티어로 계산한다. 자리가 아니라 직접 입력의 역할 글자로는 안 받는다.
+  // 자유(오픈 큐): 6vs6 은 역할 제한이 없어서 이 티어로 계산한다. 자리가 아니라 직접 입력의 역할 글자로는 안 받는다. 아이콘은 오버워치 플렉스 아이콘(pos_ow_open)
   { key: 'open', name: '자유', icon: '🔓', slots: 0, aliases: [], open: true },
 ];
 
