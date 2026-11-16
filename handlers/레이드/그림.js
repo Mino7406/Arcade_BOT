@@ -1197,17 +1197,11 @@ function skillGlitch(ctx, seed) {
     splitRgb(mon.x0 - px(20), mon.y0, mon.x1 + px(20), mon.y1, 3);
     gtxt('CLK ▲ 150%', ctx.mx - 215, ctx.my - 40, 17, '#ff6a78');
   } else if (ctx.fx === 'deadeye') {
-    // 데드아이: 표적 카드만 픽셀 모자이크로 '초점'이 잠기고, 몬스터 눈에서 계단처럼 꺾인 디지털 레이저가 뻗는다
+    // 데드아이: 표적 카드의 위·아래 띠가 모자이크로 '초점'이 잠기고, 끊긴 조준 고리 + LOCK
     for (const t of tgts) {
       pixelate(px(t.x + 4), px(t.y + 4), px(t.x + t.w - 4), px(t.y + 46), px(10)); // 이름·체력 줄은 읽히게 위·아래 띠만 모자이크
       pixelate(px(t.x + 4), px(t.y + t.h - 52), px(t.x + t.w - 4), px(t.y + t.h - 4), px(10));
-      const x1 = t.x + t.w / 2, y1 = t.y + 86; let x0 = ctx.mx, y0 = ctx.my - 8; const steps = 9;
-      for (let k = 1; k <= steps; k++) {
-        const nx = x0 + (x1 - x0) / steps, ny = y0 + (y1 - y0) / steps, jx = (rnd() - 0.5) * 16, jy = (rnd() - 0.5) * 6;
-        p.line(x0 + jx, y0, nx + jx, y0, 7, '#5a0812'); p.line(nx + jx, y0, nx + jx, ny + jy, 7, '#5a0812');
-        p.line(x0 + jx, y0, nx + jx, y0, 3, '#ff3a4a'); p.line(nx + jx, y0, nx + jx, ny + jy, 3, '#ff3a4a');
-        x0 = nx; y0 = ny + jy;
-      }
+      const x1 = t.x + t.w / 2, y1 = t.y + 86;
       // 끊긴 조준 고리: 조각난 호 네 개 + 어긋난 복사본(아이콘 바깥쪽)
       for (let a = 0; a < 4; a++) {
         const a0 = a * Math.PI / 2 + 0.25 + rnd() * 0.2;
