@@ -579,6 +579,8 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply(buildReloadListPayload(interaction));
       } else if (interaction.customId === 'recruit:팀') {
         await interaction.reply(buildTeamMatchListPayload(interaction));
+      } else if (interaction.customId === 'recruit:티어') {
+        await interaction.reply(require('./handlers/매치/팀').buildTierGamePayload());
       } else if (interaction.customId === 'recruit:명령어') {
         await interaction.reply(buildCommandListPayload());
       } else if (interaction.customId === 'recruit:DM알림') {
