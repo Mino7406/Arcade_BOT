@@ -114,9 +114,9 @@ function buildSetupPanelPayload(interaction) {
     new ButtonBuilder().setCustomId('recruit:불러오기').setLabel('🔎 불러오기').setStyle(ButtonStyle.Primary),
   );
   const row2 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('recruit:티어').setLabel('🏅 내 티어 설정').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId('recruit:명령어').setLabel('📖 명령어 보기').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('recruit:DM알림').setLabel('🔔 DM 알림 설정').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('recruit:티어').setLabel('🏅 내 티어 설정').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId('recruit:관리').setLabel('⚙️ 관리').setStyle(ButtonStyle.Danger),
   );
   const playgroundRow = new ActionRowBuilder().addComponents(
