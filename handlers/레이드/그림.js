@@ -505,6 +505,12 @@ function gooBlob(x, y, r, color) {
 function haze(x, y, r, color, alpha) { p.roundRect(x - r, y - r, r * 2, r * 2, r, color, alpha); }
 function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
   if (!move) return;
+  if (move === 'peel' && layer === 'front') {
+    // 바나나 껍질 뿌리기: 몸 둘레로 흩날리는 바나나 껍질 + 작은 노란 조각
+    for (const [dx, dy] of [[-150, -46], [156, -40], [-182, 30], [188, 36], [-96, 70], [104, 74]]) drawPixels(PEEL, cx + dx, cy + dy, 6);
+    for (const [dx, dy] of [[-120, -10], [126, -6], [-60, 84], [66, 86]]) dot(cx + dx, cy + dy, 5, '#f5d040');
+    return;
+  }
   const G = 8;
   const cell = (x, y, c) => p.rect(cx + Math.round((x - cx) / G) * G - G / 2, cy + Math.round((y - cy) / G) * G - G / 2, G, G, c);
   if (move === 'spore' && layer === 'front') {
@@ -752,6 +758,13 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
 }
 // 맞은 파티원 카드 아이콘 위 타격 표시: 박치기는 할퀸 자국, 흩뿌리기는 점액 얼룩, 짓누르기는 충격 별.
 function hitFx(move, cx, cy, color, spore = color, accent = spore) {
+  if (move === 'peel') {
+    // 바나나 껍질에 맞음: 아이콘 옆에 껍질 두 개 + 미끄러진 자국
+    drawPixels(PEEL, cx - 30, cy + 20, 5);
+    drawPixels(PEEL, cx + 30, cy - 18, 5);
+    p.line(cx - 40, cy + 40, cx - 8, cy + 40, 3, '#f5d040');
+    return;
+  }
   if (move === 'spore') {
     // 포자 흩뿌리기: 점액 얼룩(동그라미)과 구분되게 — 대폭발과 같은 동그란 포자 알갱이 두 개 + 흩날리는 네모 가루
     puff(cx - 22, cy - 16, 4, spore, '#f1cdfb');
@@ -931,6 +944,7 @@ function actLabel(act) {
 // 원숭이 부하(몬스터 minions): 몬스터 양옆에 작게 + 아래 HP 막대. 결과 화면엔 이번 턴 받은 피해(빨강)를 HP 막대 아래에,
 // 이번 턴 쓰러진 부하는 회색으로 한 번 더 보여 주고 그다음부턴 그리지 않는다. 부하를 불러낸 턴엔 발밑에 흙먼지.
 // 그린 부하가 있으면 true(오른쪽 피해 숫자를 바깥으로 비킨다).
+const PEEL = { rows: ['y...y', 'yy.yy', '.yyy.', '..d..'], palette: { y: '#f5d040', d: '#7a5410' } };
 const BANANA = { rows: ['...y', '..yy', '.yyd', 'yyd.', 'dd..'], palette: { y: '#f5d040', d: '#a8781a' } };
 const MINION_SPOTS = [-172, 172, -262];
 function drawMinions(b, last, showingResult) {

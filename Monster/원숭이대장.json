@@ -2,8 +2,9 @@
   "_메모": [
     "여섯 번째 레이드 몬스터. 칸 설명은 슬라임.json의 _메모와 같고, 여기에는 원숭이 대장만의 것을 적는다.",
     "palette: a 외곽선 · h 하이라이트 · o 밝은 면 · b 몸 · d 그늘 · f 얼굴(크림) · e 귓속 · w 눈 반사광·송곳니 · k 눈·눈썹 · c 볼 · m 입 · g·l 새싹 · t 눈물 · y 빛(필살기 예고 눈·반짝임). 다른 몬스터처럼 둥근 몸 하나(A안) + 큰 눈(반사광) + 바깥 위에서 안쪽 아래로 기운 두 칸 성난 눈썹(5줄 털 위 6·7·14·15칸 + 6줄) + 송곳니로 위협적으로(표정 시안 1번).",
-    "poses: attack 포효(벌린 입 + 송곳니) · summon 질끈 감은 눈 + 포효 + 반짝임(부하 부르기) · slam·smash 질끈 감은 눈 + 포효 · ready 노랗게 빛나는 눈 + 이빨 + 반짝임 · cry 우울 상태(처진 눈썹 + 꼭 감은 일자 눈 + 몸 끝까지 흐르는 눈물 줄기 ㅠㅠ + 벌린 울음 입). 22칸 × 15줄, scale 1.2.",
+    "poses: attack 포효(벌린 입 + 송곳니) · peel 씩 웃는 입 + 바나나 껍질 · roar 질끈 감은 눈 + 포효 + 반짝임(우두머리 호령) · summon 질끈 감은 눈 + 포효 + 반짝임(부하 부르기) · slam·smash 질끈 감은 눈 + 포효 · ready 노랗게 빛나는 눈 + 이빨 + 반짝임 · cry 우울 상태(처진 눈썹 + 꼭 감은 일자 눈 + 몸 끝까지 흐르는 눈물 줄기 ㅠㅠ + 벌린 울음 입). 22칸 × 15줄, scale 1.2.",
     "smash(필살기 1) = 부하 부르기(빨간 경고), combo(필살기 2, ultimate) = 부하가 살아 있을 때만 쓰는 합동 필살기 — 살아 있는 부하 한 마리마다 perMinion 피해 추가, 그 턴 부하는 따로 공격 안 함. 7턴 보장은 부하가 있으면 필살기 2로 채운다.",
+    "peel(바나나 껍질 뿌리기): 전원 작은 피해 + 🍌미끄러짐(독버섯 환각과 같은 confuse 규칙 — 다음 턴 행동이 effectRate 확률로 헛손질, 방어하면 안 걸림). roar(우두머리 호령): buffRate — 다음 피해 기술 1회 피해 증가, 그 턴 부하의 바나나 투척도 같은 배율.",
     "minions(졸개, 이 블록이 있는 몬스터만): summon 효과 기술로 count마리를 불러낸다(살아 있는 부하가 있으면 그 기술은 고르지 않음). 부하 HP는 몬스터 최대 HP × hpRate. 부하가 살아 있으면 아군 공격·스킬 피해는 자동으로 첫 번째 살아 있는 부하에게 가고 넘친 피해는 사라진다.",
     "부하는 불려 나온 다음 턴부터 몬스터 기술 뒤에 한 마리씩 attack(무작위 한 명, 수호자가 도발하면 수호자)을 한다. 피해는 몬스터 피해 배율·분노 배율을 똑같이 받고 방어·도발로 줄어든다.",
     "penalty(우울 상태): 아군 행동으로 부하를 다 처치하면 다음 턴부터 turns턴 동안 몬스터가 받는 피해 × weakRate, 주는 피해 × dealRate(행동은 그대로 — 1턴 행동 불가는 너무 가혹하다는 사용자 결정). 우울 상태 중엔 cry 자세. 다 잃은 뒤 2턴은 부하를 다시 부르지 않는다.",
@@ -14,8 +15,8 @@
   "emoji": "🦍",
   "rageName": "성난 원숭이 대장",
   "lore": "나뭇잎 왕관을 쓴 거만한 원숭이 대장. 가슴을 쿵쿵 두드려 부하들을 불러 모아 XP를 털어 간다!",
-  "baseHp": 6000,
-  "damageRate": 1.32,
+  "baseHp": 5800,
+  "damageRate": 1.45,
   "rage": {
     "hpRatio": 0.5,
     "damageRate": 1.5
@@ -138,6 +139,40 @@
         "...abbbbbbbbbbbbdda...",
         "....aaaaaaaaaaaaaa...."
       ],
+      "peel": [
+        "..........gl..........",
+        "..........g...........",
+        "...x...aaaaaaaa...x...",
+        "..x..aaohbbbbbdaa..x..",
+        ".aa.aohbbbbbbbbdda.aa.",
+        "aeeaohkkbbbbbbkkddaeea",
+        "aaohbbbbkkbbkkbbbbddaa",
+        "..aooffwkkffwkkffdda..",
+        "..aooffkkkffkkkffdda..",
+        "..abbffkkkffkkkffdda..",
+        "..abbccffffffffccdda..",
+        "..abbfffmmmmmmfffdda..",
+        "..abbbffwffffwffbdda..",
+        "...abbbbbbbbbbbbdda...",
+        "....aaaaaaaaaaaaaa...."
+      ],
+      "roar": [
+        "..........gl..........",
+        "...y......g.......y...",
+        ".......aaaaaaaa.......",
+        ".y...aaohbbbbbdaa...y.",
+        ".aa.aohbbbbbbbbdda.aa.",
+        "aeeaohkkbbbbbbkkddaeea",
+        "aaohbbbbkkbbkkbbbbddaa",
+        "..aooffkffffffkffdda..",
+        "..aoofffkkffkkfffdda..",
+        "y.abbffkffffffkffdda.y",
+        "..abbccffffffffccdda..",
+        "..abbfffmmmmmmfffdda..",
+        "..abbbffwmmmmwffbdda..",
+        ".y.abbbbbbbbbbbbdda.y.",
+        "....aaaaaaaaaaaaaa...."
+      ],
       "ready": [
         "..........gl..........",
         "...y......g.......y...",
@@ -230,6 +265,27 @@
       "damage": [6, 8],
       "fx": "smash"
     },
+    "peel": {
+      "name": "바나나 껍질 뿌리기",
+      "telegraph": "🍌 바나나를 우적우적 먹어 치운다...",
+      "target": "all",
+      "damage": [2, 3],
+      "effect": "confuse",
+      "effectRate": 0.35,
+      "guardBlocks": true,
+      "status": {
+        "name": "미끄러짐",
+        "emoji": "🍌"
+      },
+      "fx": "peel"
+    },
+    "roar": {
+      "name": "우두머리 호령",
+      "telegraph": "📣 숨을 크게 들이마신다...",
+      "target": "none",
+      "buffRate": 1.5,
+      "fx": "wail"
+    },
     "smash": {
       "name": "부하 부르기",
       "telegraph": "🦍 가슴을 쿵쿵 두드린다! 부하들이 몰려온다!",
@@ -253,14 +309,18 @@
   },
   "intentWeights": {
     "normal": {
-      "attack": 4,
+      "attack": 3.5,
       "slam": 2,
+      "peel": 2,
+      "roar": 1.5,
       "smash": 2,
       "combo": 1.5
     },
     "rage": {
-      "attack": 3.5,
+      "attack": 3,
       "slam": 2,
+      "peel": 2,
+      "roar": 1.5,
       "smash": 2.5,
       "combo": 2
     }

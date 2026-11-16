@@ -95,7 +95,7 @@ const MONSTER_DIR = path.join(__dirname, '..', '..', 'Monster');
 const REQUIRED_MOVES = ['attack', 'smash'];
 // 그림(레이드그림.js)이 아는 연출 종류. 새 연출은 레이드그림.js의 monsterFx·hitFx에 그리고 여기에 이름을 더한다.
 const MOVE_FX = ['attack', 'sweep', 'charge', 'smash', 'heal', 'spore', 'hypno', 'absorb', 'burst', 'frost', 'icefall',
-  'curse', 'wail', 'phase', 'storm', 'dust', 'smoke', 'ignite', 'boom', 'summon'];
+  'curse', 'wail', 'phase', 'storm', 'dust', 'smoke', 'ignite', 'boom', 'summon', 'peel'];
 const EFFECTS = ['slow', 'stun', 'shield', 'poison', 'confuse', 'chill', 'fear', 'phase', 'smoke', 'summon'];
 // 부하(minions 블록이 있는 몬스터만 — 원숭이 대장):
 //   summon(효과): 부하 count마리를 불러낸다(HP = 몬스터 최대 HP × hpRate). 살아 있는 부하가 있으면 그 기술은 고르지 않는다.
@@ -840,7 +840,8 @@ function resolveTurn(battle, rng = Math.random) {
   // 합동 필살기를 쓴 턴은 부하도 거기에 힘을 보탰으니 따로 공격하지 않는다.
   if (!last.minionsJoined && !defused) {
     const mn = battle.monster.minions;
-    const mult = (battle.rage ? battle.monster.rage.damageRate : 1) * monsterDamageRate(battle);
+    // 공격력 증가(우두머리 호령 등)를 이번 턴 대장 공격에 썼으면 부하 투척도 같은 배율
+    const mult = (battle.rage ? battle.monster.rage.damageRate : 1) * monsterDamageRate(battle) * (last.powered || 1);
     const parts = [];
     for (const minion of battle.minions ?? []) {
       if (minion.hp <= 0 || minion.born >= battle.turn) continue;
