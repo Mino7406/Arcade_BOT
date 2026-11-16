@@ -87,7 +87,11 @@ async function buildRankingView(guild, page, includeShare = true) {
   // (레벨 데이터는 파일 하나짜리 인메모리 객체라 전체를 훑어도 부담이 없다.)
   const allEntries = getLeaderboard(guild.id, rawTotal, 0);
   const names = await getMemberNames(guild, allEntries.map(e => e.userId));
-  const entries = allEntries.filter(e => names.has(e.userId));
+  // 나간 유저를 뺀 뒤 순위를 다시 매긴다 — 원래 순위(나간 사람 포함)를 그대로 쓰면
+  // "전체 101명"인데 마지막 사람이 117위로 나오는 식으로 인원수와 어긋난다.
+  const entries = allEntries
+    .filter(e => names.has(e.userId))
+    .map((e, i) => ({ ...e, rank: i + 1 }));
   if (entries.length === 0) return null;
 
   const total = entries.length;
