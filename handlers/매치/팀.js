@@ -73,9 +73,16 @@ function parseTeamsText(raw) {
     .map(s => s.trim())
     .filter(s => s && !LOBBY_LINE_RE.test(s));
 
-  const teams = segments.map(parseTeamLine).filter(t => t.members.length > 0);
+  let teams = segments.map(parseTeamLine).filter(t => t.members.length > 0);
 
-  if (teams.length < 2) return { error: '팀을 **두 줄 이상**(한 줄에 한 팀)으로 적어 주세요.\n예)\n```\n윤진-승훈-시형-연우-강현\n현호-찬영-찬우-승민-채원\n```' };
+  // 줄을 안 나누고 한 줄에 전원을 적었으면 앞에서부터 반씩 두 팀으로 나눈다(홀수면 앞 팀이 한 명 더).
+  if (teams.length === 1 && teams[0].members.length >= 2) {
+    const all = teams[0].members;
+    const half = Math.ceil(all.length / 2);
+    teams = [{ name: null, members: all.slice(0, half) }, { name: null, members: all.slice(half) }];
+  }
+
+  if (teams.length < 2) return { error: '팀을 나누려면 이름이 **두 명 이상** 있어야 해요.\n예)\n```\n윤진-승훈-시형-연우-강현\n현호-찬영-찬우-승민-채원\n```' };
   if (teams.length > MAX_TEAMS) return { error: `팀은 최대 ${MAX_TEAMS}개까지 적을 수 있어요.` };
   const big = teams.find(t => t.members.length > MAX_MEMBERS);
   if (big) return { error: `한 팀은 최대 ${MAX_MEMBERS}명까지예요. (\`${big.members.slice(0, 3).join(' ')} …\` 줄 확인)` };
@@ -95,6 +102,18 @@ function parseTeamsText(raw) {
 // 지난 판을 입력창에 다시 채워 줄 때 쓰는 글(한 줄에 한 팀).
 function teamsToText(teams) {
   return teams.map(t => `${t.name ? `[${t.name}] ` : ''}${t.members.join('-')}`).join('\n');
+}
+
+// 이름을 입력창에 넣을 때 구분 기호(띄어쓰기·- 등)와 겹치지 않게 지운다: "코리안갱씥 이경민" → "코리안갱씥이경민"
+function nameToken(name) {
+  return String(name).replace(/[\s,，\-·|/]+/g, '') || '?';
+}
+
+// 첫 판 초안: 마감된 참가자를 참가 순서대로 앞에서부터 반씩 두 팀으로.
+function draftTeams(participants) {
+  const names = participants.map(u => nameToken(u.displayName));
+  const half = Math.ceil(names.length / 2);
+  return [{ name: null, members: names.slice(0, half) }, { name: null, members: names.slice(half) }];
 }
 
 function randomTeams(participants) {
@@ -124,13 +143,14 @@ function buildBoardPayload(match, matchMsgId) {
   const { gameInfo, title } = match.data;
   const rounds = match.board?.rounds ?? [];
   const last = rounds.at(-1);
-  const blocks = [
-    `### 👥 참가자　${match.participants.length}명\n${match.participants.map(u => u.displayName).join(' · ') || '*없음*'}`,
-  ];
+  const blocks = [];
 
   if (!last) {
-    blocks.push('**📝 팀 입력**을 누르고 메모장에 쓰던 그대로 붙여넣으세요.\n```\n윤진-승훈-시형-연우-강현\n현호-찬영-찬우-승민-채원\n```\n-# 한 줄에 한 팀 · `-` 나 띄어쓰기로 구분 · 귀찮으면 🎲 랜덤');
+    // 아직 팀이 없으면 마감된 인원을 그대로 넣은 초안을 보여 준다. 📝 팀 입력을 누르면 이 글이 입력창에 채워져 있다.
+    const draft = teamsToText(draftTeams(match.participants)) || '없음';
+    blocks.push(`### 👥 참가자　${match.participants.length}명\n\`\`\`\n${draft}\n\`\`\`\n**📝 팀 입력**을 누르면 위 명단이 그대로 들어가 있어요. 자리만 바꾸고 제출하세요.\n-# 한 줄에 한 팀 · 한 줄로 다 적으면 반씩 나눠요 · 귀찮으면 🎲 랜덤`);
   } else {
+    blocks.push(`### 👥 참가자　${match.participants.length}명\n${match.participants.map(u => u.displayName).join(' · ') || '*없음*'}`);
     const lines = last.teams.map((t, i) => `${teamLabel(t, i)}　${t.members.join(' · ')}`);
     blocks.push(`### ⚔️ ${rounds.length}판\n${lines.join('\n')}`);
     const history = rounds.slice(0, -1).slice(-HISTORY_SHOWN).map((r, k, arr) => {
@@ -272,7 +292,8 @@ function buildInputModal(match, matchMsgId) {
     .setPlaceholder('윤진-승훈-시형-연우-강현\n현호-찬영-찬우-승민-채원')
     .setRequired(true)
     .setMaxLength(1000);
-  if (last) input.setValue(teamsToText(last.teams));
+  const prefill = last ? teamsToText(last.teams) : teamsToText(draftTeams(match.participants));
+  if (prefill) input.setValue(prefill.slice(0, 1000));
   return new ModalBuilder()
     .setCustomId(`team:modal:${matchMsgId}`)
     .setTitle(fixing ? `${rounds.length}판 팀 고치기` : `${rounds.length + 1}판 팀 입력`)
@@ -369,6 +390,7 @@ async function handleTeamAssignSelect(interaction) {
 module.exports = {
   parseTeamsText, // 테스트용
   teamsToText,
+  draftTeams,
   buildBoardPayload, // 화면 모음·테스트용
   postBoard,
   buildMatchSelectMenu,

@@ -194,7 +194,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:random:${id}` }));
     assert(match.board.rounds.length === 2, '10분이 지나면 다음 판으로 쌓여야 함');
 
-    const bad = mkInteraction({ user: 'u2', customId: `team:modal:${id}`, fields: { teams: '혼자 한 줄' } });
+    const bad = mkInteraction({ user: 'u2', customId: `team:modal:${id}`, fields: { teams: '혼자' } });
     await team.handleTeamModal(bad);
     assert(match.board.rounds.length === 2, '잘못된 입력인데 판이 늘어남');
 
