@@ -300,7 +300,7 @@ function buildBoardPayload(match, matchMsgId) {
   // 내전 내역: 순번(#3)·직전 표시·시각(몇 분 전)·방식 한 줄 + 팀별 인용 줄. 내역마다 칸을 띄워 구분한다.
   const shown = board.history.slice(0, HISTORY_SHOWN);
   if (shown.length) {
-    blocks.push(`### 📜 내전 내역\n-# 위가 가장 최근이에요`);
+    blocks.push('### 📜 내전 내역');
     shown.forEach((h, k) => {
       const no = h.no ? `#${h.no}` : '이전';
       const tag = k === 0 ? ' · 직전 팀' : '';
