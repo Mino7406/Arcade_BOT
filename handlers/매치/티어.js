@@ -177,7 +177,8 @@ function save() {
 }
 
 function getTier(userId, game) {
-  return store[userId]?.[game] ?? null;
+  const tier = store[userId]?.[game] ?? null;
+  return tier && findTier(game, tier.tier) ? tier : null; // 티어 목록이 바뀌어 없어진 값은 없는 것으로
 }
 
 function setTier(userId, game, tier) {

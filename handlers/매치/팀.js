@@ -21,6 +21,7 @@ const {
   StringSelectMenuBuilder,
   TextInputBuilder,
   TextInputStyle,
+  escapeMarkdown,
 } = require('discord.js');
 const {
   ADMIN_IDS,
@@ -139,9 +140,24 @@ function splitHalf(names) {
   return [{ name: null, members: names.slice(0, half) }, { name: null, members: names.slice(half) }];
 }
 
+// 참가자 → 입력창에 쓸 이름. 표시 이름이 같은 사람이 있으면 뒤에 숫자를 붙여 구분한다(윤진, 윤진2).
+// 그대로 두면 입력창을 제출할 때 "두 번 적힌 이름" 오류가 난다.
+function participantTokens(participants) {
+  const seen = new Map();
+  const out = new Map();
+  for (const u of participants) {
+    const base = nameToken(u.displayName);
+    const n = (seen.get(base) || 0) + 1;
+    seen.set(base, n);
+    out.set(u.id, n === 1 ? base : `${base}${n}`);
+  }
+  return out;
+}
+
 // 첫 초안: 마감된 참가자를 참가 순서대로 앞에서부터 반씩.
 function draftTeams(participants) {
-  return splitHalf(participants.map(u => nameToken(u.displayName)));
+  const tok = participantTokens(participants);
+  return splitHalf(participants.map(u => tok.get(u.id)));
 }
 
 function shuffle(list) {
@@ -154,7 +170,8 @@ function shuffle(list) {
 }
 
 function randomTeams(participants) {
-  return splitHalf(shuffle(participants).map(u => nameToken(u.displayName)));
+  const tok = participantTokens(participants);
+  return splitHalf(shuffle(participants).map(u => tok.get(u.id)));
 }
 
 // 참가자마다 점수. 티어를 모르는 사람은 아는 사람들의 중간값(아무도 모르면 0)으로 친다.
@@ -204,7 +221,8 @@ function balanceTeams(participants, game) {
   const chosen = new Set(best[Math.floor(Math.random() * best.length)]);
   const t1 = users.filter((u, i) => chosen.has(i));
   const t2 = users.filter((u, i) => !chosen.has(i));
-  return [{ name: null, members: t1.map(u => nameToken(u.displayName)) }, { name: null, members: t2.map(u => nameToken(u.displayName)) }];
+  const tok = participantTokens(participants);
+  return [{ name: null, members: t1.map(u => tok.get(u.id)) }, { name: null, members: t2.map(u => tok.get(u.id)) }];
 }
 
 // ── 카드 ────────────────────────────────────────────────────
@@ -226,7 +244,7 @@ function normalizeBoard(match) {
 
 function sameMembers(teams, participants) {
   const a = teams.flatMap(t => t.members).sort().join('|');
-  const b = participants.map(u => nameToken(u.displayName)).sort().join('|');
+  const b = [...participantTokens(participants).values()].sort().join('|');
   return a === b;
 }
 
@@ -253,19 +271,19 @@ function teamBlocks(teams, match) {
     const avgTier = scores.length ? tiers.tierFromScore(game, scores.reduce((a, b) => a + b, 0) / scores.length) : null;
     const avgEmoji = avgTier && tiers.tierEmojiId(game, avgTier);
     const avg = avgTier ? `${avgEmoji ? `<:t:${avgEmoji}> ` : ''}${tiers.tierLabel(game, avgTier)}` : ''; // 팀 평균 티어: <이모지> 다이아몬드4
-    const title = `${TEAM_ICONS[i] ?? '▫️'} ${t.name ?? `${i + 1} 팀`}`;
+    const title = `${TEAM_ICONS[i] ?? '▫️'} ${t.name ? escapeMarkdown(t.name) : `${i + 1} 팀`}`;
     if (compact) {
-      const names = t.members.map((n, k) => `${memberTiers[k] ? `${tiers.tierBadge(game, memberTiers[k])} ` : ''}${n}`);
+      const names = t.members.map((n, k) => `${memberTiers[k] ? `${tiers.tierBadge(game, memberTiers[k])} ` : ''}${escapeMarkdown(n)}`);
       return `**${title}**${avg ? `　·　${avg}` : ''}\n${names.join(' · ')}`;
     }
     const lines = t.members.map((n, k) => {
       const tr = memberTiers[k];
-      if (!withTiers) return `▸ **${n}**`;
-      if (!tr) return `❓ **${n}**`;
+      if (!withTiers) return `▸ **${escapeMarkdown(n)}**`;
+      if (!tr) return `❓ **${escapeMarkdown(n)}**`;
       const id = tiers.tierEmojiId(game, tr);
-      return `${id ? `<:t:${id}>` : '▸'} **${n}** · *${tiers.tierLabel(game, tr)}*`; // 이름 · 기울임 티어
+      return `${id ? `<:t:${id}>` : '▸'} **${escapeMarkdown(n)}** · *${tiers.tierLabel(game, tr)}*`; // 이름 · 기울임 티어
     });
-    return `### ${title}${avg ? `　·　${avg}` : ''}\n>>> ${lines.join('\n')}`; // 팀원은 인용 블록(왼쪽 세로 막대)으로 묶는다
+    return `### ${title}${avg ? `　·　${avg}` : ''}\n${lines.length ? `>>> ${lines.join('\n')}` : '-# 없음'}`; // 팀원은 인용 블록(왼쪽 세로 막대)으로 묶는다, 빈 팀은 "없음"
   });
   return compact ? [texts.join('\n\n')] : texts;
 }
@@ -293,7 +311,7 @@ function buildBoardPayload(match, matchMsgId) {
   blocks.push(...teamBlocks(cur.teams, match));
 
   if (tiers.hasTiers(game)) {
-    const unknown = match.participants.filter(u => !tiers.getTier(u.id, game)).map(u => u.displayName);
+    const unknown = match.participants.filter(u => !tiers.getTier(u.id, game)).map(u => escapeMarkdown(u.displayName));
     if (unknown.length) blocks.push({ text: `-# 티어 미지정 : ${unknown.join(', ')} (⚖️ 티어를 저장하면 밸런스가 정확해져요)`, noDivider: true });
   }
 
@@ -307,7 +325,7 @@ function buildBoardPayload(match, matchMsgId) {
       const sec = h.at ? Math.floor(h.at / 1000) : null;
       const when = sec ? ` · <t:${sec}:t> (<t:${sec}:R>)` : '';
       const how = HOW_TEXT[h.how] ? ` · ${HOW_TEXT[h.how]}` : '';
-      const teams = h.teams.map((t, i) => `> ${TEAM_ICONS[i] ?? '▫️'} : ${t.members.map(n => `**${n}**`).join(' · ')}`).join('\n'); // 🔵 : **이름** · **이름**
+      const teams = h.teams.map((t, i) => `> ${TEAM_ICONS[i] ?? '▫️'} : ${t.members.length ? t.members.map(n => `**${escapeMarkdown(n)}**`).join(' · ') : '없음'}`).join('\n'); // 🔵 : **이름** · **이름**
       blocks.push({ text: `**${no}${tag}**${when}${how}\n${teams}`, noDivider: true });
     });
   }
@@ -343,7 +361,17 @@ async function resolveBoardChannel(client, match) {
 }
 
 // 카드를 (지우고) 맨 아래에 새로 올린다. 올린 메시지를 돌려준다.
-async function postBoard(client, matchMsgId, match) {
+// 두 사람이 동시에 눌러도 옛 카드를 둘 다 못 지우고 새 카드가 두 장 생기지 않게, 매치마다 한 번에 하나씩 처리한다.
+const boardQueues = new Map();
+function postBoard(client, matchMsgId, match) {
+  const prev = boardQueues.get(matchMsgId) || Promise.resolve();
+  const run = prev.catch(() => {}).then(() => postBoardNow(client, matchMsgId, match));
+  boardQueues.set(matchMsgId, run);
+  run.finally(() => { if (boardQueues.get(matchMsgId) === run) boardQueues.delete(matchMsgId); }).catch(() => {});
+  return run;
+}
+
+async function postBoardNow(client, matchMsgId, match) {
   const board = normalizeBoard(match);
   if (board.channelId && board.messageId) {
     const oldCh = await fetchChannel(client, board.channelId);
@@ -371,6 +399,7 @@ async function refreshBoard(client, matchMsgId, match) {
 // 마감되면 자동으로 한 번 올린다. 마감 해제 후 다시 마감돼도 이미 있으면 그대로 둔다.
 setCloseHook('내전', async (matchMsgId, match) => {
   if (match.board?.messageId) return;
+  if ((match.participants?.length ?? 0) < 2) return; // 혼자·빈 내전은 팀을 나눌 게 없다(필요하면 📌 팀 불러오기)
   const client = match.message?.client;
   if (!client) return;
   await postBoard(client, matchMsgId, match);

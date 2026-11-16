@@ -279,6 +279,87 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     client.naejeonMatches.delete(id);
   });
 
+  await flow('팀 짜기: 예외 상황(같은 이름·마크다운 이름·빈 팀·동시 클릭·끝난 내전·팀 6개·많은 인원)', async () => {
+    const card = require(path.join(root, 'handlers/공통/카드.js'));
+    const tierMod = require(path.join(root, 'handlers/매치/티어.js'));
+    const mkMatch = async (players, title) => {
+      await naejeon.handleNaejeonModal(mkInteraction({ user: ADMIN, customId: 'naejeon:modal:lol', fields: { title, datetime: '내일 8시', players: String(players), description: '' } }));
+      await naejeon.handleNaejeonButton(mkInteraction({ user: ADMIN, customId: 'naejeon:publish', message: new FakeMsg(card.notice('p'), channel) }));
+      return [...client.naejeonMatches.values()].at(-1);
+    };
+    const liveBoards = (m) => channel.sent.filter(x => !x.deleted && x.id === m.board?.messageId);
+
+    // 같은 표시 이름 두 명 + 마크다운 글자가 든 이름
+    const m1 = await mkMatch(4, '예외1');
+    const id1 = m1.message.id;
+    m1.participants.push({ id: 'd1', displayName: '윤진' }, { id: 'd2', displayName: '윤진' }, { id: 'd3', displayName: '**굵게**_밑줄_' }, { id: 'd4', displayName: '`코드`~~취소~~' });
+    common.markClosed(client.naejeonMatches, id1, m1, '내전', false);
+    await new Promise(r => setTimeout(r, 20));
+    assert(m1.board?.messageId, '같은 이름이 있어도 카드가 올라가야 함');
+    const allNames = m1.board.current.teams.flatMap(t => t.members);
+    assert(new Set(allNames).size === 4, `같은 이름을 구분 못 함(${allNames})`);
+    const prefilled = require(path.join(root, 'handlers/매치/팀.js')).teamsToText(m1.board.current.teams);
+    assert(!team.parseTeamsText(prefilled, { game: 'lol' }).error, '자동으로 채운 팀을 그대로 제출하면 오류가 나면 안 됨');
+    const json1 = JSON.stringify(liveBoards(m1)[0]?.components ?? []);
+    assert(!json1.includes('**굵게**_밑줄_') && json1.includes('\\\\*\\\\*굵게'), '이름 속 마크다운 글자를 그대로 넣음(굵게·밑줄로 깨짐)');
+
+    // 두 사람이 동시에 ⚖️ 밸런스 / 🎲 랜덤 → 카드는 한 장만 남아야 함
+    await Promise.all([
+      team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:balance:${id1}` })),
+      team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:random:${id1}` })),
+      team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:balance:${id1}` })),
+    ]);
+    const boardsLeft = channel.sent.filter(x => !x.deleted && JSON.stringify(x.components).includes('팀 현황') && JSON.stringify(x.components).includes(`team:input:${id1}`));
+    assert(boardsLeft.length === 1, `동시에 눌렀더니 카드가 ${boardsLeft.length}장 남음`);
+    assert(m1.board.history.length === 2, `동시 클릭 3번이면 내역 2개여야 함(${m1.board.history.length})`);
+
+    // 팀 6개(짧게 보기)와 빈 줄·이상한 입력
+    await team.handleTeamModal(mkInteraction({ user: ADMIN, customId: `team:modal:${id1}`, fields: { teams: ['a b', 'c d', 'e f', 'g h', 'i j', 'k l'].join(String.fromCharCode(10)) } }));
+    assert(m1.board.current.teams.length === 6, '팀 6개 입력이 안 됨');
+    for (const bad of ['', '   ', '혼자', ['a-b', 'a-c'].join(String.fromCharCode(10)), Array.from({ length: 11 }, (_, i) => `x${i} y${i}`).join(String.fromCharCode(10))]) {
+      const before = m1.board.history.length;
+      await team.handleTeamModal(mkInteraction({ user: ADMIN, customId: `team:modal:${id1}`, fields: { teams: bad } }));
+      assert(m1.board.history.length === before, `잘못된 입력("${bad.slice(0, 10)}")인데 팀이 바뀜`);
+    }
+
+    // 끝난(삭제된) 내전의 카드 버튼
+    client.naejeonMatches.delete(id1);
+    for (const cid of [`team:input:${id1}`, `team:balance:${id1}`, `team:random:${id1}`, `team:open:${id1}`]) {
+      const it = mkInteraction({ user: ADMIN, customId: cid });
+      await team.handleTeamButton(it);
+      assert(it.replied && !it.modalShown, `끝난 내전에서 ${cid} 가 안내 없이 넘어감`);
+    }
+    const tierAfter = mkInteraction({ user: 'u5', customId: `team:tier:lol:${id1}` });
+    await team.handleTeamButton(tierAfter);
+    assert(tierAfter._reply, '끝난 내전 카드에서도 🏅 내 티어 설정은 열려야 함');
+
+    // 혼자 마감 → 카드 자동으로 안 올림, 📌 팀 불러오기로는 올라가고 빈 팀은 "없음"
+    const m2 = await mkMatch(1, '예외2');
+    const id2 = m2.message.id;
+    await naejeon.handleNaejeonButton(mkInteraction({ user: 'u1', customId: 'naejeon:join', message: m2.message }));
+    await new Promise(r => setTimeout(r, 20));
+    assert(m2.closed && !m2.board?.messageId, '혼자인 내전은 카드를 자동으로 올리지 않아야 함');
+    await team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:open:${id2}` }));
+    assert(m2.board?.messageId, '📌 팀 불러오기로는 혼자여도 올라가야 함');
+    client.naejeonMatches.delete(id2);
+
+    // 저장된 티어 값이 지금 목록에 없으면 없는 것으로
+    tierMod.setTier('weird', 'lol', { tier: 'mythic', div: 1 });
+    assert(tierMod.getTier('weird', 'lol') === null, '목록에 없는 티어 값을 그대로 씀');
+
+    // 많은 인원: 20명(전부 비교)·24명(빠른 방식) 밸런스가 빨리 끝나고 인원이 맞아야 함
+    for (const n of [20, 24]) {
+      const ps = Array.from({ length: n }, (_, i) => ({ id: `b${n}_${i}`, displayName: `사람${i}` }));
+      ps.forEach((u, i) => tierMod.setTier(u.id, 'lol', i % 3 ? { tier: ['iron', 'gold', 'diamond', 'master'][i % 4], div: (i % 4) + 1 } : null));
+      const t0 = Date.now();
+      const teams = team.balanceTeams(ps, 'lol');
+      const ms = Date.now() - t0;
+      const total = teams[0].members.length + teams[1].members.length;
+      assert(total === n && new Set([...teams[0].members, ...teams[1].members]).size === n, `${n}명 밸런스 인원이 안 맞음`);
+      assert(ms < 1500, `${n}명 밸런스가 너무 느림(${ms}ms)`);
+    }
+  });
+
   await flow('내전: 권한 없음·만료·잘못된 입력 안내', async () => {
     await naejeon.handleNaejeonModal(mkInteraction({ customId: 'naejeon:modal:lol', fields: { title: '', datetime: 'x', players: 'abc', description: '' } }));
     await naejeon.handleNaejeonButton(mkInteraction({ customId: 'naejeon:join', message: new FakeMsg(require(path.join(root, 'handlers/공통/카드.js')).notice('x'), channel) }));
