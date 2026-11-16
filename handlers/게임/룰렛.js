@@ -701,4 +701,4 @@ async function handleRouletteButton(interaction) {
 }
 
 // buildLobbyPayload/buildResultPayload는 화면 모음·테스트에서 직접 그려 보려고 함께 내보낸다.
-module.exports = { buildLobbyPayload, buildSpinningPayload, buildResultPayload, buildHackPromptPayload, buildHackIntroPayload, startRouletteCommand, handleRouletteButton, loadRoulette, saveRoulette, MIN_BET, MAX_BET };
+module.exports = { buildLobbyPayload, buildWallErosionPayload, WALL_EROSION, buildSpinningPayload, buildResultPayload, buildHackPromptPayload, buildHackIntroPayload, startRouletteCommand, handleRouletteButton, loadRoulette, saveRoulette, MIN_BET, MAX_BET };

@@ -76,4 +76,4 @@ function useGateway(guildId, userId) {
   return true;
 }
 
-module.exports = { GATEWAY_NAME, gatewayEmoji, gatewayButtonEmoji, ensureGatewayEmoji, setGatewayEmojiId, loadGateways, saveGateways, getGateways, grantGateway, useGateway };
+module.exports = { GATEWAY_EMOJI: EMOJI, EMOJI_DIR, GATEWAY_NAME, gatewayEmoji, gatewayButtonEmoji, ensureGatewayEmoji, setGatewayEmojiId, loadGateways, saveGateways, getGateways, grantGateway, useGateway };

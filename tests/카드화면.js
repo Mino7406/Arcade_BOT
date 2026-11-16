@@ -77,6 +77,7 @@ async function buildScreens() {
   const rl = req('handlers/게임/룰렛.js');
   // 해킹 툴 앱 이모지는 봇이 켜져야 ID가 생기므로, 화면 모음에선 자리표시 ID를 넣고 그림은 로컬 파일로 보여 준다(LOCAL_EMOJI).
   req('handlers/게임/해킹툴.js').setHackToolEmojiId('0');
+  req('handlers/게임/블랙월게이트웨이.js').setGatewayEmojiId('0');
   req('handlers/매치/티어.js').usePreviewPositionEmojis(); // 포지션 아이콘도 같은 방식(LOCAL_EMOJI 의 pos_… 그림)
   const xp = req('handlers/관리/XP.js').views;
   const panel = req('handlers/관리/패널.js');
@@ -227,6 +228,20 @@ async function buildScreens() {
   });
   const rlHackSpin = rl.buildSpinningPayload(rlb, 300, ['🍋', null, null], 1, 1);
   add('룰렛', '해킹 툴로 다시 돌리는 중', '해킹된 기계 — 보라·시안 + 해골 + 글리치', rlHackSpin, rlWith(rlHackSpin));
+  // 블랙월 게이트웨이 룰렛(사전 해킹): 로비의 발동 버튼 → 돌리기 전 잠식 4단계 → 블랙월 룰렛(7️⃣만 돎) → 100% 잭팟
+  const gwLobby = { ...rlb, gateways: 2, gatewayArmed: false };
+  const gwL0 = rl.buildLobbyPayload(gwLobby, { ephemeral: true, withImage: true });
+  add('룰렛', '게이트웨이 — 로비(발동 전)', '게이트웨이가 있으면 로비에 보유 수와 🌐 발동 버튼이 보임', gwL0, rlWith(gwL0));
+  const gwL1 = rl.buildLobbyPayload({ ...gwLobby, gatewayArmed: true }, { ephemeral: true, withImage: true });
+  add('룰렛', '게이트웨이 — 로비(발동됨)', '발동하면 버튼이 초록 "발동됨 · 이번 판 100% 잭팟"으로 바뀜(다시 누르면 취소)', gwL1, rlWith(gwL1));
+  for (let step = 0; step < rl.WALL_EROSION.length; step++) {
+    const er = rl.buildWallErosionPayload(rlb, 300, step);
+    add('룰렛', `게이트웨이 — 돌리기 전 잠식 ${step + 1}/${rl.WALL_EROSION.length}`, ['평범한 룰렛이 가장자리부터 붉은 선·막대·테두리 사각형으로 잠식당함', '잠식이 번져 나감', '대부분 블랙월로 덮임', '거의 다 덮임 — 곧 블랙월 룰렛이 돌아감'][step], er, rlWith(er));
+  }
+  const gwSpin = rl.buildSpinningPayload(rlb, 300, ['7️⃣', null, null], 1, 0, true);
+  add('룰렛', '게이트웨이 — 잠식이 끝난 뒤 도는 중', '완전히 블랙월이 된 룰렛 · 릴엔 7️⃣만 돎', gwSpin, rlWith(gwSpin));
+  const gwWin = rl.buildResultPayload(rlb, { bet: 300, resultLine: '🎉 **JACKPOT!** (x10)', netLine: '📈 **+2700 XP**', net: 2700, reels: ['7️⃣', '7️⃣', '7️⃣'], multiplier: 10, gateway: true });
+  add('룰렛', '게이트웨이 — 결과(100% 잭팟)', '블랙월 테마 결과 카드 · 부제에 블랙월 게이트웨이 발동', gwWin, rlWith(gwWin));
   add('룰렛', '결과 — 해킹 툴로 번복', '해킹된 기계 그림 · 보라 띠 · 부제에 사용 횟수', rlHack, rlWith(rlHack));
 
   // ── 레벨 · 랭킹 · 퀴즈 ────────────────────────
@@ -443,6 +458,8 @@ module.exports = { buildScreens };
 function localEmojiScript() {
   const hack = require(path.join(ROOT, 'handlers/게임/해킹툴.js'));
   const map = Object.fromEntries(Object.values(hack.EMOJIS).map(e => [e.name, 'data:image/png;base64,' + fs.readFileSync(path.join(hack.EMOJI_DIR, e.file)).toString('base64')]));
+  const gw = require(path.join(ROOT, 'handlers/게임/블랙월게이트웨이.js'));
+  map[gw.GATEWAY_EMOJI.name] = 'data:image/png;base64,' + fs.readFileSync(path.join(gw.EMOJI_DIR, gw.GATEWAY_EMOJI.file)).toString('base64');
   // 게임 썸네일도 봇이 켜져야 여백 넣은 앱 이모지 ID가 생기므로, 원래 이모지 ID → 여백 그림(LOCAL_THUMB)
   const th = require(path.join(ROOT, 'handlers/공통/썸네일.js'));
   const thumbs = Object.fromEntries(Object.entries(th.SOURCES).map(([id, name]) => [id, 'data:image/png;base64,' + fs.readFileSync(path.join(ROOT, 'assets/썸네일', `${name}.png`)).toString('base64')]));
