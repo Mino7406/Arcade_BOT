@@ -155,7 +155,7 @@
     },
     "smash": {
       "name": "블랙월 게이트웨이",
-      "telegraph": "> BLACKWALL_GATEWAY 개방 중!! 방어하세요 — 못 막으면 오류·취약·즉사가 한꺼번에",
+      "telegraph": "> BLACKWALL_GATEWAY 개방 중!! 방어하세요",
       "target": "all",
       "damage": [16, 20],
       "guardBlocks": true,
