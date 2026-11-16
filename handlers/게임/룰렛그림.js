@@ -268,13 +268,13 @@ function getBg() {
 }
 
 // ── 변하는 부분 ────────────────────────────────────────────────
-function drawSpinningWindow(p, x, phase, reel, base = getBg()) {
+function drawSpinningWindow(p, x, phase, reel, base = getBg(), only = null) {
   // 도는 릴: 릴 띠(심볼 여러 개가 세로로 이어진 것)를 그리고 세로로 길게 번지게(모션 블러) 해서 빠르게 돌아가는 느낌을 낸다.
   const sc = p.s;
   const gap = 104; // 심볼 사이 간격(설계 좌표)
   const shift = ((phase * 37 + reel * 53) % gap) - gap / 2;
   for (let k = -2; k <= 2; k++) {
-    const key = SYMBOLS[(((phase * 2 + reel * 3 + k) % SYMBOLS.length) + SYMBOLS.length) % SYMBOLS.length];
+    const key = only || SYMBOLS[(((phase * 2 + reel * 3 + k) % SYMBOLS.length) + SYMBOLS.length) % SYMBOLS.length]; // only: 블랙월은 7️⃣만 돈다
     const [ox, oy] = SYMBOL_OFFSET[key] || [0, 0];
     drawSymbol(p, key, x + WIN_W / 2 + ox, WIN_CY + oy + shift + k * gap);
   }
@@ -517,10 +517,11 @@ function paintSlot({ reels = [null, null, null], bet, right = '', rightColor = '
   base.copy(p.buf);
   const f = getFont();
   if (wall) drawWallBg(p); else if (hacked) drawHackDecor(p, phase); else drawBulbs(p, phase);
+  const spinBase = wall ? Buffer.from(p.buf) : base; // 블랙월은 도는 칸 둘레도 블랙월 바탕으로 되돌린다
 
   for (let i = 0; i < 3; i++) {
     const x = WIN_X[i];
-    if (reels[i] === null) { drawSpinningWindow(p, x, phase, i, base); continue; }
+    if (reels[i] === null) { drawSpinningWindow(p, x, phase, i, spinBase, wall ? '7️⃣' : null); continue; }
     const [ox, oy] = SYMBOL_OFFSET[reels[i]] || [0, 0];
     drawSymbol(p, reels[i], x + WIN_W / 2 + ox, WIN_CY + oy);
   }
@@ -559,23 +560,42 @@ function paintSlot({ reels = [null, null, null], bet, right = '', rightColor = '
 function mixErosion(p, A, erosion, seed) {
   let st = (seed * 2654435761 + 7) >>> 0;
   const rnd = () => ((st = (st * 1103515245 + 12345) >>> 0) / 4294967296);
-  const w = p.w, h = p.h, S = 8, b = p.buf;
-  const front = ['#96101e', '#5a0812', '#dc2234'];
-  for (let by = 0; by < h; by += S) {
-    for (let bx = 0; bx < w; bx += S) {
-      const edge = Math.min(bx, w - S - bx, by, h - S - by) / (Math.min(w, h) / 2); // 0 가장자리 ~ 1 한가운데
-      const key = edge + (rnd() - 0.5) * 0.45;
-      const limit = erosion * 1.3 - 0.05;
-      if (key < limit) continue; // 이 칸은 블랙월(b에 이미 그려져 있음)
-      const blend = key < limit + 0.12; // 번지는 앞쪽: 붉은 칸으로
-      for (let y = by; y < Math.min(h, by + S); y++) {
-        for (let x = bx; x < Math.min(w, bx + S); x++) {
-          const i = (y * w + x) * 3;
-          if (blend) { const c = front[Math.floor(rnd() * 3)]; b[i] = parseInt(c.slice(1, 3), 16); b[i + 1] = parseInt(c.slice(3, 5), 16); b[i + 2] = parseInt(c.slice(5, 7), 16); }
-          else { b[i] = A[i]; b[i + 1] = A[i + 1]; b[i + 2] = A[i + 2]; }
-        }
-      }
+  const w = p.w, h = p.h, S = 6, b = p.buf;
+  const cols = Math.ceil(w / S), rows = Math.ceil(h / S);
+  const limit = erosion * 1.3 - 0.05;
+  // 칸마다 블랙월(true)/평범(false): 가장자리에서 안쪽으로 들쭉날쭉하게 번진다
+  const wallCell = [];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const bx = c * S, by = r * S;
+    const edge = Math.min(bx, w - S - bx, by, h - S - by) / (Math.min(w, h) / 2);
+    wallCell[r * cols + c] = edge + (rnd() - 0.5) * 0.3 < limit;
+  }
+  const isWall = (c, r) => c < 0 || r < 0 || c >= cols || r >= rows ? true : wallCell[r * cols + c];
+  const put = (x, y, rr, gg, bb) => { if (x < 0 || y < 0 || x >= w || y >= h) return; const i = (y * w + x) * 3; b[i] = rr; b[i + 1] = gg; b[i + 2] = bb; };
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    if (wallCell[r * cols + c]) continue; // 블랙월 칸은 이미 그려져 있음
+    for (let y = r * S; y < Math.min(h, r * S + S); y++) for (let x = c * S; x < Math.min(w, c * S + S); x++) {
+      const i = (y * w + x) * 3; b[i] = A[i]; b[i + 1] = A[i + 1]; b[i + 2] = A[i + 2];
     }
+  }
+  // 번지는 앞쪽: 채운 사각형 대신 가는 붉은 세로선·가로 막대·테두리만 있는 사각형(회로/글리치 느낌)이 쌓인다
+  const reds = [[255, 58, 74], [220, 34, 52], [150, 16, 30], [255, 110, 120]];
+  const inWall = (x, y) => isWall(Math.floor(x / S), Math.floor(y / S));
+  const nearFront = (x, y) => { const c = Math.floor(x / S), r = Math.floor(y / S); for (let d = -3; d <= 3; d++) for (let e = -3; e <= 3; e++) if (!isWall(c + d, r + e)) return true; return false; };
+  const px = (x, y, c) => { if (inWall(x, y)) put(Math.floor(x), Math.floor(y), c[0], c[1], c[2]); };
+  const rect = (x, y, rw, rh, c) => { for (let yy = y; yy < y + rh; yy++) for (let xx = x; xx < x + rw; xx++) px(xx, yy, c); };
+  const count = Math.floor(30 + erosion * 70);
+  for (let n = 0, tries = 0; n < count && tries < count * 40; tries++) {
+    const x = Math.floor(rnd() * w), y = Math.floor(rnd() * h);
+    if (!inWall(x, y) || !nearFront(x, y)) continue;
+    n++;
+    const c = reds[Math.floor(rnd() * reds.length)], k = rnd();
+    if (k < 0.4) rect(x, y, rnd() < 0.7 ? 1 : 2, 14 + Math.floor(rnd() * 56), c); // 세로선
+    else if (k < 0.65) rect(x, y, 14 + Math.floor(rnd() * 46), rnd() < 0.7 ? 1 : 3, c); // 가로 막대
+    else if (k < 0.9) { // 테두리만 있는 사각형
+      const rw = 12 + Math.floor(rnd() * 30), rh = 8 + Math.floor(rnd() * 22);
+      rect(x, y, rw, 1, c); rect(x, y + rh, rw, 1, c); rect(x, y, 1, rh, c); rect(x + rw, y, 1, rh + 1, c);
+    } else rect(x, y, 3 + Math.floor(rnd() * 4), 3 + Math.floor(rnd() * 4), [90, 8, 20]); // 어두운 작은 조각
   }
 }
 
