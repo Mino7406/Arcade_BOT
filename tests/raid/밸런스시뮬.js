@@ -5,7 +5,7 @@
 const args = process.argv.slice(2);
 const E = require(args.find(a => a.endsWith('.js')) || require('path').join(__dirname, '..', '..', 'handlers', '레이드', '전투.js'));
 const pick = args.find(a => !a.endsWith('.js')) || 'slime';
-const MONSTER = E.MONSTERS.find(m => m.id === pick || m.name === pick);
+const MONSTER = E.loadMonsters().find(m => m.id === pick || m.name === pick); // 꺼진(enabled false) 몬스터도 시험할 수 있게 loadMonsters
 if (!MONSTER) throw new Error(`몬스터 없음: ${pick} (있는 것: ${E.MONSTERS.map(m => m.id).join(', ')})`);
 console.log(`몬스터: ${MONSTER.name}`);
 const TURN_CAP = 60; // 20분 제한 넉넉히

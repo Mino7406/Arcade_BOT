@@ -119,6 +119,7 @@ function monsterProblems(m) {
   const problems = [];
   for (const key of ['id', 'name', 'emoji', 'rageName', 'lore']) if (typeof m[key] !== 'string' || !m[key]) problems.push(`${key} 없음`);
   if (!(m.baseHp > 0)) problems.push('baseHp는 0보다 큰 숫자');
+  if (m.enabled !== undefined && typeof m.enabled !== 'boolean') problems.push('enabled는 true/false');
   if (m.damageRate !== undefined && !(m.damageRate > 0)) problems.push('damageRate는 0보다 큰 숫자');
   const s = m.sprite;
   if (!Array.isArray(s?.rows) || !s.rows.length || !s.palette) problems.push('sprite.rows/palette 없음');
@@ -251,7 +252,9 @@ function loadMonsters(dir = MONSTER_DIR) {
   if (!list.length) console.error('👾 쓸 수 있는 몬스터가 없습니다 — 레이드가 출현하지 않습니다.');
   return list;
 }
-const MONSTERS = loadMonsters();
+// enabled: false 인 몬스터(아직 공개 전)는 레이드 후보에서 뺀다 — 자동 출현·관리자 선택 모두. 켜려면 몬스터 파일에서 "enabled": false 를 지운다.
+// loadMonsters()는 전부 돌려주므로 테스트·시뮬레이션·예시 페이지는 꺼진 몬스터도 loadMonsters()로 볼 수 있다.
+const MONSTERS = loadMonsters().filter(m => m.enabled !== false);
 
 // 몬스터 데이터에 intentWeights가 없을 때 쓰는 기본 가중치.
 const INTENT_WEIGHTS = {

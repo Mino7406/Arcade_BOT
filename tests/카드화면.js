@@ -353,7 +353,7 @@ async function buildScreens() {
     await shot('우울 상태', '오른쪽 위 배지 · 받는 피해 증가 · 남은 턴');
   }
   // ??? (블랙월 느낌): 모집 시간 제한 없음 · 대기 XP 실시간 차감 · 패배해도 도주 안 함 · 승리 시 MVP 아이템
-  const voidM = raidMonsters.find(m => m.id === 'void');
+  const voidM = raidBattle.loadMonsters().find(m => m.id === 'void'); // 꺼진(enabled false) 몬스터라 MONSTERS가 아닌 loadMonsters
   if (voidM) {
     const H = 3600e3;
     const wait = async (title, sub, extra, partyN = 2) => {
