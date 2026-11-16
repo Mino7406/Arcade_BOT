@@ -183,12 +183,18 @@ function participantScores(participants, game) {
 }
 
 // ── 포지션 배정 ─────────────────────────────────────────────
-// 롤·오버워치에서 한 팀이 딱 5명이면 자리를 하나씩 맡긴다(롤: 탑~서폿, 오버워치: 탱1·딜2·힐2).
+// 롤·오버워치에서 팀 인원이 맞으면 자리를 하나씩 맡긴다.
+//  - 롤 5명: 탑~서폿
+//  - 오버워치 5명(5vs5): 탱1·딜2·힐2 / 6명(6vs6): 탱2·딜2·힐2 — 팀 인원으로 저절로 바뀐다(내전 정원 12명이면 6vs6)
 // 맡긴 자리가 그 사람 생각과 얼마나 다른지를 "비용"으로 매겨, 밸런스 때 티어 차이에 더해 함께 줄인다(티어 한 단계 = 1).
 const LINEUP_SLOTS = {
-  lol: ['top', 'jungle', 'mid', 'adc', 'support'],
-  overwatch: ['tank', 'damage', 'damage', 'support', 'support'],
+  lol: { 5: ['top', 'jungle', 'mid', 'adc', 'support'] },
+  overwatch: {
+    5: ['tank', 'damage', 'damage', 'support', 'support'],
+    6: ['tank', 'tank', 'damage', 'damage', 'support', 'support'],
+  },
 };
+const slotsFor = (game, size) => LINEUP_SLOTS[game]?.[size] ?? null;
 const POS_SUB_COST = 0.5; // 롤: 부 포지션을 맡음
 const POS_OFF_COST = 1.5; // 롤: 주·부 둘 다 아닌 자리 / 오버워치: 티어를 저장 안 한 롤
 const OW_OFF_ROLE = 2;    // 오버워치: 저장 안 한 롤을 맡으면 가장 높은 롤 티어에서 이만큼 낮춰 계산
@@ -207,7 +213,14 @@ function uniquePerms(list) {
   walk(list, []);
   return out;
 }
-const SLOT_PERMS = Object.fromEntries(Object.entries(LINEUP_SLOTS).map(([g, slots]) => [g, uniquePerms(slots)]));
+const SLOT_PERMS = new Map(); // 'overwatch:6' → 자리 순열(처음 쓸 때 한 번 만든다)
+function slotPerms(game, size) {
+  const slots = slotsFor(game, size);
+  if (!slots) return null;
+  const key = `${game}:${size}`;
+  if (!SLOT_PERMS.has(key)) SLOT_PERMS.set(key, uniquePerms(slots));
+  return SLOT_PERMS.get(key);
+}
 
 // 자리 하나에서의 { cost, score }. base 는 그 사람의 기본 점수(티어 모르면 중간값).
 function slotFit(user, game, slot, base) {
@@ -225,9 +238,9 @@ function slotFit(user, game, slot, base) {
 // 한 팀(users, 같은 순서의 기본 점수 bases)의 가장 잘 맞는 자리 배정. 해당 없으면 null.
 // → { slots: [사람마다 자리], cost, sum: 그 자리 기준 점수 합 }
 function lineup(users, game, bases) {
-  const perms = SLOT_PERMS[game];
-  if (!perms || users.length !== LINEUP_SLOTS[game].length) return null;
-  const fits = users.map((u, i) => Object.fromEntries(LINEUP_SLOTS[game].map(slot => [slot, slotFit(u, game, slot, bases[i])])));
+  const perms = slotPerms(game, users.length);
+  if (!perms) return null;
+  const fits = users.map((u, i) => Object.fromEntries(slotsFor(game, users.length).map(slot => [slot, slotFit(u, game, slot, bases[i])])));
   let best = null;
   for (const perm of perms) {
     let cost = 0; let sum = 0;
@@ -245,7 +258,7 @@ function balanceTeams(participants, game) {
   const scores = participantScores(users, game);
   const total = scores.reduce((a, b) => a + b, 0);
   const size = Math.ceil(n / 2);
-  const withLineup = !!LINEUP_SLOTS[game] && (size === 5 || n - size === 5);
+  const withLineup = !!(slotsFor(game, size) || slotsFor(game, n - size));
 
   // 한 팀의 { sum, cost }: 5명이면 자리를 맡긴 기준(오버워치는 그 롤 티어), 아니면 그냥 합
   const evalTeam = idxs => {
@@ -336,7 +349,7 @@ function makeDraft(match) {
 
 // 카드에 보여 줄 팀의 자리 배정. 롤·오버워치 5명 팀에서 누구라도 포지션(오버워치는 롤 티어)을 저장했을 때만.
 function teamLineup(resolved, game, match) {
-  if (!LINEUP_SLOTS[game] || resolved.length !== LINEUP_SLOTS[game].length) return null;
+  if (!slotsFor(game, resolved.length)) return null;
   const hasData = resolved.some(u => u && (game === 'lol' ? tiers.getPositions(u.id, 'lol').length : Object.values(tiers.getRoleTiers(u.id)).some(Boolean)));
   if (!hasData) return null;
   const allScores = participantScores(match.participants, game);
@@ -347,9 +360,10 @@ function teamLineup(resolved, game, match) {
 
 // 이름 뒤에 붙일 자리 글자: 롤 "미드", 오버워치 "🛡️ 탱커", 발로 주 역할 "감시자"
 function slotLabel(game, slot, user) {
-  if (game === 'lol' && slot) return tiers.positionName('lol', slot);
-  if (game === 'overwatch' && slot) { const r = tiers.owRole(slot); return r ? `${r.icon} ${r.name}` : ''; }
-  if (game === 'valorant' && user) { const main = tiers.getPositions(user.id, 'valorant')[0]; return main ? tiers.positionName('valorant', main) : ''; }
+  const withIcon = (key, name) => `${tiers.positionIcon(game, key)} ${name}`.trim();
+  if (game === 'lol' && slot) return withIcon(slot, tiers.positionName('lol', slot));
+  if (game === 'overwatch' && slot) { const r = tiers.owRole(slot); return r ? withIcon(slot, r.name) : ''; }
+  if (game === 'valorant' && user) { const main = tiers.getPositions(user.id, 'valorant')[0]; return main ? withIcon(main, tiers.positionName('valorant', main)) : ''; }
   return '';
 }
 
@@ -378,7 +392,7 @@ function teamBlocks(teams, match) {
       return `**${title}**${avg ? `　·　${avg}` : ''}\n${names.join(' · ')}`;
     }
     const order = t.members.map((n, k) => k);
-    if (lu) order.sort((a, b) => LINEUP_SLOTS[game].indexOf(lu.slots[a]) - LINEUP_SLOTS[game].indexOf(lu.slots[b]));
+    if (lu) { const slots = slotsFor(game, t.members.length); order.sort((a, b) => slots.indexOf(lu.slots[a]) - slots.indexOf(lu.slots[b])); }
     const lines = order.map(k => {
       const n = t.members[k];
       const tr = memberTiers[k];
@@ -628,7 +642,7 @@ function tierCard(gk, { header, thumbTier = null, blocks, rows, footer }) {
   return card({
     color: GAME_COLORS[game] ?? 0x5865F2,
     header,
-    sub: [`${tiers.LADDERS[game]?.name ?? ''}${r ? ` · ${r.icon} ${r.name}` : ''}`, '🏅 내 티어 설정'],
+    sub: [`${tiers.LADDERS[game]?.name ?? ''}${r ? ` · ${tiers.positionIcon(game, r.key)} ${r.name}` : ''}`, '🏅 내 티어 설정'],
     thumb: tierIconUrl(gk, thumbTier) ?? gameIconUrl(game),
     blocks,
     footer,
@@ -640,14 +654,15 @@ function tierCard(gk, { header, thumbTier = null, blocks, rows, footer }) {
 function positionLine(game, userId) {
   const [main, sub] = tiers.getPositions(userId, game);
   if (!main) return '*아직 저장 안 함*';
-  return `**${tiers.positionName(game, main)}**${sub ? ` · ${tiers.positionName(game, sub)}(부)` : ''}`;
+  const icon = k => { const t = tiers.positionIcon(game, k); return t ? `${t} ` : ''; };
+  return `${icon(main)}**${tiers.positionName(game, main)}**${sub ? ` · ${icon(sub)}${tiers.positionName(game, sub)}(부)` : ''}`;
 }
 
 // 오버워치 롤별 티어 한 줄 요약: "🛡️ <이모지>다이아2 · ⚔️ 골드1 · 💉 -"
 function roleSummary(userId) {
   const rt = tiers.getRoleTiers(userId);
   if (!Object.values(rt).some(Boolean)) return null;
-  return tiers.OW_ROLES.map(r => `${r.icon} ${rt[r.key] ? tierLine(`overwatch.${r.key}`, rt[r.key]) : '-'}`).join('　');
+  return tiers.OW_ROLES.map(r => `${tiers.positionIcon('overwatch', r.key)} ${rt[r.key] ? tierLine(`overwatch.${r.key}`, rt[r.key]) : '-'}`).join('　');
 }
 
 // 게임모집 패널의 🏅 내 티어 설정: 저장된 티어가 있으면 바로 보여 주고, 아래에서 게임을 고른다.
@@ -684,20 +699,24 @@ function buildTierGamePayload(userId) {
 // 오버워치: 롤(탱커·딜러·힐러)마다 랭크가 따로라 먼저 롤을 고른다.
 function buildOwRolesPayload(matchMsgId, userId) {
   const rt = tiers.getRoleTiers(userId);
-  const buttons = tiers.OW_ROLES.map(r => new ButtonBuilder()
-    .setCustomId(`team:tier:overwatch.${r.key}:${matchMsgId}`)
-    .setLabel(`${r.icon} ${r.name}`)
-    .setStyle(rt[r.key] ? ButtonStyle.Success : ButtonStyle.Secondary));
+  const buttons = tiers.OW_ROLES.map(r => {
+    const emoji = tiers.positionEmoji('overwatch', r.key); // 롤 아이콘 이모지가 있으면 버튼 아이콘으로, 없으면 🛡️⚔️💉 글자
+    const b = new ButtonBuilder()
+      .setCustomId(`team:tier:overwatch.${r.key}:${matchMsgId}`)
+      .setLabel(emoji ? r.name : `${r.icon} ${r.name}`)
+      .setStyle(rt[r.key] ? ButtonStyle.Success : ButtonStyle.Secondary);
+    return emoji ? b.setEmoji(emoji) : b;
+  });
   if (matchMsgId === 'panel') buttons.push(backButton('team:tier_games:panel', '↩️ 뒤로'));
   return payload(tierCard('overwatch', {
     header: '🏅 내 티어 설정',
     thumbTier: tiers.getTier(userId, 'overwatch'),
     blocks: [
-      `**롤별 티어**\n${tiers.OW_ROLES.map(r => `${r.icon} **${r.name}** : ${tierLine(`overwatch.${r.key}`, rt[r.key])}`).join('\n')}`,
+      `**롤별 티어**\n${tiers.OW_ROLES.map(r => `${tiers.positionIcon('overwatch', r.key)} **${r.name}** : ${tierLine(`overwatch.${r.key}`, rt[r.key])}`).join('\n')}`,
       '**어느 롤 티어를 설정할까요?**',
     ],
     rows: [new ActionRowBuilder().addComponents(...buttons)],
-    footer: '하는 롤만 저장하면 돼요 · ⚖️ 밸런스 때 탱1·딜2·힐2로 맡기고 그 롤 티어로 계산해요',
+    footer: '하는 롤만 저장하면 돼요 · ⚖️ 밸런스 때 탱1·딜2·힐2(6vs6은 탱2·딜2·힐2)로 맡기고 그 롤 티어로 계산해요',
   }), { ephemeral: true });
 }
 
@@ -706,7 +725,10 @@ function buildPositionPayload(game, matchMsgId, userId) {
   const word = tiers.POSITION_WORD[game];
   const [main, sub] = tiers.getPositions(userId, game);
   const opts = (current, extra) => [
-    ...tiers.POSITIONS[game].map(p => ({ label: p.name, value: p.key, default: p.key === current })),
+    ...tiers.POSITIONS[game].map(p => {
+      const emoji = tiers.positionEmoji(game, p.key);
+      return { label: p.name, value: p.key, default: p.key === current, ...(emoji ? { emoji } : {}) };
+    }),
     extra,
   ];
   const mainMenu = new StringSelectMenuBuilder()

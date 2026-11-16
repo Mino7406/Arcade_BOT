@@ -105,7 +105,7 @@ function findTier(game, key) {
 // ── 포지션 ──────────────────────────────────────────────────
 // 롤: 주/부 포지션을 저장해 두면 팀마다 탑~서폿을 겹치지 않게 맡긴다(밸런스에도 반영).
 // 발로: 주/부 역할은 카드에 보여 주기만 한다(역할이 롤만큼 고정되지 않아서 밸런스엔 안 넣음).
-// 오버워치: 포지션별로 랭크가 따로라 탱커·딜러·힐러 티어를 각각 저장하고, 팀마다 탱1·딜2·힐2로 맡겨 그 롤 티어로 계산한다.
+// 오버워치: 포지션별로 랭크가 따로라 탱커·딜러·힐러 티어를 각각 저장하고, 팀마다 탱1·딜2·힐2(6vs6이면 탱2·딜2·힐2)로 맡겨 그 롤 티어로 계산한다.
 const POSITIONS = {
   lol: [
     { key: 'top', name: '탑' },
@@ -365,6 +365,28 @@ function tierEmojiId(game, tier) {
   return file ? emojiIds.get(file) ?? null : null;
 }
 
+// 포지션 아이콘: assets/티어/pos_<lol|val|ow>_<자리>.png (롤은 라이엇 클라이언트, 발로는 공식 역할 아이콘, 오버워치는 블리자드 롤 아이콘)
+// 라이트·다크 테마 둘 다 보이게 발로는 빨강, 오버워치는 주황으로 칠해 두었다.
+const POS_PREFIX = { lol: 'lol', valorant: 'val', overwatch: 'ow' };
+const posFile = (game, key) => (POS_PREFIX[baseGame(game)] && key ? `pos_${POS_PREFIX[baseGame(game)]}_${key}` : null);
+function positionEmojiId(game, key) {
+  const file = posFile(game, key);
+  return file ? emojiIds.get(file) ?? null : null;
+}
+
+// 선택 메뉴·버튼에 넣을 이모지 객체(없으면 undefined). 이름은 파일 이름(화면 모음이 그림을 찾을 때 씀).
+function positionEmoji(game, key) {
+  const id = positionEmojiId(game, key);
+  return id ? { id, name: posFile(game, key) } : undefined;
+}
+
+// 자리 이름 앞에 붙일 아이콘 글자. 이모지가 없으면 오버워치는 🛡️⚔️💉, 나머지는 빈칸.
+function positionIcon(game, key) {
+  const id = positionEmojiId(game, key);
+  if (id) return `<:${posFile(game, key)}:${id}>`;
+  return baseGame(game) === 'overwatch' ? owRole(key)?.icon ?? '' : '';
+}
+
 // 이름 앞에 붙일 글자. 이모지가 준비됐으면 이모지(롤은 단계 숫자를 뒤에), 아니면 "[다2]" 같은 글자.
 function tierBadge(gk, tier) {
   const game = baseGame(gk);
@@ -398,5 +420,11 @@ module.exports = {
   setPositions,
   ensureTierEmojis,
   tierEmojiId,
+  positionEmojiId,
+  positionEmoji,
+  positionIcon,
+  // 화면 모음 전용: 봇 없이 포지션 아이콘을 그릴 수 있게 자리표시 ID를 넣는다
+  usePreviewPositionEmojis: () => allEmojiFiles().filter(f => f.startsWith('pos_')).forEach(f => emojiIds.set(f, '0')),
+  EMOJI_DIR,
   tierBadge,
 };
