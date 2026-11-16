@@ -334,7 +334,7 @@ function buildBoardPayload(match, matchMsgId) {
   return payload(card({
     color: gameInfo.color,
     header: title,
-    sub: [gameInfo.name, '⚔️ 팀 설정', status],
+    sub: [gameInfo.name, status],
     thumb: gameThumb(gameInfo),
     thumbAlt: gameInfo.name,
     blocks,
