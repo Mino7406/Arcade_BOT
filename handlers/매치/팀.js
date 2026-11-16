@@ -358,9 +358,10 @@ function teamLineup(resolved, game, match) {
   return lineup(resolved, game, resolved.map(u => (u ? byId.get(u.id) ?? median : median)));
 }
 
-// 이름 뒤에 붙일 자리 글자: 롤 "미드", 오버워치 "🛡️ 탱커", 발로 주 역할 "감시자"
+// 자리 표시: 포지션 아이콘(롤·오버워치는 맡은 자리, 발로는 주 역할)
 function slotLabel(game, slot, user) {
-  const withIcon = (key, name) => `${tiers.positionIcon(game, key)} ${name}`.trim();
+  // 아이콘 이모지가 있으면 아이콘만(카드가 짧게), 없으면 글자(오버워치는 🛡️ 탱커처럼)
+  const withIcon = (key, name) => (tiers.positionEmojiId(game, key) ? tiers.positionIcon(game, key) : `${tiers.positionIcon(game, key)} ${name}`.trim());
   if (game === 'lol' && slot) return withIcon(slot, tiers.positionName('lol', slot));
   if (game === 'overwatch' && slot) { const r = tiers.owRole(slot); return r ? withIcon(slot, r.name) : ''; }
   if (game === 'valorant' && user) { const main = tiers.getPositions(user.id, 'valorant')[0]; return main ? withIcon(main, tiers.positionName('valorant', main)) : ''; }
@@ -397,11 +398,14 @@ function teamBlocks(teams, match) {
       const n = t.members[k];
       const tr = memberTiers[k];
       const slot = slotLabel(game, lu?.slots[k], resolved[k]);
-      const tail = slot ? ` · ${slot}` : '';
+      // 자리 배정(롤·오버워치)은 모두에게 있고 줄도 자리 순서라, 아이콘을 맨 앞에 두면 세로로 한 줄로 맞는다: [역할] [티어] 이름 · 티어
+      // 발로 역할은 저장한 사람만 있어 맨 앞에 두면 줄이 들쭉날쭉해지므로 뒤에 붙인다. 아이콘 이모지가 없을 때(글자)도 뒤에.
+      const lead = lu && slot && tiers.positionEmojiId(game, lu.slots[k]) ? `${slot} ` : '';
+      const tail = slot && !lead ? ` · ${slot}` : '';
       if (!withTiers) return `▸ **${escapeMarkdown(n)}**`;
-      if (!tr) return `❓ **${escapeMarkdown(n)}**${tail}`;
+      if (!tr) return `${lead}❓ **${escapeMarkdown(n)}**${tail}`;
       const id = tiers.tierEmojiId(game, tr);
-      return `${id ? `<:t:${id}>` : '▸'} **${escapeMarkdown(n)}** · *${tiers.tierLabel(game, tr)}*${tail}`; // 이름 · 기울임 티어 · 자리
+      return `${lead}${id ? `<:t:${id}>` : '▸'} **${escapeMarkdown(n)}** · *${tiers.tierLabel(game, tr)}*${tail}`; // [자리] [티어] 이름 · 기울임 티어
     });
     return `### ${title}${avg ? `　·　${avg}` : ''}\n${lines.length ? `>>> ${lines.join('\n')}` : '-# 없음'}`; // 팀원은 인용 블록(왼쪽 세로 막대)으로 묶는다, 빈 팀은 "없음"
   });
