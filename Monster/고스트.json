@@ -11,7 +11,7 @@
   "emoji": "👻",
   "rageName": "폭주한 고스트",
   "lore": "밤마다 서버를 떠도는 하얀 고스트. 한 사람을 골라 뚫어지게 노려보며 XP를 빨아 간다!",
-  "baseHp": 5760,
+  "baseHp": 5950,
   "damageRate": 1.15,
   "rage": {
     "hpRatio": 0.5,

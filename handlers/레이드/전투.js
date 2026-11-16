@@ -13,6 +13,8 @@ const POTIONS_PER_BATTLE = 2;
 const POTION_HEAL = 45;
 const GUARD_DAMAGE_RATE = 0.3;   // 방어: 받는 피해 70% 감소
 const TAUNT_DAMAGE_RATE = 0.3;   // 도발 중인 수호자: 받는 피해 70% 감소
+const TAUNT_REFLECT = 8;         // 도발 반격: 도발한 턴에 맞은 원래 피해(줄이기 전) × 이만큼 몬스터에게 되돌려준다(부하가 있어도 대장에게)
+const HEALER_HEAL = 20;          // 치유의 빛 회복량(30에서 너프)
 // 분노 조건(rage.hpRatio · rage.damageRate)과 기술 효과의 세기(effectRate · effectTurns · useBelowHp),
 // 상태이상의 이름·이모지(status — 슬라임은 💧점액·💫기절, 다른 몬스터는 🔥화상·❄️빙결처럼 전용으로)는
 // 몬스터마다 다르게 줄 수 있게 몬스터 파일(Monster/*.json)이 정한다. 효과 종류의 규칙만 여기 있다.
@@ -33,7 +35,7 @@ const TAUNT_DAMAGE_RATE = 0.3;   // 도발 중인 수호자: 받는 피해 70% �
 //   chill(효과): 맞은 사람 냉기 +stacks(분노 중 rageStacks). 방어해도 걸린다.
 //   chillOnHit(보호막 기술): 그 보호막이 켜진 턴에 몬스터에게 피해를 준 사람은 녹는 대신 냉기 +chillOnHit(얼음 갑옷).
 // 인원별 몬스터 피해 배율. 보통 플레이 승률이 인원과 상관없이 80~90%가 되게 맞춘 값(치유사·수호자가 다 있는 4인은 훨씬 버티므로 크게).
-const PARTY_DAMAGE_RATE = { 1: 1.35, 2: 1.07, 3: 1.28, 4: 1.92 }; // 3인은 궁수 차지 샷을 올리면서 1.25 → 1.28, 4인은 전투를 줄이며(HP ×0.8) 2.0 → 1.92
+const PARTY_DAMAGE_RATE = { 1: 1.35, 2: 1.07, 3: 1.28, 4: 1.8 }; // 4인: 치유사 회복 30 → 20 너프로 어려워져 1.92 → 1.8 // 3인은 궁수 차지 샷을 올리면서 1.25 → 1.28, 4인은 전투를 줄이며(HP ×0.8) 2.0 → 1.92
 // 몬스터가 주는 피해(기술·독) 배율 = 인원별 배율 × 몬스터 파일의 damageRate(없으면 1).
 // damageRate는 baseHp를 줄여 전투를 짧게 하면서 승률은 그대로 두려고 몬스터마다 맞춘 값.
 function monsterDamageRate(battle) {
@@ -63,12 +65,12 @@ const ROLES = {
     skill: { name: '차지 샷', cooldown: 3, damage: [220, 260], critChance: 0.3, desc: '220~260 피해, 치명타 확률 30%' },
   },
   tank: {
-    name: '수호자', emoji: '🛡️', attack: [60, 80], hpWeight: 0.85,
-    skill: { name: '도발', cooldown: 2, desc: '이번 턴 단일 공격을 대신 맞고, 받는 피해 70% 감소' },
+    name: '수호자', emoji: '🛡️', attack: [60, 80], hpWeight: 1.1,
+    skill: { name: '수호의 태세', cooldown: 2, desc: '이번 턴 단일 공격을 대신 맞고 받는 피해 70% 감소, 맞은 피해 ×8 반격' }, // 예전 이름 '도발'(사용자 요청으로 변경 — 코드·주석의 '도발'은 이 스킬)
   },
   healer: {
     name: '치유사', emoji: '💚', attack: [40, 60], hpWeight: 0.9,
-    skill: { name: '치유의 빛', cooldown: 3, desc: '아군 전원 HP +30, 쓰러진 아군은 HP 25로 부활' },
+    skill: { name: '치유의 빛', cooldown: 3, desc: '아군 전원 HP +20, 쓰러진 아군은 HP 25로 부활' },
   },
 };
 const ROLE_ORDER = ['sword', 'archer', 'tank', 'healer'];
@@ -580,6 +582,7 @@ function resolveTurn(battle, rng = Math.random) {
 
   // 1) 아군 행동
   let taunter = null;
+  let reflectRaw = 0; // 도발한 수호자가 이번 턴 맞은 원래 피해 합(반격용)
   for (const m of acting) {
     const role = ROLES[m.role];
     if (isStunned(battle, m)) {
@@ -624,7 +627,7 @@ function resolveTurn(battle, rng = Math.random) {
         const dmg = hitRes.dmg;
         m.damage += dmg;
         addChill(m, hitChill());
-        last.acts[m.userId] = { label: role.skill.name, value: dmg };
+        last.acts[m.userId] = { label: role.skill.name, value: dmg, skill: true };
         log.push(`${role.emoji} **${m.name}** ✨${role.skill.name} → **${dmg}**${minionTag(hitRes.minion)}`);
       } else if (m.role === 'archer') {
         let dmg = randInt(role.skill.damage, rng);
@@ -634,20 +637,20 @@ function resolveTurn(battle, rng = Math.random) {
         dmg = hitRes.dmg;
         m.damage += dmg;
         addChill(m, hitChill());
-        last.acts[m.userId] = { label: role.skill.name, value: dmg, crit };
+        last.acts[m.userId] = { label: role.skill.name, value: dmg, crit, skill: true };
         log.push(`${role.emoji} **${m.name}** ✨${role.skill.name} → **${dmg}**${crit ? ' 💥치명타!' : ''}${minionTag(hitRes.minion)}`);
       } else if (m.role === 'tank') {
         taunter = m;
         addChill(m, melt);
-        last.acts[m.userId] = { label: role.skill.name };
+        last.acts[m.userId] = { label: role.skill.name, skill: true };
         log.push(`${role.emoji} **${m.name}** ✨${role.skill.name}! 몬스터의 시선을 끈다`);
       } else if (m.role === 'healer') {
         let healed = 0;
         const revived = [];
         const cleansed = new Set(); // 씻어낸 상태이상 이름(점액 등)
         for (const t of battle.members) {
-          if (t.hp > 0) healed += heal(t, isStenched(battle, t) ? Math.round(30 * (t.stenchRate ?? 1)) : 30); // 악취 중엔 회복 감소(씻어내지 못함)
-          else { t.hp = 25; healed += 25; revived.push(t.name); }
+          if (t.hp > 0) healed += heal(t, isStenched(battle, t) ? Math.round(HEALER_HEAL * (t.stenchRate ?? 1)) : HEALER_HEAL); // 악취 중엔 회복 감소(씻어내지 못함)
+          else { t.hp = 25; healed += 25; revived.push(t.name); (last.revivedIds ??= []).push(t.userId); }
           if (slowTurnsLeft(battle, t) > 0) { t.slowUntil = 0; cleansed.add(t.slowStatus.name); } // 점액(slow)도 씻어낸다
           if (poisonStacks(battle, t) > 0) { t.poisonStacks = 0; t.poisonUntil = 0; cleansed.add(t.poisonStatus.name); } // 독도 씻어낸다
           if (chill && (t.chillStacks || 0) > 0) { t.chillStacks = 0; cleansed.add(chill.status.name); } // 냉기도 녹인다
@@ -655,7 +658,8 @@ function resolveTurn(battle, rng = Math.random) {
         m.healing += healed;
         m.support += healed;
         m.revives += revived.length;
-        last.acts[m.userId] = { label: role.skill.name, value: healed, heal: true };
+        last.acts[m.userId] = { label: role.skill.name, value: healed, heal: true, skill: true, revived: revived.length > 0 };
+        last.healed = battle.members.filter(t => t.hp > 0).map(t => t.userId); // 치유의 빛 연출용(회복·부활받은 사람)
         log.push(`${role.emoji} **${m.name}** ✨${role.skill.name} → 아군 회복${cleansed.size ? ` · ${[...cleansed].join('·')} 제거` : ''}${revived.length ? ` · **${revived.join(', ')}** 부활!` : ''}`);
       }
     } else if (action === 'guard') {
@@ -754,7 +758,7 @@ function resolveTurn(battle, rng = Math.random) {
       if (target === taunter && move.target === 'single') target.protected += Math.round(dmg);
       const rawDmg = Math.round(dmg);
       if (target.guarding) dmg *= move.guardRate ?? GUARD_DAMAGE_RATE; // 대폭발처럼 방어가 덜 먹히는 기술은 guardRate
-      if (target === taunter) dmg *= TAUNT_DAMAGE_RATE;
+      if (target === taunter) { dmg *= TAUNT_DAMAGE_RATE; reflectRaw += rawDmg; }
       dmg = Math.max(1, Math.round(dmg));
       // 종료 화면 '방어' 칸: 도발로 대신 맞아 준 공격은 원래 피해 전부(아군이 맞을 걸 대신 받음), 방어는 줄인 만큼
       target.blocked += target === taunter && move.target === 'single' ? rawDmg : Math.max(0, rawDmg - dmg);
@@ -867,7 +871,7 @@ function resolveTurn(battle, rng = Math.random) {
       battle.incoming += raw;
       if (t === taunter) t.protected += raw;
       if (t.guarding) dmg *= GUARD_DAMAGE_RATE;
-      if (t === taunter) dmg *= TAUNT_DAMAGE_RATE;
+      if (t === taunter) { dmg *= TAUNT_DAMAGE_RATE; reflectRaw += raw; }
       dmg = Math.max(1, Math.round(dmg));
       t.blocked += t === taunter ? raw : Math.max(0, raw - dmg);
       t.hp = Math.max(0, t.hp - dmg);
@@ -876,6 +880,23 @@ function resolveTurn(battle, rng = Math.random) {
       parts.push(`${t.name} -${dmg}${t.hp <= 0 ? ' 💀' : ''}`);
     }
     if (parts.length) log.push(`${mn.emoji} **${mn.name}**의 **${mn.attack.name}**! → ${parts.join(' · ')}`);
+  }
+  // 2-3) 도발 반격: 도발한 수호자가 맞은 원래 피해 × TAUNT_REFLECT 를 대장에게(살아 있을 때만, 점액·보호막·우울 보정은 공격과 같게)
+  if (taunter && taunter.hp > 0 && reflectRaw > 0) {
+    const dmg = dealt(taunter, reflectRaw * TAUNT_REFLECT);
+    battle.hp -= dmg;
+    taunter.damage += dmg;
+    last.monsterDamage += dmg;
+    last.reflect = { userId: taunter.userId, value: dmg };
+    last.acts[taunter.userId] = { label: '반격', value: dmg, skill: true };
+    log.push(`🛡️ **${taunter.name}** 반격! → **${dmg}**`);
+    if (battle.hp <= 0) {
+      battle.hp = 0;
+      for (const m of battle.members) { m.choice = null; m.guarding = false; }
+      log.push(`🎉 **${battle.monster.name}**을(를) 쓰러뜨렸다!`);
+      battle.log = log;
+      return 'clear';
+    }
   }
   freezeCheck();
 

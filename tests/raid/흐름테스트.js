@@ -840,7 +840,8 @@ let ok4;
       assert(E.minionsAlive(b).length === monkey.minions.count && b.minions[0].maxHp === mhp && !Object.keys(b.lastTurn.hits).length, '부하 부르기: 부하 두 마리(HP = 최대 HP × hpRate), 그 턴엔 피해 없음');
       const bossHp = b.hp;
       turnWith('attack', { x: 'attack', t: 'skill', y: 'attack' });
-      assert(b.hp === bossHp && b.minions[0].hp < mhp && b.log.join().includes(monkey.minions.attack.name), '부하가 있으면 공격은 부하에게 먼저, 부하는 다음 턴부터 바나나 투척');
+      assert(b.hp === bossHp - (b.lastTurn.reflect?.value || 0) && b.minions[0].hp < mhp && b.log.join().includes(monkey.minions.attack.name), '부하가 있으면 공격은 부하에게 먼저(도발 반격만 대장에게), 부하는 다음 턴부터 바나나 투척');
+      assert(b.lastTurn.reflect?.value > 0 && b.lastTurn.acts.t.label === '반격', '도발한 수호자가 바나나에 맞으면 대장에게 반격');
       assert(b.lastTurn.minionTargets?.t && !b.lastTurn.minionTargets?.x, '도발하면 바나나도 수호자가 맞음');
       {
         // 부하가 살아 있는 동안은 다음 행동으로 부하 부르기가 나오지 않는다(무작위로 여러 턴)
