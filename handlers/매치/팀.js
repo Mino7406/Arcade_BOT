@@ -294,7 +294,7 @@ function buildBoardPayload(match, matchMsgId) {
 
   if (tiers.hasTiers(game)) {
     const unknown = match.participants.filter(u => !tiers.getTier(u.id, game)).map(u => u.displayName);
-    if (unknown.length) blocks.push({ text: `-# 티어 미지정 : ${unknown.join(', ')} (티어를 저장하면 밸런스가 정확해져요)`, noDivider: true });
+    if (unknown.length) blocks.push({ text: `-# 티어 미지정 : ${unknown.join(', ')} (⚖️ 티어를 저장하면 밸런스가 정확해져요)`, noDivider: true });
   }
 
   // 내전 내역: 순번(#3)·직전 표시·시각(몇 분 전)·방식 한 줄 + 팀별 인용 줄. 내역마다 칸을 띄워 구분한다.
