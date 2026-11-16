@@ -1000,20 +1000,25 @@ function corruptCorners(seed, keep) {
   }
 }
 // 화면 글리치: 가로 띠 몇 줄을 옆으로 살짝 민다(3~8px). 글자·카드가 있는 줄은 피하도록 장면마다 밀어도 되는 세로 구간만.
-function glitchBands(seed, ranges, n = 3) {
+function glitchBands(seed, ranges, n = 4) {
   if (!ranges?.length) return;
   const rnd = seeded(seed * 131 + 17);
   const k = RENDER_SCALE, x0 = Math.round(24 * k), x1 = Math.round((W - 24) * k), rowBytes = (x1 - x0) * 3;
   for (let i = 0; i < n; i++) {
-    const [a, b] = ranges[Math.floor(rnd() * ranges.length)];
-    const h = Math.round((2 + rnd() * 4) * k);
-    const y0 = Math.round((a + rnd() * Math.max(1, b - a - 6)) * k);
-    const dx = Math.round((rnd() < 0.5 ? -1 : 1) * (3 + rnd() * 5) * k);
+    const [a, b] = ranges[i % ranges.length];
+    const hh = 3 + rnd() * 6;                       // 띠 두께(설계 px)
+    const yd = a + rnd() * Math.max(1, b - a - hh);  // 띠 위치(설계 px)
+    const dx = Math.round((rnd() < 0.5 ? -1 : 1) * (6 + rnd() * 9) * k);
+    const y0 = Math.round(yd * k), h = Math.max(2, Math.round(hh * k));
     for (let yy = y0; yy < y0 + h && yy < p.h; yy++) {
       const start = (yy * p.w + x0) * 3;
       const row = Buffer.from(p.buf.subarray(start, start + rowBytes));
       row.copy(p.buf, start + Math.max(0, dx) * 3, Math.max(0, -dx) * 3, rowBytes - Math.max(0, dx) * 3);
     }
+    // 밀린 띠 위아래 가장자리에 붉은·청록 얇은 선(빈 배경 위에서도 보이게, 일부 구간만)
+    const lx = 40 + rnd() * (W - 380), lw = 120 + rnd() * 220;
+    p.rect(lx, yd - 1, lw, 1.5, '#ff2a3c');
+    p.rect(lx + 18, yd + hh, lw * 0.6, 1.5, '#28dce6');
   }
 }
 // 가장자리 은은한 붉은 빛: 바깥에서 안쪽으로 옅어지는 붉은 띠(반투명) 네 변
@@ -1027,7 +1032,8 @@ function edgeGlow() {
   }
 }
 // 장면마다 띠를 밀어도 되는 세로 구간(설계 좌표) — 몬스터 칸 안쪽
-const CORRUPT_BANDS = { 모집: [[112, 250]], 전투: [[124, 262]], 결과: [[180, 330]] };
+// 띠는 몬스터(칸 가운데)를 가로지르게 — 몬스터 위·가운데·아래 구간을 돌아가며
+const CORRUPT_BANDS = { 모집: [[150, 175], [195, 215], [225, 245], [120, 140]], 전투: [[160, 185], [200, 225], [232, 258], [128, 150]], 결과: [[220, 245], [255, 280], [290, 315]] };
 // 장면별 지킬 상자(설계 좌표 900×640) — 모서리 오염이 덮지 않는다
 const CORRUPT_KEEP = {
   모집: [[90, 10, 720, 92], [280, 262, 340, 66], [20, 362, 860, 260]],
