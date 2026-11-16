@@ -163,6 +163,8 @@ async function buildScreens() {
     add('나만 보이는 메시지', '🧭 포지션 설정', '주/부 포지션을 고르면 바로 저장', team.buildPositionPayload('lol', '1', 'me'));
     add('나만 보이는 메시지', '🏅 내 티어 설정 — 오버워치 역할 고르기', '돌격·공격·지원 티어를 따로 저장(저장한 역할은 초록)', team.buildOwRolesPayload('1', 'me'));
     add('나만 보이는 메시지', '🏅 내 티어 설정 — 오버워치 돌격 티어', '', team.buildTierPickPayload('overwatch.tank', '1', 'me'));
+    add('나만 보이는 메시지', '🏅 내 티어 설정 — 내 티어 정보(패널)', '게임마다 이름 줄 + 인용 줄, 오른쪽에 🗑️ 전체 초기화', team.buildTierGamePayload('me'));
+    add('나만 보이는 메시지', '🗑️ 전체 초기화 확인', '', team.buildResetAllConfirmPayload());
     Object.assign(tm, orig);
   }
   add('내전 · 모집', '안내 한 줄 — 만료', '모든 짧은 안내가 같은 카드 모양', card.notice('⚠️ **만료된 내전입니다.**', { ephemeral: true }));

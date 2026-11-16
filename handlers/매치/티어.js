@@ -315,6 +315,15 @@ function setTier(userId, gk, tier) {
   save(userId);
 }
 
+// 🗑️ 전체 초기화: 이 사람의 모든 게임 티어·역할을 지운다. 지운 게 있었으면 true.
+function resetAll(userId) {
+  const store = storeOf(userId);
+  if (!store[userId]) return false;
+  delete store[userId];
+  save(userId);
+  return true;
+}
+
 // 포지션 저장: [주, 부] (빈 배열이면 지움)
 function setPositions(userId, game, list) {
   if (!POSITIONS[game]) return;
@@ -440,6 +449,7 @@ module.exports = {
   getPositions,
   setTier,
   setPositions,
+  resetAll,
   ensureTierEmojis,
   tierEmojiId,
   positionEmojiId,

@@ -185,6 +185,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await team.handleTeamButton(mkInteraction({ user: 'u7', customId: 'team:tier_back:lol:panel', message: panelTier.message }));
     await team.handleTeamButton(mkInteraction({ user: 'u7', customId: 'team:tier_games:panel', message: panelTier.message }));
     assert(JSON.stringify(panelTier.message.components).includes('내 티어'), '게임 고르기 화면에 저장된 내 티어가 안 보임');
+    assert(JSON.stringify(panelTier.message.components).includes('team:tier_resetall:panel'), '내 티어 정보 옆에 전체 초기화 버튼이 없음');
     await team.handleTeamButton(mkInteraction({ user: 'u7', customId: 'team:tier:pubg:panel', message: panelTier.message }));
     await team.handleTeamSelect(mkInteraction({ user: 'u7', customId: 'team:tier_pick:pubg:panel', values: ['crystal'], message: panelTier.message }));
     await team.handleTeamButton(mkInteraction({ user: 'u7', customId: 'team:tier_back:pubg:panel', message: panelTier.message }));
@@ -297,6 +298,14 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     tierMod.setTier('u2', 'overwatch.support', { tier: 'gold', div: 1 });
     await team.handleTeamButton(mkInteraction({ user: 'u2', customId: `team:tier_reset:overwatch.tank:${id}`, message: owBtn._reply }));
     assert(!tierMod.getTier('u2', 'overwatch.tank') && tierMod.getTier('u2', 'overwatch.support'), '오버워치 초기화가 그 롤만 지우지 않음');
+
+    // 🗑️ 전체 초기화: 확인 화면 → 모두 지우기 → 모든 게임 티어·포지션이 사라짐
+    tierMod.setPositions('u2', 'lol', ['mid']);
+    const allMsg = new FakeMsg(team.buildTierGamePayload('u2'), channel);
+    await team.handleTeamButton(mkInteraction({ user: 'u2', customId: 'team:tier_resetall:panel', message: allMsg }));
+    assert(JSON.stringify(allMsg.components).includes('team:tier_resetall_ok:panel'), '전체 초기화 확인 화면이 안 뜸');
+    await team.handleTeamButton(mkInteraction({ user: 'u2', customId: 'team:tier_resetall_ok:panel', message: allMsg }));
+    assert(!tierMod.getTier('u2', 'overwatch') && !tierMod.getTier('u2', 'lol') && tierMod.getPositions('u2', 'lol').length === 0, '전체 초기화했는데 티어·포지션이 남음');
 
     match.closed = false; // 마감 해제 후 다시 마감돼도 카드를 또 올리지 않는다
     const before = channel.sent.length;
