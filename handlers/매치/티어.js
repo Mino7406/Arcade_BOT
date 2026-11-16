@@ -103,37 +103,51 @@ function findTier(game, key) {
 }
 
 // ── 포지션 ──────────────────────────────────────────────────
-// 롤: 주/부 포지션을 저장해 두면 팀마다 탑~서폿을 겹치지 않게 맡긴다(밸런스에도 반영).
+// 롤: 주/부 포지션을 저장해 두면 팀마다 탑~서포터를 겹치지 않게 맡긴다(밸런스에도 반영).
 // 발로: 주/부 역할은 카드에 보여 주기만 한다(역할이 롤만큼 고정되지 않아서 밸런스엔 안 넣음).
-// 오버워치: 포지션별로 랭크가 따로라 탱커·딜러·힐러 티어를 각각 저장하고, 팀마다 탱1·딜2·힐2(6vs6이면 탱2·딜2·힐2)로 맡겨 그 롤 티어로 계산한다.
+// 오버워치: 포지션별로 랭크가 따로라 돌격·공격·지원 티어를 각각 저장하고, 팀마다 돌격1·공격2·지원2(6vs6이면 돌격2·공격2·지원2)로 맡겨 그 롤 티어로 계산한다.
+// aliases: ✏️ 직접 입력에서 줄 맨 앞에 적으면 그 역할로 알아듣는 글자(이름과 헷갈리지 않게 두 글자 이상만)
 const POSITIONS = {
   lol: [
-    { key: 'top', name: '탑' },
-    { key: 'jungle', name: '정글' },
-    { key: 'mid', name: '미드' },
-    { key: 'adc', name: '원딜' },
-    { key: 'support', name: '서폿' },
+    { key: 'top', name: '탑', aliases: ['탑', '탑솔'] },
+    { key: 'jungle', name: '정글', aliases: ['정글', '정글러'] },
+    { key: 'mid', name: '미드', aliases: ['미드'] },
+    { key: 'adc', name: '바텀', aliases: ['바텀', '원딜', '봇듀', '에이디'] },
+    { key: 'support', name: '서포터', aliases: ['서포터', '서폿', '서포트'] },
   ],
   valorant: [
-    { key: 'duelist', name: '타격대' },
-    { key: 'initiator', name: '척후대' },
-    { key: 'controller', name: '전략가' },
-    { key: 'sentinel', name: '감시자' },
+    { key: 'duelist', name: '타격대', aliases: ['타격대', '타격'] },
+    { key: 'initiator', name: '척후대', aliases: ['척후대', '척후'] },
+    { key: 'controller', name: '전략가', aliases: ['전략가', '전략'] },
+    { key: 'sentinel', name: '감시자', aliases: ['감시자', '감시'] },
   ],
 };
 const POSITION_WORD = { lol: '포지션', valorant: '역할' };
 const OW_ROLES = [
-  { key: 'tank', name: '탱커', icon: '🛡️', slots: 1 },
-  { key: 'damage', name: '딜러', icon: '⚔️', slots: 2 },
-  { key: 'support', name: '힐러', icon: '💉', slots: 2 },
+  { key: 'tank', name: '돌격', icon: '🛡️', slots: 1, aliases: ['돌격', '탱', '탱커'] },
+  { key: 'damage', name: '공격', icon: '⚔️', slots: 2, aliases: ['공격', '딜', '딜러'] },
+  { key: 'support', name: '지원', icon: '💉', slots: 2, aliases: ['지원', '힐', '힐러', '서폿'] },
 ];
 
 function positionName(game, key) {
+  if (baseGame(game) === 'overwatch') return owRole(key)?.name ?? '';
   return POSITIONS[game]?.find(p => p.key === key)?.name ?? '';
 }
 
 function owRole(key) {
   return OW_ROLES.find(r => r.key === key) ?? null;
+}
+
+// 역할을 적을 수 있는 게임(롤·발로·오버워치)
+function hasPositions(game) {
+  return !!POSITIONS[game] || game === 'overwatch';
+}
+
+// 직접 입력의 낱말 하나 → 역할 키(없으면 null). 오버워치는 한 글자 줄임말(탱·딜·힐)도 받는다.
+function parsePositionToken(game, token) {
+  const list = game === 'overwatch' ? OW_ROLES : POSITIONS[game];
+  const word = String(token).trim();
+  return list?.find(p => p.aliases.includes(word))?.key ?? null;
 }
 
 // 낮은 칸부터 0, 1, 2 … 로 센 점수. 롤 아이언4 = 0, 골드1 = 15 / 발로 아이언1 = 0, 레디언트 = 24
@@ -406,6 +420,8 @@ module.exports = {
   splitKey,
   ladderOf,
   positionName,
+  hasPositions,
+  parsePositionToken,
   owRole,
   hasTiers,
   findTier,

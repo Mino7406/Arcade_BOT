@@ -209,14 +209,27 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     assert(tierMod.getTier('u4', 'lol')?.tier === 'master', '팀 입력의 티어(마스터)가 저장되지 않음');
     assert(match.board.current.teams[0].members.join() === '이름u1,이름u2', `티어 글자가 이름에 섞임(${match.board.current.teams[0].members})`);
 
+    // ✏️ 직접 입력(팀별 칸): 맨 앞 역할은 고정, 이름 뒤 티어는 저장, 첫 줄 [이름]은 팀 이름
+    const NL = String.fromCharCode(10);
+    const boxModal = team.buildInputModal(match, id).toJSON();
+    assert(boxModal.components.length === 2 && boxModal.components[0].components[0].custom_id === 'team0', '직접 입력 창이 팀별 칸으로 안 나옴');
+    await team.handleTeamModal(mkInteraction({ user: ADMIN, customId: `team:modal:${id}`, fields: { team0: ['[공격]', '미드 이름u1', '정글 이름u3 골2'].join(NL), team1: ['이름u2', '서포터 이름u4'].join(NL) } }));
+    const cur = match.board.current;
+    assert(cur.teams[0].name === '공격' && cur.teams[0].members.join() === '이름u1,이름u3', `팀별 칸이 잘못 읽힘(${JSON.stringify(cur.teams)})`);
+    assert(cur.teams[0].pos?.join() === 'mid,jungle' && cur.teams[1].pos?.join() === ',support', `고정 역할이 저장되지 않음(${JSON.stringify(cur.teams.map(t => t.pos))})`);
+    assert(tierMod.getTier('u3', 'lol')?.tier === 'gold', '직접 입력의 티어(골2)가 저장되지 않음');
+    assert(team.buildInputModal(match, id).toJSON().components[0].components[0].value.includes('미드 이름u1'), '다시 열면 고정 역할이 채워져 있어야 함');
+    assert(team.parseTeamBoxes(['윤진-승훈' + NL + '시형-연우', ''], { game: 'lol' }).teams.length === 2, '한 칸에 예전 방식으로 붙여넣으면 예전처럼 읽어야 함');
+    assert(team.parseTeamBoxes(['돌격 가' + NL + '힐 나', '딜 다' + NL + '라'], { game: 'overwatch' }).teams[0].pos.join() === 'tank,support', '오버워치 줄임말(돌격·힐)을 못 읽음');
+
     await team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:balance:${id}` }));
-    assert(match.board.current.how === 'balance' && match.board.history.length === 2, '밸런스 후 이전 팀표로 안 밀림');
+    assert(match.board.current.how === 'balance' && match.board.history.length === 3, '밸런스 후 이전 팀표로 안 밀림');
     await team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:random:${id}` }));
-    assert(match.board.history.length === 3, '랜덤 후 이전 팀표가 안 쌓임');
+    assert(match.board.history.length === 4, '랜덤 후 이전 팀표가 안 쌓임');
 
     const bad = mkInteraction({ user: ADMIN, customId: `team:modal:${id}`, fields: { teams: '혼자' } });
     await team.handleTeamModal(bad);
-    assert(match.board.history.length === 3, '잘못된 입력인데 팀이 바뀜');
+    assert(match.board.history.length === 4, '잘못된 입력인데 팀이 바뀜');
 
     // 🏅 내 티어: 티어 고르기 → 단계 고르기 → 저장 / 단계 없는 티어 / 지우기
     const tierBtn = mkInteraction({ user: 'u3', customId: `team:tier:lol:${id}` });
@@ -254,7 +267,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     assert(!tierMod.getTier('u2', 'overwatch.support'), '저장 안 한 롤(힐러)에 티어가 생김');
     assert(tierMod.getTier('u2', 'overwatch')?.tier === 'diamond', '오버워치 대표 티어(가장 높은 롤)가 안 나옴');
     await team.handleTeamButton(mkInteraction({ user: 'u2', customId: `team:tier_roles:${id}`, message: owBtn._reply }));
-    assert(JSON.stringify(owBtn._reply.components).includes('탱커'), '↩️ 뒤로가 롤 고르기로 안 돌아감');
+    assert(JSON.stringify(owBtn._reply.components).includes('돌격'), '↩️ 뒤로가 롤 고르기로 안 돌아감');
 
     // 롤 포지션: 🧭 포지션 설정 → 주(미드) → 부(정글) → 주를 지우면 부도 지워짐
     await team.handleTeamButton(mkInteraction({ user: 'u3', customId: `team:tier_posset:lol:${id}`, message: tierBtn._reply }));

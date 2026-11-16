@@ -41,7 +41,7 @@ const HISTORY_KEPT = 10;
 const HISTORY_SHOWN = 3;
 const TEAM_ICONS = ['🔵', '🔴', '🟢', '🟡', '🟣', '🟠', '⚪', '🟤', '⚫', '🩷'];
 const OLD_UI_NOTE = '⚠️ **팀 짜기 방식이 바뀌었어요.** 내전이 마감되면 내전채팅에 팀 짜기 카드가 자동으로 올라가요.';
-const HOW_TEXT = { input: '📝 입력', balance: '⚖️ 밸런스', random: '🎲 랜덤' };
+const HOW_TEXT = { input: '✏️ 직접 입력', balance: '⚖️ 밸런스', random: '🎲 랜덤' };
 
 // ── 이름 ────────────────────────────────────────────────────
 
@@ -111,10 +111,16 @@ function parseTeamsText(raw, { game } = {}) {
     teams = [{ name: null, members: all.slice(0, half) }, { name: null, members: all.slice(half) }];
   }
 
-  if (teams.length < 2) return { error: '팀을 나누려면 이름이 **두 명 이상** 있어야 해요.\n예)\n```\n윤진-승훈-시형-연우-강현\n현호-찬영-찬우-승민-채원\n```' };
-  if (teams.length > MAX_TEAMS) return { error: `팀은 최대 ${MAX_TEAMS}개까지 적을 수 있어요.` };
+  const error = validateTeams(teams);
+  return error ? { error } : { teams, hints };
+}
+
+// 팀 수·인원·겹친 이름 확인. 문제 있으면 안내 문구, 없으면 null.
+function validateTeams(teams) {
+  if (teams.length < 2) return '팀을 나누려면 이름이 **두 명 이상** 있어야 해요.\n예)\n```\n윤진-승훈-시형-연우-강현\n현호-찬영-찬우-승민-채원\n```';
+  if (teams.length > MAX_TEAMS) return `팀은 최대 ${MAX_TEAMS}개까지 적을 수 있어요.`;
   const big = teams.find(t => t.members.length > MAX_MEMBERS);
-  if (big) return { error: `한 팀은 최대 ${MAX_MEMBERS}명까지예요. (\`${big.members.slice(0, 3).join(' ')} …\` 줄 확인)` };
+  if (big) return `한 팀은 최대 ${MAX_MEMBERS}명까지예요. (\`${big.members.slice(0, 3).join(' ')} …\` 줄 확인)`;
 
   const seen = new Set();
   const dups = new Set();
@@ -123,9 +129,39 @@ function parseTeamsText(raw, { game } = {}) {
     if (seen.has(key)) dups.add(key);
     seen.add(key);
   }
-  if (dups.size > 0) return { error: `두 번 적힌 이름이 있어요: **${[...dups].join(', ')}**` };
+  if (dups.size > 0) return `두 번 적힌 이름이 있어요: **${[...dups].join(', ')}**`;
+  return null;
+}
 
-  return { teams, hints };
+// ✏️ 직접 입력의 팀별 칸(칸 하나 = 팀 하나, 한 줄에 한 명)을 읽는다.
+//   탑 승훈 다2   ← 맨 앞 역할(그 자리로 고정) · 이름 · 티어(저장). 역할·티어는 둘 다 빼도 된다.
+//   [공수]        ← 첫 줄을 대괄호로 쓰면 팀 이름
+// 한 칸에 "윤진-승훈-…"처럼 예전 방식으로 여러 팀을 붙여넣으면 예전처럼 읽는다.
+// 성공: { teams: [{ name, members, pos? }], hints } / 실패: { error }
+function parseTeamBoxes(boxes, { game } = {}) {
+  const filled = boxes.map(b => String(b || '').trim()).filter(Boolean);
+  if (filled.length === 1 && /[-/]|\svs\s/i.test(filled[0])) return parseTeamsText(filled[0], { game });
+
+  const hints = [];
+  const teams = filled.map(box => {
+    const lines = box.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    let name = null;
+    const head = /^\[([^\]]{1,20})\]$/.exec(lines[0] || '');
+    if (head) { name = head[1].trim(); lines.shift(); }
+    const members = [];
+    const pos = [];
+    for (const line of lines) {
+      const words = line.split(/\s+/);
+      const slot = words.length >= 2 && tiers.hasPositions(game) ? tiers.parsePositionToken(game, words[0]) : null;
+      const rest = slot ? words.slice(1).join(' ') : line;
+      const got = parseTeamLine(rest, game, hints).members; // 한 줄에 여러 명·"승훈(불2)"·"승훈 불2" 모두 예전처럼
+      got.forEach((m, i) => { members.push(m); pos.push(i === 0 ? slot : null); });
+    }
+    return { name, members, ...(pos.some(Boolean) ? { pos } : {}) };
+  }).filter(t => t.members.length > 0);
+
+  const error = validateTeams(teams);
+  return error ? { error } : { teams, hints };
 }
 
 // 입력창에 채워 줄 글(한 줄에 한 팀).
@@ -185,7 +221,7 @@ function participantScores(participants, game) {
 // ── 포지션 배정 ─────────────────────────────────────────────
 // 롤·오버워치에서 팀 인원이 맞으면 자리를 하나씩 맡긴다.
 //  - 롤 5명: 탑~서폿
-//  - 오버워치 5명(5vs5): 탱1·딜2·힐2 / 6명(6vs6): 탱2·딜2·힐2 — 팀 인원으로 저절로 바뀐다(내전 정원 12명이면 6vs6)
+//  - 오버워치 5명(5vs5): 돌격1·공격2·지원2 / 6명(6vs6): 돌격2·공격2·지원2 — 팀 인원으로 저절로 바뀐다(내전 정원 12명이면 6vs6)
 // 맡긴 자리가 그 사람 생각과 얼마나 다른지를 "비용"으로 매겨, 밸런스 때 티어 차이에 더해 함께 줄인다(티어 한 단계 = 1).
 const LINEUP_SLOTS = {
   lol: { 5: ['top', 'jungle', 'mid', 'adc', 'support'] },
@@ -237,9 +273,12 @@ function slotFit(user, game, slot, base) {
 
 // 한 팀(users, 같은 순서의 기본 점수 bases)의 가장 잘 맞는 자리 배정. 해당 없으면 null.
 // → { slots: [사람마다 자리], cost, sum: 그 자리 기준 점수 합 }
-function lineup(users, game, bases) {
-  const perms = slotPerms(game, users.length);
-  if (!perms) return null;
+// pins: 사람마다 ✏️ 직접 입력으로 고정한 자리(없으면 null). 고정이 서로 부딪혀(탑 둘 등) 맞는 배정이 없으면 고정을 무시한다.
+function lineup(users, game, bases, pins = []) {
+  const all = slotPerms(game, users.length);
+  if (!all) return null;
+  const pinned = all.filter(perm => perm.every((slot, i) => !pins[i] || pins[i] === slot));
+  const perms = pinned.length ? pinned : all;
   const fits = users.map((u, i) => Object.fromEntries(slotsFor(game, users.length).map(slot => [slot, slotFit(u, game, slot, bases[i])])));
   let best = null;
   for (const perm of perms) {
@@ -347,25 +386,34 @@ function makeDraft(match) {
   return { teams, how: canBalance ? 'balance' : 'random', at: Date.now(), draft: true };
 }
 
-// 카드에 보여 줄 팀의 자리 배정. 롤·오버워치 5명 팀에서 누구라도 포지션(오버워치는 롤 티어)을 저장했을 때만.
-function teamLineup(resolved, game, match) {
+// 카드에 보여 줄 팀의 자리 배정. 롤·오버워치 팀 인원이 맞고, 누구라도 포지션(오버워치는 역할 티어)을 저장했거나 직접 고정한 자리가 있을 때만.
+function teamLineup(resolved, game, match, pins = []) {
   if (!slotsFor(game, resolved.length)) return null;
-  const hasData = resolved.some(u => u && (game === 'lol' ? tiers.getPositions(u.id, 'lol').length : Object.values(tiers.getRoleTiers(u.id)).some(Boolean)));
+  const hasData = pins.some(Boolean) || resolved.some(u => u && (game === 'lol' ? tiers.getPositions(u.id, 'lol').length : Object.values(tiers.getRoleTiers(u.id)).some(Boolean)));
   if (!hasData) return null;
   const allScores = participantScores(match.participants, game);
   const byId = new Map(match.participants.map((u, i) => [u.id, allScores[i]]));
   const median = [...allScores].sort((a, b) => a - b)[Math.floor(allScores.length / 2)] ?? 0;
-  return lineup(resolved, game, resolved.map(u => (u ? byId.get(u.id) ?? median : median)));
+  return lineup(resolved, game, resolved.map(u => (u ? byId.get(u.id) ?? median : median)), pins);
 }
 
-// 자리 표시: 포지션 아이콘(롤·오버워치는 맡은 자리, 발로는 주 역할)
-function slotLabel(game, slot, user) {
-  // 아이콘 이모지가 있으면 아이콘만(카드가 짧게), 없으면 글자(오버워치는 🛡️ 탱커처럼)
-  const withIcon = (key, name) => (tiers.positionEmojiId(game, key) ? tiers.positionIcon(game, key) : `${tiers.positionIcon(game, key)} ${name}`.trim());
-  if (game === 'lol' && slot) return withIcon(slot, tiers.positionName('lol', slot));
-  if (game === 'overwatch' && slot) { const r = tiers.owRole(slot); return r ? withIcon(slot, r.name) : ''; }
-  if (game === 'valorant' && user) { const main = tiers.getPositions(user.id, 'valorant')[0]; return main ? withIcon(main, tiers.positionName('valorant', main)) : ''; }
-  return '';
+// 팀원마다 맡은 자리 키(자리 배정 → 직접 고정 → 발로는 저장한 주 역할 순서로). 없으면 null.
+function memberSlots(t, resolved, game, lu) {
+  const pins = t.pos || [];
+  return t.members.map((n, k) => {
+    if (lu) return lu.slots[k];
+    if (pins[k]) return pins[k];
+    if (game === 'valorant' && resolved[k]) return tiers.getPositions(resolved[k].id, 'valorant')[0] ?? null;
+    return null;
+  });
+}
+
+// 자리 표시: 포지션 아이콘. 아이콘 이모지가 있으면 아이콘만(카드가 짧게), 없으면 글자(오버워치는 🛡️ 돌격처럼)
+function slotLabel(game, slot) {
+  if (!slot || !tiers.hasPositions(game)) return '';
+  const name = tiers.positionName(game, slot);
+  if (!name) return '';
+  return tiers.positionEmojiId(game, slot) ? tiers.positionIcon(game, slot) : `${tiers.positionIcon(game, slot)} ${name}`.trim();
 }
 
 // 팀 하나 = 카드 한 칸. 큰 팀 제목 옆에 팀 평균 티어(이모지 + 티어) → 한 명씩 한 줄(티어 이모지 + 굵은 이름 + 티어 + 자리).
@@ -377,10 +425,11 @@ function teamBlocks(teams, match) {
   const compact = teams.length > 4;
   const texts = teams.map((t, i) => {
     const resolved = t.members.map(n => resolveMember(n, match.participants));
-    const lu = withTiers && !compact ? teamLineup(resolved, game, match) : null;
+    const lu = withTiers && !compact ? teamLineup(resolved, game, match, t.pos || []) : null;
+    const slots = memberSlots(t, resolved, game, lu);
     const memberTiers = resolved.map((u, k) => {
       if (!withTiers || !u) return null;
-      if (game === 'overwatch' && lu) return tiers.getTier(u.id, `overwatch.${lu.slots[k]}`) ?? tiers.getTier(u.id, game);
+      if (game === 'overwatch' && slots[k]) return tiers.getTier(u.id, `overwatch.${slots[k]}`) ?? tiers.getTier(u.id, game); // 맡은 역할의 티어
       return tiers.getTier(u.id, game);
     });
     const scores = memberTiers.map(tr => tiers.tierScore(game, tr)).filter(x => x !== null && x !== undefined);
@@ -393,14 +442,14 @@ function teamBlocks(teams, match) {
       return `**${title}**${avg ? `　·　${avg}` : ''}\n${names.join(' · ')}`;
     }
     const order = t.members.map((n, k) => k);
-    if (lu) { const slots = slotsFor(game, t.members.length); order.sort((a, b) => slots.indexOf(lu.slots[a]) - slots.indexOf(lu.slots[b])); }
+    if (lu) { const order0 = slotsFor(game, t.members.length); order.sort((a, b) => order0.indexOf(lu.slots[a]) - order0.indexOf(lu.slots[b])); }
     const lines = order.map(k => {
       const n = t.members[k];
       const tr = memberTiers[k];
-      const slot = slotLabel(game, lu?.slots[k], resolved[k]);
+      const slot = slotLabel(game, slots[k]);
       // 자리 배정(롤·오버워치)은 모두에게 있고 줄도 자리 순서라, 아이콘을 맨 앞에 두면 세로로 한 줄로 맞는다: [역할] [티어] 이름 · 티어
-      // 발로 역할은 저장한 사람만 있어 맨 앞에 두면 줄이 들쭉날쭉해지므로 뒤에 붙인다. 아이콘 이모지가 없을 때(글자)도 뒤에.
-      const lead = lu && slot && tiers.positionEmojiId(game, lu.slots[k]) ? `${slot} ` : '';
+      // 발로 역할·인원이 안 맞는 팀의 고정 자리는 일부만 있어 맨 앞에 두면 줄이 들쭉날쭉해지므로 뒤에 붙인다. 아이콘 이모지가 없을 때(글자)도 뒤에.
+      const lead = lu && slot && tiers.positionEmojiId(game, slots[k]) ? `${slot} ` : '';
       const tail = slot && !lead ? ` · ${slot}` : '';
       if (!withTiers) return `▸ **${escapeMarkdown(n)}**`;
       if (!tr) return `${lead}❓ **${escapeMarkdown(n)}**${tail}`;
@@ -414,7 +463,7 @@ function teamBlocks(teams, match) {
 
 function buildBoardRows(match, matchMsgId) {
   const game = match.data.game;
-  const buttons = [new ButtonBuilder().setCustomId(`team:input:${matchMsgId}`).setLabel('📝 팀 입력').setStyle(ButtonStyle.Primary)];
+  const buttons = [new ButtonBuilder().setCustomId(`team:input:${matchMsgId}`).setLabel('✏️ 직접 입력').setStyle(ButtonStyle.Primary)];
   if (tiers.hasTiers(game)) buttons.push(new ButtonBuilder().setCustomId(`team:balance:${matchMsgId}`).setLabel('⚖️ 밸런스').setStyle(ButtonStyle.Secondary));
   buttons.push(new ButtonBuilder().setCustomId(`team:random:${matchMsgId}`).setLabel('🎲 랜덤').setStyle(ButtonStyle.Secondary));
   if (tiers.hasTiers(game)) buttons.push(new ButtonBuilder().setCustomId(`team:tier:${game}:${matchMsgId}`).setLabel('🏅 내 티어 설정').setStyle(ButtonStyle.Success));
@@ -462,7 +511,7 @@ function buildBoardPayload(match, matchMsgId) {
     thumb: gameThumb(gameInfo),
     thumbAlt: gameInfo.name,
     blocks,
-    footer: '📝 팀 입력에 지금 팀이 채워져 있어요 · 바꿀 사람만 고치면 돼요',
+    footer: '✏️ 직접 입력에 지금 팀과 역할이 채워져 있어요 · 바꿀 사람만 고치면 돼요',
     rows: buildBoardRows(match, matchMsgId),
   }));
 }
@@ -591,8 +640,46 @@ function learnTiers(match, hints) {
   return note;
 }
 
+// 직접 입력 칸에 채울 팀 하나의 글: 한 줄에 한 명, 맡은 자리가 있으면 맨 앞에(탑 민호), 카드에 보이는 순서대로.
+function teamToLines(t, match) {
+  const game = match.data.game;
+  const resolved = t.members.map(n => resolveMember(n, match.participants));
+  const lu = tiers.hasTiers(game) ? teamLineup(resolved, game, match, t.pos || []) : null;
+  // 발로는 저장한 주 역할을 채우면 그대로 고정돼 버리니, 직접 고정한 것만 채운다
+  const slots = t.members.map((n, k) => (lu ? lu.slots[k] : (t.pos || [])[k] || null));
+  const order = t.members.map((n, k) => k);
+  if (lu) { const order0 = slotsFor(game, t.members.length); order.sort((a, b) => order0.indexOf(slots[a]) - order0.indexOf(slots[b])); }
+  const lines = order.map(k => `${slots[k] ? `${tiers.positionName(game, slots[k])} ` : ''}${t.members[k]}`);
+  return [...(t.name ? [`[${t.name}]`] : []), ...lines].join('\n');
+}
+
+const INPUT_PLACEHOLDER = {
+  lol: '탑 승훈 다2\n정글 윤진\n미드 시형\n바텀 연우\n서포터 강현',
+  overwatch: '돌격 승훈 다2\n공격 윤진\n공격 시형\n지원 연우\n지원 강현',
+  valorant: '타격대 승훈 불2\n감시자 윤진\n시형\n연우\n강현',
+};
+
+// ✏️ 직접 입력: 팀마다 칸 하나(디스코드 입력창은 칸이 최대 5개라 팀이 6개 이상이면 예전처럼 칸 하나에 한 줄 한 팀).
 function buildInputModal(match, matchMsgId) {
   const cur = normalizeBoard(match).current;
+  const game = match.data.game;
+  if (cur.teams.length <= 5) {
+    const teams = cur.teams.length >= 2 ? cur.teams : [...cur.teams, { name: null, members: [] }, { name: null, members: [] }].slice(0, 2);
+    const hint = tiers.hasPositions(game) ? '한 줄에 한 명 (역할 이름 티어)' : tiers.hasTiers(game) ? '한 줄에 한 명 (이름 티어)' : '한 줄에 한 명';
+    const rows = teams.map((t, i) => {
+      const input = new TextInputBuilder()
+        .setCustomId(`team${i}`)
+        .setLabel(`${TEAM_ICONS[i] ?? ''} ${t.name || `${i + 1} 팀`} · ${hint}`.trim().slice(0, 45))
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder((INPUT_PLACEHOLDER[game] ?? '승훈\n윤진\n시형\n연우\n강현').slice(0, 100))
+        .setRequired(false)
+        .setMaxLength(1000);
+      const value = teamToLines(t, match);
+      if (value) input.setValue(value.slice(0, 1000));
+      return new ActionRowBuilder().addComponents(input);
+    });
+    return new ModalBuilder().setCustomId(`team:modal:${matchMsgId}`).setTitle('직접 입력').addComponents(...rows);
+  }
   const prefill = teamsToText(cur.teams);
   const input = new TextInputBuilder()
     .setCustomId('teams')
@@ -604,7 +691,7 @@ function buildInputModal(match, matchMsgId) {
   if (prefill) input.setValue(prefill.slice(0, 1000));
   return new ModalBuilder()
     .setCustomId(`team:modal:${matchMsgId}`)
-    .setTitle('팀 입력')
+    .setTitle('직접 입력')
     .addComponents(new ActionRowBuilder().addComponents(input));
 }
 
@@ -683,7 +770,7 @@ function buildTierGamePayload(userId) {
     };
     blocks.push(`### 📋 내 티어 정보\n${games.map(line).join('\n')}`);
   } else {
-    blocks.push('아직 저장한 티어가 없어요.\n티어를 저장해 두면 내전 팀 짜기에서 **⚖️ 밸런스**로 팀을 고르게 나눠 줘요.');
+    blocks.push('티어를 저장해 두면 내전 팀 설정에서 **⚖️ 밸런스**로 팀을 고르게 나눠 줘요.');
   }
   blocks.push('**어느 게임 티어를 설정할까요?**');
   const buttons = games.map(g => {
@@ -693,14 +780,14 @@ function buildTierGamePayload(userId) {
   return payload(card({
     color: 0x5865F2,
     header: '🏅 내 티어 설정',
-    sub: '롤 · 발로란트 · 오버워치 · 배틀그라운드',
+    sub: '내전 팀 설정에 쓰일 티어를 직접 정할 수 있어요',
     blocks,
     footer: saved.length ? '초록 버튼은 이미 저장된 게임이에요 · 한 번 저장하면 다음 내전에도 그대로 써요' : '한 번 저장하면 다음 내전에도 그대로 써요',
     rows: [new ActionRowBuilder().addComponents(...buttons)],
   }), { ephemeral: true });
 }
 
-// 오버워치: 롤(탱커·딜러·힐러)마다 랭크가 따로라 먼저 롤을 고른다.
+// 오버워치: 역할(돌격·공격·지원)마다 랭크가 따로라 먼저 롤을 고른다.
 function buildOwRolesPayload(matchMsgId, userId) {
   const rt = tiers.getRoleTiers(userId);
   const buttons = tiers.OW_ROLES.map(r => {
@@ -716,11 +803,11 @@ function buildOwRolesPayload(matchMsgId, userId) {
     header: '🏅 내 티어 설정',
     thumbTier: tiers.getTier(userId, 'overwatch'),
     blocks: [
-      `**롤별 티어**\n${tiers.OW_ROLES.map(r => `${tiers.positionIcon('overwatch', r.key)} **${r.name}** : ${tierLine(`overwatch.${r.key}`, rt[r.key])}`).join('\n')}`,
-      '**어느 롤 티어를 설정할까요?**',
+      `**역할별 티어**\n${tiers.OW_ROLES.map(r => `${tiers.positionIcon('overwatch', r.key)} **${r.name}** : ${tierLine(`overwatch.${r.key}`, rt[r.key])}`).join('\n')}`,
+      '**어느 역할 티어를 설정할까요?**',
     ],
     rows: [new ActionRowBuilder().addComponents(...buttons)],
-    footer: '하는 롤만 저장하면 돼요 · ⚖️ 밸런스 때 탱1·딜2·힐2(6vs6은 탱2·딜2·힐2)로 맡기고 그 롤 티어로 계산해요',
+    footer: '하는 역할만 저장하면 돼요 · ⚖️ 밸런스 때 돌격1·공격2·지원2(6vs6은 돌격2·공격2·지원2)로 맡기고 그 역할 티어로 계산해요',
   }), { ephemeral: true });
 }
 
@@ -745,7 +832,7 @@ function buildPositionPayload(game, matchMsgId, userId) {
     .setDisabled(!main)
     .addOptions(opts(sub, { label: '없음', value: 'none' }).filter(o => o.value !== main));
   const note = game === 'lol'
-    ? '⚖️ 밸런스 때 팀마다 탑~서폿이 겹치지 않게 맡기고, 되도록 주 → 부 포지션 순서로 넣어 줘요.'
+    ? '⚖️ 밸런스 때 팀마다 탑~서포터가 겹치지 않게 맡기고, 되도록 주 → 부 포지션 순서로 넣어 줘요.'
     : '팀 짜기 카드의 이름 옆에 주 역할이 보여요.';
   return payload(tierCard(game, {
     header: `🧭 ${word} 설정`,
@@ -981,7 +1068,7 @@ async function handleTeamButton(interaction) {
       return;
     }
     const { role } = tiers.splitKey(game);
-    if (role && !tiers.owRole(role)) return interaction.update(notice('⚠️ **알 수 없는 롤이에요.**'));
+    if (role && !tiers.owRole(role)) return interaction.update(notice('⚠️ **알 수 없는 역할이에요.**'));
     // 오버워치는 롤 고르기부터, 롤을 고른 뒤엔 그 롤 티어 고르기
     const view = game === 'overwatch' ? buildOwRolesPayload(matchMsgId, interaction.user.id) : buildTierPickPayload(game, matchMsgId, interaction.user.id);
     // 게임모집 패널에서 게임을 고른 경우(matchMsgId 'panel')나 롤 고르기 화면에서 누른 경우엔 그 메시지를 그대로 바꾼다
@@ -1024,7 +1111,12 @@ async function handleTeamModal(interaction) {
   const matchMsgId = interaction.customId.slice('team:modal:'.length);
   const match = await getEditableMatch(interaction, matchMsgId);
   if (!match) return;
-  const parsed = parseTeamsText(interaction.fields.getTextInputValue('teams'), { game: match.data.game });
+  // 팀별 칸(team0~team4)이 있으면 그걸로, 없으면 예전 한 칸짜리(teams). 없는 칸을 읽으면 discord.js 가 오류를 내서 감싼다.
+  const field = id => { try { return interaction.fields.getTextInputValue(id) ?? ''; } catch { return ''; } };
+  const boxes = [0, 1, 2, 3, 4].map(i => field(`team${i}`));
+  const parsed = boxes.some(b => b.trim())
+    ? parseTeamBoxes(boxes, { game: match.data.game })
+    : parseTeamsText(field('teams'), { game: match.data.game });
   if (parsed.error) {
     await interaction.reply(notice(`⚠️ ${parsed.error}`, { ephemeral: true }));
     return;
@@ -1041,6 +1133,8 @@ async function handleTeamAssignSelect(interaction) {
 
 module.exports = {
   parseTeamsText, // 테스트용
+  parseTeamBoxes,
+  buildInputModal,
   teamsToText,
   draftTeams,
   balanceTeams,

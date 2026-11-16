@@ -152,17 +152,17 @@ async function buildScreens() {
     const owInfo = { name: '오버워치', emoji: '🎮', color: 0xF99E1A };
     const halves = us => [{ name: null, members: us.slice(0, 5).map(u => u.displayName) }, { name: null, members: us.slice(5).map(u => u.displayName) }];
     const named = users(10);
-    add('내전 · 모집', '팀 짜기 카드(롤 포지션)', '포지션을 저장한 사람이 있으면 5명 팀마다 탑~서폿을 맡기고 그 순서로 줄을 세움', team.buildBoardPayload({ data: base('lol'), participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 2, teams: halves(named) }, history: [] } }, '1'));
-    add('내전 · 모집', '팀 짜기 카드(오버워치 롤별 티어)', '탱1·딜2·힐2로 맡기고, 맡은 롤의 티어를 보여 줌', team.buildBoardPayload({ data: { ...base('lol'), game: 'overwatch', gameInfo: owInfo, title: '오버워치 내전' }, participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: halves(named) }, history: [] } }, '1'));
+    add('내전 · 모집', '팀 짜기 카드(롤 포지션)', '포지션을 저장한 사람이 있으면 5명 팀마다 탑~서포터를 맡기고 그 순서로 줄을 세움', team.buildBoardPayload({ data: base('lol'), participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 2, teams: halves(named) }, history: [] } }, '1'));
+    add('내전 · 모집', '팀 짜기 카드(오버워치 역할별 티어)', '돌격1·공격2·지원2로 맡기고, 맡은 역할의 티어를 보여 줌', team.buildBoardPayload({ data: { ...base('lol'), game: 'overwatch', gameInfo: owInfo, title: '오버워치 내전' }, participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: halves(named) }, history: [] } }, '1'));
     const twelve = users(12).map((u, i) => (i >= 10 ? { ...u, displayName: u.displayName + '2' } : u));
     owTiers[110] = { tank: ['master', 3] }; owTiers[111] = { tank: ['gold', 2], damage: ['platinum', 4] };
-    add('내전 · 모집', '팀 짜기 카드(오버워치 6vs6)', '팀이 6명이면 탱2·딜2·힐2로 저절로 바뀜', team.buildBoardPayload({ data: { ...base('lol'), game: 'overwatch', gameInfo: owInfo, title: '오버워치 6vs6 내전', players: '12' }, participants: twelve, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: [{ name: null, members: twelve.slice(0, 6).map(u => u.displayName) }, { name: null, members: twelve.slice(6).map(u => u.displayName) }] }, history: [] } }, '1'));
+    add('내전 · 모집', '팀 짜기 카드(오버워치 6vs6)', '팀이 6명이면 돌격2·공격2·지원2로 저절로 바뀜', team.buildBoardPayload({ data: { ...base('lol'), game: 'overwatch', gameInfo: owInfo, title: '오버워치 6vs6 내전', players: '12' }, participants: twelve, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: [{ name: null, members: twelve.slice(0, 6).map(u => u.displayName) }, { name: null, members: twelve.slice(6).map(u => u.displayName) }] }, history: [] } }, '1'));
     tm.getTier = (uid, gk) => (uid === 'me' ? fake('100', gk) ?? fake('101', gk) : fake(uid, gk));
     tm.getRoleTiers = uid => Object.fromEntries(tm.OW_ROLES.map(r => [r.key, fake(uid === 'me' ? '104' : uid, `overwatch.${r.key}`)]));
     add('나만 보이는 메시지', '🏅 내 티어 설정 — 롤(포지션 버튼)', '티어 고르기 아래 🧭 포지션 설정', team.buildTierPickPayload('lol', '1', 'me'));
     add('나만 보이는 메시지', '🧭 포지션 설정', '주/부 포지션을 고르면 바로 저장', team.buildPositionPayload('lol', '1', 'me'));
-    add('나만 보이는 메시지', '🏅 내 티어 설정 — 오버워치 롤 고르기', '탱커·딜러·힐러 티어를 따로 저장(저장한 롤은 초록)', team.buildOwRolesPayload('1', 'me'));
-    add('나만 보이는 메시지', '🏅 내 티어 설정 — 오버워치 탱커 티어', '', team.buildTierPickPayload('overwatch.tank', '1', 'me'));
+    add('나만 보이는 메시지', '🏅 내 티어 설정 — 오버워치 역할 고르기', '돌격·공격·지원 티어를 따로 저장(저장한 역할은 초록)', team.buildOwRolesPayload('1', 'me'));
+    add('나만 보이는 메시지', '🏅 내 티어 설정 — 오버워치 돌격 티어', '', team.buildTierPickPayload('overwatch.tank', '1', 'me'));
     Object.assign(tm, orig);
   }
   add('내전 · 모집', '안내 한 줄 — 만료', '모든 짧은 안내가 같은 카드 모양', card.notice('⚠️ **만료된 내전입니다.**', { ephemeral: true }));
