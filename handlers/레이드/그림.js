@@ -65,48 +65,37 @@ function text(s, x, y, size, color, opts = {}) {
   p.text(opts.regular ? R() : B(), s, x, y, { size, color, align: opts.align || 'center', maxWidth: opts.maxWidth });
 }
 // ── 깨진 글자(오염 테마) ──
-// 글자가 깨진 것처럼: 일부 글자를 �(대체 문자)·▒로 바꿔 그리고, errCode면 끝에 ERR_0x?? 오류 코드를 흐리게 붙인다.
-// 같은 글자는 매번 같은 모양으로 깨지게(seed). 나눔고딕에 �·▓·█가 없어 �는 마름모 + ?로 직접 그린다(▒는 글꼴에 있음).
+// 글자가 깨진 것처럼(사용자가 고른 시안): 청록·붉은 그림자를 좌우로 어긋나게 겹쳐 쓰고, 글자 상자 안 가로 띠를 옆으로 밀고, 작은 칸을 빼먹는다.
+// 같은 글자는 매번 같은 모양으로 깨지게(seed). strength 0.5 이하(작은 글자)는 색 어긋남 1px만 — 읽기 어려워져서.
 function seeded(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1103515245 + 12345) >>> 0) / 4294967296); }
 function isCorrupt(monster) { return monster?.theme === 'corrupt'; }
-const REPLACEMENT = '\uFFFD';
-// 깨질 글자 고르기: 공백·문장부호는 빼고 rate 비율(최소 1개)만 �나 ▒로
-function corruptChars(s, seed, rate) {
-  const rnd = seeded(seed * 7919 + s.length);
-  const chars = [...s];
-  const idx = chars.map((ch, i) => (/[\s!?.,()]/.test(ch) ? -1 : i)).filter(i => i >= 0);
-  const n = Math.max(1, Math.round(idx.length * rate));
-  for (let k = 0; k < n && idx.length; k++) {
-    const i = idx.splice(Math.floor(rnd() * idx.length), 1)[0];
-    chars[i] = rnd() < 0.65 ? REPLACEMENT : '▒';
-  }
-  return { chars, code: 'ERR_0x' + Math.floor(rnd() * 256).toString(16).toUpperCase().padStart(2, '0') };
-}
-function glitchText(s, x, y, size, color, { seed = 1, rate = 0.15, errCode = false, maxWidth } = {}) {
-  const { chars, code } = corruptChars(s, seed, rate);
-  const repW = size * 0.86;
-  const charW = (ch) => (ch === ' ' ? size * 0.3 : p.textWidth(B(), ch, size));
-  const widthOf = (ch) => (ch === REPLACEMENT ? repW : charW(ch));
-  const codeSize = Math.round(size * 0.72);
-  const codeW = errCode ? p.textWidth(B(), code, codeSize) + size * 0.4 : 0;
-  let total = chars.reduce((sum, ch) => sum + widthOf(ch), 0) + codeW;
-  const scale = maxWidth && total > maxWidth ? maxWidth / total : 1; // 넘치면 글자 크기를 줄인다
-  const fs_ = size * scale;
-  total *= scale;
-  let cx = x - total / 2;
-  for (const ch of chars) {
-    const w = widthOf(ch) * scale;
-    if (ch === REPLACEMENT) {
-      // 대체 문자 �: 글자색 마름모 + 가운데 배경색 ?
-      const r = fs_ * 0.42, mx = cx + w / 2;
-      p.poly([mx, y - r, mx + r, y, mx, y + r, mx - r, y], color);
-      text('?', mx, y + fs_ * 0.02, Math.round(fs_ * 0.62), C.bg);
-    } else if (ch !== ' ') {
-      text(ch, cx, y, fs_, color, { align: 'left' });
+function glitchText(s, x, y, size, color, { seed = 1, strength = 1, maxWidth } = {}) {
+  const off = strength <= 0.5 ? 1 : Math.max(2, Math.round(size / 20));
+  text(s, x - off, y, size, '#28dce6', { maxWidth });
+  text(s, x + off, y, size, '#ff2a3c', { maxWidth });
+  text(s, x, y, size, color, { maxWidth });
+  if (strength <= 0.5) return;
+  const rnd = seeded(seed * 9973 + s.length);
+  const tw = Math.min(p.textWidth(B(), s, size), maxWidth ?? Infinity);
+  const k = RENDER_SCALE;
+  const bx0 = Math.max(0, Math.round((x - tw / 2 - off - 2) * k)), bx1 = Math.min(p.w, Math.round((x + tw / 2 + off + 2) * k));
+  const by0 = Math.max(0, Math.round((y - size * 0.6) * k)), by1 = Math.min(p.h, Math.round((y + size * 0.6) * k));
+  const rowBytes = (bx1 - bx0) * 3;
+  if (rowBytes <= 0 || by1 <= by0) return;
+  for (let i = 0; i < 2; i++) { // 가로 띠 밀기(1~3px)
+    const h = 1 + Math.floor(rnd() * Math.max(2, (by1 - by0) / 7));
+    const y0 = by0 + Math.floor(rnd() * Math.max(1, by1 - by0 - h));
+    const dx = (rnd() < 0.5 ? -1 : 1) * (1 + Math.floor(rnd() * 3));
+    for (let yy = y0; yy < y0 + h && yy < by1; yy++) {
+      const start = (yy * p.w + bx0) * 3;
+      const row = Buffer.from(p.buf.subarray(start, start + rowBytes));
+      row.copy(p.buf, start + Math.max(0, dx) * 3, Math.max(0, -dx) * 3, rowBytes - Math.max(0, dx) * 3);
     }
-    cx += w;
   }
-  if (errCode) text(code, cx + size * 0.4 * scale, y + fs_ * 0.06, Math.round(codeSize * scale), C.dim, { align: 'left' });
+  for (let i = 0; i < 2; i++) { // 빠진 칸
+    const cx = x - tw / 2 + rnd() * tw, cy = y - size * 0.4 + rnd() * size * 0.8;
+    p.rect(cx, cy, 3 + rnd() * 3, 2, ['#08020a', '#b41424', '#28c8d2'][Math.floor(rnd() * 3)]);
+  }
 }
 function bar(x, y, w, h, ratio, color) {
   p.roundRect(x, y, w, h, h / 2, C.hpBack);
@@ -977,12 +966,12 @@ let themeKey = ''; // 배경 캐시 키 뒤에 붙는다(테마마다 배경을 
 // 귀퉁이에서 멀수록 듬성듬성. keep(지킬 상자: 글자·HP 바·배지·카드)에 닿는 블록은 그리지 않는다. 매번 같은 모양(seed).
 function corruptCorners(seed, keep) {
   const rnd = seeded(seed);
-  const S = 8, R = 118;
+  const S = 8, R = 140;
   const hits = (x, y, w, h) => keep.some(([kx, ky, kw, kh]) => x < kx + kw && x + w > kx && y < ky + kh && y + h > ky);
   for (const [cx, cy, sx, sy] of [[0, 0, 1, 1], [W, 0, -1, 1], [0, H, 1, -1], [W, H, -1, -1]]) {
     for (let by = 0; by < R; by += S) for (let bx = 0; bx < R; bx += S) {
       const d = Math.hypot(bx, by) / R;
-      if (d > 1 || rnd() > (1 - d) ** 1.4) continue;
+      if (d > 1 || rnd() > (1 - d) ** 1.1) continue;
       const x = sx > 0 ? cx + bx : cx - bx - S, y = sy > 0 ? cy + by : cy - by - S;
       if (hits(x, y, S, S)) continue;
       const r = rnd();
@@ -1000,6 +989,35 @@ function corruptCorners(seed, keep) {
     }
   }
 }
+// 화면 글리치: 가로 띠 몇 줄을 옆으로 살짝 민다(3~8px). 글자·카드가 있는 줄은 피하도록 장면마다 밀어도 되는 세로 구간만.
+function glitchBands(seed, ranges, n = 3) {
+  if (!ranges?.length) return;
+  const rnd = seeded(seed * 131 + 17);
+  const k = RENDER_SCALE, x0 = Math.round(24 * k), x1 = Math.round((W - 24) * k), rowBytes = (x1 - x0) * 3;
+  for (let i = 0; i < n; i++) {
+    const [a, b] = ranges[Math.floor(rnd() * ranges.length)];
+    const h = Math.round((2 + rnd() * 4) * k);
+    const y0 = Math.round((a + rnd() * Math.max(1, b - a - 6)) * k);
+    const dx = Math.round((rnd() < 0.5 ? -1 : 1) * (3 + rnd() * 5) * k);
+    for (let yy = y0; yy < y0 + h && yy < p.h; yy++) {
+      const start = (yy * p.w + x0) * 3;
+      const row = Buffer.from(p.buf.subarray(start, start + rowBytes));
+      row.copy(p.buf, start + Math.max(0, dx) * 3, Math.max(0, -dx) * 3, rowBytes - Math.max(0, dx) * 3);
+    }
+  }
+}
+// 가장자리 은은한 붉은 빛: 바깥에서 안쪽으로 옅어지는 붉은 띠(반투명) 네 변
+function edgeGlow() {
+  for (let i = 0; i < 12; i++) {
+    const a = 0.07 * (1 - i / 12), d = i * 4;
+    p.roundRect(0, d, W, 4, 0, '#c81428', a);
+    p.roundRect(0, H - d - 4, W, 4, 0, '#c81428', a);
+    p.roundRect(d, 0, 4, H, 0, '#c81428', a);
+    p.roundRect(W - d - 4, 0, 4, H, 0, '#c81428', a);
+  }
+}
+// 장면마다 띠를 밀어도 되는 세로 구간(설계 좌표) — 몬스터 칸 안쪽
+const CORRUPT_BANDS = { 모집: [[112, 250]], 전투: [[124, 262]], 결과: [[180, 330]] };
 // 장면별 지킬 상자(설계 좌표 900×640) — 모서리 오염이 덮지 않는다
 const CORRUPT_KEEP = {
   모집: [[90, 10, 720, 92], [280, 262, 340, 66], [20, 362, 860, 260]],
@@ -1016,7 +1034,11 @@ async function render(scene, draw, monster = null) {
   try {
     const t0 = process.hrtime.bigint();
     draw();
-    if (corrupt) corruptCorners(scene.length * 31 + 7, CORRUPT_KEEP[scene] ?? []);
+    if (corrupt) {
+      edgeGlow();
+      glitchBands(scene.length * 13 + 3, CORRUPT_BANDS[scene]);
+      corruptCorners(scene.length * 31 + 7, CORRUPT_KEEP[scene] ?? []);
+    }
     const t1 = process.hrtime.bigint();
     const png = painter.png();
     logRender(scene, Number(t1 - t0) / 1e6, Number(process.hrtime.bigint() - t1) / 1e6, png.length);
@@ -1035,11 +1057,11 @@ function renderRecruit(r) {
     background('recruit', 102, 240);
     const title = '몬스터 출현!';
     const tw = p.textWidth(B(), title, 46);
-    if (isCorrupt(r.monster)) glitchText(title, W / 2, 47, 46, C.gold, { seed: 1, rate: 0.2 });
+    if (isCorrupt(r.monster)) glitchText(title, W / 2, 47, 46, C.gold, { seed: 1 });
     else text(title, W / 2, 47, 46, C.gold);
     titleIcon(W / 2 - tw / 2 - 46, 47); titleIcon(W / 2 + tw / 2 + 46, 47);
     const sub = `${r.monster.name}${subjectJosa(r.monster.name)} XP 시스템을 망가뜨렸어요!`;
-    if (isCorrupt(r.monster)) glitchText(sub, W / 2, 84, 21, '#ff8f7a', { seed: 2, rate: 0.1, errCode: true, maxWidth: W - 120 });
+    if (isCorrupt(r.monster)) glitchText(sub, W / 2, 84, 21, '#ff8f7a', { seed: 2, strength: 0.5, maxWidth: W - 120 });
     else text(sub, W / 2, 84, 21, '#ff8f7a', { maxWidth: W - 120 });
     drawMonster(r.monster, W / 2, 206, 112);
     if (isCorrupt(r.monster)) glitchText(r.monster.name, W / 2, 298, 38, C.gold, { seed: 3 });
