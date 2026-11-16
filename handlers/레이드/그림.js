@@ -65,19 +65,56 @@ function text(s, x, y, size, color, opts = {}) {
   p.text(opts.regular ? R() : B(), s, x, y, { size, color, align: opts.align || 'center', maxWidth: opts.maxWidth });
 }
 // ── 깨진 글자(오염 테마) ──
-// 글자가 깨진 것처럼(사용자가 고른 6번째 시안 그대로): 청록·붉은 그림자를 좌우로 어긋나게 겹쳐 쓰고,
-// 글자 상자 안 가로 띠를 옆으로 밀고(strips), 작은 칸을 빼먹는다(holes). 같은 글자는 매번 같은 모양(seed).
+// 글자가 깨진 것처럼(사용자 결정): ① 문자 깨짐 — 일부 글자를 �(직접 그림 — 나눔고딕에 없음)·▒로 바꾸고, errCode면 끝에 흐린 ERR_0x?? 코드
+// ② 6번째 시안의 색 어긋남 — 청록·붉은 그림자를 좌우로 off px, 글자 상자 안 가로 띠 밀림(strips), 빠진 칸(holes). 같은 글자는 매번 같은 모양(seed).
+// ???처럼 기호뿐인 글자는 ①이 없고 ②만.
 function seeded(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1103515245 + 12345) >>> 0) / 4294967296); }
 function isCorrupt(monster) { return monster?.theme === 'corrupt'; }
-function glitchText(s, x, y, size, color, { seed = 1, off = 2, strips = 2, shift = 3, holes = 2, maxWidth } = {}) {
-  const k = RENDER_SCALE, o = off / k; // off는 실제 픽셀(675 기준) — 시안과 같게
-  text(s, x - o, y, size, '#2fb8c0', { maxWidth });
-  text(s, x + o, y, size, '#bf1e2d', { maxWidth });
-  text(s, x, y, size, color, { maxWidth });
+const REPLACEMENT = '\uFFFD';
+function corruptChars(s, seed, rate) {
+  const rnd = seeded(seed * 7919 + s.length);
+  const chars = [...s];
+  const idx = chars.map((ch, i) => (/[\s!?.,()]/.test(ch) ? -1 : i)).filter(i => i >= 0);
+  const n = idx.length && rate > 0 ? Math.max(1, Math.round(idx.length * rate)) : 0;
+  for (let k = 0; k < n; k++) {
+    const i = idx.splice(Math.floor(rnd() * idx.length), 1)[0];
+    chars[i] = rnd() < 0.6 ? REPLACEMENT : '▒';
+  }
+  return { chars, code: 'ERR_0x' + Math.floor(rnd() * 256).toString(16).toUpperCase().padStart(2, '0') };
+}
+function glitchText(s, x, y, size, color, { seed = 1, rate = 0.2, errCode = false, off = 2, strips = 2, shift = 3, holes = 2, maxWidth } = {}) {
+  const k = RENDER_SCALE;
+  const { chars, code } = corruptChars(s, seed, rate);
+  const repW = size * 0.86;
+  const charW = (ch) => (ch === ' ' ? size * 0.3 : p.textWidth(B(), ch, size)); // 공백 하나는 글꼴 폭이 0으로 나와 따로
+  const widthOf = (ch) => (ch === REPLACEMENT ? repW : charW(ch));
+  const codeSize = Math.round(size * 0.72);
+  const codeW = errCode ? p.textWidth(B(), code, codeSize) + size * 0.4 : 0;
+  let total = chars.reduce((sum, ch) => sum + widthOf(ch), 0) + codeW;
+  const sc = maxWidth && total > maxWidth ? maxWidth / total : 1; // 넘치면 글자 크기를 줄인다
+  const fs_ = size * sc;
+  total *= sc;
+  const left = x - total / 2;
+  // 색 어긋남: 청록(왼쪽) → 붉은(오른쪽) → 본래 색 순서로 세 번 그린다(off는 실제 픽셀)
+  for (const [dx, col] of [[-off / k, '#2fb8c0'], [off / k, '#bf1e2d'], [0, color]]) {
+    let cx = left + dx;
+    for (const ch of chars) {
+      const w = widthOf(ch) * sc;
+      if (ch === REPLACEMENT) {
+        const r = fs_ * 0.42, mx = cx + w / 2;
+        p.poly([mx, y - r, mx + r, y, mx, y + r, mx - r, y], col);
+        if (dx === 0) text('?', mx, y + fs_ * 0.02, Math.round(fs_ * 0.62), C.bg);
+      } else if (ch !== ' ') {
+        text(ch, cx, y, fs_, col, { align: 'left' });
+      }
+      cx += w;
+    }
+    if (errCode && dx === 0) text(code, cx + size * 0.4 * sc, y + fs_ * 0.06, Math.round(codeSize * sc), C.dim, { align: 'left' });
+  }
+  // 띠 밀림 · 빠진 칸(실제 픽셀)
   const rnd = seeded(seed * 9973 + s.length);
-  const tw = Math.min(p.textWidth(B(), s, size), maxWidth ?? Infinity);
-  const bx0 = Math.max(0, Math.round((x - tw / 2) * k) - 6), bx1 = Math.min(p.w, Math.round((x + tw / 2) * k) + 6);
-  const by0 = Math.max(0, Math.round((y - size * 0.6) * k)), by1 = Math.min(p.h, Math.round((y + size * 0.6) * k));
+  const bx0 = Math.max(0, Math.round(left * k) - 6), bx1 = Math.min(p.w, Math.round((left + total) * k) + 6);
+  const by0 = Math.max(0, Math.round((y - fs_ * 0.6) * k)), by1 = Math.min(p.h, Math.round((y + fs_ * 0.6) * k));
   const rowBytes = (bx1 - bx0) * 3, hh = by1 - by0;
   if (rowBytes <= 0 || hh <= 4) return;
   for (let i = 0; i < strips; i++) {
@@ -1056,11 +1093,11 @@ function renderRecruit(r) {
     background('recruit', 102, 240);
     const title = '몬스터 출현!';
     const tw = p.textWidth(B(), title, 46);
-    if (isCorrupt(r.monster)) glitchText(title, W / 2, 47, 46, C.gold, { seed: 1, strips: 2, shift: 3, holes: 2 });
+    if (isCorrupt(r.monster)) glitchText(title, W / 2, 47, 46, C.gold, { seed: 1, rate: 0.2, strips: 2, shift: 3, holes: 2 });
     else text(title, W / 2, 47, 46, C.gold);
     titleIcon(W / 2 - tw / 2 - 46, 47); titleIcon(W / 2 + tw / 2 + 46, 47);
     const sub = `${r.monster.name}${subjectJosa(r.monster.name)} XP 시스템을 망가뜨렸어요!`;
-    if (isCorrupt(r.monster)) glitchText(sub, W / 2, 84, 21, '#ff8f7a', { seed: 2, off: 1, strips: 0, holes: 0, maxWidth: W - 120 });
+    if (isCorrupt(r.monster)) glitchText(sub, W / 2, 84, 21, '#ff8f7a', { seed: 2, rate: 0.1, errCode: true, off: 1, strips: 0, holes: 0, maxWidth: W - 120 });
     else text(sub, W / 2, 84, 21, '#ff8f7a', { maxWidth: W - 120 });
     drawMonster(r.monster, W / 2, 206, 112);
     if (isCorrupt(r.monster)) glitchText(r.monster.name, W / 2, 298, 38, C.gold, { seed: 3, strips: 1, shift: 3, holes: 1 });
