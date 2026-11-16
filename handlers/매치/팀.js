@@ -257,7 +257,7 @@ function teamBlocks(teams, match) {
     const title = `${TEAM_ICONS[i] ?? '▫️'} ${t.name ?? `${i + 1} 팀`}`;
     if (compact) {
       const names = t.members.map((n, k) => `${memberTiers[k] ? `${tiers.tierBadge(game, memberTiers[k])} ` : ''}${n}`);
-      return `**${title}**${avg ? `　·　평균 ${avg}` : ''}\n${names.join(' · ')}`;
+      return `**${title}**${avg ? `　·　${avg}` : ''}\n${names.join(' · ')}`;
     }
     const lines = t.members.map((n, k) => {
       const tr = memberTiers[k];
@@ -266,7 +266,7 @@ function teamBlocks(teams, match) {
       const id = tiers.tierEmojiId(game, tr);
       return `${id ? `<:t:${id}>` : '▸'} **${n}**　${tick}${tiers.tierLabel(game, tr)}${tick}`;
     });
-    return `### ${title}${avg ? `　·　평균 ${avg}` : ''}\n>>> ${lines.join('\n')}`; // 팀원은 인용 블록(왼쪽 세로 막대)으로 묶는다
+    return `### ${title}${avg ? `　·　${avg}` : ''}\n>>> ${lines.join('\n')}`; // 팀원은 인용 블록(왼쪽 세로 막대)으로 묶는다
   });
   return compact ? [texts.join('\n\n')] : texts;
 }
