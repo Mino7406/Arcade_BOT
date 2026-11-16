@@ -238,7 +238,13 @@ function normalizeBoard(match) {
   if (!Array.isArray(b.history)) b.history = [];
   if (b.current === undefined) b.current = null;
   // 아직 아무도 팀을 안 정했으면 초안을 만들어 둔다(한 번 만들면 그대로, 참가자가 바뀌었으면 다시).
-  if (!b.current || (b.current.draft && !sameMembers(b.current.teams, match.participants))) b.current = makeDraft(match);
+  // 자동으로 나눈 팀도 #1 처럼 순번을 받고, 다음에 팀을 바꾸면 내전 내역에 남는다.
+  if (!b.current) {
+    b.count = (b.count || 0) + 1;
+    b.current = { ...makeDraft(match), no: b.count };
+  } else if (b.current.draft && !sameMembers(b.current.teams, match.participants)) {
+    b.current = { ...makeDraft(match), no: b.current.no ?? ((b.count = (b.count || 0) + 1)) }; // 참가자가 바뀌면 같은 순번으로 다시 나눔
+  }
   return b;
 }
 
@@ -435,7 +441,7 @@ function linkRow(url) {
 
 async function commitTeams(interaction, matchMsgId, match, teams, how, extraNote = '') {
   const board = normalizeBoard(match);
-  if (board.current && !board.current.draft) board.history = [board.current, ...board.history].slice(0, HISTORY_KEPT); // 초안은 내역에 안 남김
+  if (board.current) board.history = [board.current, ...board.history].slice(0, HISTORY_KEPT); // 자동으로 나눈 #1 도 내역에 남긴다
   board.count = (board.count || 0) + 1; // 내역 순번(#1, #2 …)
   board.current = { teams, at: Date.now(), by: interaction.user.id, how, no: board.count };
   try {

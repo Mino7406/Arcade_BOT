@@ -210,13 +210,13 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     assert(match.board.current.teams[0].members.join() === '이름u1,이름u2', `티어 글자가 이름에 섞임(${match.board.current.teams[0].members})`);
 
     await team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:balance:${id}` }));
-    assert(match.board.current.how === 'balance' && match.board.history.length === 1, '밸런스 후 이전 팀표로 안 밀림');
+    assert(match.board.current.how === 'balance' && match.board.history.length === 2, '밸런스 후 이전 팀표로 안 밀림');
     await team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:random:${id}` }));
-    assert(match.board.history.length === 2, '랜덤 후 이전 팀표가 안 쌓임');
+    assert(match.board.history.length === 3, '랜덤 후 이전 팀표가 안 쌓임');
 
     const bad = mkInteraction({ user: ADMIN, customId: `team:modal:${id}`, fields: { teams: '혼자' } });
     await team.handleTeamModal(bad);
-    assert(match.board.history.length === 2, '잘못된 입력인데 팀이 바뀜');
+    assert(match.board.history.length === 3, '잘못된 입력인데 팀이 바뀜');
 
     // 🏅 내 티어: 티어 고르기 → 단계 고르기 → 저장 / 단계 없는 티어 / 지우기
     const tierBtn = mkInteraction({ user: 'u3', customId: `team:tier:lol:${id}` });
@@ -273,7 +273,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     assert(match.board.current?.draft && match.board.current.how === 'balance', `티어 8/10명이면 초안이 밸런스여야 함(${match.board.current?.how})`);
     await team.handleTeamButton(mkInteraction({ user: ADMIN, guildId: G, customId: `team:balance:${id}` }));
     assert(match.board.current?.how === 'balance', '밸런스가 안 됨');
-    assert(match.board.history.length === 0, '초안(티어 8명 → 자동 밸런스)이 내역에 남음');
+    assert(match.board.history.length === 1 && match.board.history[0].no === 1 && match.board.current.no === 2, `자동으로 나눈 #1 이 내역에 남고 다음은 #2 여야 함(내역 ${match.board.history.length}, 지금 #${match.board.current.no})`);
     const normal = mkInteraction({ user: ADMIN, customId: 'naejeon:manage', message: match.message });
     common.clearNotifyTimer?.(match);
     client.naejeonMatches.delete(id);
@@ -311,7 +311,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     ]);
     const boardsLeft = channel.sent.filter(x => !x.deleted && JSON.stringify(x.components).includes(`team:input:${id1}`));
     assert(boardsLeft.length === 1, `동시에 눌렀더니 카드가 ${boardsLeft.length}장 남음`);
-    assert(m1.board.history.length === 2, `동시 클릭 3번이면 내역 2개여야 함(${m1.board.history.length})`);
+    assert(m1.board.history.length === 3, `동시 클릭 3번이면 내역 3개여야 함(${m1.board.history.length})`);
 
     // 팀 6개(짧게 보기)와 빈 줄·이상한 입력
     await team.handleTeamModal(mkInteraction({ user: ADMIN, customId: `team:modal:${id1}`, fields: { teams: ['a b', 'c d', 'e f', 'g h', 'i j', 'k l'].join(String.fromCharCode(10)) } }));
