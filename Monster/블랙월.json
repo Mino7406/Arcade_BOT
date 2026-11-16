@@ -36,7 +36,8 @@
     }
   },
   "ui": {
-    "moveBanner": "terminal"
+    "moveBanner": "terminal",
+    "resultMs": 7000
   },
   "sprite": {
     "rows": [

@@ -923,7 +923,7 @@ function advanceTurn(r) {
     if (allChosen(r.battle)) { advanceTurn(r); return; }
     armTurnTimer(r);
     requestRender(r, { image: true, immediate: true });
-  }, RESULT_MS);
+  }, r.battle.monster.ui?.resultMs ?? RESULT_MS); // 몬스터가 ui.resultMs 를 정하면 그 시간(??? 는 글리치 연출이 잘 보이게 더 길게)
 }
 
 // 레이드를 끝낸다. XP 정지 해제 · 보상 지급 · 상태 저장 · 복구 안내 후 결과 화면을 바로 보내게 한다.
