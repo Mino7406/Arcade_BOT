@@ -307,7 +307,7 @@ function buildBoardPayload(match, matchMsgId) {
       const sec = h.at ? Math.floor(h.at / 1000) : null;
       const when = sec ? ` · <t:${sec}:t> (<t:${sec}:R>)` : '';
       const how = HOW_TEXT[h.how] ? ` · ${HOW_TEXT[h.how]}` : '';
-      const teams = h.teams.map((t, i) => `> ${TEAM_ICONS[i] ?? '▫️'} ${t.members.join(' · ')}`).join('\n');
+      const teams = h.teams.map((t, i) => `> ${TEAM_ICONS[i] ?? '▫️'}　${t.members.map(n => `**${n}**`).join(' · ')}`).join('\n'); // 동그라미와 이름 사이를 띄우고 이름은 굵게
       blocks.push({ text: `**${no}${tag}**${when}${how}\n${teams}`, noDivider: true });
     });
   }
