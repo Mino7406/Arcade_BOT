@@ -195,7 +195,7 @@ function buildLobbyPayload(lobby, extra = {}) {
 
 // 릴이 도는 중: reels 에서 null 인 릴은 아직 돌고 있다(stage 가 오를수록 하나씩 멈춘다).
 function buildSpinningPayload(lobby, bet, reels, phase = 0, hacks = 0, wall = false) {
-  const png = renderSlot({ reels, bet, phase, right: '돌리는 중...', rightColor: '#c9b8a0', hacked: hacks > 0 || wall, wall });
+  const png = renderSlot({ reels, bet, phase, right: '돌리는 중...', rightColor: '#c9b8a0', hacked: hacks > 0 || wall, wall }); // 블랙월: 돌기 전에 이미 완전히 잠식된 상태
   if (wall) return payload(card({
     color: WALL_COLOR,
     header: `${gatewayEmoji()} 룰렛머신`,
@@ -212,17 +212,23 @@ function buildSpinningPayload(lobby, bet, reels, phase = 0, hacks = 0, wall = fa
   }), { files: [slotFile(png)] });
 }
 
-// 해킹 침입 연출 카드(해킹 툴을 쓴 뒤 다시 돌리기 전). reels: 직전 꽝 결과, step: 단계 번호.
-const INTRO_STEP_MS = 900; // 단계 사이 간격(3단계 ≈ 2.7초). 디스코드 메시지 수정 제한(약 5초에 5번) 안쪽
-function buildHackIntroPayload(lobby, bet, reels, step, hacks, wall = false) {
-  const png = renderHackIntro({ reels, bet, step, wall });
-  if (wall) return payload(card({
+// 블랙월 게이트웨이 발동: 돌리기 전에 평범한 룰렛이 가장자리부터 블랙월에 잠식당하는 장면(step 0~3, erosion 은 번진 정도).
+const WALL_EROSION = [0.2, 0.45, 0.7, 0.92];
+function buildWallErosionPayload(lobby, bet, step) {
+  const png = renderSlot({ reels: [null, null, null], bet, phase: step, right: '잠식 중...', rightColor: '#ff6a78', hacked: true, wall: true, erosion: WALL_EROSION[step] });
+  return payload(card({
     color: WALL_COLOR,
     header: `${gatewayEmoji()} 룰렛머신`,
     sub: [`<@${lobby.userId}>`, `${gatewayEmoji()} ${GATEWAY_NAME} 발동`],
     blocks: [{ image: SLOT_URL, divider: true }],
-    footer: `${gatewayEmoji()} 블랙월 방화벽을 뚫는 중... ${'▓'.repeat(step + 1)}${'░'.repeat(Math.max(0, 2 - step))}`,
+    footer: `${gatewayEmoji()} 블랙월이 룰렛을 잠식하는 중... ${'▓'.repeat(step + 1)}${'░'.repeat(Math.max(0, 3 - step))}`,
   }), { files: [slotFile(png)] });
+}
+
+// 해킹 침입 연출 카드(해킹 툴을 쓴 뒤 다시 돌리기 전). reels: 직전 꽝 결과, step: 단계 번호.
+const INTRO_STEP_MS = 900; // 단계 사이 간격(3단계 ≈ 2.7초). 디스코드 메시지 수정 제한(약 5초에 5번) 안쪽
+function buildHackIntroPayload(lobby, bet, reels, step, hacks) {
+  const png = renderHackIntro({ reels, bet, step });
   return payload(card({
     color: HACK_COLOR,
     header: `${hackToolEmoji()} 룰렛머신`,
@@ -486,10 +492,10 @@ function resultView(bet, spin, hacks) {
 // 채널에 릴이 하나씩 멈추는 연출을 보여 주고 결과로 고친다. message 가 있으면(해킹 툴로 다시 돌릴 때) 그 카드를 그대로 다시 돌린다.
 // 결과가 실제로 올라간 메시지를 돌려준다(수정이 끝내 실패해 새로 보냈으면 새 메시지).
 async function revealSpin(channel, message, lobby, bet, spin, hacks, introReels = null) {
-  const wall = !!spin.gateway; // 블랙월 게이트웨이 발동: 침입 연출 + 붉은 블랙월 테마
+  const wall = !!spin.gateway; // 블랙월 게이트웨이 발동: 돌기 전에 평범한 룰렛이 블랙월에 잠식당하고, 덮인 뒤 붉은 블랙월 룰렛이 돈다
   if (wall) {
-    for (let step = 0; step < INTRO_STEP_COUNT; step++) {
-      const pl = buildHackIntroPayload(lobby, bet, null, step, 0, true);
+    for (let step = 0; step < WALL_EROSION.length; step++) {
+      const pl = buildWallErosionPayload(lobby, bet, step);
       if (!message) message = await channel.send(pl);
       else { try { await message.edit(pl); } catch { message = null; } }
       if (message) await sleep(INTRO_STEP_MS);

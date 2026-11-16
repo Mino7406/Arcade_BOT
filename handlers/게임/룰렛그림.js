@@ -511,7 +511,7 @@ function drawBulbs(p, phase) {
  * @param {number} [o.phase]            돌아가는 연출 프레임 번호(0~)
  * @param {boolean} [o.hacked]         해킹 툴로 번복 중 — 해킹된 기계(보라·시안 + 해골 + 글리치)로 그린다
  */
-function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = '#ffe9a8', badge = '', badgeColor = '#ffd23f', winIdx = [], jackpot = false, phase = 0, hacked = false, wall = false } = {}) {
+function paintSlot({ reels = [null, null, null], bet, right = '', rightColor = '#ffe9a8', badge = '', badgeColor = '#ffd23f', winIdx = [], jackpot = false, phase = 0, hacked = false, wall = false } = {}) {
   const p = getPainter();
   const base = hacked && !wall ? getHackBg() : getBg();
   base.copy(p.buf);
@@ -551,8 +551,44 @@ function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = 
   }
 
   if (hacked && !wall) applyGlitch(p, phase);
-  if (wall) { wallPlate(p, phase, 0); wallOverlay(p, phase + 3); }
-  return p.png();
+  if (wall) { wallPlate(p, phase, 0); wallOverlay(p, phase + 3); applyGlitch(p, phase + 11, 0.3); } // 글리치는 조금만
+  return p;
+}
+
+// 침식 합성: 평범한 룰렛(A)을 칸(8px) 단위로 블랙월(B, 지금 p.buf)로 바꾼다. 가장자리에서 가운데로 번지고(번지는 앞쪽 칸은 붉게 물듦), erosion 이 1이면 전부 블랙월.
+function mixErosion(p, A, erosion, seed) {
+  let st = (seed * 2654435761 + 7) >>> 0;
+  const rnd = () => ((st = (st * 1103515245 + 12345) >>> 0) / 4294967296);
+  const w = p.w, h = p.h, S = 8, b = p.buf;
+  const front = ['#96101e', '#5a0812', '#dc2234'];
+  for (let by = 0; by < h; by += S) {
+    for (let bx = 0; bx < w; bx += S) {
+      const edge = Math.min(bx, w - S - bx, by, h - S - by) / (Math.min(w, h) / 2); // 0 가장자리 ~ 1 한가운데
+      const key = edge + (rnd() - 0.5) * 0.45;
+      const limit = erosion * 1.3 - 0.05;
+      if (key < limit) continue; // 이 칸은 블랙월(b에 이미 그려져 있음)
+      const blend = key < limit + 0.12; // 번지는 앞쪽: 붉은 칸으로
+      for (let y = by; y < Math.min(h, by + S); y++) {
+        for (let x = bx; x < Math.min(w, bx + S); x++) {
+          const i = (y * w + x) * 3;
+          if (blend) { const c = front[Math.floor(rnd() * 3)]; b[i] = parseInt(c.slice(1, 3), 16); b[i + 1] = parseInt(c.slice(3, 5), 16); b[i + 2] = parseInt(c.slice(5, 7), 16); }
+          else { b[i] = A[i]; b[i + 1] = A[i + 1]; b[i + 2] = A[i + 2]; }
+        }
+      }
+    }
+  }
+}
+
+// 룰렛 그림 한 장(PNG). wall 이고 erosion(0~1 미만)이 있으면 평범한 룰렛이 블랙월로 침식당하는 중간 모습.
+function renderSlot(o = {}) {
+  if (o.wall && o.erosion != null && o.erosion < 1) {
+    const normal = paintSlot({ ...o, wall: false, hacked: false });
+    const A = Buffer.from(normal.buf);
+    const p = paintSlot({ ...o, wall: true });
+    mixErosion(p, A, o.erosion, (o.phase ?? 0) + 5);
+    return p.png();
+  }
+  return paintSlot(o).png();
 }
 
 // 블랙월 게이트웨이 룰렛의 위 판: 'ARCADE ROULETTE' 대신 깨진 'BLACKWALL GATEWAY'
@@ -561,26 +597,6 @@ function wallPlate(p, seed = 0, level = 0) {
   p.roundRect(53, TOP_PLATE_Y + 3, 494, PLATE_H - 6, 10, '#0a0204');
   drawBrokenPlate(p, f, TOP_PLATE_Y, [{ text: 'BLACKWALL GATEWAY', x: 300, align: 'center', size: 19, color: '#ff3a4a' }], level, 31 + seed * 7);
 }
-// 붉은 외눈(우리가 디자인한 ??? 몬스터의 눈): 아몬드 모양 + 분홍 흰자 + 세로 동공. r 은 가로 반지름.
-function drawWallEye(p, cx, cy, r) {
-  const h = r * 0.5;
-  p.poly([cx - r - 6, cy, cx - r * 0.5, cy - h - 4, cx + r * 0.5, cy - h - 4, cx + r + 6, cy, cx + r * 0.5, cy + h + 4, cx - r * 0.5, cy + h + 4], '#7a0f1c');
-  p.poly([cx - r, cy, cx - r * 0.5, cy - h, cx + r * 0.5, cy - h, cx + r, cy, cx + r * 0.5, cy + h, cx - r * 0.5, cy + h], '#ff2a3c');
-  p.poly([cx - r * 0.75, cy, cx - r * 0.4, cy - h * 0.7, cx + r * 0.4, cy - h * 0.7, cx + r * 0.75, cy, cx + r * 0.4, cy + h * 0.7, cx - r * 0.4, cy + h * 0.7], '#ffc4ca');
-  p.poly([cx - r * 0.1, cy - h * 0.75, cx + r * 0.1, cy - h * 0.75, cx + r * 0.1, cy + h * 0.75, cx - r * 0.1, cy + h * 0.75], '#12040a');
-}
-// 블랙월 게이트웨이 침입 연출: 평범한 기계 위로 붉은 외눈이 단계마다 커지고, 위 판은 점점 깨지며, 아래 판엔 터미널 문구.
-function renderWallIntro(p, f, step, bet) {
-  drawWallBg(p);
-  wallPlate(p, step, step);
-  p.roundRect(53, BOTTOM_PLATE_Y + 3, 494, PLATE_H - 6, 10, '#0a0204');
-  const lines = ['> OPEN GATEWAY ...', '> BREACH 63% ▓▓▓░░', '> ACCESS: JACKPOT'];
-  drawBrokenPlate(p, f, BOTTOM_PLATE_Y, [{ text: lines[Math.max(0, Math.min(2, step))], x: 300, align: 'center', size: 20, color: '#ff6a78' }], step, 97 + step * 11);
-  drawWallEye(p, 300, WIN_CY, 34 + step * 22);
-  wallOverlay(p, 40 + step);
-  return p.png();
-}
-
 // ── 블랙월 룰렛 바탕·오염(??? 화면과 같은 느낌) ──
 // 바탕: 새까만 공허 + 얇은 붉은 테두리 + 어두운 릴 창(심볼은 원래 색 그대로). 판 글자 자리는 검은 판 + 붉은 테두리.
 function drawWallBg(p) {
@@ -703,12 +719,11 @@ const lerpHex = (h1, h2, t) => {
  * @param {number} [o.bet]
  * @param {number} o.step          0 ~ INTRO_STEP_COUNT-1
  */
-function renderHackIntro({ reels, bet, step = 0, wall = false }) {
+function renderHackIntro({ reels, bet, step = 0 }) {
   const st = INTRO_STEPS[Math.max(0, Math.min(INTRO_STEP_COUNT - 1, step))];
   const p = getPainter();
   const f = getFont();
   const final = !!st.final;
-  if (wall) return renderWallIntro(p, f, step, bet);
   if (final) {
     getHackBg().copy(p.buf);
     drawHackDecor(p, step);
@@ -733,7 +748,6 @@ function renderHackIntro({ reels, bet, step = 0, wall = false }) {
   drawBrokenPlate(p, f, BOTTOM_PLATE_Y, bottom, lvl, 97 + step * 11);
   drawSkull(p, 300, WIN_CY, st.skull); // 정중앙 해골이 단계마다 커진다(글리치에 같이 흔들린다)
   applyGlitch(p, 11 + step * 5, st.power);
-  if (wall) tintBlackwall(p, 40 + step);
   return p.png();
 }
 
