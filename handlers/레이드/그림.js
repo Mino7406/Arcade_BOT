@@ -65,47 +65,37 @@ function text(s, x, y, size, color, opts = {}) {
   p.text(opts.regular ? R() : B(), s, x, y, { size, color, align: opts.align || 'center', maxWidth: opts.maxWidth });
 }
 // ── 깨진 글자(오염 테마) ──
-// 글자가 깨진 것처럼(사용자 결정 — 문자 깨짐): 일부 글자를 �(대체 문자)·▒로 바꿔 그리고, errCode면 끝에 ERR_0x?? 오류 코드를 흐리게.
-// 같은 글자는 매번 같은 모양으로 깨지게(seed). 나눔고딕에 �·▓·█가 없어 �는 마름모 + ?로 직접 그린다(▒는 글꼴에 있음).
-// ???처럼 기호뿐인 글자는 깨질 글자가 없어 그대로.
+// 글자가 깨진 것처럼(사용자가 고른 6번째 시안 그대로): 청록·붉은 그림자를 좌우로 어긋나게 겹쳐 쓰고,
+// 글자 상자 안 가로 띠를 옆으로 밀고(strips), 작은 칸을 빼먹는다(holes). 같은 글자는 매번 같은 모양(seed).
 function seeded(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1103515245 + 12345) >>> 0) / 4294967296); }
 function isCorrupt(monster) { return monster?.theme === 'corrupt'; }
-const REPLACEMENT = '\uFFFD';
-function corruptChars(s, seed, rate) {
-  const rnd = seeded(seed * 7919 + s.length);
-  const chars = [...s];
-  const idx = chars.map((ch, i) => (/[\s!?.,()]/.test(ch) ? -1 : i)).filter(i => i >= 0);
-  const n = idx.length ? Math.max(1, Math.round(idx.length * rate)) : 0;
-  for (let k = 0; k < n; k++) {
-    const i = idx.splice(Math.floor(rnd() * idx.length), 1)[0];
-    chars[i] = rnd() < 0.65 ? REPLACEMENT : '▒';
-  }
-  return { chars, code: 'ERR_0x' + Math.floor(rnd() * 256).toString(16).toUpperCase().padStart(2, '0') };
-}
-function glitchText(s, x, y, size, color, { seed = 1, rate = 0.15, errCode = false, maxWidth } = {}) {
-  const { chars, code } = corruptChars(s, seed, rate);
-  const repW = size * 0.86;
-  const charW = (ch) => (ch === ' ' ? size * 0.3 : p.textWidth(B(), ch, size)); // 공백 하나는 글꼴 폭이 0으로 나와 따로
-  const widthOf = (ch) => (ch === REPLACEMENT ? repW : charW(ch));
-  const codeSize = Math.round(size * 0.72);
-  const codeW = errCode ? p.textWidth(B(), code, codeSize) + size * 0.4 : 0;
-  let total = chars.reduce((sum, ch) => sum + widthOf(ch), 0) + codeW;
-  const scale = maxWidth && total > maxWidth ? maxWidth / total : 1; // 넘치면 글자 크기를 줄인다
-  const fs_ = size * scale;
-  total *= scale;
-  let cx = x - total / 2;
-  for (const ch of chars) {
-    const w = widthOf(ch) * scale;
-    if (ch === REPLACEMENT) {
-      const r = fs_ * 0.42, mx = cx + w / 2;
-      p.poly([mx, y - r, mx + r, y, mx, y + r, mx - r, y], color);
-      text('?', mx, y + fs_ * 0.02, Math.round(fs_ * 0.62), C.bg);
-    } else if (ch !== ' ') {
-      text(ch, cx, y, fs_, color, { align: 'left' });
+function glitchText(s, x, y, size, color, { seed = 1, off = 2, strips = 2, shift = 3, holes = 2, maxWidth } = {}) {
+  const k = RENDER_SCALE, o = off / k; // off는 실제 픽셀(675 기준) — 시안과 같게
+  text(s, x - o, y, size, '#2fb8c0', { maxWidth });
+  text(s, x + o, y, size, '#bf1e2d', { maxWidth });
+  text(s, x, y, size, color, { maxWidth });
+  const rnd = seeded(seed * 9973 + s.length);
+  const tw = Math.min(p.textWidth(B(), s, size), maxWidth ?? Infinity);
+  const bx0 = Math.max(0, Math.round((x - tw / 2) * k) - 6), bx1 = Math.min(p.w, Math.round((x + tw / 2) * k) + 6);
+  const by0 = Math.max(0, Math.round((y - size * 0.6) * k)), by1 = Math.min(p.h, Math.round((y + size * 0.6) * k));
+  const rowBytes = (bx1 - bx0) * 3, hh = by1 - by0;
+  if (rowBytes <= 0 || hh <= 4) return;
+  for (let i = 0; i < strips; i++) {
+    const sy = Math.floor(rnd() * (hh - 3)), sh = 2 + Math.floor(rnd() * Math.max(1, Math.floor(hh / 7) - 1));
+    const dx = (rnd() < 0.5 ? -1 : 1) * (1 + Math.floor(rnd() * shift));
+    for (let yy = by0 + sy; yy < by0 + sy + sh && yy < by1; yy++) {
+      const start = (yy * p.w + bx0) * 3;
+      const row = Buffer.from(p.buf.subarray(start, start + rowBytes));
+      p.buf.fill(0, start, start + rowBytes);
+      row.copy(p.buf, start + Math.max(0, dx) * 3, Math.max(0, -dx) * 3, rowBytes - Math.max(0, dx) * 3);
     }
-    cx += w;
   }
-  if (errCode) text(code, cx + size * 0.4 * scale, y + fs_ * 0.06, Math.round(codeSize * scale), C.dim, { align: 'left' });
+  const cols = [[8, 2, 4], [180, 20, 36], [40, 200, 210]];
+  for (let i = 0; i < holes; i++) {
+    const hx = bx0 + Math.floor(rnd() * Math.max(1, bx1 - bx0 - 6)), hy = by0 + Math.floor(rnd() * Math.max(1, hh - 4));
+    const w = 3 + Math.floor(rnd() * 3), c = cols[Math.floor(rnd() * 3)];
+    for (let yy = hy; yy < hy + 2; yy++) for (let xx = hx; xx < hx + w && xx < p.w; xx++) { const j = (yy * p.w + xx) * 3; p.buf[j] = c[0]; p.buf[j + 1] = c[1]; p.buf[j + 2] = c[2]; }
+  }
 }
 function bar(x, y, w, h, ratio, color) {
   p.roundRect(x, y, w, h, h / 2, C.hpBack);
@@ -972,74 +962,71 @@ const CORRUPT_C = {
   orange: '#ff6a5a', sub: '#f2dada', dim: '#7a5a5e', muted: '#b08a8a', hpBack: '#2e1418',
 };
 let themeKey = ''; // 배경 캐시 키 뒤에 붙는다(테마마다 배경을 따로 저장)
-// 모서리 디지털 오염: 화면 네 귀퉁이부터 8px 블록이 붉게 물들거나 까맣게 빠지고, 회로 막대·테두리를 따라 흐르는 세로 줄기.
-// 귀퉁이에서 멀수록 듬성듬성. keep(지킬 상자: 글자·HP 바·배지·카드)에 닿는 블록은 그리지 않는다. 매번 같은 모양(seed).
-function corruptCorners(seed, keep) {
+// 화면 오염 후처리(6번째 시안 그대로, 실제 픽셀 675×480 단위): ① 가장자리 붉은 빛 ② 네 모서리 오염(옆 칸이 붉게 끌려와 어긋난 블록 ·
+// 붉은 블록 · 빠진 칸 · 회로 막대, 테두리를 따라 흐르는 세로 줄기) ③ 붉은 잡음 점 ④ 약한 가로 띠 밀림(글자 줄은 피함).
+// 직업 아이콘 자리(카드 아이콘 칸)는 건드리지 않는다. 매번 같은 모양(seed).
+const ICON_KEEP = [0, 1, 2, 3].map(i => [Math.round((20 + i * (CARD_W + CARD_GAP) + CARD_W / 2 - 34) * RENDER_SCALE), Math.round((CARD_Y + 46) * RENDER_SCALE), Math.round(68 * RENDER_SCALE), Math.round(80 * RENDER_SCALE)]);
+// 띠를 밀면 안 되는 줄(실제 픽셀) — 시안과 같게
+const BAND_SAFE = { 모집: [[15, 60], [145, 240], [330, 480]], 전투: [[10, 80], [150, 240], [260, 480]], 결과: [[10, 140], [150, 480]] };
+function corruptPost(scene, seed) {
   const rnd = seeded(seed);
-  const S = 8, R = 140;
-  const hits = (x, y, w, h) => keep.some(([kx, ky, kw, kh]) => x < kx + kw && x + w > kx && y < ky + kh && y + h > ky);
-  for (const [cx, cy, sx, sy] of [[0, 0, 1, 1], [W, 0, -1, 1], [0, H, 1, -1], [W, H, -1, -1]]) {
-    for (let by = 0; by < R; by += S) for (let bx = 0; bx < R; bx += S) {
+  const w = p.w, h = p.h, buf = p.buf;
+  const inIcon = (x, y, bw, bh) => scene !== '모집' && scene !== '전투' ? false : ICON_KEEP.some(([kx, ky, kw, kh]) => x < kx + kw && x + bw > kx && y < ky + kh && y + bh > ky);
+  const setPx = (x, y, c) => { if (x < 0 || y < 0 || x >= w || y >= h || inIcon(x, y, 1, 1)) return; const j = (y * w + x) * 3; buf[j] = c[0]; buf[j + 1] = c[1]; buf[j + 2] = c[2]; };
+  // ① 가장자리 붉은 빛
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const e = Math.min(Math.min(x, w - 1 - x) / w, Math.min(y, h - 1 - y) / h);
+      if (e >= 0.06) { if (x > w * 0.06 && x < w * 0.94) x = Math.floor(w * 0.94); continue; }
+      const k = ((0.06 - e) / 0.06) ** 2, j = (y * w + x) * 3;
+      buf[j] = Math.min(255, buf[j] + Math.round(50 * k));
+    }
+  }
+  // ② 모서리 오염
+  const src = Buffer.from(buf);
+  const B6 = 6;
+  for (const [cx, cy, sx, sy] of [[0, 0, 1, 1], [w, 0, -1, 1], [0, h, 1, -1], [w, h, -1, -1]]) {
+    const R = 90 + Math.floor(rnd() * 31);
+    for (let by = 0; by < R; by += B6) for (let bx = 0; bx < R; bx += B6) {
       const d = Math.hypot(bx, by) / R;
-      if (d > 1 || rnd() > (1 - d) ** 1.1) continue;
-      const x = sx > 0 ? cx + bx : cx - bx - S, y = sy > 0 ? cy + by : cy - by - S;
-      if (hits(x, y, S, S)) continue;
+      if (d > 1 || rnd() > (1 - d) ** 1.3) continue;
+      const x = cx + sx * bx - (sx < 0 ? B6 : 0), y = cy + sy * by - (sy < 0 ? B6 : 0);
+      if (x < 0 || y < 0 || x >= w - B6 || y >= h - B6 || inIcon(x, y, B6, B6)) continue;
       const r = rnd();
-      if (r < 0.45) p.rect(x, y, S, S, ['#96101e', '#5a0812', '#dc2234'][Math.floor(rnd() * 3)]);
-      else if (r < 0.65) p.rect(x, y, S, S, '#060204');
-      else if (r < 0.8) { const w = S * (1 + Math.floor(rnd() * 3)); if (!hits(x, y, w, S)) p.rect(x, y + S / 2 - 1, w, 2, '#ff3c4c'); }
+      if (r < 0.35) { // 옆 칸 내용을 끌어와 붉게
+        const ox = Math.max(0, Math.min(w - B6, x + [-2, -1, 1, 2][Math.floor(rnd() * 4)] * B6));
+        for (let yy = 0; yy < B6; yy++) for (let xx = 0; xx < B6; xx++) {
+          const s = ((y + yy) * w + ox + xx) * 3, dIdx = ((y + yy) * w + x + xx) * 3;
+          buf[dIdx] = Math.min(255, src[s] + 60); buf[dIdx + 1] = Math.round(src[s + 1] * 0.35); buf[dIdx + 2] = Math.min(255, Math.round(src[s + 2] * 0.4) + 8);
+        }
+      } else if (r < 0.6) { const c = [[150, 16, 30], [90, 8, 18], [220, 34, 52]][Math.floor(rnd() * 3)]; for (let yy = 0; yy < B6; yy++) for (let xx = 0; xx < B6; xx++) setPx(x + xx, y + yy, c); }
+      else if (r < 0.75) { for (let yy = 0; yy < B6; yy++) for (let xx = 0; xx < B6; xx++) setPx(x + xx, y + yy, [6, 2, 4]); }
+      else if (r < 0.9) { const len = B6 * (1 + Math.floor(rnd() * 3)); for (let yy = B6 / 2 - 1; yy <= B6 / 2; yy++) for (let xx = 0; xx < len; xx++) setPx(x + xx, y + yy, [255, 60, 76]); }
     }
-    for (let i = 0; i < 4; i++) {
-      const x = sx > 0 ? cx + 6 + rnd() * R * 0.5 : cx - 6 - rnd() * R * 0.5;
-      const len = R * (0.5 + rnd() * 0.7);
-      for (let tt = 0; tt < len; tt += 4) {
-        const y = sy > 0 ? cy + tt : cy - tt - 3;
-        if (rnd() < 0.85 && !hits(x, y, 2, 3)) p.rect(x, y, 2, 3, rnd() < 0.85 ? '#ff2e40' : '#ffc8cc');
-      }
+    for (let i = 0; i < 4; i++) { // 테두리를 따라 흐르는 세로 줄기
+      const x = cx + sx * (4 + Math.floor(rnd() * (R / 2 - 4))), L = Math.floor(R / 2 + rnd() * (R / 2 + 40));
+      for (let tt = 0; tt < L; tt += 2) if (rnd() < 0.85) setPx(x, cy + sy * tt - (sy < 0 ? 1 : 0), rnd() < 0.85 ? [255, 46, 64] : [255, 200, 205]);
     }
   }
-}
-// 화면 글리치: 가로 띠 몇 줄을 옆으로 살짝 민다(3~8px). 글자·카드가 있는 줄은 피하도록 장면마다 밀어도 되는 세로 구간만.
-function glitchBands(seed, ranges, n = 4) {
-  if (!ranges?.length) return;
-  const rnd = seeded(seed * 131 + 17);
-  const k = RENDER_SCALE, x0 = Math.round(24 * k), x1 = Math.round((W - 24) * k), rowBytes = (x1 - x0) * 3;
-  for (let i = 0; i < n; i++) {
-    const [a, b] = ranges[i % ranges.length];
-    const hh = 3 + rnd() * 6;                       // 띠 두께(설계 px)
-    const yd = a + rnd() * Math.max(1, b - a - hh);  // 띠 위치(설계 px)
-    const dx = Math.round((rnd() < 0.5 ? -1 : 1) * (6 + rnd() * 9) * k);
-    const y0 = Math.round(yd * k), h = Math.max(2, Math.round(hh * k));
-    for (let yy = y0; yy < y0 + h && yy < p.h; yy++) {
-      const start = (yy * p.w + x0) * 3;
-      const row = Buffer.from(p.buf.subarray(start, start + rowBytes));
-      row.copy(p.buf, start + Math.max(0, dx) * 3, Math.max(0, -dx) * 3, rowBytes - Math.max(0, dx) * 3);
+  // ③ 붉은 잡음 점
+  for (let i = 0; i < 25; i++) {
+    const x = Math.floor(rnd() * (w - 2)), y = Math.floor(rnd() * (h - 2)), c = rnd() < 0.5 ? [200, 30, 45] : [120, 14, 24];
+    for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) setPx(x + dx, y + dy, c);
+  }
+  // ④ 약한 가로 띠 밀림 3줄(글자 줄은 피함)
+  const safe = BAND_SAFE[scene] ?? [];
+  let n = 0;
+  for (let tries = 0; n < 3 && tries < 500; tries++) {
+    const y0 = Math.floor(rnd() * (h - 8)), hh = 2 + Math.floor(rnd() * 3);
+    if (safe.some(([a, b]) => (a <= y0 && y0 <= b) || (a <= y0 + hh && y0 + hh <= b))) continue;
+    const dx = (rnd() < 0.5 ? -1 : 1) * (3 + Math.floor(rnd() * 6)), rowBytes = w * 3;
+    for (let yy = y0; yy < y0 + hh; yy++) {
+      const start = yy * rowBytes, row = Buffer.from(buf.subarray(start, start + rowBytes));
+      row.copy(buf, start + Math.max(0, dx) * 3, Math.max(0, -dx) * 3, rowBytes - Math.max(0, dx) * 3);
     }
-    // 밀린 띠 위아래 가장자리에 붉은·청록 얇은 선(빈 배경 위에서도 보이게, 일부 구간만)
-    const lx = 40 + rnd() * (W - 380), lw = 120 + rnd() * 220;
-    p.rect(lx, yd - 1, lw, 1.5, '#ff2a3c');
-    p.rect(lx + 18, yd + hh, lw * 0.6, 1.5, '#28dce6');
+    n++;
   }
 }
-// 가장자리 은은한 붉은 빛: 바깥에서 안쪽으로 옅어지는 붉은 띠(반투명) 네 변
-function edgeGlow() {
-  for (let i = 0; i < 12; i++) {
-    const a = 0.07 * (1 - i / 12), d = i * 4;
-    p.roundRect(0, d, W, 4, 0, '#c81428', a);
-    p.roundRect(0, H - d - 4, W, 4, 0, '#c81428', a);
-    p.roundRect(d, 0, 4, H, 0, '#c81428', a);
-    p.roundRect(W - d - 4, 0, 4, H, 0, '#c81428', a);
-  }
-}
-// 장면마다 띠를 밀어도 되는 세로 구간(설계 좌표) — 몬스터 칸 안쪽
-// 띠는 몬스터(칸 가운데)를 가로지르게 — 몬스터 위·가운데·아래 구간을 돌아가며
-const CORRUPT_BANDS = { 모집: [[150, 175], [195, 215], [225, 245], [120, 140]], 전투: [[160, 185], [200, 225], [232, 258], [128, 150]], 결과: [[220, 245], [255, 280], [290, 315]] };
-// 장면별 지킬 상자(설계 좌표 900×640) — 모서리 오염이 덮지 않는다
-const CORRUPT_KEEP = {
-  모집: [[90, 10, 720, 92], [280, 262, 340, 66], [20, 362, 860, 260]],
-  전투: [[26, 16, 128, 50], [240, 12, 420, 58], [46, 70, 808, 40], [20, 362, 860, 260], [176, 272, 548, 54], [W - 232, 126, 214, 210]],
-  결과: [[90, 8, 720, 136], [20, 150, 860, 472]],
-};
 async function render(scene, draw, monster = null) {
   if (!load()) return null;
   p = painter;
@@ -1050,11 +1037,7 @@ async function render(scene, draw, monster = null) {
   try {
     const t0 = process.hrtime.bigint();
     draw();
-    if (corrupt) {
-      edgeGlow();
-      glitchBands(scene.length * 13 + 3, CORRUPT_BANDS[scene]);
-      corruptCorners(scene.length * 31 + 7, CORRUPT_KEEP[scene] ?? []);
-    }
+    if (corrupt) corruptPost(scene, scene.length * 31 + 7);
     const t1 = process.hrtime.bigint();
     const png = painter.png();
     logRender(scene, Number(t1 - t0) / 1e6, Number(process.hrtime.bigint() - t1) / 1e6, png.length);
@@ -1073,14 +1056,14 @@ function renderRecruit(r) {
     background('recruit', 102, 240);
     const title = '몬스터 출현!';
     const tw = p.textWidth(B(), title, 46);
-    if (isCorrupt(r.monster)) glitchText(title, W / 2, 47, 46, C.gold, { seed: 1, rate: 0.2 });
+    if (isCorrupt(r.monster)) glitchText(title, W / 2, 47, 46, C.gold, { seed: 1, strips: 2, shift: 3, holes: 2 });
     else text(title, W / 2, 47, 46, C.gold);
     titleIcon(W / 2 - tw / 2 - 46, 47); titleIcon(W / 2 + tw / 2 + 46, 47);
     const sub = `${r.monster.name}${subjectJosa(r.monster.name)} XP 시스템을 망가뜨렸어요!`;
-    if (isCorrupt(r.monster)) glitchText(sub, W / 2, 84, 21, '#ff8f7a', { seed: 2, rate: 0.1, errCode: true, maxWidth: W - 120 });
+    if (isCorrupt(r.monster)) glitchText(sub, W / 2, 84, 21, '#ff8f7a', { seed: 2, off: 1, strips: 0, holes: 0, maxWidth: W - 120 });
     else text(sub, W / 2, 84, 21, '#ff8f7a', { maxWidth: W - 120 });
     drawMonster(r.monster, W / 2, 206, 112);
-    if (isCorrupt(r.monster)) glitchText(r.monster.name, W / 2, 298, 38, C.gold, { seed: 3 });
+    if (isCorrupt(r.monster)) glitchText(r.monster.name, W / 2, 298, 38, C.gold, { seed: 3, strips: 1, shift: 3, holes: 1 });
     else text(r.monster.name, W / 2, 298, 38, C.gold);
     cards(r.party, (x, y, w, h, roleKey, m) => {
       const role = ROLES[roleKey];
@@ -1174,7 +1157,7 @@ function renderBattle(r) {
     const name = b.rage ? m.rageName : m.name;
     const NAME_MAX = 420;
     const nw = Math.min(p.textWidth(B(), name, 36), NAME_MAX);
-    if (isCorrupt(m)) glitchText(name, W / 2, 41, 36, b.rage ? C.red : C.gold, { seed: 4, maxWidth: NAME_MAX });
+    if (isCorrupt(m)) glitchText(name, W / 2, 41, 36, b.rage ? C.red : C.gold, { seed: 4, strips: 1, shift: 3, holes: 1, maxWidth: NAME_MAX });
     else text(name, W / 2, 41, 36, b.rage ? C.red : C.gold, { maxWidth: NAME_MAX });
     if (b.rage) {
       p.roundRect(W / 2 + nw / 2 + 12, 24, 64, 34, 8, '#5c1410');
