@@ -398,29 +398,29 @@ function statusBadges(b, mem, x, y) {
   if (isVulnerable(b, mem)) { vulnBadge(x, by, vulnTurnsLeft(b, mem)); by += 44; }
   if (isDoomed(b, mem)) doomBadge(x, by);
 }
-// 오류(???): 노란 경고 삼각형 + ! + 남은 턴
+// ── ??? 상태 아이콘(검은 바탕 + 붉은 선, 터미널 느낌) ──
+// 오류: 붉은 테두리 네모 + 청록 그림자가 어긋난 느낌표 + 끊긴 줄 + 남은 턴
 function errorBadge(cx, cy, turns) {
-  p.poly([cx, cy - 13, cx + 14, cy + 10, cx - 14, cy + 10], '#2a1a04');
-  p.poly([cx, cy - 9, cx + 10, cy + 8, cx - 10, cy + 8], '#ffcf3a');
-  p.rect(cx - 1.5, cy - 3, 3, 8, '#2a1a04'); p.rect(cx - 1.5, cy + 6, 3, 2.5, '#2a1a04');
-  text(`${turns}턴`, cx, cy + 24, 15, '#ffe08a');
+  p.rect(cx - 13, cy - 13, 26, 26, '#1a0608'); p.strokeRoundRect(cx - 13, cy - 13, 26, 26, 2, 2, '#ff3a4a');
+  p.rect(cx + 0.5, cy - 8, 3.5, 10, '#2ad0d8'); p.rect(cx + 0.5, cy + 4, 3.5, 3.5, '#2ad0d8');
+  p.rect(cx - 2, cy - 8, 3.5, 10, '#ff3a4a'); p.rect(cx - 2, cy + 4, 3.5, 3.5, '#ff3a4a');
+  p.rect(cx - 13, cy + 1, 10, 2, '#0d0406'); p.rect(cx + 4, cy - 5, 9, 2, '#0d0406');
+  text(`${turns}턴`, cx, cy + 26, 15, '#ffb0b8');
 }
-// 취약: 열린 자물쇠(붉은) + 남은 턴
+// 취약: 조준선(락온) + 남은 턴
 function vulnBadge(cx, cy, turns) {
-  p.roundRect(cx - 11, cy - 3, 22, 16, 3, '#2a0a10');
-  p.roundRect(cx - 9, cy - 1, 18, 12, 2, '#ff4a5a');
-  p.strokeRoundRect(cx - 6, cy - 13, 12, 12, 5, 3, '#ff8a94');
-  p.rect(cx - 12, cy - 9, 8, 8, '#17120e'); // 걸쇠 한쪽이 열려 있다
-  p.circle(cx, cy + 5, 2, '#2a0a10');
-  text(`${turns}턴`, cx, cy + 24, 15, '#ffb4bc');
+  p.circle(cx, cy, 12, '#ff3a4a'); p.circle(cx, cy, 9.5, '#14040a'); p.circle(cx, cy, 5, '#ff3a4a'); p.circle(cx, cy, 3, '#14040a');
+  for (const [x, y, w, h] of [[-1, -17, 2, 8], [-1, 9, 2, 8], [-17, -1, 8, 2], [9, -1, 8, 2]]) p.rect(cx + x, cy + y, w, h, '#ff3a4a');
+  p.rect(cx - 1, cy - 1, 2, 2, '#ffb0b8');
+  text(`${turns}턴`, cx, cy + 26, 15, '#ffb4bc');
 }
-// 즉사: 해골(이번 턴 판정)
+// 즉사: 글리치 해골(붉은 해골 + 청록 그림자 + 잘린 줄) — 이번 턴 판정
 function doomBadge(cx, cy) {
-  p.roundRect(cx - 12, cy - 12, 24, 20, 8, '#1a0a14');
-  p.roundRect(cx - 10, cy - 10, 20, 16, 7, '#f1ecff');
-  p.circle(cx - 4, cy - 3, 3, '#1a0a14'); p.circle(cx + 4, cy - 3, 3, '#1a0a14');
-  p.rect(cx - 5, cy + 8, 10, 5, '#f1ecff'); p.rect(cx - 3, cy + 8, 1.5, 5, '#1a0a14'); p.rect(cx + 1.5, cy + 8, 1.5, 5, '#1a0a14');
-  text('판정', cx, cy + 24, 15, '#e6dcff');
+  for (const [dx, c] of [[2, '#2ad0d8'], [0, '#ff3a4a']]) { p.roundRect(cx - 11 + dx, cy - 13, 22, 18, 8, c); p.rect(cx - 6 + dx, cy + 4, 12, 7, c); }
+  p.circle(cx - 4, cy - 4, 3.2, '#0d0406'); p.circle(cx + 4, cy - 4, 3.2, '#0d0406'); p.rect(cx - 1, cy, 2, 3, '#0d0406');
+  p.rect(cx - 3, cy + 7, 1.5, 4, '#0d0406'); p.rect(cx + 1.5, cy + 7, 1.5, 4, '#0d0406');
+  p.rect(cx - 14, cy - 1, 12, 2, '#0d0406'); p.rect(cx + 3, cy + 3, 12, 1.5, '#0d0406');
+  text('판정', cx, cy + 26, 15, '#ffb0b8');
 }
 // 점액: 독 거품처럼 방울 세 개(어두운 테두리 → 점액색 → 흰 반사광) + 아래에 남은 턴
 function slowBadge(cx, cy, turns, color) {
