@@ -988,45 +988,6 @@ function actLabel(act) {
   return act.heal ? `${act.label} +${act.value}` : `${act.label} ${act.value}`;
 }
 
-// ── 직업 스킬 연출(도트 그림, 결과 화면) ──
-// 몬스터 기술 연출(몬스터 둘레·맞은 카드 아이콘 가운데)과 겹치지 않게, 스킬을 쓴 사람의 카드 윗부분
-// (결과 화면엔 리본이 없어 비어 있음)에만 작게 띄운다. 치유의 빛은 회복받은 카드마다, 부활하면 빛기둥.
-const SKILL_SPRITES = {
-  slash: { rows: ['....wwwwwwww....', '..wwbb....bbww..', '.wb..........bw.', 'w..............w'], palette: { w: '#ffffff', b: '#9fd8ff' } },
-  // 궁수·수호자·치유사는 검사 반달 베기와 같은 그림체(가는 흰 선 + 옅은 색 테두리, 가운데 하나) — 사용자 요청
-  shot: { rows: ['...........w....', 'bbbbwwwwwwwwww..', '...........w....'], palette: { w: '#ffffff', b: '#ffe9a0' } },
-  guard: { rows: ['.bwwwwwb.', 'w.......w', 'w.......w', 'b.......b', '.w.....w.', '..b...b..', '...www...'], palette: { w: '#ffffff', b: '#9fd8ff' } },
-  twinkle: { rows: ['....w....', '....b....', '...bwb...', 'wbbwwwbbw', '...bwb...', '....b....', '....w....'], palette: { w: '#ffffff', b: '#9ff0b0' } },
-  shield: { rows: ['.aaaaaaa.', 'abbbbbbba', 'abwbbbbba', 'abwbbbbba', 'abbbbbbba', '.abbbbba.', '..abbba..', '...aba...', '....a....'], palette: { a: '#1c2a38', b: '#5a9be0', w: '#ffffff' } },
-  cross: { rows: ['..g..', '.ggg.', 'ggwgg', '.ggg.', '..g..'], palette: { g: '#5fe08a', w: '#ffffff' } },
-  spark: { rows: ['.y.', 'yyy', '.y.'], palette: { y: '#ffd23f' } },
-  pip: { rows: ['.w.', 'www', '.w.'], palette: { w: '#cfe8ff' } },
-};
-function cardSkillFx(b, last, mem, x, y, w) {
-  if (!last) return;
-  const cx = x + w / 2, top = y + 26; // 카드 맨 위(결과 화면엔 리본이 없는 자리) — 몬스터 피격 연출(아이콘 둘레)과 떨어지게
-  const act = last.acts?.[mem.userId];
-  if (act?.skill && mem.role === 'sword') drawPixels(SKILL_SPRITES.slash, cx, top, 4);
-  if (act?.skill && mem.role === 'archer') {
-    drawPixels(SKILL_SPRITES.shot, cx, top, 4);
-    if (act.crit) drawPixels(SKILL_SPRITES.spark, cx + 40, top, 4);
-  }
-  if (act?.skill && mem.role === 'tank') {
-    // 속이 빈 방패 윤곽선, 반격한 턴엔 테두리가 노랗게
-    drawPixels(SKILL_SPRITES.guard, cx, top, 4, last.reflect?.userId === mem.userId ? { colors: { b: '#ffd23f' } } : {});
-  }
-  const healer = b.members.find(m => m.role === 'healer' && last.acts?.[m.userId]?.skill);
-  if (healer && last.healed?.includes(mem.userId)) {
-    const revived = last.revivedIds?.includes(mem.userId);
-    // 부활: 카드 위에서 아이콘까지 내려오는 빛기둥(가운데)
-    if (revived) for (let i = 0; i < 7; i++) p.rect(cx - 8, y + 10 + i * 8, 16, 5, i % 2 ? '#9ff0b0' : '#ffffff');
-    // 자기 스킬 연출이 있거나 부활했으면 반짝임은 오른쪽에 작게(같은 자리에 겹치지 않게), 아니면 가운데
-    const own = (act?.skill && mem.role !== 'healer') || revived;
-    if (own) drawPixels(SKILL_SPRITES.twinkle, cx + 70, top - 2, 2.6);
-    else drawPixels(SKILL_SPRITES.twinkle, cx, top, 4);
-  }
-}
-
 // 원숭이 부하(몬스터 minions): 몬스터 양옆에 작게 + 아래 HP 막대. 결과 화면엔 이번 턴 받은 피해(빨강)를 HP 막대 아래에,
 // 이번 턴 쓰러진 부하는 회색으로 한 번 더 보여 주고 그다음부턴 그리지 않는다. 부하를 불러낸 턴엔 발밑에 흙먼지.
 // 그린 부하가 있으면 true(오른쪽 피해 숫자를 바깥으로 비킨다).
@@ -1259,7 +1220,6 @@ function renderBattle(r) {
       if (stenchK) stenchBehind(roleKey, x + w / 2, y + 86, stenchK);
       roleIcon(roleKey, x + w / 2, y + 86, down);
       if (stenchK) stenchFront(x + w / 2, y + 86, stenchK);
-      if (r.showingResult && !down) cardSkillFx(b, last, mem, x, y, w);
       // 표식(영혼 사냥 예고 대상): 선택 화면에서 카드 오른쪽 위에 빛나는 눈
       if (!down && !r.showingResult && !isIntentHidden(b) && b.marks?.includes(mem.userId)) markEye(x + w - 36, y + 66);
       if (!down && isIced(b, mem)) iceCover(x + w / 2, y + 86); // 빙결: 아이콘이 얼음에 갇힘
