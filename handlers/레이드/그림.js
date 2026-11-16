@@ -283,6 +283,10 @@ const STATUS_ICONS = {
 // 악취 기운(카드 아이콘 위): 작은 방귀 구름 + 맴도는 파리 두 마리(냄새 줄은 X자처럼 보여 뺌 — 사용자 요청)
 function stenchAura(cx, cy) {
   drawPixels(FART_CLOUD, cx + 30, cy + 22, 3);
+  stenchFlies(cx, cy);
+}
+// 악취 파리 두 마리(검은 몸 + 흰 날개)
+function stenchFlies(cx, cy) {
   for (const [fx, fy] of [[-34, -40], [36, -8]]) {
     p.rect(fx + cx - 2, fy + cy - 2, 5, 5, '#1a120a');
     p.rect(fx + cx - 5, fy + cy - 6, 4, 3, '#d8e4ee');
@@ -291,7 +295,7 @@ function stenchAura(cx, cy) {
 }
 // 악취: 갈색 냄새 구름 배지 + 냄새 줄 + 남은 턴
 function stenchBadge(cx, cy, turns) {
-  drawPixels(STENCH_ICON, cx, cy - 4, 2.4);
+  drawPixels(STENCH_ICON, cx, cy, 2.4);
   text(`${turns}턴`, cx, cy + 24, 15, '#e0c49a');
 }
 // 카드 왼쪽 위 상태 아이콘: 기절(별). 점액는 아이콘 없이 점액 얼룩으로 표시한다.
@@ -794,8 +798,14 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
 // 맞은 파티원 카드 아이콘 위 타격 표시: 박치기는 할퀸 자국, 흩뿌리기는 점액 얼룩, 짓누르기는 충격 별.
 function hitFx(move, cx, cy, color, spore = color, accent = spore) {
   if (move === 'fart') {
-    // 구린 방귀에 맞음: 아이콘 둘레 초록 구름 + 냄새 줄
-    stenchAura(cx, cy);
+    // 구린 방귀에 맞음: 가스 구름이 아이콘 양옆을 감싸고(이름은 가리지 않게) 위로 작은 구름이 피어오름 + 파리
+    // 왼쪽 상태 배지(약 cx-88~-50)와 오른쪽 피해 숫자(cx+63 부근)는 가리지 않는 폭으로
+    drawPixels(FART_CLOUD, cx - 28, cy + 12, 3);
+    drawPixels(FART_CLOUD, cx + 28, cy + 8, 3);
+    drawPixels(FART_CLOUD, cx, cy + 20, 3);
+    drawPixels(FART_CLOUD, cx - 22, cy - 34, 2);
+    drawPixels(FART_CLOUD, cx + 22, cy - 40, 2);
+    stenchFlies(cx, cy);
     return;
   }
   if (move === 'peel') {
@@ -987,7 +997,7 @@ function actLabel(act) {
 // 방귀 구름(외곽선 있는 겨자색 뭉게구름) · 악취 아이콘(소용돌이 갈색 구름)
 const FART_CLOUD = { rows: ['..aaa.aaa..', '.ahhhahhha.', 'ahhoooooooa', 'aoooooooooa', '.aoooooooa.', '..aaaaaaa..'], palette: { a: '#4f441a', h: '#ece2a0', o: '#c2b450' } };
 const STENCH_ICON = {
-  rows: ['................', '......aaaa......', '.....ahhhha.....', '....ahooooha....', '...ahoodddoha...', '...ahoddoddda...', '..ahoddoooodda..', '..ahoddodooodha.', '.aoooodddooodoa.', '.adooooooooddoa.', '..adooooooddooa.', '...aaaaaaaaaaa..', '.aa.............', 'aoha............', '.aa.............'],
+  rows: ['......aaaa......', '.....ahhhha.....', '....ahooooha....', '...ahoodddoha...', '...ahoddoddda...', '..ahoddoooodda..', '..ahoddodooodha.', '.aoooodddooodoa.', '.adooooooooddoa.', '..adooooooddooa.', '...aaaaaaaaaaa..'],
   palette: { a: '#3a1e0a', o: '#c47a32', h: '#eaa860', d: '#6a3812' },
 };
 const PEEL = { rows: ['y...y', 'yy.yy', '.yyy.', '..d..'], palette: { y: '#f5d040', d: '#7a5410' } };
