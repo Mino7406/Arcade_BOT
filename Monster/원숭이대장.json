@@ -314,7 +314,7 @@
       "peel": 2,
       "roar": 1.5,
       "smash": 2,
-      "combo": 1.5
+      "combo": 2
     },
     "rage": {
       "attack": 3,
@@ -322,7 +322,7 @@
       "peel": 2,
       "roar": 1.5,
       "smash": 2.5,
-      "combo": 2
+      "combo": 2.5
     }
   }
 }
