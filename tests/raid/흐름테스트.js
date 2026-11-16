@@ -853,6 +853,20 @@ let ok4;
         return E.getMember(bb, 'x').hp;
       };
       assert(doomRun(1, false) === 0 && doomRun(0, false) > 0 && doomRun(1, true) > 0, '즉사(kill -9): 확률 판정, 치유사 스킬로 해제');
+      // 즉사 중첩: 판정을 넘긴 바로 그 턴에 kill -9 에 또 맞으면 확률이 stackRate(0.1)씩 오른다 — 끊기면 처음부터
+      b = mk(); b.intent = 'killnine'; b.marks = ['x'];
+      E.choose(b, 'x', 'attack'); E.choose(b, 'y', 'attack'); E.resolveTurn(b, () => 0.5);
+      const m1 = E.getMember(b, 'x');
+      assert(E.isDoomed(b, m1) && m1.doomTurn === b.turn && Math.abs(m1.doomRate - voidM.moves.killnine.effectRate) < 1e-9 && m1.doomStacks === 0, '즉사 첫 걸림: 기본 확률, 중첩 0');
+      b.intent = 'killnine'; b.marks = ['x'];
+      E.choose(b, 'x', 'attack'); E.choose(b, 'y', 'attack'); E.resolveTurn(b, () => 0.99); // 판정 통과(0.99 ≥ 확률) 후 또 걸림
+      const m2 = E.getMember(b, 'x');
+      assert(m2.hp > 0 && m2.doomStacks === 1 && Math.abs(m2.doomRate - (voidM.moves.killnine.effectRate + voidM.moves.killnine.stackRate)) < 1e-9, '즉사 연속으로 또 걸리면 중첩 +1, 확률 +10%p');
+      // 블랙월 게이트웨이: 방어하지 않은 사람에게 오류·취약·즉사가 1턴씩 한꺼번에, 방어한 사람은 안 걸림
+      b = mk(); b.intent = 'smash'; E.choose(b, 'x', 'attack'); E.choose(b, 'y', 'guard'); E.resolveTurn(b, () => 0.5);
+      const gx = E.getMember(b, 'x'), gy = E.getMember(b, 'y');
+      assert(E.isErrored(b, gx) && E.errorTurnsLeft(b, gx) === 1 && E.isVulnerable(b, gx) && E.vulnTurnsLeft(b, gx) === 1 && E.isDoomed(b, gx), '블랙월 게이트웨이: 방어 안 하면 오류·취약·즉사 1턴씩 한꺼번에');
+      assert(!E.isErrored(b, gy) && !E.isVulnerable(b, gy) && !E.isDoomed(b, gy), '블랙월 게이트웨이: 방어한 사람은 아무것도 안 걸림');
     }
   }
   // 14-3b) 원숭이 대장(Monster-all): 부하 부르기(필살기 1) · 공격이 부하에게 먼저 · 바나나 투척 · 합동 필살기(필살기 2) · 우울 상태

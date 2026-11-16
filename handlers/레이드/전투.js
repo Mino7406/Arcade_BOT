@@ -97,7 +97,7 @@ const MONSTER_DIR = path.join(__dirname, '..', '..', 'Monster');
 const REQUIRED_MOVES = ['attack', 'smash'];
 // 그림(레이드그림.js)이 아는 연출 종류. 새 연출은 레이드그림.js의 monsterFx·hitFx에 그리고 여기에 이름을 더한다.
 const MOVE_FX = ['attack', 'sweep', 'charge', 'smash', 'heal', 'spore', 'hypno', 'absorb', 'burst', 'frost', 'icefall',
-  'curse', 'wail', 'phase', 'storm', 'dust', 'smoke', 'ignite', 'boom', 'summon', 'peel', 'fart', 'overclock', 'deadeye', 'vuln', 'killnine'];
+  'curse', 'wail', 'phase', 'storm', 'dust', 'smoke', 'ignite', 'boom', 'summon', 'peel', 'fart', 'overclock', 'deadeye', 'vuln', 'killnine', 'crash', 'gateway'];
 const EFFECTS = ['slow', 'stun', 'shield', 'poison', 'confuse', 'chill', 'fear', 'phase', 'smoke', 'summon', 'stench', 'error', 'vuln', 'doom'];
 // stench(악취 — 원숭이 대장 구린 방귀): 맞은 사람(guardBlocks면 방어한 사람 제외)은 effectTurns턴 동안 회복약을 못 쓰고,
 //   치유사 스킬 회복량 × effectRate(씻어내지 못함). followUp: 이 기술을 쓴 다음 턴엔 반드시 그 기술(바나나 껍질 → 구린 방귀).
@@ -198,6 +198,8 @@ function monsterProblems(m) {
     if (move.followUp !== undefined && !m.moves?.[move.followUp]) problems.push(`moves.${key}.followUp "${move.followUp}"이 moves에 없음`);
     if (move.effect === 'error' && (!named(move.status) || !int(move.effectTurns, 1))) problems.push(`moves.${key}: error는 status.name·emoji, effectTurns(1 이상) 필요`);
     if (move.effect === 'vuln' && (!named(move.status) || !int(move.effectTurns, 1) || !(move.effectRate > 1 && move.effectRate <= 3))) problems.push(`moves.${key}: vuln은 status.name·emoji, effectTurns(1 이상), effectRate(1 초과 3 이하) 필요`);
+    if (move.also !== undefined && !(Array.isArray(move.also) && move.also.every(e => ['error', 'vuln', 'doom'].includes(e.effect) && named(e.status)))) problems.push(`moves.${key}.also는 error/vuln/doom 상태이상 목록(각각 status.name·emoji)`);
+    if (move.stackRate !== undefined && !rate(move.stackRate)) problems.push(`moves.${key}.stackRate는 0~1`);
     if (move.effect === 'doom' && (!named(move.status) || !rate(move.effectRate) || (move.rageRate !== undefined && !rate(move.rageRate)))) problems.push(`moves.${key}: doom은 status.name·emoji, effectRate(0~1), rageRate(0~1) 필요`);
     if (move.effect === 'summon' && (!m.minions || move.target !== 'none')) problems.push(`moves.${key}: summon은 target none 기술에만, minions 블록 필요`);
     if (move.needMinions && !m.minions) problems.push(`moves.${key}: needMinions는 minions 블록 필요`);
@@ -400,6 +402,8 @@ function createBattle(monster, party, rng = Math.random, { minParty = HP_MIN_PAR
       vulnUntil: 0,     // 이 턴까지 취약(받는 피해 증가)
       vulnRate: 1,
       vulnStatus: null,
+      doomStacks: 0,    // 즉사 중첩(연속으로 또 걸린 횟수 — 확률이 stackRate 씩 오름)
+      doomSurvivedTurn: 0, // 즉사 판정을 넘긴 턴(그 턴에 또 걸려야 중첩)
       doomTurn: 0,      // 이 턴에 즉사 판정
       doomRate: 0,
       doomStatus: null,
@@ -439,6 +443,18 @@ function isErrored(battle, m) { return m.hp > 0 && battle.turn <= (m.errorUntil 
 function errorTurnsLeft(battle, m) { return isErrored(battle, m) ? m.errorUntil - battle.turn + 1 : 0; }
 function isVulnerable(battle, m) { return m.hp > 0 && battle.turn <= (m.vulnUntil ?? 0); }
 function vulnTurnsLeft(battle, m) { return isVulnerable(battle, m) ? m.vulnUntil - battle.turn + 1 : 0; }
+// 오류·취약·즉사 한 가지를 t 에게 건다(src 는 기술 또는 also 항목). 걸린 상태 표시 글자를 돌려준다.
+function applyDigital(battle, t, src, last) {
+  if (src.effect === 'error') { t.errorUntil = battle.turn + src.effectTurns; t.errorStatus = src.status; }
+  else if (src.effect === 'vuln') { t.vulnUntil = battle.turn + src.effectTurns; t.vulnRate = src.effectRate; t.vulnStatus = src.status; }
+  else if (src.effect === 'doom') {
+    t.doomStacks = t.doomSurvivedTurn === battle.turn ? (t.doomStacks || 0) + 1 : 0;
+    const baseRate = battle.rage ? (src.rageRate ?? src.effectRate) : src.effectRate;
+    t.doomTurn = battle.turn + 1; t.doomRate = Math.min(0.95, baseRate + (src.stackRate ?? 0) * t.doomStacks); t.doomStatus = src.status;
+  } else return '';
+  last.effects[t.userId] = src.effect;
+  return " " + src.status.emoji + src.status.name;
+}
 function isDoomed(battle, m) { return m.hp > 0 && m.doomTurn === battle.turn; }
 function isStenched(battle, m) { return m.hp > 0 && battle.turn <= (m.stenchUntil ?? 0); }
 function stenchTurnsLeft(battle, m) { return isStenched(battle, m) ? m.stenchUntil - battle.turn + 1 : 0; }
@@ -699,7 +715,7 @@ function resolveTurn(battle, rng = Math.random) {
           if (chill && (t.chillStacks || 0) > 0) { t.chillStacks = 0; cleansed.add(chill.status.name); } // 냉기도 녹인다
           if (isErrored(battle, t)) { t.errorUntil = 0; cleansed.add(t.errorStatus.name); } // 오류·취약·즉사도 씻어낸다
           if (isVulnerable(battle, t)) { t.vulnUntil = 0; cleansed.add(t.vulnStatus.name); }
-          if (isDoomed(battle, t)) { t.doomTurn = 0; cleansed.add(t.doomStatus.name); }
+          if (isDoomed(battle, t)) { t.doomTurn = 0; t.doomStacks = 0; cleansed.add(t.doomStatus.name); }
         }
         m.healing += healed;
         m.support += healed;
@@ -768,7 +784,7 @@ function resolveTurn(battle, rng = Math.random) {
     const dead = rng() < m.doomRate;
     last.effects[m.userId] = dead ? 'doomed' : last.effects[m.userId];
     if (dead) { m.hp = 0; log.push(`${m.doomStatus.emoji} **${m.name}** ${m.doomStatus.name}! 💀`); last.doomedIds = [...(last.doomedIds ?? []), m.userId]; }
-    else log.push(`${m.doomStatus.emoji} **${m.name}** ${m.doomStatus.name} 판정을 넘겼다`);
+    else { log.push(`${m.doomStatus.emoji} **${m.name}** ${m.doomStatus.name} 판정을 넘겼다`); m.doomSurvivedTurn = battle.turn; }
     m.doomTurn = 0;
   }
   if (aliveMembers(battle).length === 0) {
@@ -871,9 +887,8 @@ function resolveTurn(battle, rng = Math.random) {
           last.effects[t.userId] = 'chill';
           tag = ` ${st.emoji}${st.name}×${t.chillStacks}`;
         }
-        if (t.hp > 0 && move.effect === 'error' && !blocked) { t.errorUntil = battle.turn + move.effectTurns; t.errorStatus = move.status; last.effects[t.userId] = 'error'; tag = ` ${move.status.emoji}${move.status.name}`; }
-        if (t.hp > 0 && move.effect === 'doom' && !blocked) { t.doomTurn = battle.turn + 1; t.doomRate = battle.rage ? (move.rageRate ?? move.effectRate) : move.effectRate; t.doomStatus = move.status; last.effects[t.userId] = 'doom'; tag = ` ${move.status.emoji}${move.status.name}`; }
-        if (t.hp > 0 && move.effect === 'vuln' && !blocked) { t.vulnUntil = battle.turn + move.effectTurns; t.vulnRate = move.effectRate; t.vulnStatus = move.status; last.effects[t.userId] = 'vuln'; tag = ` ${move.status.emoji}${move.status.name}`; }
+        if (t.hp > 0 && !blocked && ['error', 'vuln', 'doom'].includes(move.effect)) tag = applyDigital(battle, t, move, last);
+        for (const ex of move.also ?? []) if (t.hp > 0 && !blocked) tag += applyDigital(battle, t, ex, last); // 한 기술이 상태이상을 여럿 거는 경우(블랙월 게이트웨이)
         if (t.hp > 0 && move.effect === 'stench' && !blocked) { t.stenchUntil = battle.turn + move.effectTurns; t.stenchRate = move.effectRate; t.stenchStatus = move.status; last.effects[t.userId] = 'stench'; tag = ` ${move.status.emoji}${move.status.name}`; }
         if (t.hp > 0 && move.effect === 'fear' && !blocked) { t.fearTurn = battle.turn + 1; t.fearStatus = move.status; last.effects[t.userId] = 'fear'; tag = ` ${move.status.emoji}${move.status.name}`; }
         if (t.hp > 0 && move.effect === 'stun' && !t.guarding) { t.stunTurn = battle.turn + 1; t.stunStatus = move.status; last.effects[t.userId] = 'stun'; tag = ` ${move.status.emoji}${move.status.name}`; }

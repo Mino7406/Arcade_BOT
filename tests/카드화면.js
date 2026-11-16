@@ -373,7 +373,11 @@ async function buildScreens() {
       raidBattle.assignMarks(rr.battle);
       return rr;
     };
-    const vshot = async (rr, title, sub) => { const v = await raidMod.battleView(rr); add('레이드', `??? — ${title}`, sub, v, rf(v)); };
+    const vshot = async (rr, title, sub) => {
+      const v = await raidMod.battleView(rr); add('레이드', `??? — ${title}`, sub, v, rf(v));
+      if (process.env.DUMP_VOID) { const f = (v.files || [])[0]; if (f) require('fs').writeFileSync(require('path').join(process.env.DUMP_VOID, `${String(dumpN++).padStart(2, '0')}.png`), f.attachment); }
+    };
+    let dumpN = 1;
     let rr = vb('smash');
     await vshot(rr, '전투 — 필살기 경고', '블랙월 게이트웨이(필살기) 예고 · 빨간 경고 상자');
     rr = vb('deadeye');
@@ -392,6 +396,19 @@ async function buildScreens() {
     rr.battle.members.forEach(mm => choose(rr.battle, mm.userId, 'attack'));
     resolveTurn(rr.battle, () => 0.01); rr.showingResult = false;
     await vshot(rr, '전투 — kill -9 다음 턴(즉사 판정)', '☠️ 판정 배지 · 이번 턴 끝에 확률로 쓰러짐(치유사 스킬·방어로 대처)');
+    // 기술별 결과 화면(글리치 연출) · 상태이상 중첩 표시
+    const result = (intent, pick, rng2, extra) => { const r2 = vb(intent); r2.battle.members.forEach((mm, i) => choose(r2.battle, mm.userId, typeof pick === 'function' ? pick(i) : pick)); if (extra) extra(r2); resolveTurn(r2.battle, rng2); r2.showingResult = true; return r2; };
+    await vshot(result('overclock', 'attack', () => 0.5), '전투 — 오버클록 결과', '몬스터가 잔상을 끌며 번지고 줄마다 박자가 어긋남 · CLK ▲▲ 150%');
+    await vshot(result('deadeye', 'attack', () => 0.5), '전투 — 데드아이 결과', '표적 카드가 모자이크로 초점이 잠기고 계단식 레이저 · 끊긴 조준 고리');
+    await vshot(result('killnine', 'attack', () => 0.5), '전투 — kill -9 결과', '표적 카드가 꺼지는 화면처럼 접힘 + > kill -9 PID · Killed');
+    await vshot(result('smash', i => (i === 0 ? 'guard' : 'attack'), () => 0.5), '전투 — 블랙월 게이트웨이 결과(첫 번째만 방어)', '화면 전체가 세로로 갈라짐 · 방어 안 한 사람은 ⚠️오류+🔓취약+☠️즉사가 1턴씩 한꺼번에');
+    // 서로 다른 상태이상이 한 카드에 겹친 모습(독·냉기·점액·악취 같은 기존 상태까지)
+    const st = vb('attack');
+    const m0s = st.battle.members[0], m1s = st.battle.members[1];
+    for (const mm of [m0s, m1s]) { mm.errorUntil = st.battle.turn + 2; mm.errorStatus = { name: '오류', emoji: '⚠️' }; mm.vulnUntil = st.battle.turn + 2; mm.vulnRate = 1.3; mm.vulnStatus = { name: '취약', emoji: '🔓' }; mm.doomTurn = st.battle.turn; mm.doomRate = 0.5; mm.doomStacks = 2; mm.doomStatus = { name: '즉사', emoji: '☠️' }; }
+    m1s.poisonStacks = 2; m1s.poisonUntil = st.battle.turn + 3; m1s.poisonStatus = { name: '독', emoji: '☠️' };
+    m1s.chillStacks = 2; m1s.stenchUntil = st.battle.turn + 2; m1s.stenchRate = 0.5; m1s.stenchStatus = { name: '악취', emoji: '💨' };
+    await vshot(st, '전투 — 상태이상 중첩 표시', '첫째: 오류·취약·즉사 / 둘째: 거기에 독·냉기·악취까지 — 왼쪽에 세로로 쌓임');
     // 결과와 안내
     const pn = await raidMod.battleView({ ...vb('attack'), showingResult: false });
     const defeatNote = raidMod.buildEndNoticePayload({ kind: 'defeat', xp: 100, stacks: 2, lost: 640, details: ['128명 · 합계 : -12,800 XP'] });

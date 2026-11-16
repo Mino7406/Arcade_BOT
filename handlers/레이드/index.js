@@ -346,7 +346,7 @@ function effectLines(b) {
   const vuln = b.members.filter(mem => isVulnerable(b, mem));
   for (const [label, mems] of byStatus(vuln, 'vulnStatus')) lines.push(`${label}: ${mems.map(mem => `${mem.name}(${vulnTurnsLeft(b, mem)}턴)`).join(', ')} - **받는 피해 +${Math.round(((mems[0].vulnRate ?? 1) - 1) * 100)}%(치유사 스킬로 해제)**`);
   const doomed = b.members.filter(mem => isDoomed(b, mem));
-  for (const [label, mems] of byStatus(doomed, 'doomStatus')) lines.push(`${label}: ${mems.map(mem => mem.name).join(', ')} - **이번 턴 행동이 끝난 뒤 ${Math.round((mems[0].doomRate ?? 0) * 100)}% 확률로 쓰러짐(치유사 스킬로 해제)**`);
+  for (const [label, mems] of byStatus(doomed, 'doomStatus')) lines.push(`${label}: ${mems.map(mem => mem.name).join(', ')} - **이번 턴 행동이 끝난 뒤 ${Math.round((mems[0].doomRate ?? 0) * 100)}% 확률로 쓰러짐${mems[0].doomStacks ? `(중첩 ${mems[0].doomStacks})` : ''}(치유사 스킬로 해제)**`);
   if (isPhased(b)) lines.push(`👻 투명화: ${monsterName} - **이번 턴 일반 공격은 빗나감(스킬은 맞음)**`);
   // 점화(꼬마 폭탄): 불끄기 진행 — 이번 턴 포함 남은 턴
   if (b.fuse) lines.push(`💣 도화선: 남은 불 **${Math.max(0, b.fuse.need - b.fuse.dealt).toLocaleString()} / ${b.fuse.need.toLocaleString()}** · 남은 ${Math.max(1, b.fuse.until - b.turn + 1)}턴 - **피해로 불을 다 끄면 기절, 못 끄면 대폭발**`);
