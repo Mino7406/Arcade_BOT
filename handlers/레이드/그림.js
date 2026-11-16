@@ -993,7 +993,7 @@ function actLabel(act) {
 // (결과 화면엔 리본이 없어 비어 있음)에만 작게 띄운다. 치유의 빛은 회복받은 카드마다, 부활하면 빛기둥.
 const SKILL_SPRITES = {
   slash: { rows: ['....wwwwwwww....', '..wwbb....bbww..', '.wb..........bw.', 'w..............w'], palette: { w: '#ffffff', b: '#9fd8ff' } },
-  arrow: { rows: ['b..........w....', '.bbbbbbbbbbwwww.', 'b..........w....'], palette: { w: '#ffffff', b: '#c8a070' } },
+  shot: { rows: ['........wwww....', '.y..wwwwwwwwwww.', 'yyy.............', '.y..wwwwwwwwwww.', '........wwww....'], palette: { w: '#ffffff', y: '#ffd23f' } }, // 발사: 왼쪽 섬광 + 오른쪽으로 뻗는 속도선
   shield: { rows: ['.aaaaaaa.', 'abbbbbbba', 'abwbbbbba', 'abwbbbbba', 'abbbbbbba', '.abbbbba.', '..abbba..', '...aba...', '....a....'], palette: { a: '#1c2a38', b: '#5a9be0', w: '#ffffff' } },
   cross: { rows: ['..g..', '.ggg.', 'ggwgg', '.ggg.', '..g..'], palette: { g: '#5fe08a', w: '#ffffff' } },
   spark: { rows: ['.y.', 'yyy', '.y.'], palette: { y: '#ffd23f' } },
@@ -1005,12 +1005,13 @@ function cardSkillFx(b, last, mem, x, y, w) {
   const act = last.acts?.[mem.userId];
   if (act?.skill && mem.role === 'sword') drawPixels(SKILL_SPRITES.slash, cx, top, 4);
   if (act?.skill && mem.role === 'archer') {
-    drawPixels(SKILL_SPRITES.arrow, cx - 6, top, 4);
-    if (act.crit) drawPixels(SKILL_SPRITES.spark, cx + 42, top, 4);
+    drawPixels(SKILL_SPRITES.shot, cx, top, 4); // 검사 반달 베기처럼 가운데 하나: 발사 섬광 + 속도선(화살 대신 '쏜 느낌' — 사용자 요청)
+    if (act.crit) drawPixels(SKILL_SPRITES.spark, cx + 40, top, 4);
   }
   if (act?.skill && mem.role === 'tank') {
-    drawPixels(SKILL_SPRITES.shield, cx, top, 2.4);
-    if (last.reflect?.userId === mem.userId) for (const dx of [-24, 24]) drawPixels(SKILL_SPRITES.pip, cx + dx, top, 3.4);
+    // 치유사 십자처럼 양옆에 작은 방패 둘, 반격한 턴엔 노랗게
+    const gold = last.reflect?.userId === mem.userId ? { colors: { a: '#5a3a08', b: '#ffd23f' } } : {};
+    for (const dx of [-30, 30]) drawPixels(SKILL_SPRITES.shield, cx + dx, top, 2.2, gold);
   }
   const healer = b.members.find(m => m.role === 'healer' && last.acts?.[m.userId]?.skill);
   if (healer && last.healed?.includes(mem.userId)) {
