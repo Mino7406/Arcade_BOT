@@ -580,12 +580,12 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await roulette.handleRouletteButton(mkInteraction({ user: 'u2', customId: `roulette:cancel:${s2.id}`, message: s2._reply }));
   });
 
-  await flow('룰렛: 블랙월 게이트웨이를 발동하고 돌리면 100% 잭팟 · 아이템 1개 소모 · 취소하면 소모 안 함', async () => {
+  await flow('룰렛: 블랙월 게이트웨이를 사용하고 돌리면 100% 잭팟 · 아이템 1개 소모 · 취소하면 소모 안 함', async () => {
     const gw = require(path.join(root, 'handlers/게임/블랙월게이트웨이.js'));
     lv.applyXp('g1', 'gwuser', 800, 'test');
     gw.grantGateway('g1', 'gwuser'); gw.grantGateway('g1', 'gwuser');
     channel.sent.length = 0;
-    // 발동 버튼이 로비에 떠야 하고, 켜고 끌 수 있다
+    // 사용 버튼이 로비에 떠야 하고, 켜고 끌 수 있다
     const s = mkInteraction({ user: 'gwuser', command: '룰렛' });
     await roulette.startRouletteCommand(s);
     const lobbyId = s.id;
@@ -595,7 +595,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await roulette.handleRouletteButton(gate);
     await roulette.handleRouletteButton(mkInteraction({ user: 'gwuser', customId: `roulette:spin:${lobbyId}`, message: s._reply }));
     const shown = channel.sent.map(m => JSON.stringify(m.components || [])).join(' ');
-    assert(shown.includes('JACKPOT') && shown.includes('블랙월 게이트웨이 발동'), '게이트웨이를 발동하고 돌리면 결과가 JACKPOT + 발동 표시');
+    assert(shown.includes('JACKPOT') && shown.includes('블랙월 게이트웨이 사용'), '게이트웨이를 사용하고 돌리면 결과가 JACKPOT + 발동 표시');
     const left = gw.getGateways('g1', 'gwuser');
     assert(left === 1 || left === Infinity, '아이템은 돌릴 때 1개만 소모됨(남은 ' + left + '개)');
   });

@@ -175,7 +175,7 @@ function buildLobbyCard(lobby) {
     header: '🎰 룰렛머신',
     sub: ['하루 1회', lobby.hackTools > 0 ? `${hackToolEmoji()} ${HACK_TOOL_NAME} ${hackHaveText(lobby.hackTools)}` : null, lobby.gateways > 0 ? `${gatewayEmoji()} ${GATEWAY_NAME} ${gatewayHaveText(lobby.gateways)}` : null].filter(Boolean),
     blocks: [
-      `<@${lobby.userId}>님, 베팅 XP를 고른 뒤 **🎰 돌리기**를 누르세요.${lobby.gateways > 0 ? `\n-# ${gatewayEmoji()} ${GATEWAY_NAME}를 발동하면 이번 판은 **100% 잭팟**이에요(돌리면 1개 소모)` : ''}`,
+      `<@${lobby.userId}>님, 베팅 XP를 고른 뒤 **🎰 돌리기**를 누르세요.${lobby.gateways > 0 ? `\n-# ${gatewayEmoji()} ${GATEWAY_NAME}를 사용하면 이번 판은 **100% 잭팟**이에요(돌리면 1개 소모)` : ''}`,
       { image: SLOT_URL },
       { text: betText, ...(withoutCancel.button ? { button: withoutCancel.button } : {}) },
       payoutTable(),
@@ -199,7 +199,7 @@ function buildSpinningPayload(lobby, bet, reels, phase = 0, hacks = 0, wall = fa
   if (wall) return payload(card({
     color: WALL_COLOR,
     header: `${gatewayEmoji()} 룰렛머신`,
-    sub: [`<@${lobby.userId}>`, `${gatewayEmoji()} ${GATEWAY_NAME} 발동`],
+    sub: [`<@${lobby.userId}>`, `${gatewayEmoji()} ${GATEWAY_NAME} 사용`],
     blocks: [{ image: SLOT_URL, divider: true }],
     footer: `${gatewayEmoji()} 블랙월 너머에서 결과를 가져오는 중...`,
   }), { files: [slotFile(png)] });
@@ -219,7 +219,7 @@ function buildWallErosionPayload(lobby, bet, step) {
   return payload(card({
     color: WALL_COLOR,
     header: `${gatewayEmoji()} 룰렛머신`,
-    sub: [`<@${lobby.userId}>`, `${gatewayEmoji()} ${GATEWAY_NAME} 발동`],
+    sub: [`<@${lobby.userId}>`, `${gatewayEmoji()} ${GATEWAY_NAME} 사용`],
     blocks: [{ image: SLOT_URL, divider: true }],
     footer: `${gatewayEmoji()} 블랙월이 룰렛을 잠식하는 중... ${'▓'.repeat(step + 1)}${'░'.repeat(Math.max(0, 3 - step))}`,
   }), { files: [slotFile(png)] });
@@ -254,7 +254,7 @@ function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multi
   return payload(card({
     color: gateway ? WALL_COLOR : hacks > 0 ? HACK_COLOR : win ? 0xFFD700 : COLORS.muted,
     header: gateway ? `${gatewayEmoji()} 룰렛머신` : hacks > 0 ? `${hackToolEmoji()} 룰렛머신` : '🎰 룰렛머신',
-    sub: [`<@${lobby.userId}>`, hacks > 0 || gateway ? null : '결과', hackLabel(hacks), gateway ? `${gatewayEmoji()} ${GATEWAY_NAME} 발동` : null].filter(Boolean),
+    sub: [`<@${lobby.userId}>`, hacks > 0 || gateway ? null : '결과', hackLabel(hacks), gateway ? `${gatewayEmoji()} ${GATEWAY_NAME} 사용` : null].filter(Boolean),
     blocks: [
       { image: SLOT_URL, divider: true }, // 제목·결과 줄 아래 구분선
       `### ${resultLine}　${netLine}`, // 결과와 손익을 한 줄에
@@ -297,8 +297,8 @@ function buildControlRow(lobby) {
   // 블랙월 게이트웨이를 갖고 있으면 '발동' 버튼(누르면 켜고 끔). 켜 두고 돌리면 이번 판이 100% 잭팟.
   const gate = lobby.gateways > 0
     ? [new ButtonBuilder().setCustomId(`roulette:gate:${lobby.id}`).setEmoji(gatewayButtonEmoji())
-        .setLabel(lobby.gatewayArmed ? '발동됨 · 이번 판 100% 잭팟 (다시 누르면 취소)' : `${GATEWAY_NAME} 발동`)
-        .setStyle(lobby.gatewayArmed ? ButtonStyle.Success : ButtonStyle.Secondary)]
+        .setLabel(lobby.gatewayArmed ? '사용됨 · 이번 판 100% 잭팟 (다시 누르면 취소)' : `${GATEWAY_NAME} 사용`)
+        .setStyle(lobby.gatewayArmed ? ButtonStyle.Success : ButtonStyle.Danger)]
     : [];
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -422,7 +422,7 @@ async function spinLobby(interaction, lobby, lobbies) {
   // 블랙월 게이트웨이를 발동해 뒀으면 아이템 1개를 쓰고 이번 판을 잭팟(7️⃣ 트리플)으로 확정한다. 테스트 서버는 무제한(개수 안 줄음).
   const useGate = lobby.gatewayArmed && (hackUnlimited(lobby.guildId) || useGateway(lobby.guildId, lobby.userId));
   const spin = useGate ? jackpotSpin(bet) : rollSpin(bet);
-  if (useGate) logSystem({ 유형: '룰렛', 유저: userLabel(lobby.userId), 내용: `${GATEWAY_NAME} 발동 — 잭팟 확정(베팅 ${bet}, x${spin.multiplier})` });
+  if (useGate) logSystem({ 유형: '룰렛', 유저: userLabel(lobby.userId), 내용: `${GATEWAY_NAME} 사용 — 잭팟 확정(베팅 ${bet}, x${spin.multiplier})` });
   const net = spin.payout - bet;
 
   // 테스트 서버는 XP 시스템이 꺼져 있으므로 정산하지 않고 연출만 보여 준다.
