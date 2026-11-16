@@ -19,8 +19,8 @@ const ROULETTE_PATH = path.join(__dirname, '..', '..', 'DB', 'roulette.json');
 fs.mkdirSync(path.dirname(ROULETTE_PATH), { recursive: true });
 
 const MIN_BET = 10;
-const MAX_BET = 300;
-const BET_PRESETS = [10, 50, 100, 200, 300];
+const MAX_BET = 1000; // 300에서 상향(유저 평균 레벨이 올라 한 레벨에 필요한 XP가 커짐 — 중앙값 820·상위 25% 2,180)
+const BET_PRESETS = [10, 100, 300, 500, 1000]; // 한 줄 버튼 최대 5개
 const LOBBY_TIMEOUT_MS = 60 * 1000;
 const WALL_COLOR = 0xB81C2A; // 블랙월 게이트웨이를 발동한 룰렛 카드 띠 색(붉은)
 const WALL_FOOTER = '⏰ 블랙월 ▓▒░ [ACCESS_GRANTED] 잭팟 확정';

@@ -516,7 +516,7 @@ function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = 
   const base = hacked && !wall ? getHackBg() : getBg();
   base.copy(p.buf);
   const f = getFont();
-  if (hacked && !wall) drawHackDecor(p, phase); else drawBulbs(p, phase);
+  if (wall) drawWallBg(p); else if (hacked) drawHackDecor(p, phase); else drawBulbs(p, phase);
 
   for (let i = 0; i < 3; i++) {
     const x = WIN_X[i];
@@ -551,12 +551,12 @@ function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = 
   }
 
   if (hacked && !wall) applyGlitch(p, phase);
-  if (wall) { wallPlate(p, phase); tintBlackwall(p, phase + 3); }
+  if (wall) { wallPlate(p, phase, 0); wallOverlay(p, phase + 3); }
   return p.png();
 }
 
 // 블랙월 게이트웨이 룰렛의 위 판: 'ARCADE ROULETTE' 대신 깨진 'BLACKWALL GATEWAY'
-function wallPlate(p, seed = 0, level = 2) {
+function wallPlate(p, seed = 0, level = 0) {
   const f = getFont();
   p.roundRect(53, TOP_PLATE_Y + 3, 494, PLATE_H - 6, 10, '#0a0204');
   drawBrokenPlate(p, f, TOP_PLATE_Y, [{ text: 'BLACKWALL GATEWAY', x: 300, align: 'center', size: 19, color: '#ff3a4a' }], level, 31 + seed * 7);
@@ -571,19 +571,50 @@ function drawWallEye(p, cx, cy, r) {
 }
 // 블랙월 게이트웨이 침입 연출: 평범한 기계 위로 붉은 외눈이 단계마다 커지고, 위 판은 점점 깨지며, 아래 판엔 터미널 문구.
 function renderWallIntro(p, f, step, bet) {
-  getBg().copy(p.buf);
-  drawBulbs(p, step);
-  wallPlate(p, step, step + 1);
+  drawWallBg(p);
+  wallPlate(p, step, step);
   p.roundRect(53, BOTTOM_PLATE_Y + 3, 494, PLATE_H - 6, 10, '#0a0204');
   const lines = ['> OPEN GATEWAY ...', '> BREACH 63% ▓▓▓░░', '> ACCESS: JACKPOT'];
   drawBrokenPlate(p, f, BOTTOM_PLATE_Y, [{ text: lines[Math.max(0, Math.min(2, step))], x: 300, align: 'center', size: 20, color: '#ff6a78' }], step, 97 + step * 11);
   drawWallEye(p, 300, WIN_CY, 34 + step * 22);
-  applyGlitch(p, 11 + step * 5, 0.35);
-  tintBlackwall(p, 40 + step);
+  wallOverlay(p, 40 + step);
   return p.png();
 }
 
-// ── 블랙월 물들이기(블랙월 게이트웨이를 발동한 룰렛) ──────────────────────
+// ── 블랙월 룰렛 바탕·오염(??? 화면과 같은 느낌) ──
+// 바탕: 새까만 공허 + 얇은 붉은 테두리 + 어두운 릴 창(심볼은 원래 색 그대로). 판 글자 자리는 검은 판 + 붉은 테두리.
+function drawWallBg(p) {
+  p.clear('#0d0406');
+  p.strokeRoundRect(4, 4, W - 8, H - 8, 16, 2.5, '#9a1c28');
+  p.strokeRoundRect(12, 12, W - 24, H - 24, 12, 1, '#4a0f16');
+  for (const y of [TOP_PLATE_Y, BOTTOM_PLATE_Y]) {
+    p.roundRect(50, y, 500, PLATE_H, 8, '#080203');
+    p.strokeRoundRect(50, y, 500, PLATE_H, 8, 1.5, '#8a1424');
+  }
+  for (let i = 0; i < 3; i++) {
+    p.roundRect(WIN_X[i], WIN_Y, WIN_W, WIN_H, 10, '#1a0a0d');
+    p.strokeRoundRect(WIN_X[i], WIN_Y, WIN_W, WIN_H, 10, 1.5, '#ff3a4a');
+  }
+}
+// 오염: 네 모서리 블록(붉은·어두운·빠진 칸·회로 막대) + 테두리를 따라 흐르는 붉은 줄기 + 드문 붉은 점. seed 로 모양이 정해진다.
+function wallOverlay(p, seed = 0) {
+  let st = (seed * 2654435761 + 12345) >>> 0;
+  const rnd = () => ((st = (st * 1103515245 + 12345) >>> 0) / 4294967296);
+  for (const [cx, cy, sx, sy] of [[0, 0, 1, 1], [W, 0, -1, 1], [0, H, 1, -1], [W, H, -1, -1]]) {
+    for (let by = 0; by < 56; by += 6) for (let bx = 0; bx < 70; bx += 6) {
+      const d = Math.hypot(bx / 70, by / 56);
+      if (d > 1 || rnd() > (1 - d) ** 1.2) continue;
+      const x = sx > 0 ? cx + bx : cx - bx - 6, y = sy > 0 ? cy + by : cy - by - 6, r = rnd();
+      if (r < 0.5) p.rect(x, y, 6, 6, ['#96101e', '#5a0812', '#dc2234'][Math.floor(rnd() * 3)]);
+      else if (r < 0.7) p.rect(x, y, 6, 6, '#060204');
+      else if (r < 0.85) p.rect(x, y + 2, 6 * (1 + Math.floor(rnd() * 3)), 2, '#ff3c4c');
+    }
+    for (let i = 0; i < 3; i++) { const x = sx > 0 ? cx + 8 + rnd() * 30 : cx - 8 - rnd() * 30, len = 26 + rnd() * 46; p.rect(x, sy > 0 ? cy : cy - len, 1.5, len, '#ff2e40'); }
+  }
+  for (let i = 0; i < 14; i++) p.rect(rnd() * (W - 2), rnd() * (H - 2), 2, 2, rnd() < 0.5 ? '#c81e2d' : '#781420');
+}
+
+// ── 블랙월 물들이기(예전 방식 — 지금은 쓰지 않음) ──────────────────────
 // 해킹된 기계 그림을 검정+붉은 단색으로 바꾸고, 주사선·붉은 세로 데이터 줄기·모서리 블록·가로 띠 어긋남을 얹는다. seed 로 모양이 정해진다(같은 장면은 같은 모양).
 function tintBlackwall(p, seed = 0) {
   const b = p.buf;
