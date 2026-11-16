@@ -384,7 +384,7 @@ setCloseHook('내전', async (matchMsgId, match) => {
 // ── 권한 ────────────────────────────────────────────────────
 
 function canEdit(match, userId) {
-  return match.data.organizer.id === userId || ADMIN_IDS.includes(userId) || match.participants.some(u => u.id === userId);
+  return match.data.organizer.id === userId || ADMIN_IDS.includes(userId); // 팀 입력·밸런스·랜덤·불러오기는 주최자·관리자만
 }
 
 async function getEditableMatch(interaction, matchMsgId) {
@@ -394,7 +394,7 @@ async function getEditableMatch(interaction, matchMsgId) {
     return null;
   }
   if (!canEdit(match, interaction.user.id)) {
-    await interaction.reply(notice('❌ **이 내전의 참가자·주최자만 팀을 바꿀 수 있어요.**', { ephemeral: true }));
+    await interaction.reply(notice('❌ **팀은 이 내전의 주최자·관리자만 바꿀 수 있어요.**', { ephemeral: true }));
     return null;
   }
   return match;

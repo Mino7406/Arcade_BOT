@@ -182,16 +182,16 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await team.handleTeamButton(mkInteraction({ user: 'u7', customId: 'team:tier_save:lol:challenger:panel', message: panelTier.message }));
     assert(require(path.join(root, 'handlers/매치/티어.js')).getTier('u7', 'lol')?.tier === 'challenger', '패널에서 고른 티어가 저장되지 않음');
 
-    const input = mkInteraction({ user: 'u2', customId: `team:input:${id}` });
+    const input = mkInteraction({ user: ADMIN, customId: `team:input:${id}` });
     await team.handleTeamButton(input);
     assert(input.modalShown, '팀 입력 창이 안 뜸');
-    const outsider = mkInteraction({ user: 'u9', customId: `team:input:${id}` });
+    const outsider = mkInteraction({ user: 'u2', customId: `team:input:${id}` });
     await team.handleTeamButton(outsider);
-    assert(!outsider.modalShown, '참가자가 아닌데 입력 창이 뜸');
+    assert(!outsider.modalShown, '주최자·관리자가 아닌 참가자인데 입력 창이 뜸');
 
     const first = boardMsg();
     // 이름u1 = 참가자 u1 의 표시 이름. 티어를 같이 적으면 저장된다.
-    await team.handleTeamModal(mkInteraction({ user: 'u2', customId: `team:modal:${id}`, fields: { teams: ['이름u1 다2-이름u2 골1', '이름u3-이름u4 마스터'].join(String.fromCharCode(10)) } }));
+    await team.handleTeamModal(mkInteraction({ user: ADMIN, customId: `team:modal:${id}`, fields: { teams: ['이름u1 다2-이름u2 골1', '이름u3-이름u4 마스터'].join(String.fromCharCode(10)) } }));
     assert(match.board.current?.teams?.length === 2, '입력한 팀이 저장되지 않음');
     assert(first.deleted && boardMsg() !== first, '카드가 맨 아래로 다시 올라오지 않음');
     assert(JSON.stringify(boardMsg().components).includes('팀 현황'), '카드에 팀 현황 표시가 없음');
@@ -205,7 +205,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:random:${id}` }));
     assert(match.board.history.length === 2, '랜덤 후 이전 팀표가 안 쌓임');
 
-    const bad = mkInteraction({ user: 'u2', customId: `team:modal:${id}`, fields: { teams: '혼자' } });
+    const bad = mkInteraction({ user: ADMIN, customId: `team:modal:${id}`, fields: { teams: '혼자' } });
     await team.handleTeamModal(bad);
     assert(match.board.history.length === 2, '잘못된 입력인데 팀이 바뀜');
 
@@ -240,7 +240,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await new Promise(r => setTimeout(r, 20));
     assert(channel.sent.length === before, '다시 마감됐는데 카드를 또 올림');
 
-    const sel = mkInteraction({ user: 'u3', customId: `team:open:${id}` });
+    const sel = mkInteraction({ user: ADMIN, customId: `team:open:${id}` });
     await team.handleTeamButton(sel);
     assert(boardMsg() && !boardMsg().deleted, '📌 팀 불러오기로 카드를 다시 못 올림');
     common.clearNotifyTimer?.(match);
