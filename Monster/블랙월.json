@@ -37,7 +37,8 @@
   },
   "ui": {
     "moveBanner": "terminal",
-    "resultMs": 5500
+    "resultMs": 5500,
+    "noShake": true
   },
   "sprite": {
     "rows": [
@@ -82,7 +83,36 @@
       "r": "#ff2a3c",
       "h": "#ffc4c8"
     },
-    "poses": {},
+    "poses": {
+      "ready": [
+        ".............qqqqq.q..........",
+        ".......q..qqqqddddq.qq........",
+        ".......qq..dddddddddq.q.......",
+        "......qqqddkkkhkkkkkddd.qq....",
+        "....q.qqdqqqqqrkkrqqqqqqd.....",
+        "...q.qddkkkkkkrkkkkkkkkdd.qq..",
+        "......dkrkkkqqrkkkkkkkkkddq...",
+        "...q.dkkkkkkkkkkkkkkkkkkkdq...",
+        ".....dkrkkkkkrhrrrkkkrkkkdqqq.",
+        ".q.qqkkkkkrrrrrrrrrrrkkkkkdqq.",
+        "..qqdkrkrrhrrkkkrrhhhrrkqqdq..",
+        ".qq.dkkkrhhrrkkkrrhhhhrkkkddq.",
+        "hrrrrkqrhhhrrkkkrrhhhhrrrrrrh.",
+        ".qqqdkkkrhhrrkkkrrhhhhrkkkddq.",
+        "...ddkrkrrhrrkkkrrhhhrrkqqd.qq",
+        "....dkkkkkrrrrrrrrrrrkkkkkddq.",
+        "....ddkrkkkkkrhrrrkkkrkkkdd...",
+        "..qq.qkkkkkkkkkkkkkkkkkkkdqqq.",
+        ".....ddkkkkkkqrqkkkkkqqkdd.q..",
+        "...q.dddkkkkkkrkkkkkkkkd.dq...",
+        ".....q.dqqkqkqrqqqkqqkdqqq....",
+        "......qq.ddkkkhkkkkkddd.qq....",
+        ".........qqqdqdqqqdqq.q.......",
+        "........qq..qqdqdqqq..q.......",
+        ".........q...q.....q..........",
+        "..............q..q............"
+]
+    },
     "scale": 1.3,
     "rageColors": {
       "r": "#ff6a2a",
@@ -180,6 +210,7 @@
           "status": { "name": "즉사", "emoji": "☠️" }
         }
       ],
+      "readyPose": "ready",
       "fx": "gateway"
     }
   },

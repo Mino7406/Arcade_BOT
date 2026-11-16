@@ -1229,19 +1229,17 @@ function skillGlitch(ctx, seed) {
       splitRgb(px(t.x), px(t.y), px(t.x + t.w), px(t.y + t.h), 3);
     }
   } else if (ctx.fx === 'gateway') {
-    // 블랙월 게이트웨이: 몬스터 영역이 세로 조각으로 갈라져 위아래로 어긋나고, 새까만 공허 사각형이 뚫린다. 파티 줄은 색만 어긋나고 HP 줄·글자 줄은 그대로 읽힌다.
-    const ay0 = px(112), ay1 = px(CARD_Y - 8), full = grab(0, ay0, w, ay1);
+    // 블랙월 게이트웨이: 화면 전체가 세로 조각으로 갈라져 위아래로 어긋나고, 새까만 공허 사각형이 뚫리며 붉은 선이 간다
+    const full = grab(0, 0, w, h);
     let x = 0; while (x < w) {
-      const cw = ri(px(24), px(80)), dy = ri(-px(14), px(14));
-      if (rnd() < 0.6) for (let i = x; i < Math.min(w, x + cw); i++) for (let y = ay0; y < ay1; y++) { const sy = y - ay0 - dy; const d = (y * w + i) * 3; if (sy < 0 || sy >= full.rows.length) { buf[d] = 6; buf[d + 1] = 2; buf[d + 2] = 5; continue; } const sr = full.rows[sy]; buf[d] = sr[i * 3]; buf[d + 1] = sr[i * 3 + 1]; buf[d + 2] = sr[i * 3 + 2]; }
+      const cw = ri(px(20), px(70)), dy = ri(-px(26), px(26));
+      if (rnd() < 0.75) for (let i = x; i < Math.min(w, x + cw); i++) for (let y = 0; y < h; y++) { const sy = y - dy; const d = (y * w + i) * 3; if (sy < 0 || sy >= h) { buf[d] = 6; buf[d + 1] = 2; buf[d + 2] = 5; continue; } const s = full.rows[sy]; buf[d] = s[i * 3]; buf[d + 1] = s[i * 3 + 1]; buf[d + 2] = s[i * 3 + 2]; }
       x += cw;
     }
-    splitRgb(0, ay0, w, ay1, 5);
-    bandRows(0, ay0, w, ay1, 4, 6, 40);
-    for (let i = 0; i < 3; i++) { const vw = ri(px(60), px(150)), vh = ri(px(14), px(34)), vx = ri(px(20), w - vw - px(20)), vy = ri(ay0 + px(8), ay1 - vh - px(36)); fill(vx, vy, vx + vw, vy + vh, [3, 1, 3]); fill(vx, vy, vx + vw, vy + 2, [255, 58, 74]); staticNoise(vx, vy, vx + vw, vy + vh, 0.05); }
-    // 파티 줄: 카드 테두리 쪽에만 살짝 찢김 + 색 어긋남(이름·체력 줄은 피함)
-    for (const [a0, a1] of [[CARD_Y + 4, CARD_Y + 44], [CARD_Y + 200, CARD_Y + CARD_H - 4]]) { bandRows(0, px(a0), w, px(a1), 2, 4, 26); }
-    splitRgb(0, px(CARD_Y), w, px(CARD_Y + CARD_H), 3);
+    splitRgb(0, 0, w, h, 6);
+    bandRows(0, 0, w, h, 8, 8, 60);
+    for (let i = 0; i < 5; i++) { const vw = ri(px(70), px(220)), vh = ri(px(24), px(80)), vx = ri(0, w - vw), vy = ri(px(110), h - vh - px(10)); fill(vx, vy, vx + vw, vy + vh, [3, 1, 3]); fill(vx, vy, vx + vw, vy + 2, [255, 58, 74]); fill(vx, vy + vh - 2, vx + vw, vy + vh, [150, 16, 30]); staticNoise(vx, vy, vx + vw, vy + vh, 0.05); }
+    gtxt('▓ BLACKWALL GATEWAY ▓', ctx.mx, ctx.my + 138, 26, '#ff6a78');
   }
   // 아이콘 칸 되돌리기
   ICON_KEEP.forEach(([x, y, kw, kh], i) => saved[i].forEach((row, k) => row.copy(buf, ((y + k) * w + x) * 3)));
@@ -1424,7 +1422,7 @@ function renderBattle(r) {
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'back', sporeColor, accentColor);
     // 투명화(유령): 다음 턴 동안 몸을 흐리게(회색)
     drawMonster(m, W / 2, monsterY, 112, { rage: b.rage, pose, outline: shielded ? '#cfe8ff' : null, gray: isPhased(b) });
-    if (shaking) shakeFx(m, W / 2, monsterY, 112, pose);
+    if (shaking && !m.ui?.noShake) shakeFx(m, W / 2, monsterY, 112, pose); // ui.noShake 몬스터(???)는 떨림 대신 준비 자세(readyPose)만
     // 점화 카운트다운 중엔 어떤 자세·기술이든 도화선 끝에 불꽃 + 열기(sprite.fuseTip = [칸, 줄])
     if (b.fuse && m.sprite?.fuseTip) {
       const rowsNow = (pose && m.sprite.poses?.[pose]) || m.sprite.rows;
