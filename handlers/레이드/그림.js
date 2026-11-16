@@ -1431,7 +1431,7 @@ function renderBattle(r) {
       flame(tx + 1, ty - 4, 0.75, [['#4a1206', 1.25], ['#ff6a2c', 1], ['#ffe066', 0.6], ['#ffffff', 0.25]]);
       for (const [dx, dy] of [[-11, -10], [12, -14], [14, 4], [-10, 6]]) dot(tx + dx, ty + dy, 3, '#ffe066');
     }
-    if (b.rage) rageFx(m, W / 2, monsterY, 112, pose, 'mark');
+    if (b.rage && !m.ui?.noRageMark) rageFx(m, W / 2, monsterY, 112, pose, 'mark'); // ui.noRageMark 몬스터(???)는 붉은 핏줄 분노 마크를 그리지 않는다
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'front', sporeColor, accentColor);
     const minionsShown = drawMinions(b, last, r.showingResult);
     // 몬스터 오른쪽: 이번 턴 받은 피해(빨강) · 재생 회복량(초록, 피해 아래). 결과 화면에서만.

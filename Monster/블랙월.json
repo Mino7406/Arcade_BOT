@@ -38,7 +38,8 @@
   "ui": {
     "moveBanner": "terminal",
     "resultMs": 5500,
-    "noShake": true
+    "noShake": true,
+    "noRageMark": true
   },
   "sprite": {
     "rows": [

@@ -411,6 +411,9 @@ async function buildScreens() {
     rr.battle.members.forEach(mm => choose(rr.battle, mm.userId, 'attack'));
     resolveTurn(rr.battle, () => 0.01); rr.showingResult = false;
     await vshot(rr, '전투 — kill -9 다음 턴(즉사 판정)', '☠️ 판정 배지 · 이번 턴 끝에 확률로 쓰러짐(치유사 스킬·방어로 대처)');
+    // 분노(체력 40% 이하): 붉은 핏줄 분노 마크는 그리지 않음
+    rr = vb('attack'); rr.battle.hp = Math.round(rr.battle.maxHp * 0.3); rr.battle.rage = true;
+    await vshot(rr, '전투 — 분노', '체력이 줄어 분노: 바닥 불빛·몸 테두리만, 오른쪽 위 붉은 핏줄 마크는 없음');
     // 기술별 결과 화면(글리치 연출) · 상태이상 중첩 표시
     const result = (intent, pick, rng2, extra) => { const r2 = vb(intent); r2.battle.members.forEach((mm, i) => choose(r2.battle, mm.userId, typeof pick === 'function' ? pick(i) : pick)); if (extra) extra(r2); resolveTurn(r2.battle, rng2); r2.showingResult = true; return r2; };
     await vshot(result('overclock', 'attack', () => 0.5), '전투 — 오버클록 결과', '몬스터가 잔상을 끌며 번지고 줄마다 박자가 어긋남 · CLK ▲▲ 150%');
