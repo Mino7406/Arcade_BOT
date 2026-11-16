@@ -280,16 +280,9 @@ const STATUS_ICONS = {
     palette: { d: '#2a1410', w: '#ffffff', s: '#b9c6d6', y: '#f0b84a', b: '#8b5a2b', g: '#7ccf5a' },
   },
 };
-// 냄새 줄: 위로 구불구불 올라가는 초록 선 세 개(구린 방귀·악취 배지)
-function stinkLines(cx, cy, s = 1, color = '#9acd4a') {
-  for (const dx of [-8, 0, 8]) {
-    const pts = [0, 1, 2, 3, 4].map(i => [cx + dx * s + (i % 2 ? 3 : -3) * s, cy + 12 * s - i * 6 * s]);
-    for (let i = 0; i < 4; i++) p.line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], 2.5 * s, color);
-  }
-}
-// 악취 기운(카드 아이콘 위): 구불구불 피어오르는 갈색 냄새 줄기 + 맴도는 파리 두 마리
+// 악취 기운(카드 아이콘 위): 작은 방귀 구름 + 맴도는 파리 두 마리(냄새 줄은 X자처럼 보여 뺌 — 사용자 요청)
 function stenchAura(cx, cy) {
-  for (const dx of [-26, 26]) stinkLines(cx + dx, cy - 22, 0.9, '#a07a48');
+  drawPixels(FART_CLOUD, cx + 30, cy + 22, 3);
   for (const [fx, fy] of [[-34, -40], [36, -8]]) {
     p.rect(fx + cx - 2, fy + cy - 2, 5, 5, '#1a120a');
     p.rect(fx + cx - 5, fy + cy - 6, 4, 3, '#d8e4ee');
@@ -298,9 +291,7 @@ function stenchAura(cx, cy) {
 }
 // 악취: 갈색 냄새 구름 배지 + 냄새 줄 + 남은 턴
 function stenchBadge(cx, cy, turns) {
-  haze(cx, cy + 2, 12, '#6b4a24', 0.95);
-  haze(cx - 4, cy - 2, 7, '#a07a48', 0.95);
-  stinkLines(cx, cy - 14, 0.6, '#c49a62');
+  drawPixels(STENCH_ICON, cx, cy - 4, 2.4);
   text(`${turns}턴`, cx, cy + 24, 15, '#e0c49a');
 }
 // 카드 왼쪽 위 상태 아이콘: 기절(별). 점액는 아이콘 없이 점액 얼룩으로 표시한다.
@@ -531,17 +522,22 @@ function haze(x, y, r, color, alpha) { p.roundRect(x - r, y - r, r * 2, r * 2, r
 function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
   if (!move) return;
   if (move === 'fart' && layer === 'front') {
-    // 구린 방귀: 뒤돌아선 엉덩이 아래에서 파티 쪽(아래)으로 부채꼴로 넓게 퍼지는 가스 — 멀수록 크고 옅은 구름 + 냄새 줄
-    for (let k = 0; k < 9; k++) {
-      const ang = ((22 + k * 17) * Math.PI) / 180; // 22°~158°: 아래쪽 부채꼴
-      for (let i = 1; i <= 5; i++) {
-        const d = 26 + i * 44;
-        const x = cx + Math.cos(ang) * d * 1.25, y = cy + 44 + Math.sin(ang) * d * 0.5;
-        haze(x, y, 6 + i * 3.5, '#b6e06a', 0.3 - i * 0.03);
-        if (i % 2) dot(x + 4, y - 3, 4, '#e2f7b0');
-      }
+    // 구린 방귀: 뒤돌아선 엉덩이에서 뿜어진 커다란 가스 덩어리 하나가 파티 쪽(아래·양옆)으로 뭉게뭉게 부풀어 퍼진다.
+    // 겹친 원들의 합집합을 8px 도트로 칠하고(외곽선·그늘·밝은 면), 엉덩이 쪽엔 '뿌웅' 충격선.
+    const G2 = 8;
+    const puffs = [[0, 52, 44], [-78, 74, 40], [78, 74, 40], [-160, 96, 38], [160, 96, 38], [-240, 112, 32], [240, 112, 32],
+      [-36, 106, 40], [36, 106, 40], [-118, 122, 34], [118, 122, 34], [-300, 126, 22], [300, 126, 22]];
+    const inside = (x, y) => puffs.some(([dx, dy, r]) => (x - (cx + dx)) ** 2 + (y - (cy + dy)) ** 2 <= r * r);
+    const nearTop = (x, y) => puffs.some(([dx, dy, r]) => { const ux = x - (cx + dx), uy = y - (cy + dy); return ux * ux + uy * uy <= r * r && uy < -r * 0.35 && ux < r * 0.3; });
+    const bottom = cy + 146; // 몬스터 칸 아래 끝 위에서 멈춘다
+    for (let y = cy + 4; y <= bottom; y += G2) for (let x = cx - 330; x <= cx + 330; x += G2) {
+      if (!inside(x, y)) continue;
+      const edge = !inside(x - G2, y) || !inside(x + G2, y) || !inside(x, y - G2) || !inside(x, y + G2) || y + G2 > bottom;
+      const shade = !inside(x, y + G2 * 2) || y + G2 * 2 > bottom;
+      p.rect(x - G2 / 2, y - G2 / 2, G2, G2, edge ? '#4a3c18' : nearTop(x, y) ? '#e6dca0' : shade ? '#8c7c3a' : '#bcae5c');
     }
-    for (const [dx, dy] of [[-200, 70], [206, 72], [-90, 96], [96, 98]]) stinkLines(cx + dx, cy + dy - 30, 0.8);
+    // 뿌웅: 엉덩이 바로 아래 양옆으로 짧은 충격선
+    for (const [x1, y1, x2, y2] of [[-62, 22, -96, 8], [62, 22, 96, 8], [-56, 40, -100, 40], [56, 40, 100, 40]]) p.line(cx + x1, cy + y1, cx + x2, cy + y2, 4, '#f4ecc0');
     return;
   }
   if (move === 'peel' && layer === 'front') {
@@ -988,6 +984,12 @@ function actLabel(act) {
 // 원숭이 부하(몬스터 minions): 몬스터 양옆에 작게 + 아래 HP 막대. 결과 화면엔 이번 턴 받은 피해(빨강)를 HP 막대 아래에,
 // 이번 턴 쓰러진 부하는 회색으로 한 번 더 보여 주고 그다음부턴 그리지 않는다. 부하를 불러낸 턴엔 발밑에 흙먼지.
 // 그린 부하가 있으면 true(오른쪽 피해 숫자를 바깥으로 비킨다).
+// 방귀 구름(외곽선 있는 겨자색 뭉게구름) · 악취 아이콘(소용돌이 갈색 구름)
+const FART_CLOUD = { rows: ['..aaa.aaa..', '.ahhhahhha.', 'ahhoooooooa', 'aoooooooooa', '.aoooooooa.', '..aaaaaaa..'], palette: { a: '#4f441a', h: '#ece2a0', o: '#c2b450' } };
+const STENCH_ICON = {
+  rows: ['................', '......aaaa......', '.....ahhhha.....', '....ahooooha....', '...ahoodddoha...', '...ahoddoddda...', '..ahoddoooodda..', '..ahoddodooodha.', '.aoooodddooodoa.', '.adooooooooddoa.', '..adooooooddooa.', '...aaaaaaaaaaa..', '.aa.............', 'aoha............', '.aa.............'],
+  palette: { a: '#3a1e0a', o: '#c47a32', h: '#eaa860', d: '#6a3812' },
+};
 const PEEL = { rows: ['y...y', 'yy.yy', '.yyy.', '..d..'], palette: { y: '#f5d040', d: '#7a5410' } };
 const BANANA = { rows: ['...y', '..yy', '.yyd', 'yyd.', 'dd..'], palette: { y: '#f5d040', d: '#a8781a' } };
 const MINION_SPOTS = [-172, 172, -262];
