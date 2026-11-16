@@ -337,7 +337,7 @@ function effectLines(b) {
   // 부하(원숭이 대장): 살아 있는 부하 수·HP, 우울 상태(부하를 다 잃음)
   const mnAlive = minionsAlive(b);
   if (mnAlive.length) lines.push(`${b.monster.minions.emoji} ${b.monster.minions.name}: ${mnAlive.map(x => `${x.hp}/${x.maxHp}`).join(' · ')} - **공격·스킬은 부하에게 먼저 감, 다 처치하면 ${b.monster.minions.penalty.emoji ?? ''}${b.monster.minions.penalty.name}**`);
-  if (isWeak(b)) lines.push(`${b.monster.minions.penalty.emoji ?? ''} ${b.monster.minions.penalty.name}: ${monsterName} - **받는 피해 +${Math.round(((b.weakRate ?? 1) - 1) * 100)}% · ${weakTurnsLeft(b)}턴 남음**`);
+  if (isWeak(b)) lines.push(`${b.monster.minions.penalty.emoji ?? ''} ${b.monster.minions.penalty.name}: ${monsterName} - **받는 피해 +${Math.round(((b.weakRate ?? 1) - 1) * 100)}%**`);
   const stenched = b.members.filter(mem => isStenched(b, mem));
   for (const [label, mems] of byStatus(stenched, 'stenchStatus')) lines.push(`${label}: ${mems.map(mem => `${mem.name}(${stenchTurnsLeft(b, mem)}턴)`).join(', ')} - **회복약 사용 불가 · 치유사 회복 -${minusPct(mems[0].stenchRate ?? 1)}%**`);
   const errored = b.members.filter(mem => isErrored(b, mem));

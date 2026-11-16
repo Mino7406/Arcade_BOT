@@ -26,7 +26,7 @@
     "name": "원숭이 부하",
     "emoji": "🐒",
     "count": 2,
-    "hpRate": 0.045,
+    "hpRate": 0.075,
     "attack": {
       "name": "바나나 투척",
       "damage": [2, 3]
@@ -34,7 +34,7 @@
     "penalty": {
       "name": "우울 상태",
       "emoji": "😭",
-      "turns": 2,
+      "turns": 1,
       "weakRate": 1.2
     },
     "sprite": {

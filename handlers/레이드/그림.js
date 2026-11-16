@@ -1469,7 +1469,7 @@ function renderBattle(r) {
       p.roundRect(W - 216, slotY, 180, 54, 12, '#1e2440');
       p.strokeRoundRect(W - 216, slotY, 180, 54, 12, 2, '#8fd8ff');
       text('우울 상태', W - 126, slotY + 17, 19, '#dff4ff');
-      text(`받는 피해 +${Math.round(((b.weakRate ?? 1) - 1) * 100)}% · ${weakTurnsLeft(b)}턴`, W - 126, slotY + 40, 15, '#8fd8ff');
+      text(`받는 피해 +${Math.round(((b.weakRate ?? 1) - 1) * 100)}%`, W - 126, slotY + 40, 15, '#8fd8ff');
       slotY += 60;
     }
     if (b.fuse) {
