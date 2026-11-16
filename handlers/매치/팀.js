@@ -251,7 +251,9 @@ function teamBlocks(teams, match) {
     const resolved = t.members.map(n => resolveMember(n, match.participants));
     const memberTiers = resolved.map(u => (withTiers && u ? tiers.getTier(u.id, game) : null));
     const scores = memberTiers.map(tr => tiers.tierScore(game, tr)).filter(x => x !== null && x !== undefined);
-    const avg = scores.length ? tiers.tierLabel(game, tiers.tierFromScore(game, scores.reduce((a, b) => a + b, 0) / scores.length)) : '';
+    const avgTier = scores.length ? tiers.tierFromScore(game, scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+    const avgEmoji = avgTier && tiers.tierEmojiId(game, avgTier);
+    const avg = avgTier ? `${avgEmoji ? `<:t:${avgEmoji}> ` : ''}${tiers.tierLabel(game, avgTier)}` : ''; // [평균 <이모지> 다이아몬드4]
     const title = `${TEAM_ICONS[i] ?? '▫️'} ${t.name ?? `${i + 1} 팀`}`;
     if (compact) {
       const names = t.members.map((n, k) => `${memberTiers[k] ? `${tiers.tierBadge(game, memberTiers[k])} ` : ''}${n}`);
