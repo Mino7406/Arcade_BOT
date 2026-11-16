@@ -343,6 +343,7 @@ async function onReady(c) {
   await require('./handlers/게임/해킹툴').ensureHackToolEmoji(c); // 해킹 툴 앱 이모지(없으면 등록, 실패하면 🛠️)
   await require('./handlers/공통/썸네일').ensureThumbEmojis(c).catch(err => console.error('썸네일 이모지 준비 실패(원래 그림으로 표시):', err));
   await require('./handlers/매치/티어').ensureTierEmojis(c).catch(err => console.error('티어 이모지 준비 실패(글자로 표시):', err));
+  require('./handlers/매치/티어').refreshFileNames(c).catch(err => console.error('티어 파일 이름 채우기 실패:', err)); // 기다리지 않음: tier.json 을 이름·보기가 붙은 모양으로 다시 씀
   await restoreMatches(c); // ⬅️ 추가: 저장된 내전/모집 복원
   enableSaveNow(); // 복원이 끝났으므로 이제부터는 게시/취소 직후 바로 저장해도 안전하다
   await recoverCancelledEmbeds(c, new Set([...allowedChannels, MATCH_BONUS_CHANNEL_ID])); // 저장 파일에서 빠진 취소 임베드 삭제 예약 복구

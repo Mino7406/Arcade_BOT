@@ -387,6 +387,22 @@ function setTier(userId, gk, tier) {
   save(userId);
 }
 
+// 봇이 켜질 때 한 번: 이름이 없는 사람은 서버 멤버 목록에서 별명을 찾아 채우고, 파일을 지금 모양(이름·보기)으로 다시 쓴다.
+// 예전 모양(한 줄짜리)으로 저장돼 있던 파일도 이때 바뀐다. 못 찾은 사람(서버를 나감 등)은 이름 없이 그대로.
+async function refreshFileNames(client) {
+  const missing = Object.keys(realStore).filter(id => !names.has(id));
+  let filled = 0;
+  for (const id of missing) {
+    for (const guild of client.guilds?.cache?.values?.() ?? []) {
+      const member = guild.members.cache.get(id) || await guild.members.fetch(id).catch(() => null);
+      if (member) { names.set(id, member.displayName); filled++; break; }
+    }
+  }
+  save('');
+  save('test_');
+  return filled;
+}
+
 // 파일에 같이 적어 둘 이름(서버 별명). 바뀌었을 때만 저장한다. 저장된 티어가 없는 사람은 파일에 안 나온다.
 function setName(userId, name) {
   const clean = String(name || '').trim().slice(0, 40);
@@ -533,6 +549,7 @@ module.exports = {
   setPositions,
   resetAll,
   setName,
+  refreshFileNames,
   ensureTierEmojis,
   tierEmojiId,
   positionEmojiId,
