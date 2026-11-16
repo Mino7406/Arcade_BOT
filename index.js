@@ -23,7 +23,7 @@ const { handleOmokButton, handleOmokMessage } = require('./handlers/게임/오�
 const { loadRoulette, saveRoulette, handleRouletteButton } = require('./handlers/게임/룰렛');
 const { loadBotMatchXp, saveBotMatchXp } = require('./handlers/게임/봇전한도');
 const { loadHackTools } = require('./handlers/게임/해킹툴');
-const { loadGateways, handleGatewayPick, handleGatewayButton } = require('./handlers/게임/블랙월게이트웨이');
+const { loadGateways } = require('./handlers/게임/블랙월게이트웨이');
 const { loadDmPrefs, saveDmPrefs, buildDmSettingPayload, handleDmSettingButton } = require('./handlers/매치/DM설정');
 const { loadRealmRoster, saveRealmRoster } = require('./forms/마크/명단');
 const { startQuizScheduler, handleQuizMessage } = require('./handlers/게임/퀴즈');
@@ -468,7 +468,6 @@ client.on('interactionCreate', async (interaction) => {
       interaction.customId?.startsWith('realm:') ||
       interaction.customId?.startsWith('cobblemon:') ||
       interaction.customId?.startsWith('raid:') || // 레이드는 출현한 채널(놀이터·테스트 채널)에서 그대로 진행
-      interaction.customId?.startsWith('gateway:') || // 블랙월 게이트웨이는 나만 보이는 화면이라 어느 채널에서든
       interaction.customId?.startsWith('form:');
 
     if (!isChannelExempt && !skipChannelLimits) {
@@ -493,8 +492,6 @@ client.on('interactionCreate', async (interaction) => {
         await handleMojipMemberAdd(interaction);
       } else if (interaction.customId === 'xp:pick') {
         await handleXpUserSelect(interaction);
-      } else if (interaction.customId === 'gateway:pick') {
-        await handleGatewayPick(interaction);
       }
 
     } else if (interaction.isStringSelectMenu()) {
@@ -612,8 +609,6 @@ client.on('interactionCreate', async (interaction) => {
         await handleCobblemonButton(interaction);
       } else if (interaction.customId.startsWith('raid:')) {
         await handleRaidButton(interaction);
-      } else if (interaction.customId.startsWith('gateway:')) {
-        await handleGatewayButton(interaction);
       }
     }
   } catch (error) {

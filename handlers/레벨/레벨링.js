@@ -56,7 +56,6 @@ const xpState = {
   minigameFrozen: false,    // 미니게임(오목·룰렛·틱택토·끝말잇기·퀴즈) XP 정산 정지
   newbieBoostEnabled: true, // 뉴비부스트 역할 2배 적용 여부
   frozenUsers: {},          // { [guildId]: { [userId]: true } } — /xp에서 개별 유저 XP 지급 정지
-  timedFrozen: {},          // { [guildId]: { [userId]: 풀리는 시각(ms) } } — 블랙월 게이트웨이 아이템으로 건 시간제 XP 정지
 };
 
 function loadXpState() {
@@ -70,7 +69,6 @@ function loadXpState() {
       if (saved?.frozenUsers && typeof saved.frozenUsers === 'object') {
         xpState.frozenUsers = saved.frozenUsers;
       }
-      if (saved?.timedFrozen && typeof saved.timedFrozen === 'object') xpState.timedFrozen = saved.timedFrozen;
     }
   } catch (err) {
     // 못 읽으면 기본값(전부 정상 작동)으로 시작한다 — 긴급정지가 안 걸린 쪽이 더 안전한 기본값.
@@ -96,7 +94,7 @@ function getXpState() {
 // 않는다(setUserXpFrozen 전용) — key 검증 없이 xpState[key]=!!value를 허용하면 실수로
 // setXpSwitch('frozenUsers', ...)를 호출했을 때 객체를 boolean으로 덮어써 정지 목록이 깨진다.
 function setXpSwitch(key, value) {
-  if (key in xpState && key !== 'frozenUsers' && key !== 'timedFrozen') {
+  if (key in xpState && key !== 'frozenUsers') {
     xpState[key] = !!value;
     saveXpState();
   }
@@ -106,26 +104,7 @@ function setXpSwitch(key, value) {
 // 특정 유저가 XP 지급 정지 대상인지. /xp → XP 조정에서 유저별로 켜고 끈다.
 // farmFrozen/minigameFrozen(전체 정지)과 달리 이 유저 한 명에게만 적용된다.
 function isUserXpFrozen(guildId, userId) {
-  return !!xpState.frozenUsers[guildId]?.[userId] || userXpFrozenUntil(guildId, userId) > Date.now();
-}
-// 시간제 정지(블랙월 게이트웨이): 풀리는 시각(ms), 없거나 지났으면 0
-function userXpFrozenUntil(guildId, userId) {
-  const until = xpState.timedFrozen?.[guildId]?.[userId] ?? 0;
-  return until > Date.now() ? until : 0;
-}
-// 그 유저의 XP 지급을 ms 동안 멈춘다(이미 걸려 있으면 그 뒤로 이어 붙이지 않고 더 늦은 쪽). 풀리는 시각을 돌려준다.
-function freezeUserXpFor(guildId, userId, ms) {
-  if (!xpState.timedFrozen) xpState.timedFrozen = {};
-  if (!xpState.timedFrozen[guildId]) xpState.timedFrozen[guildId] = {};
-  const until = Math.max(Date.now() + ms, xpState.timedFrozen[guildId][userId] ?? 0);
-  xpState.timedFrozen[guildId][userId] = until;
-  // 지난 기록은 이때 같이 치운다
-  for (const [g, users] of Object.entries(xpState.timedFrozen)) {
-    for (const [u, t] of Object.entries(users)) if (t <= Date.now()) delete users[u];
-    if (!Object.keys(users).length) delete xpState.timedFrozen[g];
-  }
-  saveXpState();
-  return until;
+  return !!xpState.frozenUsers[guildId]?.[userId];
 }
 
 // 유저별 XP 지급 정지를 켜고 끈다(즉시 저장). applyXp() 한 곳에서만 걸러내므로
@@ -538,8 +517,6 @@ module.exports = {
   isRaidXpFrozen,
   isNewbieBoostEnabled,
   isUserXpFrozen,
-  userXpFrozenUntil,
-  freezeUserXpFor,
   setUserXpFrozen,
   handleMessageXp,
   awardMatchCompletionXp,

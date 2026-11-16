@@ -284,7 +284,7 @@ async function recruitView(r, { redraw = true } = {}) {
   sections.push({
     // 이름표를 붙인 인용 블록 두 줄 — 보상과 시작 규칙을 한눈에
     text: (isPersistent(r)
-      ? `> 🎁 **보상** : 파티원 +${clearXpOf(r)} XP · 👑 MVP는 +${mvpBonusOf(r)} XP 더 + ${gatewayEmoji()} ${GATEWAY_NAME}\n`
+      ? `> 🎁 **보상** : 파티원 +${clearXpOf(r)} XP · 👑 MVP는 여기에 ${gatewayEmoji()} ${GATEWAY_NAME}${mvpBonusOf(r) ? ` + ${mvpBonusOf(r)} XP` : ' 지급'}\n`
       : `> 🎁 **보상** : +${CLEAR_XP} XP · ${hackToolEmoji()} ${HACK_TOOL_NAME} 1개\n`) +
       '> ▶️ **바로 시작** : 첫 참가자가 방장이 되며 시작 여부를 결정할 수 있어요.',
   });

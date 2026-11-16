@@ -398,11 +398,11 @@ async function buildScreens() {
     add('레이드', '??? — 패배 채널 안내', '도주하지 않음 · 모든 유저 -100 XP · 지금까지 1인당 잃은 XP', defeatNote);
     const er = vb('attack'); er.phase = 'ended'; er.endedAt = Date.now(); er.frozenAt = Date.now() - 5 * H; er.battle.hp = 0;
     const ev = await raidMod.endView(er, 'clear', [
-      { userId: '100', xp: 2000, mvp: true, hackTool: false, gateway: true },
+      { userId: '100', xp: 1000, mvp: true, hackTool: false, gateway: true },
       { userId: '101', xp: 1000, mvp: false, hackTool: false, gateway: false },
       { userId: '102', xp: 1000, mvp: false, hackTool: false, gateway: false },
     ]);
-    add('레이드', '??? — 토벌 성공 결과', '파티원 +1000 XP · MVP +1000 XP 더 + 🌐 블랙월 게이트웨이(해킹 툴은 없음)', ev, rf(ev));
+    add('레이드', '??? — 토벌 성공 결과', '파티원 +1000 XP · MVP는 같은 1000 XP + 🌐 블랙월 게이트웨이(해킹 툴은 없음)', ev, rf(ev));
     void pn;
   }
   const endR = (outcome, rewards) => { const rr = startBattle(m0); rr.phase = 'ended'; rr.endedAt = Date.now(); rr.frozenAt = Date.now() - 20 * 60e3; if (outcome === 'clear') rr.battle.hp = 0; return raidMod.endView(rr, outcome, rewards); };

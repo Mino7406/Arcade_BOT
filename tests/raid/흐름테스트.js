@@ -1151,14 +1151,10 @@ let ok4;
         assert(modW.isPlaygroundPaused('gMain') && textOf(mW).includes('TURN 1'), '재시작 후 ??? 전투 이어가기');
         await press(modW, mW, 'v1', 'raid:act:attack');
         await press(modW, mW, 'v2', 'raid:act:attack'); // 둘 다 골라야 턴이 진행된다(검사가 먼저 쓰러뜨리면 궁수는 행동하지 않아 보상 없음)
-        assert(lv.getXp('gMain', 'v1') === before.v1 + 2000 && lv.getXp('gMain', 'v2') === before.v2, '토벌 보상: MVP 1000 + 1000 보너스(직접 행동한 사람만)');
+        assert(lv.getXp('gMain', 'v1') === before.v1 + 1000 && lv.getXp('gMain', 'v2') === before.v2, '토벌 보상: 1000 XP(MVP도 같음, 직접 행동한 사람만)');
         assert(gw.getGateways('gMain', 'v1') === 1 && gw.getGateways('gMain', 'v2') === 0 && ht.getHackTools('gMain', 'v1') === 0, 'MVP에게만 블랙월 게이트웨이(해킹 툴은 안 줌)');
         assert(textOf(mW).includes('블랙월 게이트웨이') && !lv.isRaidXpFrozen(), '결과 화면에 아이템 표시 + XP 시스템 복구');
-        // 블랙월 게이트웨이: 시간제 XP 정지(1시간)
-        const until = lv.freezeUserXpFor('gMain', 'v2', 3600_000);
-        const xpBefore = lv.getXp('gMain', 'v2');
-        lv.applyXp('gMain', 'v2', 50, '정지 중 지급 시험');
-        assert(until > Date.now() && lv.isUserXpFrozen('gMain', 'v2') && lv.getXp('gMain', 'v2') === xpBefore, '게이트웨이: 1시간 동안 그 유저에게 XP가 안 쌓임');
+        // 블랙월 게이트웨이 아이템 사용은 개수만큼만(룰렛에서 발동하면 100% 잭팟 — 룰렛 쪽은 상호작용 테스트)
         assert(gw.useGateway('gMain', 'v1') && gw.getGateways('gMain', 'v1') === 0 && !gw.useGateway('gMain', 'v1'), '게이트웨이 아이템 사용은 개수만큼만');
       } finally {
         Date.now = realNow;
