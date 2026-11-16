@@ -165,7 +165,7 @@ function monsterProblems(m) {
     if (rd?.persistent !== undefined && typeof rd.persistent !== 'boolean') problems.push('raid.persistent는 true/false');
     for (const k of ['defeatPenaltyXp', 'clearXp', 'mvpBonusXp']) if (rd?.[k] !== undefined && !(Number.isInteger(rd[k]) && rd[k] >= 0)) problems.push(`raid.${k}는 0 이상 정수`);
     const dr = rd?.drain;
-    if (dr !== undefined && !(dr.intervalMs > 0 && dr.min >= 0 && dr.max >= dr.min && dr.max >= 1)) problems.push('raid.drain은 intervalMs(0 초과), min(0 이상), max(min 이상, 1 이상) 필요');
+    if (dr !== undefined && !(dr.intervalMs > 0 && dr.minPerMin >= 0 && dr.maxPerMin >= dr.minPerMin && dr.maxPerMin > 0)) problems.push('raid.drain은 intervalMs(0 초과), minPerMin(0 이상), maxPerMin(minPerMin 이상, 0 초과) 필요');
   }
   const TARGETS = ['single', 'all', 'none', 'self'];
   const range = (v) => Array.isArray(v) && v.length === 2 && v.every(Number.isFinite) && v[0] >= 0 && v[0] <= v[1];

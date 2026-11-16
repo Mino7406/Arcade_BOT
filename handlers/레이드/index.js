@@ -212,8 +212,10 @@ function glitchClock() {
   for (let i = 0; i < 3; i++) { const at = [0, 1, 3, 4, 6, 7][Math.floor(rnd() * 6)]; digits[at] = bad[Math.floor(rnd() * bad.length)]; }
   return digits.join('');
 }
-// 대기 차감 한 번(intervalMs 마다)의 양: min~max 사이 무작위 정수
-const drainOnce = (cfg) => cfg.min + Math.floor(Math.random() * (cfg.max - cfg.min + 1));
+// 대기 차감 한 번(intervalMs 마다)의 몫(소수): 분당 minPerMin~maxPerMin 중 무작위 값을 intervalMs 만큼의 시간으로 환산
+const drainShare = (cfg) => (cfg.minPerMin + Math.random() * (cfg.maxPerMin - cfg.minPerMin)) * (cfg.intervalMs / 60000);
+// 잃은 XP 표시: 정수로 깎인 양 + 아직 안 깎인 소수점(내림, 소수 첫째 자리) — 숫자가 틱마다 움직여 보이게
+const lostShown = (r) => (Math.floor(((r.lostPerUser || 0) + (r.drainCarry || 0)) * 10) / 10).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const waitedNow = (r, now = Date.now()) => (r.waitedMs || 0) + (r.waitSince ? Math.max(0, now - r.waitSince) : 0);
 
 async function recruitView(r, { redraw = true } = {}) {
@@ -241,7 +243,7 @@ async function recruitView(r, { redraw = true } = {}) {
     });
     sections.push({
       text: `## ⏳ \`${glitchClock()}\` ░TIME_ERR\n` +
-        `📉 **지금까지 잃은 XP :** \`-${Math.round(r.lostPerUser || 0).toLocaleString()} XP\` *(1인당)*\n` +
+        `📉 **지금까지 잃은 XP :** \`-${lostShown(r)} XP\` *(1인당)*\n` +
         `💀 **패배 ${r.defeatStacks || 0}회** · 패배 1회마다 모든 유저 **-${rules.defeatPenaltyXp ?? 0} XP**\n` +
         `**파티 ${r.party.length} / ${PARTY_MAX}** · 역할 버튼을 눌러 참가하세요`,
     });
@@ -869,10 +871,10 @@ function tickDrain(r, now = Date.now()) {
   const steps = Math.min(Math.floor((waited - (r.drainedMs || 0)) / step), Math.floor((14 * 24 * 60 * 60 * 1000) / step));
   if (steps <= 0) return;
   let total = 0;
-  for (let i = 0; i < steps; i++) total += drainOnce(rules.drain);
+  for (let i = 0; i < steps; i++) { r.drainCarry = (r.drainCarry || 0) + drainShare(rules.drain); const whole = Math.floor(r.drainCarry); r.drainCarry -= whole; total += whole; } // 소수점은 이월
   r.drainedMs = (r.drainedMs || 0) + steps * step;
   r.lostPerUser = (r.lostPerUser || 0) + total;
-  if (r.freezesXp && !isExcludedGuild(r.guildId)) {
+  if (total > 0 && r.freezesXp && !isExcludedGuild(r.guildId)) {
     deductXpFromAll(r.guildId, total, '', { quiet: true });
     r.drainLogAcc = (r.drainLogAcc || 0) + total;
     if (!r.drainLogAt) r.drainLogAt = now;
