@@ -289,7 +289,7 @@ function buildBoardPayload(match, matchMsgId) {
   // 티어가 부족해 랜덤으로 나눈 경우만 이유를 한 줄 덧붙인다.
   const when = cur.at ? ` · <t:${Math.floor(cur.at / 1000)}:t>` : '';
   const fallback = cur.draft && cur.how === 'random' && tiers.hasTiers(game) ? '\n-# 티어가 저장된 사람이 적어서 무작위로 나눴어요. 🏅 내 티어 설정 후 ⚖️ 밸런스를 눌러 보세요.' : '';
-  blocks.push(`## 🔍 팀 현황\n-# ${cur.no ? `#${cur.no} · ` : ''}${HOW_TEXT[cur.how] ?? HOW_TEXT.input}${when}${fallback}`);
+  blocks.push(`## 🔍 팀 현황\n-# ${cur.no ? `**#${cur.no}** · ` : ''}${HOW_TEXT[cur.how] ?? HOW_TEXT.input}${when}${fallback}`);
   blocks.push(...teamBlocks(cur.teams, match));
 
   if (tiers.hasTiers(game)) {
@@ -307,7 +307,7 @@ function buildBoardPayload(match, matchMsgId) {
       const sec = h.at ? Math.floor(h.at / 1000) : null;
       const when = sec ? ` · <t:${sec}:t> (<t:${sec}:R>)` : '';
       const how = HOW_TEXT[h.how] ? ` · ${HOW_TEXT[h.how]}` : '';
-      const teams = h.teams.map((t, i) => `> ${TEAM_ICONS[i] ?? '▫️'}　${t.members.map(n => `**${n}**`).join(' · ')}`).join('\n'); // 동그라미와 이름 사이를 띄우고 이름은 굵게
+      const teams = h.teams.map((t, i) => `> ${TEAM_ICONS[i] ?? '▫️'} : ${t.members.map(n => `**${n}**`).join(' · ')}`).join('\n'); // 🔵 : **이름** · **이름**
       blocks.push({ text: `**${no}${tag}**${when}${how}\n${teams}`, noDivider: true });
     });
   }
