@@ -22,8 +22,9 @@ const lastWritten = new Map();
 // 값을 JSON으로 저장한다. 내용이 직전 저장과 같으면 아무것도 하지 않고 false를 반환한다.
 // 실제로 파일을 썼으면 true. 실패는 예외로 그대로 던진다 — 호출부가 이미 try/catch로
 // 감싸고 "무엇을 저장하다 실패했는지"를 자기 문구로 남기고 있기 때문.
-function writeJsonIfChanged(filePath, value) {
-  const text = JSON.stringify(value);
+// space: 들여쓰기 칸 수 / stringify: 직접 만든 글로 쓰기(사람이 열어 볼 파일만, 예: 티어 파일). 기본은 한 줄로 촘촘하게.
+function writeJsonIfChanged(filePath, value, { space, stringify } = {}) {
+  const text = stringify ? stringify(value) : JSON.stringify(value, null, space);
   // 내용이 같더라도 파일이 실제로 있는지는 확인한다. lastWritten은 메모리에만 있어서,
   // 누가 파일을 지우거나 갈아엎으면 "이미 저장했다"고 착각해 영영 다시 쓰지 않게 된다.
   // 예전의 무조건 30초 저장은 그런 상황을 자동 복구해줬으므로 그 성질만 남긴다.

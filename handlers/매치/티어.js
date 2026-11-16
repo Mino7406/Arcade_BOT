@@ -239,13 +239,74 @@ function loadStore(file, label) {
   }
 }
 
-const realStore = loadStore(DB_PATH, '티어 저장 파일');
-const testStore = loadStore(TEST_DB_PATH, '테스트 티어 저장 파일');
+// 사람이 파일을 열어 봐도 알아보게 넣는 글자(봇은 안 쓰고, 읽을 때 떼어 냈다가 저장할 때마다 다시 만든다):
+//   "이름": 서버 별명(마지막으로 티어를 저장했을 때) / 게임마다 "보기": "롤 다이아몬드2 · 미드 / 정글(부)"
+const names = new Map(); // 유저ID → 이름
+const VIEW_KEY = '보기';
+const NAME_KEY = '이름';
+const GAME_SHORT = { lol: '롤', valorant: '발로', overwatch: '옵치', pubg: '배그' };
+
+function stripView(store) {
+  for (const [id, entry] of Object.entries(store)) {
+    if (!entry || typeof entry !== 'object') { delete store[id]; continue; }
+    if (entry[NAME_KEY]) names.set(id, String(entry[NAME_KEY]));
+    delete entry[NAME_KEY];
+    for (const g of Object.values(entry)) if (g && typeof g === 'object') delete g[VIEW_KEY];
+  }
+  return store;
+}
+
+const realStore = stripView(loadStore(DB_PATH, '티어 저장 파일'));
+const testStore = stripView(loadStore(TEST_DB_PATH, '테스트 티어 저장 파일'));
+
+// 게임 하나의 "보기" 글자
+function viewText(game, e) {
+  const parts = [];
+  if (game === 'overwatch') {
+    for (const r of OW_ROLES) {
+      const t = e.roles?.[r.key];
+      if (t && findTier(game, t.tier)) parts.push(`${r.name} ${tierLabel(game, t)}`);
+    }
+    if (e.tier && findTier(game, e.tier)) parts.push(`${tierLabel(game, e)}(역할 모름)`);
+  } else {
+    if (e.tier && findTier(game, e.tier)) parts.push(tierLabel(game, e));
+    const [main, sub] = Array.isArray(e.pos) ? e.pos : [];
+    if (main) parts.push(`${positionName(game, main)}${sub ? ` / ${positionName(game, sub)}(부)` : ''}`);
+  }
+  return `${GAME_SHORT[game] ?? game} ${parts.length ? parts.join(' · ') : '없음'}`;
+}
+
+// 파일에 쓸 모양: 이름 → 게임마다 { 보기, 실제 값… }. 줄 바꿈·들여쓰기로 보기 좋게.
+function fileView(store) {
+  const out = {};
+  for (const [id, entry] of Object.entries(store)) {
+    const user = {};
+    if (names.has(id)) user[NAME_KEY] = names.get(id);
+    for (const [game, e] of Object.entries(entry)) user[game] = LADDERS[game] ? { [VIEW_KEY]: viewText(game, e), ...e } : e;
+    out[id] = user;
+  }
+  return out;
+}
+
+// 사람마다 한 덩어리, 게임마다 한 줄:
+// {
+//   "457…": {
+//     "이름": "김민호",
+//     "lol": {"보기":"롤 다이아몬드2 · 미드","tier":"diamond","div":2,…}
+//   }
+// }
+function prettyFile(view) {
+  const users = Object.entries(view).map(([id, user]) => {
+    const lines = Object.entries(user).map(([k, v]) => `    ${JSON.stringify(k)}: ${JSON.stringify(v)}`);
+    return `  ${JSON.stringify(id)}: {\n${lines.join(',\n')}\n  }`;
+  });
+  return users.length ? `{\n${users.join(',\n')}\n}\n` : '{}\n';
+}
 
 function save(userId) {
   const test = isTestUser(userId);
   try {
-    writeJsonIfChanged(test ? TEST_DB_PATH : DB_PATH, test ? testStore : realStore);
+    writeJsonIfChanged(test ? TEST_DB_PATH : DB_PATH, fileView(test ? testStore : realStore), { stringify: prettyFile });
   } catch (err) {
     console.error('티어 저장 실패:', err);
     logError('저장 오류', `${test ? '테스트 ' : ''}티어 저장 실패`, err);
@@ -324,6 +385,14 @@ function setTier(userId, gk, tier) {
   e.at = Date.now();
   cleanEntry(userId, game);
   save(userId);
+}
+
+// 파일에 같이 적어 둘 이름(서버 별명). 바뀌었을 때만 저장한다. 저장된 티어가 없는 사람은 파일에 안 나온다.
+function setName(userId, name) {
+  const clean = String(name || '').trim().slice(0, 40);
+  if (!clean || names.get(userId) === clean) return;
+  names.set(userId, clean);
+  if (storeOf(userId)[userId]) save(userId);
 }
 
 // 🗑️ 전체 초기화: 이 사람의 모든 게임 티어·역할을 지운다. 지운 게 있었으면 true.
@@ -463,6 +532,7 @@ module.exports = {
   setTier,
   setPositions,
   resetAll,
+  setName,
   ensureTierEmojis,
   tierEmojiId,
   positionEmojiId,

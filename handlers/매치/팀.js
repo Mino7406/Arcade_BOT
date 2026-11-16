@@ -32,6 +32,7 @@ const {
 } = require('./공용');
 const { card, notice, payload, emojiUrl } = require('../공통/카드');
 const { logError } = require('../공통/로그');
+const { displayNameFromInteraction } = require('../공통/이름');
 const { NAEJEON_CHAT_CHANNEL_IDS = {}, GAME_EMOJIS = {} } = require('../../config');
 const tiers = require('./티어');
 
@@ -692,6 +693,7 @@ function learnTiers(match, hints) {
   for (const { name, tier } of hints) {
     const user = resolveMember(name, match.participants);
     if (!user) { missed.push(name); continue; }
+    tiers.setName(user.id, user.displayName);
     tiers.setTier(user.id, game, tier);
     saved.push(`${user.displayName} ${tiers.tierLabel(game, tier)}`);
   }
@@ -1057,6 +1059,7 @@ function buildTierSavedPayload(gk, tier, matchMsgId, userId) {
 }
 
 async function saveMyTier(interaction, gk, tier, matchMsgId) {
+  tiers.setName(interaction.user.id, displayNameFromInteraction(interaction)); // 파일에서 누군지 알아보게
   tiers.setTier(interaction.user.id, gk, tier);
   const match = getMatches(interaction.client).get(matchMsgId);
   await interaction.update(buildTierSavedPayload(gk, tier, matchMsgId, interaction.user.id));
@@ -1066,6 +1069,7 @@ async function saveMyTier(interaction, gk, tier, matchMsgId) {
 // 🏅 내 티어 설정 선택 메뉴
 async function handleTeamSelect(interaction) {
   const { customId } = interaction;
+  if (customId.startsWith('team:tier')) tiers.setName(interaction.user.id, displayNameFromInteraction(interaction));
 
   if (customId.startsWith('team:tier_pick:')) {
     const [, , game, matchMsgId] = customId.split(':');
@@ -1093,6 +1097,7 @@ async function handleTeamSelect(interaction) {
     let next;
     if (which === 'main') next = value === 'none' ? [] : [value, sub === value ? null : sub]; // 주를 지우면 부도 같이 지운다
     else next = [main, value === 'none' ? null : value];
+    tiers.setName(interaction.user.id, displayNameFromInteraction(interaction));
     tiers.setPositions(interaction.user.id, game, next.filter(Boolean));
     await interaction.update(buildPositionPayload(game, matchMsgId, interaction.user.id));
     const match = getMatches(interaction.client).get(matchMsgId);
@@ -1108,6 +1113,7 @@ async function handleTeamSelect(interaction) {
 
 async function handleTeamButton(interaction) {
   const { customId } = interaction;
+  if (customId.startsWith('team:tier')) tiers.setName(interaction.user.id, displayNameFromInteraction(interaction)); // 티어 파일에 이름 채우기(이미 저장된 사람만 기록됨)
 
   if (customId.startsWith('team:input:')) {
     const matchMsgId = customId.slice('team:input:'.length);
