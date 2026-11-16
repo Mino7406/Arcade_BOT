@@ -5,7 +5,7 @@
 //  - 📝 팀 입력: 칸 하나짜리 입력창. 지금 팀(처음엔 마감 인원 초안)이 채워져 있어 바꿀 사람만 고치면 된다.
 //  - ⚖️ 밸런스: 저장된 티어로 두 팀 점수 차가 가장 작게 나눈다(롤·발로만).
 //  - 🎲 랜덤: 무작위로 두 팀.
-//  - 🏅 내 티어: 내 티어를 골라 저장한다(롤·발로만). 팀 입력에 "승훈 불2"처럼 적어도 자동으로 저장된다.
+//  - 🏅 내 티어 설정: 내 티어를 골라 저장한다(롤·발로만). 팀 입력에 "승훈 불2"처럼 적어도 자동으로 저장된다.
 // 팀이 바뀔 때마다 카드는 지우고 맨 아래에 다시 올린다(채팅에 묻히지 않게). 티어만 바뀌면 그 자리에서 고친다.
 //
 // 카드는 내전이 마감되면 자동으로 올라가고(공용.js markClosed → setCloseHook), /팀으로 다시 끌어올릴 수도 있다.
@@ -255,7 +255,7 @@ function buildBoardRows(match, matchMsgId) {
   const buttons = [new ButtonBuilder().setCustomId(`team:input:${matchMsgId}`).setLabel('📝 팀 입력').setStyle(ButtonStyle.Primary)];
   if (tiers.hasTiers(game)) buttons.push(new ButtonBuilder().setCustomId(`team:balance:${matchMsgId}`).setLabel('⚖️ 밸런스').setStyle(ButtonStyle.Secondary));
   buttons.push(new ButtonBuilder().setCustomId(`team:random:${matchMsgId}`).setLabel('🎲 랜덤').setStyle(ButtonStyle.Secondary));
-  if (tiers.hasTiers(game)) buttons.push(new ButtonBuilder().setCustomId(`team:tier:${game}:${matchMsgId}`).setLabel('🏅 내 티어').setStyle(ButtonStyle.Secondary));
+  if (tiers.hasTiers(game)) buttons.push(new ButtonBuilder().setCustomId(`team:tier:${game}:${matchMsgId}`).setLabel('🏅 내 티어 설정').setStyle(ButtonStyle.Secondary));
   return [new ActionRowBuilder().addComponents(...buttons)];
 }
 
@@ -429,7 +429,7 @@ function buildInputModal(match, matchMsgId) {
     .addComponents(new ActionRowBuilder().addComponents(input));
 }
 
-// ── 🏅 내 티어 ──────────────────────────────────────────────
+// ── 🏅 내 티어 설정 ──────────────────────────────────────────────
 
 function tierOptionEmoji(game, tier) {
   const id = tiers.tierEmojiId(game, tier);
@@ -519,7 +519,7 @@ async function handleTeamMatchSelect(interaction) {
   }
 }
 
-// /팀 메뉴와 🏅 내 티어 선택 메뉴
+// /팀 메뉴와 🏅 내 티어 설정 선택 메뉴
 async function handleTeamSelect(interaction) {
   const { customId } = interaction;
   if (customId === 'team:match_select') return handleTeamMatchSelect(interaction);
