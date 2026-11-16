@@ -13,7 +13,7 @@ const POTIONS_PER_BATTLE = 2;
 const POTION_HEAL = 45;
 const GUARD_DAMAGE_RATE = 0.3;   // 방어: 받는 피해 70% 감소
 const TAUNT_DAMAGE_RATE = 0.3;   // 도발 중인 수호자: 받는 피해 70% 감소
-const TAUNT_REFLECT = 8;         // 도발 반격: 도발한 턴에 맞은 원래 피해(줄이기 전) × 이만큼 몬스터에게 되돌려준다(부하가 있어도 대장에게)
+const TAUNT_REFLECT = 5;         // 도발 반격: 도발한 턴에 맞은 원래 피해(줄이기 전) × 이만큼 몬스터에게 되돌려준다(부하가 있어도 대장에게)
 const HEALER_HEAL = 20;          // 치유의 빛 회복량(30에서 너프)
 // 분노 조건(rage.hpRatio · rage.damageRate)과 기술 효과의 세기(effectRate · effectTurns · useBelowHp),
 // 상태이상의 이름·이모지(status — 슬라임은 💧점액·💫기절, 다른 몬스터는 🔥화상·❄️빙결처럼 전용으로)는
@@ -65,8 +65,8 @@ const ROLES = {
     skill: { name: '차지 샷', cooldown: 3, damage: [220, 260], critChance: 0.3, desc: '220~260 피해, 치명타 확률 30%' },
   },
   tank: {
-    name: '수호자', emoji: '🛡️', attack: [60, 80], hpWeight: 1.1,
-    skill: { name: '수호의 태세', cooldown: 2, desc: '이번 턴 단일 공격을 대신 맞고 받는 피해 70% 감소, 맞은 피해 ×8 반격' }, // 예전 이름 '도발'(사용자 요청으로 변경 — 코드·주석의 '도발'은 이 스킬)
+    name: '수호자', emoji: '🛡️', attack: [60, 80], hpWeight: 1.0,
+    skill: { name: '수호의 태세', cooldown: 2, desc: '이번 턴 단일 공격을 대신 맞고 받는 피해 70% 감소, 맞은 피해 ×5 반격' }, // 예전 이름 '도발'(사용자 요청으로 변경 — 코드·주석의 '도발'은 이 스킬)
   },
   healer: {
     name: '치유사', emoji: '💚', attack: [40, 60], hpWeight: 0.9,
