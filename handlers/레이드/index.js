@@ -33,7 +33,7 @@ const { displayNameFromInteraction } = require('../공통/이름');
 const {
   PLAYER_MAX_HP, POTIONS_PER_BATTLE, POTION_HEAL, GUARD_DAMAGE_RATE, ROLES, ROLE_ORDER, ACTIONS, MONSTERS,
   createBattle, checkChoice, choose, allChosen, resolveTurn,
-  isStunned, slowTurnsLeft, isShielded, isPowered, poisonTurnsLeft, poisonStacks, poisonDamage, isConfused, chillStacks, isFeared, isPhased, telegraphText, isWarnIntent, minusPct, contribution,
+  isStunned, slowTurnsLeft, isShielded, isPowered, poisonTurnsLeft, poisonStacks, poisonDamage, isConfused, chillStacks, isFeared, isPhased, minionsAlive, isWeak, weakTurnsLeft, telegraphText, isWarnIntent, minusPct, contribution,
 } = require('./전투');
 const { renderRecruit, renderBattle, renderEnd, warmUp } = require('./그림');
 
@@ -292,6 +292,10 @@ function effectLines(b) {
   }
   const feared = b.members.filter(mem => mem.hp > 0 && isFeared(b, mem));
   for (const [label, mems] of byStatus(feared, 'fearStatus')) lines.push(`${label}: ${mems.map(mem => mem.name).join(', ')} - **이번 턴 스킬 사용 불가**`);
+  // 부하(원숭이 대장): 살아 있는 부하 수·HP, 우울 상태(부하를 다 잃음)
+  const mnAlive = minionsAlive(b);
+  if (mnAlive.length) lines.push(`${b.monster.minions.emoji} ${b.monster.minions.name}: ${mnAlive.map(x => `${x.hp}/${x.maxHp}`).join(' · ')} - **공격·스킬은 부하에게 먼저 감, 다 처치하면 ${b.monster.minions.penalty.emoji ?? ''}${b.monster.minions.penalty.name}**`);
+  if (isWeak(b)) lines.push(`${b.monster.minions.penalty.emoji ?? ''} ${b.monster.minions.penalty.name}: ${monsterName} - **받는 피해 +${Math.round(((b.weakRate ?? 1) - 1) * 100)}% · ${weakTurnsLeft(b)}턴 남음**`);
   if (isPhased(b)) lines.push(`👻 투명화: ${monsterName} - **이번 턴 일반 공격은 빗나감(스킬은 맞음)**`);
   // 점화(꼬마 폭탄): 불끄기 진행 — 이번 턴 포함 남은 턴
   if (b.fuse) lines.push(`💣 도화선: 남은 불 **${Math.max(0, b.fuse.need - b.fuse.dealt).toLocaleString()} / ${b.fuse.need.toLocaleString()}** · 남은 ${Math.max(1, b.fuse.until - b.turn + 1)}턴 - **피해로 불을 다 끄면 기절, 못 끄면 대폭발**`);

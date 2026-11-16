@@ -295,7 +295,7 @@ async function buildScreens() {
   // ── 레이드 (기존 디자인 유지 — 그림 + 글자 + 버튼) ───────────────────────
   const raidMod = req('handlers/레이드/index.js');
   const raidBattle = req('handlers/레이드/전투.js');
-  const { MONSTERS: raidMonsters, ROLE_ORDER: raidRoles, createBattle, resolveTurn } = raidBattle;
+  const { MONSTERS: raidMonsters, ROLE_ORDER: raidRoles, createBattle, resolveTurn, choose } = raidBattle;
   const raidParty = n => raidRoles.slice(0, n).map((role, i) => ({ userId: String(100 + i), name: ['민호', '지수', '하늘', '도윤'][i], role }));
   const rf = p => ({ files: png(p.files) });
   const raidState = (monster, partyN, extra = {}) => ({
@@ -329,6 +329,29 @@ async function buildScreens() {
   rb.showingResult = false; rb.battle.hp = Math.floor(rb.battle.maxHp * 0.3); rb.battle.rage = true;
   const pb4 = await raidMod.battleView(rb);
   add('레이드', '전투 — 분노 상태', '', pb4, rf(pb4));
+  // 원숭이 대장: 부하 부르기 경고 → 부하 등장 → 부하가 맞고 바나나 투척 → 합동 필살기 경고 → 부하 전멸(우울 상태)
+  const monkey = raidMonsters.find(m => m.id === 'monkey');
+  if (monkey) {
+    const rk = startBattle(monkey); const bk = rk.battle;
+    const shot = async (title, sub) => { const v = await raidMod.battleView(rk); add('레이드', `원숭이 대장 — ${title}`, sub, v, rf(v)); };
+    bk.intent = 'smash';
+    await shot('부하 부르기 경고', '필살기 1 · 빨간 경고 상자');
+    bk.members.forEach(m => choose(bk, m.userId, 'attack'));
+    resolveTurn(bk); rk.showingResult = true;
+    await shot('부하 등장', '양옆에 원숭이 부하 두 마리 + HP 막대 · 흙먼지');
+    rk.showingResult = false; bk.intent = 'attack';
+    bk.members.forEach(m => choose(bk, m.userId, 'attack'));
+    resolveTurn(bk); rk.showingResult = true;
+    await shot('부하가 대신 맞음', '공격은 부하에게 먼저 · 부하 머리 위 피해 숫자 · 바나나 맞은 카드');
+    rk.showingResult = false; bk.intent = 'combo'; bk.minions.forEach(x => { x.hp = Math.max(x.hp, 40); });
+    await shot('합동 필살기 경고', '필살기 2 · 부하가 살아 있을 때만');
+    bk.intent = 'attack'; bk.minions.forEach(x => { x.hp = Math.min(x.hp, 60); });
+    bk.members.forEach(m => choose(bk, m.userId, 'attack'));
+    resolveTurn(bk); rk.showingResult = true;
+    await shot('부하 전멸 → 우울 상태', '우는 얼굴 · 회색으로 쓰러진 부하');
+    rk.showingResult = false;
+    await shot('우울 상태', '오른쪽 위 배지 · 받는 피해 증가 · 남은 턴');
+  }
   const endR = (outcome, rewards) => { const rr = startBattle(m0); rr.phase = 'ended'; rr.endedAt = Date.now(); rr.frozenAt = Date.now() - 20 * 60e3; if (outcome === 'clear') rr.battle.hp = 0; return raidMod.endView(rr, outcome, rewards); };
   const ec = await endR('clear', [{ userId: '100', xp: 150, mvp: true, hackTool: true }, { userId: '101', xp: 100, mvp: false, hackTool: false }]);
   add('레이드', '종료 — 토벌 성공', 'MVP · 보상 · 해킹 툴(한 명은 보유 한도)', ec, rf(ec));

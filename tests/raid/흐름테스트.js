@@ -823,6 +823,51 @@ let ok4;
       assert(!E.isFeared(b, M('x')) && E.isFeared(b, M('t')), '필살 원혼 폭풍: 방어 안 한 사람 공포');
     }
   }
+  // 14-3b) 원숭이 대장(Monster-all): 부하 부르기(필살기 1) · 공격이 부하에게 먼저 · 바나나 투척 · 합동 필살기(필살기 2) · 우울 상태
+  {
+    const E = require(path.join(root, 'handlers/레이드/전투.js'));
+    const monkey = E.loadMonsters(path.join(root, 'Monster-all')).find(m => m.id === 'monkey');
+    assert(monkey, '원숭이 대장을 Monster 폴더에서 불러옴');
+    if (monkey) {
+      const party = [{ userId: 'x', name: 'X', role: 'sword' }, { userId: 't', name: 'T', role: 'tank' }, { userId: 'y', name: 'Y', role: 'healer' }];
+      const rng = () => 0.5;
+      const b = E.createBattle(monkey, party, rng);
+      const M = (u) => E.getMember(b, u);
+      const turnWith = (intent, choices = {}) => { if (intent) b.intent = intent; for (const [u, a] of Object.entries(choices)) E.choose(b, u, a); return E.resolveTurn(b, rng); };
+      assert(E.isWarnIntent((b.intent = 'smash', b)), '부하 부르기는 빨간 경고(필살기 1)');
+      turnWith('smash', { x: 'guard', t: 'guard', y: 'guard' });
+      const mhp = Math.round(b.maxHp * monkey.minions.hpRate / 10) * 10;
+      assert(E.minionsAlive(b).length === monkey.minions.count && b.minions[0].maxHp === mhp && !Object.keys(b.lastTurn.hits).length, '부하 부르기: 부하 두 마리(HP = 최대 HP × hpRate), 그 턴엔 피해 없음');
+      const bossHp = b.hp;
+      turnWith('attack', { x: 'attack', t: 'skill', y: 'attack' });
+      assert(b.hp === bossHp && b.minions[0].hp < mhp && b.log.join().includes(monkey.minions.attack.name), '부하가 있으면 공격은 부하에게 먼저, 부하는 다음 턴부터 바나나 투척');
+      assert(b.lastTurn.minionTargets?.t && !b.lastTurn.minionTargets?.x, '도발하면 바나나도 수호자가 맞음');
+      {
+        // 부하가 살아 있는 동안은 다음 행동으로 부하 부르기가 나오지 않는다(무작위로 여러 턴)
+        const saved = JSON.stringify({ minions: b.minions, members: b.members, hp: b.hp, turn: b.turn, sinceSmash: b.sinceSmash, rage: b.rage });
+        let summonWhileAlive = 0;
+        for (let i = 0; i < 300; i++) {
+          b.minions.forEach(mi => { mi.hp = 999; }); b.members.forEach(m => { m.hp = 100; }); b.hp = b.maxHp; b.intent = 'attack';
+          E.resolveTurn(b, Math.random);
+          if (b.intent === 'smash') summonWhileAlive++;
+        }
+        assert(summonWhileAlive === 0, '부하가 살아 있으면 부하 부르기를 다시 고르지 않음(필살기 보장은 합동 필살기로)');
+        Object.assign(b, JSON.parse(saved));
+      }
+      b.minions.forEach(mi => { if (mi.hp > 0) mi.hp = 30; });
+      const before = b.hp;
+      turnWith('attack', { x: 'attack', t: 'attack', y: 'attack' });
+      assert(!E.minionsAlive(b).length && b.lastTurn.penalty && E.isWeak(b) && E.weakTurnsLeft(b) === monkey.minions.penalty.turns && b.lastTurn.monsterMove && b.hp < before, '부하를 다 처치하면 우울 상태(행동은 그대로, 남은 피해는 대장에게)');
+      const w0 = b.hp; b.members.forEach(m => { m.hp = 100; });
+      turnWith('attack', { x: 'attack', t: 'guard', y: 'guard' });
+      assert(w0 - b.hp === Math.round(100 * monkey.minions.penalty.weakRate), '우울 상태: 받는 피해 × weakRate(검사 공격 100 → 120)');
+      // 합동 필살기: 그 턴 부하는 따로 공격하지 않음
+      b.minions = [{ hp: 100, maxHp: 100, born: 0 }, { hp: 100, maxHp: 100, born: 0 }];
+      b.members.forEach(m => { m.hp = 100; });
+      turnWith('combo', { x: 'guard', t: 'guard', y: 'guard' });
+      assert(b.lastTurn.minionsJoined && !b.log.join().includes(monkey.minions.attack.name) && b.log.join().includes(monkey.moves.combo.name), '합동 필살기 턴엔 부하가 따로 바나나를 던지지 않음');
+    }
+  }
   // 14-4) 꼬마 폭탄(Monster-all): 점화 카운트다운(불끄기 성공 → 기절, 실패 → 대폭발) · 화상 · 연막
   {
     const E = require(path.join(root, 'handlers/레이드/전투.js'));

@@ -10,7 +10,7 @@
 
 const path = require('path');
 const { Painter, loadFont } = require('./그림판');
-const { ROLES, ROLE_ORDER, PLAYER_MAX_HP, ACTIONS, createBattle, choose, resolveTurn, isStunned, slowTurnsLeft, isShielded, isPowered, poisonStacks, isConfused, chillStacks, isFeared, isPhased, isIntentHidden, isWarnIntent, telegraphText, moveFx } = require('./전투');
+const { ROLES, ROLE_ORDER, PLAYER_MAX_HP, ACTIONS, createBattle, choose, resolveTurn, isStunned, slowTurnsLeft, isShielded, isPowered, poisonStacks, isConfused, chillStacks, isFeared, isPhased, isIntentHidden, isWarnIntent, telegraphText, moveFx, isWeak, weakTurnsLeft } = require('./전투');
 
 const W = 900; // 설계 크기(좌표는 전부 이 기준)
 const H = 640;
@@ -928,6 +928,36 @@ function actLabel(act) {
   return act.heal ? `${act.label} +${act.value}` : `${act.label} ${act.value}`;
 }
 
+// 원숭이 부하(몬스터 minions): 몬스터 양옆에 작게 + 아래 HP 막대. 결과 화면엔 이번 턴 받은 피해(빨강)를 HP 막대 아래에,
+// 이번 턴 쓰러진 부하는 회색으로 한 번 더 보여 주고 그다음부턴 그리지 않는다. 부하를 불러낸 턴엔 발밑에 흙먼지.
+// 그린 부하가 있으면 true(오른쪽 피해 숫자를 바깥으로 비킨다).
+const BANANA = { rows: ['...y', '..yy', '.yyd', 'yyd.', 'dd..'], palette: { y: '#f5d040', d: '#a8781a' } };
+const MINION_SPOTS = [-172, 172, -262];
+function drawMinions(b, last, showingResult) {
+  const mn = b.monster.minions;
+  const list = b.minions ?? [];
+  if (!mn || !list.length) return false;
+  let shown = false;
+  list.forEach((mi, i) => {
+    const hitNow = showingResult ? last?.minionHits?.[i] : 0;
+    if (mi.hp <= 0 && !hitNow) return;
+    shown = true;
+    const cx = W / 2 + MINION_SPOTS[i % MINION_SPOTS.length], cy = 222;
+    if (showingResult && last?.summoned) {
+      for (const [dx, dy, r] of [[-30, 26, 12], [28, 28, 11], [0, 34, 14]]) haze(cx + dx, cy + dy, r, '#c9a27a', 0.45);
+      for (const [dx, dy] of [[-40, 10], [42, 6], [-22, -30], [24, -34]]) dot(cx + dx, cy + dy, 4, '#e8d0b0');
+    }
+    drawPixels(mn.sprite, cx, cy, 6, { dim: mi.hp <= 0, colors: b.rage ? mn.sprite.rageColors : null });
+    bar(cx - 36, cy + 42, 72, 10, mi.hp / mi.maxHp, '#f0b232');
+    if (hitNow) {
+      // 머리 위는 몬스터 기술 말풍선과 겹쳐서 HP 막대 아래에(결과 화면엔 예고 상자가 없음)
+      p.roundRect(cx - 34, cy + 58, 68, 28, 8, '#100c09');
+      text(`-${hitNow}`, cx, cy + 72, 22, '#ff5a45');
+    }
+  });
+  return shown;
+}
+
 function renderBattle(r) {
   return render('전투', () => {
     const b = r.battle;
@@ -962,11 +992,13 @@ function renderBattle(r) {
     // 자세: 턴 결과면 방금 쓴 기술(불이 꺼진 턴은 어지러운 dizzy), 선택 화면이면 예고한 기술의 readyPose(연막이면 숨김),
     // 점화 카운트다운 중이면 lit, 아니면 평상시
     const poses = m.sprite?.poses ?? {};
-    const pose = usedMove
+    const pose = (r.showingResult && last?.penalty && poses.cry ? 'cry' : null) // 부하를 다 잃은 턴 결과는 우는 얼굴
+      || usedMove
       || (r.showingResult && last?.defused && poses.dizzy ? 'dizzy' : null)
       || (!isIntentHidden(b) ? m.moves[b.intent]?.readyPose : null)
       || (isShielded(b) && poses.shielded ? 'shielded' : null) // 보호막(갑옷)이 남은 턴엔 그 모습
-      || (b.fuse && poses.lit ? 'lit' : null);
+      || (b.fuse && poses.lit ? 'lit' : null)
+      || (isWeak(b) && poses.cry ? 'cry' : null); // 우울 상태(부하를 다 잃음) 동안
     // 기술·피격·디버프 연출 색은 분노해도 원래 색(몸 색만 분노 색으로 바뀜 — 사용자 요청)
     const fxColor = m.sprite?.palette?.o || '#7fdc8c';
     const sporeColor = m.sprite?.palette?.x || fxColor; // 포자 연출 색
@@ -999,6 +1031,7 @@ function renderBattle(r) {
     }
     if (b.rage) rageFx(m, W / 2, monsterY, 112, pose, 'mark');
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'front', sporeColor, accentColor);
+    const minionsShown = drawMinions(b, last, r.showingResult);
     // 몬스터 오른쪽: 이번 턴 받은 피해(빨강) · 재생 회복량(초록, 피해 아래). 결과 화면에서만.
     const dealtNow = r.showingResult ? last?.monsterDamage : 0;
     // 점액 줄기(오른쪽 끝 약 W/2+190)와 오른쪽 위 '방어력 증가' 배지(y 186까지)를 피해 그 오른쪽 아래에,
@@ -1007,7 +1040,7 @@ function renderBattle(r) {
     if (dealtNow) numbers.push([`-${dealtNow.toLocaleString()}`, '#ff5a45']);
     if (usedMove && (last?.monsterHeal || last?.fizzled)) numbers.push([`+${(last.monsterHeal || 0).toLocaleString()}`, last.fizzled ? '#9a9a9a' : '#7cff9a']); // 독기 흡수 실패는 회색 +0
     numbers.forEach(([label, color], i) => {
-      const nx = W / 2 + 250, ny = 212 + i * 38;
+      const nx = W / 2 + (minionsShown ? 292 : 250), ny = 212 + i * 38; // 오른쪽 부하가 있으면 더 바깥으로
       p.roundRect(nx - 56, ny - 17, 112, 34, 9, '#100c09');
       text(label, nx, ny, 28, color);
     });
@@ -1027,6 +1060,14 @@ function renderBattle(r) {
       p.strokeRoundRect(W - 216, slotY, 180, 54, 12, 2, '#b9a6ff');
       text('투명화', W - 126, slotY + 17, 19, '#e6dcff');
       text('일반 공격 빗나감', W - 126, slotY + 40, 15, '#b9a6ff');
+      slotY += 60;
+    }
+    if (isWeak(b)) {
+      // 우울 상태(부하를 다 잃음): 받는 피해 증가 + 남은 턴(이번 턴 포함)
+      p.roundRect(W - 216, slotY, 180, 54, 12, '#1e2440');
+      p.strokeRoundRect(W - 216, slotY, 180, 54, 12, 2, '#8fd8ff');
+      text('우울 상태', W - 126, slotY + 17, 19, '#dff4ff');
+      text(`받는 피해 +${Math.round(((b.weakRate ?? 1) - 1) * 100)}% · ${weakTurnsLeft(b)}턴`, W - 126, slotY + 40, 15, '#8fd8ff');
       slotY += 60;
     }
     if (b.fuse) {
@@ -1115,6 +1156,7 @@ function renderBattle(r) {
       if (!down && slowTurnsLeft(b, mem) > 0 && !(usedMove && last?.hits[mem.userId])) hitFx('sweep', x + w / 2, y + 86, fxColor);
       const hit = last?.hits[mem.userId];
       if (hit && usedFx) hitFx(usedFx, x + w / 2, y + 86, fxColor, sporeColor, accentColor);
+      if (r.showingResult && last?.minionTargets?.[mem.userId]) drawPixels(BANANA, x + w / 2 + 40, y + 110, 6); // 부하의 바나나 투척에 맞음
       // 받은 피해 숫자도 그 턴의 결과 화면에서만(다음 턴 선택 화면에는 남기지 않는다)
       if (hit && r.showingResult) text(`-${hit}`, x + w - 38, y + 78, 24, '#ff5a45');
       // 독 피해(아군 행동 뒤)는 보라 숫자로 그 아래에

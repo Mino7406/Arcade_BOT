@@ -95,8 +95,16 @@ const MONSTER_DIR = path.join(__dirname, '..', '..', 'Monster');
 const REQUIRED_MOVES = ['attack', 'smash'];
 // 그림(레이드그림.js)이 아는 연출 종류. 새 연출은 레이드그림.js의 monsterFx·hitFx에 그리고 여기에 이름을 더한다.
 const MOVE_FX = ['attack', 'sweep', 'charge', 'smash', 'heal', 'spore', 'hypno', 'absorb', 'burst', 'frost', 'icefall',
-  'curse', 'wail', 'phase', 'storm', 'dust', 'smoke', 'ignite', 'boom'];
-const EFFECTS = ['slow', 'stun', 'shield', 'poison', 'confuse', 'chill', 'fear', 'phase', 'smoke'];
+  'curse', 'wail', 'phase', 'storm', 'dust', 'smoke', 'ignite', 'boom', 'summon'];
+const EFFECTS = ['slow', 'stun', 'shield', 'poison', 'confuse', 'chill', 'fear', 'phase', 'smoke', 'summon'];
+// 부하(minions 블록이 있는 몬스터만 — 원숭이 대장):
+//   summon(효과): 부하 count마리를 불러낸다(HP = 몬스터 최대 HP × hpRate). 살아 있는 부하가 있으면 그 기술은 고르지 않는다.
+//   부하가 살아 있으면 아군 공격·스킬 피해는 자동으로 첫 번째 살아 있는 부하에게 가고, 넘친 피해는 사라진다.
+//   부하는 불려 나온 다음 턴부터 몬스터 기술 뒤에 한 마리씩 minions.attack(한 명, 도발 중이면 수호자)을 한다.
+//   아군 행동으로 부하를 다 처치하면 penalty(우울 상태): 다음 턴부터 turns턴 동안 몬스터가 받는 피해 × weakRate, 주는 피해 × dealRate(행동은 그대로).
+//   needMinions 기술(부하 합동 필살기)은 부하가 살아 있을 때만 고르고, 살아 있는 부하 한 마리마다 perMinion 피해를 더한다(그 턴 부하는 따로 공격하지 않음).
+//   ultimate: 필살기 2 — 필살기 1(smash)을 못 쓸 때 7턴 보장을 대신 채운다. 필살기끼리는 연속으로 나오지 않는다.
+const SUMMON_COOLDOWN = 2; // 부하를 다 잃은 뒤 이만큼은 다시 부르지 않는다(바로 또 불러서 벌칙이 의미 없어지지 않게)
 const moveFx = (key, move) => move?.fx || key;
 
 // 고칠 때 자주 틀리는 것만 확인한다. 문제가 있으면 사유 목록, 없으면 빈 배열.
@@ -128,6 +136,21 @@ function monsterProblems(m) {
     for (const k of ['guardStacks', 'melt']) if (!int(c?.[k], 0)) problems.push(`chill.${k}는 0 이상 정수`);
     if (!named(c?.status) || !named(c?.freezeStatus)) problems.push('chill.status·freezeStatus의 name·emoji 필요');
   }
+  if (m.minions !== undefined) {
+    const mn = m.minions;
+    if (!named(mn)) problems.push('minions.name·emoji 필요');
+    if (!int(mn?.count, 1) || mn.count > 3) problems.push('minions.count는 1~3 정수');
+    if (!rate(mn?.hpRate)) problems.push('minions.hpRate(0~1) 필요');
+    const r = mn?.attack?.damage;
+    if (!mn?.attack?.name || !(Array.isArray(r) && r.length === 2 && r[0] >= 0 && r[0] <= r[1])) problems.push('minions.attack.name·damage[최소, 최대] 필요');
+    if (!mn?.penalty?.name || !(mn.penalty.weakRate >= 1)) problems.push('minions.penalty.name·weakRate(1 이상) 필요');
+    const ms = mn?.sprite;
+    if (!Array.isArray(ms?.rows) || !ms.palette) problems.push('minions.sprite.rows/palette 없음');
+    else {
+      const missing = [...new Set(ms.rows.join('').replace(/\./g, ''))].filter(ch => !ms.palette[ch]);
+      if (missing.length) problems.push(`minions.sprite.palette에 없는 글자: ${missing.join(' ')}`);
+    }
+  }
   const TARGETS = ['single', 'all', 'none', 'self'];
   const range = (v) => Array.isArray(v) && v.length === 2 && v.every(Number.isFinite) && v[0] >= 0 && v[0] <= v[1];
   for (const [key, move] of Object.entries(m.moves ?? {})) {
@@ -156,6 +179,9 @@ function monsterProblems(m) {
       if (move.rageStacks !== undefined && !int(move.rageStacks, 1)) problems.push(`moves.${key}.rageStacks는 1 이상 정수`);
     }
     if (move.effect === 'fear' && !named(move.status)) problems.push(`moves.${key}.status.name·emoji 필요`);
+    if (move.effect === 'summon' && (!m.minions || move.target !== 'none')) problems.push(`moves.${key}: summon은 target none 기술에만, minions 블록 필요`);
+    if (move.needMinions && !m.minions) problems.push(`moves.${key}: needMinions는 minions 블록 필요`);
+    if (move.perMinion !== undefined && !range(move.perMinion)) problems.push(`moves.${key}.perMinion은 [최소, 최대] 숫자`);
     if (move.mark && move.target !== 'single') problems.push(`moves.${key}: mark(표식)는 target single 기술에만`);
     if (move.rageTargets !== undefined && !int(move.rageTargets, 1)) problems.push(`moves.${key}.rageTargets는 1 이상 정수`);
     if (move.guardRate !== undefined && !rate(move.guardRate)) problems.push(`moves.${key}.guardRate(0~1) 필요`);
@@ -237,9 +263,25 @@ function pickNextIntent(battle, rng) {
   // 점화 카운트다운(꼬마 폭탄): 마지막 턴엔 대폭발, 그 전엔 점화를 다시 고르지 않는다(필살기 보장도 쉼)
   const fz = battle.fuse;
   if (fz && battle.turn + 1 >= fz.until && battle.monster.moves[fz.boom]) return fz.boom;
-  if (!fz && battle.sinceSmash >= SMASH_PITY_TURNS && battle.monster.moves.smash && battle.intent !== 'smash') { battle.sinceSmash = 0; return 'smash'; }
+  // 부하 몬스터: 필살기 1(smash = 부하 부르기)을 못 쓰는 때(부하가 살아 있음)는 필살기 2(ultimate — 부하 합동 필살기)로 보장한다
+  const usable = (key) => {
+    const mv = battle.monster.moves[key];
+    if (!mv) return false;
+    if (mv.effect === 'summon' && (minionsAlive(battle).length || (battle.turn + 1) - (battle.minionsLostTurn ?? -99) <= SUMMON_COOLDOWN)) return false;
+    if (mv.needMinions && !minionsAlive(battle).length) return false;
+    return true;
+  };
+  if (!fz && battle.sinceSmash >= SMASH_PITY_TURNS && battle.monster.moves.smash && battle.intent !== 'smash') {
+    const ult = usable('smash') ? 'smash' : Object.keys(battle.monster.moves).find(k => battle.monster.moves[k].ultimate && usable(k) && k !== battle.intent);
+    if (ult) { battle.sinceSmash = 0; return ult; }
+  }
   const weights = battle.monster.intentWeights || INTENT_WEIGHTS;
   let pool = battle.rage ? weights.rage : weights.normal;
+  // 부하 부르기(summon)는 부하가 살아 있거나 다 잃은 지 얼마 안 됐으면, 합동 기술(needMinions)은 부하가 없으면 고르지 않는다
+  if (battle.monster.minions) {
+    const allowed = Object.fromEntries(Object.entries(pool).filter(([key]) => usable(key)));
+    if (Object.values(allowed).some(w => w > 0)) pool = allowed;
+  }
   // 카운트다운 중, 또는 카운트다운이 막 끝난 뒤 2턴(필살기 카운트 sinceSmash가 새로 시작됨)은 점화를 고르지 않는다 —
   // 대폭발 바로 다음 턴에 또 점화해서 쉴 틈이 없던 문제(최종 검토)
   const justEnded = battle.monster.moves.smash?.fuse && battle.sinceSmash <= 2 && battle.fuseEnded;
@@ -261,8 +303,9 @@ function pickNextIntent(battle, rng) {
   // 재생은 HP가 useBelowHp 이하일 때만, 그보다 많으면 대신 공격
   const nextMove = battle.monster.moves[next];
   if (nextMove?.target === 'self' && battle.hp > battle.maxHp * nextMove.useBelowHp) next = 'attack';
-  if (next === 'smash' && battle.intent === 'smash') next = 'attack'; // 필살기 두 번 연속은 없게
-  if (next === 'smash') battle.sinceSmash = 0;
+  const isUlt = (k) => k === 'smash' || battle.monster.moves[k]?.ultimate;
+  if (isUlt(next) && isUlt(battle.intent)) next = 'attack'; // 필살기(1·2) 두 번 연속은 없게
+  if (isUlt(next)) battle.sinceSmash = 0;
   return next;
 }
 
@@ -288,6 +331,10 @@ function createBattle(monster, party, rng = Math.random, { minParty = HP_MIN_PAR
     phaseTurn: 0,    // 이 턴 동안 투명화(일반 공격 빗나감)
     hiddenTurn: 0,   // 이 턴 동안 다음 행동 예고가 연막으로 가려짐
     fuse: null,      // 점화 카운트다운 { until, need, dealt, boom }(꼬마 폭탄)
+    minions: [],     // 부하 [{ hp, maxHp, born }](원숭이 대장 — born: 불려 나온 턴, 그다음 턴부터 공격)
+    weakUntil: 0,    // 이 턴까지 체면 구김(부하를 다 잃음 — 받는 피해 × weakRate)
+    weakRate: 1,
+    weakDealRate: 1, // 우울 상태 중 몬스터가 주는 피해 배율
     incoming: 0,     // 몬스터가 파티에게 날린 피해 합(방어·도발로 줄이기 전) — 기여도용
     log: [],
     members: party.map(p => ({
@@ -352,6 +399,10 @@ function poisonDamage(battle, m) {
 function isConfused(battle, m) { return m.confuseTurn === battle.turn; }
 function isFeared(battle, m) { return m.fearTurn === battle.turn; }
 function isPhased(battle) { return battle.phaseTurn === battle.turn; }
+// 부하(원숭이 대장): 살아 있는 부하 목록 · 체면 구김(부하를 다 잃은 다음 턴 받는 피해 증가). 예전 기록엔 칸이 없을 수 있다.
+function minionsAlive(battle) { return (battle.minions ?? []).filter(x => x.hp > 0); }
+function isWeak(battle) { return battle.turn <= (battle.weakUntil ?? 0); }
+function weakTurnsLeft(battle) { return Math.max(0, (battle.weakUntil ?? 0) - battle.turn + 1); }
 // 연막(꼬마 폭탄): 이번 턴 예고가 가려졌는지. 경고 기술(대폭발 등 warn)은 가리지 않는다.
 function isIntentHidden(battle) { return battle.hiddenTurn === battle.turn && !battle.monster.moves[battle.intent]?.warn; }
 // 다음 행동이 '방어하세요' 경고(빨간 예고 상자)인지: 기술의 warn, 없으면 smash면 경고
@@ -495,8 +546,23 @@ function resolveTurn(battle, rng = Math.random) {
   const dealt = (m, dmg) => {
     if (slowTurnsLeft(battle, m) > 0) dmg *= m.slowRate;
     if (last.shielded) dmg *= battle.shieldRate;
+    if (isWeak(battle)) dmg *= battle.weakRate ?? 1; // 체면 구김(부하를 다 잃음)
     return Math.max(1, Math.round(dmg));
   };
+  // 아군 피해가 들어가는 곳: 부하가 살아 있으면 첫 번째 살아 있는 부하(넘친 피해는 사라짐), 아니면 몬스터.
+  // 실제로 들어간 피해를 돌려준다(기여도·화면 숫자).
+  const hadMinions = minionsAlive(battle).length > 0;
+  last.minionHits = {};   // 부하 칸 번호 → 이번 턴 받은 피해
+  const land = (dmg) => {
+    const i = (battle.minions ?? []).findIndex(x => x.hp > 0);
+    if (i < 0) { battle.hp -= dmg; last.monsterDamage += dmg; return { dmg, minion: false }; }
+    const mn = battle.minions[i];
+    const d = Math.min(dmg, mn.hp);
+    mn.hp -= d;
+    last.minionHits[i] = (last.minionHits[i] || 0) + d;
+    return { dmg: d, minion: true };
+  };
+  const minionTag = (hitMinion) => (hitMinion ? ` (${battle.monster.minions.emoji}${battle.monster.minions.name})` : '');
   if (last.shielded) log.push(`🛡️ **${battle.monster.name}**의 몸이 단단해 ${battle.shieldRate === 0.5 ? '피해가 절반만 들어간다' : `주는 피해 -${minusPct(battle.shieldRate)}%`}!`);
 
   // 1) 아군 행동
@@ -532,34 +598,31 @@ function resolveTurn(battle, rng = Math.random) {
       let dmg = randInt(role.attack, rng);
       const crit = role.critChance && rng() < role.critChance;
       if (crit) dmg *= role.critMultiplier;
-      dmg = dealt(m, dmg);
-      battle.hp -= dmg;
+      const hitRes = land(dealt(m, dmg));
+      dmg = hitRes.dmg;
       m.damage += dmg;
       addChill(m, hitChill());
       last.acts[m.userId] = { label: '공격', value: dmg, crit, auto };
-      last.monsterDamage += dmg;
-      log.push(`${role.emoji} **${m.name}** 공격${tag} → **${dmg}**${crit ? ' 💥치명타!' : ''}`);
+      log.push(`${role.emoji} **${m.name}** 공격${tag} → **${dmg}**${crit ? ' 💥치명타!' : ''}${minionTag(hitRes.minion)}`);
     } else if (action === 'skill') {
       m.cooldown = role.skill.cooldown;
       if (m.role === 'sword') {
-        const dmg = dealt(m, randInt(role.skill.damage, rng));
-        battle.hp -= dmg;
+        const hitRes = land(dealt(m, randInt(role.skill.damage, rng)));
+        const dmg = hitRes.dmg;
         m.damage += dmg;
         addChill(m, hitChill());
         last.acts[m.userId] = { label: role.skill.name, value: dmg };
-        last.monsterDamage += dmg;
-        log.push(`${role.emoji} **${m.name}** ✨${role.skill.name} → **${dmg}**`);
+        log.push(`${role.emoji} **${m.name}** ✨${role.skill.name} → **${dmg}**${minionTag(hitRes.minion)}`);
       } else if (m.role === 'archer') {
         let dmg = randInt(role.skill.damage, rng);
         const crit = rng() < role.skill.critChance;
         if (crit) dmg *= role.critMultiplier;
-        dmg = dealt(m, dmg);
-        battle.hp -= dmg;
+        const hitRes = land(dealt(m, dmg));
+        dmg = hitRes.dmg;
         m.damage += dmg;
         addChill(m, hitChill());
         last.acts[m.userId] = { label: role.skill.name, value: dmg, crit };
-        last.monsterDamage += dmg;
-        log.push(`${role.emoji} **${m.name}** ✨${role.skill.name} → **${dmg}**${crit ? ' 💥치명타!' : ''}`);
+        log.push(`${role.emoji} **${m.name}** ✨${role.skill.name} → **${dmg}**${crit ? ' 💥치명타!' : ''}${minionTag(hitRes.minion)}`);
       } else if (m.role === 'tank') {
         taunter = m;
         addChill(m, melt);
@@ -607,6 +670,18 @@ function resolveTurn(battle, rng = Math.random) {
     }
   }
 
+  // 1-1) 부하를 이번 턴에 다 처치했으면 체면 구김: 다음 턴부터 turns턴 동안 몬스터가 받는 피해 × weakRate(행동은 그대로 — 사용자 결정)
+  if (hadMinions && !minionsAlive(battle).length) {
+    const pen = battle.monster.minions.penalty;
+    const turns = pen.turns ?? 2;
+    battle.weakUntil = battle.turn + turns;
+    battle.weakRate = pen.weakRate;
+    battle.weakDealRate = pen.dealRate ?? 1;
+    battle.minionsLostTurn = battle.turn;
+    last.penalty = true;
+    log.push(`😭 ${battle.monster.minions.name}${objectJosa(battle.monster.minions.name)} 모두 잃은 **${battle.monster.name}**이(가) ${pen.emoji ?? ''}${pen.name}! **${turns}턴** 동안 받는 피해 **+${Math.round((pen.weakRate - 1) * 100)}%**${pen.dealRate ? ` · 주는 피해 **-${minusPct(pen.dealRate)}%**` : ''}`);
+  }
+
   // 1-2) 독: 아군 행동이 끝날 때 중첩만큼 피해(이번 턴 치유사가 씻어냈으면 없음). 마지막 턴이 지나면 사라진다.
   const poisonLog = [];
   // 독기 흡수가 셀 중첩: 이번 턴이 마지막인 독도 몬스터 행동 전엔 아직 몸에 있으니 지우기 전에 센다(살아 있는 사람만)
@@ -652,9 +727,15 @@ function resolveTurn(battle, rng = Math.random) {
   if (move) {
     // 공격력 증가(buffRate 기술을 쓴 뒤 첫 피해 기술 1회): 이번 공격 피해 × powerRate, 쓰고 나면 사라진다
     const powered = (move.target === 'single' || move.target === 'all') && battle.powerRate > 1 ? battle.powerRate : 0;
-    const mult = (battle.rage ? battle.monster.rage.damageRate : 1) * monsterDamageRate(battle) * (powered || 1);
+    // 우울 상태(부하를 다 잃음, dealRate): 주는 피해도 줄어든다
+    const mult = (battle.rage ? battle.monster.rage.damageRate : 1) * monsterDamageRate(battle) * (powered || 1) * (isWeak(battle) ? battle.weakDealRate ?? 1 : 1);
+    // 부하 합동 필살기(needMinions): 살아 있는 부하 한 마리마다 perMinion 피해를 더한다
+    const joined = move.needMinions ? minionsAlive(battle).length : 0;
+    if (joined) last.minionsJoined = true;
     const hit = (target) => {
-      let dmg = randInt(move.damage, rng) * mult;
+      let base = randInt(move.damage, rng);
+      for (let i = 0; i < joined && move.perMinion; i++) base += randInt(move.perMinion, rng);
+      let dmg = base * mult;
       battle.incoming += Math.round(dmg);
       // 도발로 아군 대신 맞은 한 명 공격은 줄이기 전 피해를 수호자의 기여(막아 준 피해)로 센다
       if (target === taunter && move.target === 'single') target.protected += Math.round(dmg);
@@ -739,6 +820,13 @@ function resolveTurn(battle, rng = Math.random) {
       battle.hiddenTurn = battle.turn + 1;
       log.push(`💨 연막이 퍼졌다! 다음 행동이 보이지 않는다`);
     }
+    if (move.effect === 'summon') {
+      const mn = battle.monster.minions;
+      const hp = Math.max(10, Math.round((battle.maxHp * mn.hpRate) / 10) * 10);
+      battle.minions = Array.from({ length: mn.count }, () => ({ hp, maxHp: hp, born: battle.turn }));
+      last.summoned = true;
+      log.push(`${mn.emoji} ${mn.name} **${mn.count}마리**가 뛰어나왔다! 부하가 있는 동안 공격은 부하에게 먼저 간다`);
+    }
     if (battle.fuse && battle.intent === battle.fuse.boom) { battle.fuse = null; battle.sinceSmash = 0; battle.fuseEnded = true; } // 대폭발로 카운트다운 끝 — 필살기 카운트 새로
     if (move.fuse) {
       const turns = battle.rage ? (move.fuse.rageTurns ?? move.fuse.turns) : move.fuse.turns;
@@ -747,6 +835,32 @@ function resolveTurn(battle, rng = Math.random) {
       battle.fuse = { until: battle.turn + turns, need: Math.round(battle.maxHp * need), dealt: 0, boom: move.fuse.boom };
       log.push(`🔥 도화선에 불이 붙었다! **${turns}턴** 안에 **${battle.fuse.need.toLocaleString()}** 피해를 넣어 불을 꺼라!`);
     }
+  }
+  // 2-2) 부하 공격: 지난 턴까지 불려 나온 살아 있는 부하가 한 마리씩 한 명을 때린다(도발 중이면 수호자).
+  // 합동 필살기를 쓴 턴은 부하도 거기에 힘을 보탰으니 따로 공격하지 않는다.
+  if (!last.minionsJoined && !defused) {
+    const mn = battle.monster.minions;
+    const mult = (battle.rage ? battle.monster.rage.damageRate : 1) * monsterDamageRate(battle);
+    const parts = [];
+    for (const minion of battle.minions ?? []) {
+      if (minion.hp <= 0 || minion.born >= battle.turn) continue;
+      const alive = aliveMembers(battle);
+      if (!alive.length) break;
+      const t = taunter && taunter.hp > 0 ? taunter : alive[Math.floor(rng() * alive.length)];
+      let dmg = randInt(mn.attack.damage, rng) * mult;
+      const raw = Math.round(dmg);
+      battle.incoming += raw;
+      if (t === taunter) t.protected += raw;
+      if (t.guarding) dmg *= GUARD_DAMAGE_RATE;
+      if (t === taunter) dmg *= TAUNT_DAMAGE_RATE;
+      dmg = Math.max(1, Math.round(dmg));
+      t.blocked += t === taunter ? raw : Math.max(0, raw - dmg);
+      t.hp = Math.max(0, t.hp - dmg);
+      last.hits[t.userId] = (last.hits[t.userId] || 0) + dmg;
+      (last.minionTargets ??= {})[t.userId] = true;
+      parts.push(`${t.name} -${dmg}${t.hp <= 0 ? ' 💀' : ''}`);
+    }
+    if (parts.length) log.push(`${mn.emoji} **${mn.name}**의 **${mn.attack.name}**! → ${parts.join(' · ')}`);
   }
   freezeCheck();
 
@@ -797,6 +911,9 @@ module.exports = {
   isConfused,
   isFeared,
   isPhased,
+  minionsAlive,
+  isWeak,
+  weakTurnsLeft,
   isIntentHidden,
   isWarnIntent,
   telegraphText,

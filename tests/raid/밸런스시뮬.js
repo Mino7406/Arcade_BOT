@@ -24,7 +24,7 @@ function smart(b, m) {
     const cm = b.monster.moves[mv];
     if (cm?.effect === 'chill' && cm.guardBlocks && E.chillStacks(b, m) + (b.rage ? (cm.rageStacks ?? cm.stacks) : cm.stacks) >= chill.freezeAt) return 'guard';
   }
-  if (E.isWarnIntent(b)) return 'guard'; // 필살기·대폭발 경고(꼬마 폭탄의 점화는 경고 아님)
+  if (E.isWarnIntent(b) && b.monster.moves[mv]?.target !== 'none') return 'guard'; // 필살기·대폭발 경고(꼬마 폭탄의 점화는 경고 아님, 피해 없는 부하 부르기 경고는 막을 필요 없음)
   // 표식(유령 영혼 사냥): 수호자는 도발로 대신 맞고, 표식 대상은 방어(수호자가 못 막을 때만 — 분노 2인이면 한 명은 직접)
   const markMove = b.monster.moves[mv]?.mark;
   if (markMove && m.role === 'tank' && !E.checkChoice(b, m.userId, 'skill')) return 'skill';
