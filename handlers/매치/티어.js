@@ -2,8 +2,8 @@
 //
 // 내전에 거의 같은 사람들이 계속 오니까 한 번 저장한 티어를 다음 내전에도 그대로 쓴다.
 // 저장은 두 가지로 들어온다: 팀 짜기 카드의 🏅 내 티어 설정(직접 고르기), 팀 입력에 "승훈 불2"처럼 적은 것(자동 갱신).
-// 이모지는 assets/티어/*.png(라이엇 공식 티어 그림을 128px로 줄인 것)를 봇이 켜질 때 앱 이모지로 등록해 쓴다.
-// 롤은 티어마다 그림 하나(단계는 숫자로 붙임), 발로란트는 단계마다 그림이 따로 있다.
+// 이모지는 assets/티어/*.png(각 게임 공식 티어 그림을 128px로 줄인 것)를 봇이 켜질 때 앱 이모지로 등록해 쓴다.
+// 롤·오버워치는 티어마다 그림 하나(단계는 숫자로 붙임), 발로란트·배그는 단계마다 그림이 따로 있다. 오버워치 상위 500은 그림 없음.
 
 const fs = require('fs');
 const path = require('path');
@@ -196,10 +196,10 @@ const emojiIds = new Map(); // 파일 이름(lol_gold, val_imm2 …) → 앱 이
 function emojiFileName(game, tier) {
   if (game === 'lol') return `lol_${tier.tier}`;
   if (game === 'overwatch') return `ow_${tier.tier}`;
-  if (game === 'pubg') return `pubg_${tier.tier}`;
-  if (game === 'valorant') {
+  if (game === 'valorant' || game === 'pubg') { // 발로·배그는 단계마다 그림이 따로 있다
     const t = findTier(game, tier.tier);
-    return t?.divs ? `val_${tier.tier}${tier.div || 1}` : `val_${tier.tier}`;
+    const prefix = game === 'pubg' ? 'pubg' : 'val';
+    return t?.divs ? `${prefix}_${tier.tier}${tier.div || 1}` : `${prefix}_${tier.tier}`;
   }
   return null;
 }
@@ -245,7 +245,7 @@ function tierBadge(game, tier) {
   const id = tierEmojiId(game, tier);
   if (!id) return `\`${tierLabel(game, tier, { short: true })}\``;
   const t = findTier(game, tier.tier);
-  const tail = game === 'lol' && t.divs && tier.div ? `${tier.div}` : '';
+  const tail = (game === 'lol' || game === 'overwatch') && t.divs && tier.div ? `${tier.div}` : ''; // 티어마다 그림 하나인 게임은 단계 숫자를 뒤에
   return `<:t:${id}>${tail}`;
 }
 
