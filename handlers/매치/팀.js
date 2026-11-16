@@ -263,7 +263,8 @@ function teamBlocks(teams, match) {
       if (!withTiers) return `▸ **${n}**`;
       if (!tr) return `❓ **${n}**`;
       const id = tiers.tierEmojiId(game, tr);
-      return `${id ? `<:t:${id}>` : '▸'} **${n}** · *${tiers.tierLabel(game, tr)}*`; // 이름 · 기울임 티어
+      // 이름은 굵게 한 줄, 티어는 바로 아래 작은 글씨로 내려 이름이 또렷하게 보이게 한다
+      return `${id ? `<:t:${id}>` : '▸'} **${n}**\n-# 　 ${tiers.tierLabel(game, tr)}`;
     });
     return `### ${title}${avg ? `　·　${avg}` : ''}\n>>> ${lines.join('\n')}`; // 팀원은 인용 블록(왼쪽 세로 막대)으로 묶는다
   });
