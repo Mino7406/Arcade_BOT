@@ -246,7 +246,6 @@ function teamBlocks(teams, match) {
   const game = match.data.game;
   const withTiers = tiers.hasTiers(game);
   const compact = teams.length > 4;
-  const tick = '`';
   const texts = teams.map((t, i) => {
     const resolved = t.members.map(n => resolveMember(n, match.participants));
     const memberTiers = resolved.map(u => (withTiers && u ? tiers.getTier(u.id, game) : null));
@@ -264,7 +263,7 @@ function teamBlocks(teams, match) {
       if (!withTiers) return `▸ **${n}**`;
       if (!tr) return `❓ **${n}**`;
       const id = tiers.tierEmojiId(game, tr);
-      return `${id ? `<:t:${id}>` : '▸'} **${n}**　${tick}${tiers.tierLabel(game, tr)}${tick}`;
+      return `${id ? `<:t:${id}>` : '▸'} **${n}** · *${tiers.tierLabel(game, tr)}*`; // 이름 · 기울임 티어
     });
     return `### ${title}${avg ? `　·　${avg}` : ''}\n>>> ${lines.join('\n')}`; // 팀원은 인용 블록(왼쪽 세로 막대)으로 묶는다
   });
