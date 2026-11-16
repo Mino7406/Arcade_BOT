@@ -303,16 +303,17 @@ function buildBoardPayload(match, matchMsgId) {
   const cur = board.current;
   const blocks = [];
 
-  // 마감 때 자동으로 나눈 팀(draft)도 따로 이름 붙이지 않고 그대로 팀 현황으로 보여 준다.
-  // 티어가 부족해 랜덤으로 나눈 경우만 이유를 한 줄 덧붙인다.
-  const when = cur.at ? ` · <t:${Math.floor(cur.at / 1000)}:t>` : '';
-  const fallback = cur.draft && cur.how === 'random' && tiers.hasTiers(game) ? '\n-# 티어가 저장된 사람이 적어서 무작위로 나눴어요. 🏅 내 티어 설정 후 ⚖️ 밸런스를 눌러 보세요.' : '';
-  blocks.push(`## 🔍 팀 현황\n-# ${cur.no ? `**#${cur.no}** · ` : ''}${HOW_TEXT[cur.how] ?? HOW_TEXT.input}${when}${fallback}`);
+  // 지금 팀의 순번·방식·시각은 카드 맨 위 부제 줄에 붙인다(따로 "팀 현황" 제목을 두지 않아 카드가 짧아지게).
+  // 마감 때 자동으로 나눈 팀(draft)도 똑같이 보여 주고, 티어가 부족해 랜덤으로 나눈 경우만 이유를 한 줄 덧붙인다.
+  const when = cur.at ? ` <t:${Math.floor(cur.at / 1000)}:t>` : '';
+  const status = `${cur.no ? `**#${cur.no}** ` : ''}${HOW_TEXT[cur.how] ?? HOW_TEXT.input}${when}`;
+  if (cur.draft && cur.how === 'random' && tiers.hasTiers(game)) blocks.push('-# 티어가 저장된 사람이 적어서 무작위로 나눴어요. 🏅 내 티어 설정 후 ⚖️ 밸런스를 눌러 보세요.');
   blocks.push(...teamBlocks(cur.teams, match));
 
   if (tiers.hasTiers(game)) {
     const unknown = match.participants.filter(u => !tiers.getTier(u.id, game)).map(u => escapeMarkdown(u.displayName));
-    if (unknown.length) blocks.push({ text: `-# 티어 미지정 : ${unknown.join(', ')} (⚖️ 티어를 저장하면 밸런스가 정확해져요)`, noDivider: true });
+    // 누가 미지정인지 잘 보이게 이름은 보통 크기·굵게, 안내만 작은 글씨로
+    if (unknown.length) blocks.push({ text: `❓ 티어 미지정 : ${unknown.map(n => `**${n}**`).join(' · ')}\n-# ⚖️ 티어를 저장하면 밸런스가 정확해져요`, noDivider: true });
   }
 
   // 내전 내역: 순번(#3)·직전 표시·시각(몇 분 전)·방식 한 줄 + 팀별 인용 줄. 내역마다 칸을 띄워 구분한다.
@@ -333,7 +334,7 @@ function buildBoardPayload(match, matchMsgId) {
   return payload(card({
     color: gameInfo.color,
     header: title,
-    sub: [gameInfo.name, '⚔️ 팀 설정'],
+    sub: [gameInfo.name, '⚔️ 팀 설정', status],
     thumb: gameThumb(gameInfo),
     thumbAlt: gameInfo.name,
     blocks,
