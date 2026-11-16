@@ -227,6 +227,27 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     client.naejeonMatches.delete(id);
   });
 
+  await flow('내전(테스트 서버): 🧪 가짜 인원 채우기 → 마감 → 팀 짜기 카드', async () => {
+    const G = '1282694117255548960';
+    await naejeon.handleNaejeonModal(mkInteraction({ user: ADMIN, guildId: G, customId: 'naejeon:modal:valorant', fields: { title: '발로 테스트', datetime: '내일 8시', players: '10', description: '' } }));
+    await naejeon.handleNaejeonButton(mkInteraction({ user: ADMIN, guildId: G, customId: 'naejeon:publish', message: new FakeMsg(require(path.join(root, 'handlers/공통/카드.js')).notice('p'), channel) }));
+    const match = [...client.naejeonMatches.values()].at(-1);
+    const id = match.message.id;
+    await naejeon.handleNaejeonButton(mkInteraction({ user: ADMIN, guildId: G, customId: 'naejeon:join', message: match.message }));
+    const manage = mkInteraction({ user: ADMIN, guildId: G, customId: 'naejeon:manage', message: match.message });
+    await naejeon.handleNaejeonButton(manage);
+    assert(JSON.stringify(manage._reply.components).includes('naejeon:test_fill:'), '테스트 서버 관리 메뉴에 가짜 인원 버튼이 없음');
+    await naejeon.handleNaejeonButton(mkInteraction({ user: ADMIN, guildId: G, customId: `naejeon:test_fill:${id}`, message: manage._reply }));
+    assert(match.participants.length === 10 && match.closed, `가짜 인원으로 정원이 안 참(${match.participants.length})`);
+    await new Promise(r => setTimeout(r, 20));
+    assert(match.board?.messageId, '가짜 인원으로 마감됐는데 팀 짜기 카드가 안 올라감');
+    await team.handleTeamButton(mkInteraction({ user: ADMIN, guildId: G, customId: `team:balance:${id}` }));
+    assert(match.board.current?.how === 'balance', '밸런스가 안 됨');
+    const normal = mkInteraction({ user: ADMIN, customId: 'naejeon:manage', message: match.message });
+    common.clearNotifyTimer?.(match);
+    client.naejeonMatches.delete(id);
+  });
+
   await flow('내전: 권한 없음·만료·잘못된 입력 안내', async () => {
     await naejeon.handleNaejeonModal(mkInteraction({ customId: 'naejeon:modal:lol', fields: { title: '', datetime: 'x', players: 'abc', description: '' } }));
     await naejeon.handleNaejeonButton(mkInteraction({ customId: 'naejeon:join', message: new FakeMsg(require(path.join(root, 'handlers/공통/카드.js')).notice('x'), channel) }));

@@ -16,7 +16,27 @@ const {
 const { notice, payload, text } = require('../공통/카드');
 const { displayNameFromInteraction } = require('../공통/이름');
 const { logAction, logError } = require('../공통/로그');
-const { OWNER_IDS } = require('../../config');
+const { OWNER_IDS, isTestGuild } = require('../../config');
+
+// 테스트 서버의 🧪 가짜 인원 채우기에 쓰는 이름과 티어(롤·발로). 두 명은 티어 없이 둬서 "티어 모름" 안내도 보이게 한다.
+const TEST_FILL = [
+  ['윤진', { lol: { tier: 'emerald', div: 2 }, valorant: { tier: 'dia', div: 2 } }],
+  ['승훈', { lol: { tier: 'diamond', div: 1 }, valorant: { tier: 'imm', div: 2 } }],
+  ['시형', { lol: { tier: 'master' }, valorant: { tier: 'asc', div: 3 } }],
+  ['연우', null],
+  ['강현숭이', { lol: { tier: 'platinum', div: 3 }, valorant: { tier: 'dia', div: 1 } }],
+  ['현호', { lol: { tier: 'gold', div: 1 }, valorant: { tier: 'plat', div: 2 } }],
+  ['찬영', { lol: { tier: 'emerald', div: 4 }, valorant: { tier: 'gold', div: 3 } }],
+  ['김잔우', { lol: { tier: 'diamond', div: 3 }, valorant: { tier: 'asc', div: 1 } }],
+  ['승민', { lol: { tier: 'silver', div: 2 }, valorant: { tier: 'silver', div: 3 } }],
+  ['채원', null],
+  ['코리안갱씥 이경민', { lol: { tier: 'bronze', div: 1 }, valorant: { tier: 'bronze', div: 2 } }],
+  ['예예예예예예빈', { lol: { tier: 'gold', div: 3 }, valorant: { tier: 'gold', div: 1 } }],
+  ['도원', { lol: { tier: 'platinum', div: 1 }, valorant: { tier: 'plat', div: 3 } }],
+  ['민수', { lol: { tier: 'iron', div: 2 }, valorant: { tier: 'iron', div: 3 } }],
+  ['용신', { lol: { tier: 'grandmaster' }, valorant: { tier: 'radiant' } }],
+  ['효재', { lol: { tier: 'silver', div: 1 }, valorant: { tier: 'silver', div: 1 } }],
+];
 
 const GAMES = {
   lol:       { name: '리그 오브 레전드', emoji: '<:Lol:1510933684750913626>',    defaultPlayers: 10,   color: 0xC89B3C },
@@ -124,6 +144,17 @@ function buildManageMenu(match, matchMsgId) {
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(!hasParticipants),
   );
+  // 테스트 서버 전용: 혼자서도 마감·팀 짜기 카드를 볼 수 있게 가짜 참가자로 정원을 채운다.
+  if (isTestGuild(match.guildId)) {
+    const max = parseInt(match.data.players) || 0;
+    addRemoveRow.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`naejeon:test_fill:${matchMsgId}`)
+        .setLabel('🧪 가짜 인원 채우기')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(match.participants.length >= max),
+    );
+  }
   if (match.closed) {
     return [
       new ActionRowBuilder().addComponents(
@@ -632,6 +663,33 @@ async function handleNaejeonButton(interaction) {
   }
 
   // ── 참가자 추가 (주최자/관리자 전용) ─────────────────────────
+  // ── 🧪 가짜 인원 채우기 (테스트 서버 전용) ─────────────────────
+  if (customId.startsWith('naejeon:test_fill:')) {
+    const matchMsgId = customId.slice('naejeon:test_fill:'.length);
+    const match = getMatches(interaction.client).get(matchMsgId);
+    if (!match || !isTestGuild(match.guildId)) {
+      await interaction.update(notice('⚠️ **테스트 서버에서만 쓸 수 있어요.**'));
+      return;
+    }
+    const tiers = require('./티어');
+    const max = parseInt(match.data.players) || 0;
+    for (const [name, saved] of TEST_FILL) {
+      if (match.participants.length >= max) break;
+      const id = `test_${name}`;
+      if (match.participants.some(u => u.id === id || u.displayName === name)) continue;
+      match.participants.push({ id, displayName: name });
+      for (const game of ['lol', 'valorant']) tiers.setTier(id, game, saved?.[game] ?? null);
+    }
+    for (let n = 1; match.participants.length < max; n++) { // 준비한 이름보다 정원이 크면 번호로
+      if (!match.participants.some(u => u.id === `test_${n}`)) match.participants.push({ id: `test_${n}`, displayName: `테스트${n}` });
+    }
+    const justClosed = !match.closed && match.participants.length >= max;
+    if (justClosed) markClosed(getMatches(interaction.client), matchMsgId, match, '내전', false);
+    await match.message.edit(buildPublicMessagePayload(match));
+    await interaction.update(buildManagePayload({ label: '내전', match, note: `🧪 **가짜 인원으로 ${max}명을 채웠어요.**${justClosed ? '\n마감됐으니 팀 짜기 카드가 올라가요.' : ''}`, rows: buildManageMenu(match, matchMsgId) }));
+    return;
+  }
+
   if (customId.startsWith('naejeon:add_member:')) {
     const matchMsgId = customId.slice('naejeon:add_member:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
