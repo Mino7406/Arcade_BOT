@@ -1115,7 +1115,7 @@ let ok4;
     }
     assert(!lv.isRaidXpFrozen() && !mod.isPlaygroundPaused('gMain'), '전멸 후 XP 정지 해제');
 
-    // (마) ??? 남아 있는 몬스터: 모집 마감 없음 · 대기 XP 1분 단위 차감 · 패배해도 도주 안 함(-100) · 승리 보상(MVP +아이템)
+    // (마) ??? 남아 있는 몬스터: 모집 마감 없음 · 대기 XP 5초마다 3~5 차감 · 패배해도 도주 안 함(-200) · 승리 보상(MVP +아이템)
     {
       const voidM = E.loadMonsters(path.join(root, 'Monster-all')).find(m => m.id === 'void');
       E.MONSTERS.push(voidM); // 테스트용 Monster 폴더엔 슬라임만 있어 잠깐 등록한다
@@ -1124,7 +1124,7 @@ let ok4;
       const realNow = Date.now;
       const at = (ms, fn) => { Date.now = () => realNow() + ms; return Promise.resolve(fn()).finally(() => { Date.now = realNow; }); };
       try {
-        lv.applyXp('gMain', 'v1', 500); lv.applyXp('gMain', 'v2', 50);
+        lv.applyXp('gMain', 'v1', 5000); lv.applyXp('gMain', 'v2', 50);
         const chV = mkChannel('chV', 'gMain');
         const errV = await mod.forceSpawnRaid({ guildId: 'other', channel: chV, client: rclient }, 'void');
         await settle();
@@ -1135,12 +1135,13 @@ let ok4;
         assert(t0.includes('ERR_0x7F') && t0.includes('지금까지 잃은 XP : -0 XP') && !/## ⏳ \d\d:\d\d:\d\d/.test(t0) && t0.includes('패배 0회') && t0.includes('보상** : +1000 XP') && !t0.includes('MVP는 여기에'), '??? 모집 화면: 전용 문구 · 잃은 XP · 깨진 시계(남은 시간 없음) · 보상은 +1000 XP만');
         await runTimers(); await settle();
         assert(mod.getRaidStatus('gMain').active && mod.getRaidStatus('gMain').monsterName === '???', '모집 시간이 지나도 도주하지 않음(마감 타이머 없음)');
-        // 대기 차감: 10분 흐른 것으로 하고 틱 → 분당 1 XP × 10분 = -10
+        // 대기 차감: 10분 흐른 것으로 하고 틱 → 5초마다 3~5 XP × 120번 = -360~-600
         const v1a = lv.getXp('gMain', 'v1'), v2a = lv.getXp('gMain', 'v2');
         await at(10 * 60_000, async () => { await runTimers(); await settle(); });
-        assert(lv.getXp('gMain', 'v1') === v1a - 10 && lv.getXp('gMain', 'v2') === Math.max(0, v2a - 10), '대기 10분 → 모든 유저 -10 XP(분당 1, 0 밑으로는 안 내려감)');
-        assert(textOf(raidMsg()).includes('지금까지 잃은 XP : -10 XP'), '대기창에 지금까지 잃은 XP 표시');
-        // 전투 시작(차감 멈춤) → 시간 초과 패배 → 도주하지 않고 다시 모집 + 모든 유저 -100
+        const lost10 = v1a - lv.getXp('gMain', 'v1');
+        assert(lost10 >= 360 && lost10 <= 600 && lv.getXp('gMain', 'v2') === Math.max(0, v2a - lost10), `대기 10분 → 모든 유저 같은 양 -${lost10} XP(5초마다 3~5, 360~600 범위)`);
+        assert(textOf(raidMsg()).includes(`지금까지 잃은 XP : -${lost10} XP`) && !textOf(raidMsg()).includes('도주하지 않아요'), '대기창에 지금까지 잃은 XP 표시(차감 속도·도주 안내 문구는 없음)');
+        // 전투 시작(차감 멈춤) → 시간 초과 패배 → 도주하지 않고 다시 모집 + 모든 유저 -200
         await press(mod, raidMsg(), '11', 'raid:role:sword'); await press(mod, raidMsg(), '12', 'raid:role:archer');
         await press(mod, raidMsg(), '11', 'raid:start'); await settle();
         assert(textOf(raidMsg()).includes('TURN 1'), '??? 전투 시작');
@@ -1149,10 +1150,10 @@ let ok4;
         // (테스트용 가짜 채널은 새 메시지 id가 겹쳐 레이드 메시지를 덮어쓸 수 있어, 저장된 상태로 확인한다)
         const sv = () => JSON.parse(fs.readFileSync(statePath, 'utf8')).active.gMain;
         assert(mod.getRaidStatus('gMain').active && mod.getRaidStatus('gMain').phase === 'recruit' && sv().phase === 'recruit' && sv().defeatStacks === 1 && sv().party.length === 0 && sv().battle === undefined, '패배해도 도주하지 않고 다시 모집으로(패배 1회, 파티·전투 초기화)');
-        assert(lv.getXp('gMain', 'v1') === v1b - 100 && lv.getXp('gMain', 'v2') === Math.max(0, v2b - 100), '패배 1회 → 모든 유저 -100 XP(고정)');
-        assert(Math.round(sv().lostPerUser) === 110 && lv.isRaidXpFrozen(), '잃은 XP는 대기 -10 + 패배 -100 = -110, XP 정지는 그대로');
+        assert(lv.getXp('gMain', 'v1') === v1b - 200 && lv.getXp('gMain', 'v2') === Math.max(0, v2b - 200), '패배 1회 → 모든 유저 -200 XP(고정)');
+        assert(Math.round(sv().lostPerUser) === lost10 + 200 && lv.isRaidXpFrozen(), '잃은 XP는 대기 + 패배 -200, XP 정지는 그대로');
         const notes = [...chV.msgs.values()].map(m => (m.last ? noteText(m.last) : '')).filter(Boolean);
-        assert(notes.some(c => c.includes('패배 1회') && c.includes('100 XP') && c.includes('도주하지 않았습니다')), '패배 채널 안내(도주하지 않음)');
+        assert(notes.some(c => c.includes('패배 1회') && c.includes('200 XP') && c.includes('도주하지 않았습니다')), '패배 채널 안내(도주하지 않음)');
         await mod.forceEndRaid('gMain'); await settle();
         assert(!lv.isRaidXpFrozen() && !mod.getRaidStatus('gMain').active, '관리자 종료로 끝낼 수 있음(XP 정지 해제)');
         // 승리 보상: 저장된 전투(보스 HP 1)를 이어서 한 방에 쓰러뜨림

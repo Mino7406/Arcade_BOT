@@ -62,7 +62,7 @@ const raidRules = (r) => r?.monster?.raid ?? null;
 const isPersistent = (r) => !!raidRules(r)?.persistent;
 const clearXpOf = (r) => raidRules(r)?.clearXp ?? CLEAR_XP;
 const mvpBonusOf = (r) => raidRules(r)?.mvpBonusXp ?? MVP_BONUS_XP;
-const DRAIN_MINUTE_MS = 60 * 1000;
+const DRAIN_LOG_MS = 10 * 60 * 1000; // 대기 차감은 5초마다라 로그는 10분에 한 번만 요약해서 남긴다
 const SCHEDULER_TICK_MS = 60 * 1000;
 // 남은 시간 표시(00:52:30)를 글자만 고쳐 갱신하는 주기. 디스코드는 채널당 메시지 수정이 대략 5초에 5번까지라
 // 1초마다는 불가능하고 버튼 반응까지 밀린다 — 모집(최대 1시간)은 10초, 전투 턴(60초)은 5초마다.
@@ -212,10 +212,8 @@ function glitchClock() {
   for (let i = 0; i < 3; i++) { const at = [0, 1, 3, 4, 6, 7][Math.floor(rnd() * 6)]; digits[at] = bad[Math.floor(rnd() * bad.length)]; }
   return digits.join('');
 }
-// 분당 차감량(대기 시간이 길수록 커짐): min(maxPerMin, basePerMin + stepPerMin × floor(대기시간 ÷ stepMs))
-function drainPerMinute(cfg, waitedMs) {
-  return Math.min(cfg.maxPerMin, cfg.basePerMin + cfg.stepPerMin * Math.floor(waitedMs / cfg.stepMs));
-}
+// 대기 차감 한 번(intervalMs 마다)의 양: min~max 사이 무작위 정수
+const drainOnce = (cfg) => cfg.min + Math.floor(Math.random() * (cfg.max - cfg.min + 1));
 const waitedNow = (r, now = Date.now()) => (r.waitedMs || 0) + (r.waitSince ? Math.max(0, now - r.waitSince) : 0);
 
 async function recruitView(r, { redraw = true } = {}) {
@@ -236,7 +234,6 @@ async function recruitView(r, { redraw = true } = {}) {
   // (레벨 시스템이 없는 테스트 서버에서도 문구는 보여줌)
   if (isPersistent(r)) {
     const rules = raidRules(r);
-    const per = rules.drain ? drainPerMinute(rules.drain, waitedNow(r)) : 0;
     sections.push({
       text: '>>> ## ⚠️ ░ERR_0x7F░ XP 시스템 오류\n' +
         `${m.name}${subjectJosa(m.name)} XP 시스템을 ▓▓하고 있습니다. **채팅 · 통화방 · 미니게임 XP 지급이 정지**되었습니다.\n` +
@@ -244,8 +241,8 @@ async function recruitView(r, { redraw = true } = {}) {
     });
     sections.push({
       text: `## ⏳ \`${glitchClock()}\` ░TIME_ERR\n` +
-        `📉 **지금까지 잃은 XP : -${Math.round(r.lostPerUser || 0).toLocaleString()} XP** *(1인당)*${per ? ` · 지금 분당 **-${per} XP**` : ''}\n` +
-        `💀 **패배 ${r.defeatStacks || 0}회** · 패배 1회마다 모든 유저 **-${rules.defeatPenaltyXp ?? 0} XP** · 도주하지 않아요\n` +
+        `📉 **지금까지 잃은 XP : -${Math.round(r.lostPerUser || 0).toLocaleString()} XP** *(1인당)*\n` +
+        `💀 **패배 ${r.defeatStacks || 0}회** · 패배 1회마다 모든 유저 **-${rules.defeatPenaltyXp ?? 0} XP**\n` +
         `**파티 ${r.party.length} / ${PARTY_MAX}** · 역할 버튼을 눌러 참가하세요`,
     });
   } else
@@ -859,19 +856,25 @@ function closeHelpReplies(r) {
 
 // by: 시작을 누른 사람(바로 시작·4번째 참가). 그 사람은 이미 화면을 보고 있으니 멘션에서 뺀다.
 // 모집 시간이 끝나 저절로 시작하면 by가 없어 파티원 전원을 부른다.
-// 남아 있는 몬스터: 모집 대기 중 흐른 시간만큼 XP를 깎는다(1분 단위). 전투 중·끝난 뒤에는 안 깎는다.
+// 남아 있는 몬스터: 모집 대기 중 흐른 시간만큼 XP를 깎는다(drain.intervalMs=5초마다 min~max 무작위). 전투 중·끝난 뒤에는 안 깎는다.
 // 봇이 꺼져 있던 사이에 흐른 시간도 다음 틱에서 한꺼번에 따라잡는다. 레벨 시스템이 없는 서버(테스트 서버)는 숫자만 센다.
 function tickDrain(r, now = Date.now()) {
   const rules = raidRules(r);
   if (!rules?.persistent || !rules.drain || r.phase !== 'recruit' || !r.waitSince) return;
+  const step = rules.drain.intervalMs;
   const waited = waitedNow(r, now);
-  const minutes = Math.min(Math.floor((waited - (r.drainedMs || 0)) / DRAIN_MINUTE_MS), 60 * 24 * 14);
-  if (minutes <= 0) return;
+  const steps = Math.min(Math.floor((waited - (r.drainedMs || 0)) / step), Math.floor((14 * 24 * 60 * 60 * 1000) / step));
+  if (steps <= 0) return;
   let total = 0;
-  for (let i = 1; i <= minutes; i++) total += drainPerMinute(rules.drain, (r.drainedMs || 0) + i * DRAIN_MINUTE_MS);
-  r.drainedMs = (r.drainedMs || 0) + minutes * DRAIN_MINUTE_MS;
+  for (let i = 0; i < steps; i++) total += drainOnce(rules.drain);
+  r.drainedMs = (r.drainedMs || 0) + steps * step;
   r.lostPerUser = (r.lostPerUser || 0) + total;
-  if (r.freezesXp && !isExcludedGuild(r.guildId)) deductXpFromAll(r.guildId, total, `레이드 대기 차감 '${r.monster.name}' (${minutes}분)`);
+  if (r.freezesXp && !isExcludedGuild(r.guildId)) {
+    deductXpFromAll(r.guildId, total, '', { quiet: true });
+    r.drainLogAcc = (r.drainLogAcc || 0) + total;
+    if (!r.drainLogAt) r.drainLogAt = now;
+    else if (now - r.drainLogAt >= DRAIN_LOG_MS) { logSystem({ 유형: "XP 지급", 내용: "레이드 대기 차감 " + r.monster.name + " — 최근 " + Math.round((now - r.drainLogAt) / 60000) + "분간 모든 유저 -" + r.drainLogAcc + " XP" }); r.drainLogAt = now; r.drainLogAcc = 0; }
+  }
   saveActive(r);
 }
 

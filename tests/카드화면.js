@@ -377,8 +377,8 @@ async function buildScreens() {
       add('레이드', `??? — ${title}`, sub, v, rf(v));
     };
     await wait('대기창 (막 출현)', '전용 디자인: 깨진 시계 · 잃은 XP · 패배 횟수 · 보상(MVP 아이템)', { waitedMs: 0, lostPerUser: 0, defeatStacks: 0 });
-    await wait('대기창 (3시간 경과)', '대기가 길수록 분당 차감량이 커짐 · 1인당 잃은 XP가 계속 늘어남', { waitedMs: 3 * H, lostPerUser: 240, defeatStacks: 0 });
-    await wait('대기창 (패배 2회 후)', '졌어도 도주하지 않고 다시 모집 · 패배 1회마다 모든 유저 -100 XP', { waitedMs: 5 * H, lostPerUser: 640, defeatStacks: 2 }, 0);
+    await wait('대기창 (3시간 경과)', '5초마다 -3~5 XP 차감 · 1인당 잃은 XP가 계속 늘어남', { waitedMs: 3 * H, lostPerUser: 8640, defeatStacks: 0 });
+    await wait('대기창 (패배 2회 후)', '졌어도 도주하지 않고 다시 모집 · 패배 1회마다 모든 유저 -200 XP', { waitedMs: 5 * H, lostPerUser: 14800, defeatStacks: 2 }, 0);
     // 전투 장면들
     const vb = (intent, choice = 'attack', n = 4) => {
       const rr = raidState(voidM, n);
@@ -426,8 +426,8 @@ async function buildScreens() {
     await vshot(st, '전투 — 상태이상 중첩 표시', '첫째: 오류·취약·즉사 / 둘째: 거기에 독·냉기·악취까지 — 왼쪽에 세로로 쌓임');
     // 결과와 안내
     const pn = await raidMod.battleView({ ...vb('attack'), showingResult: false });
-    const defeatNote = raidMod.buildEndNoticePayload({ kind: 'defeat', xp: 100, stacks: 2, lost: 640, details: ['128명 · 합계 : -12,800 XP'] });
-    add('레이드', '??? — 패배 채널 안내', '도주하지 않음 · 모든 유저 -100 XP · 지금까지 1인당 잃은 XP', defeatNote);
+    const defeatNote = raidMod.buildEndNoticePayload({ kind: 'defeat', xp: 200, stacks: 2, lost: 14800, details: ['128명 · 합계 : -1,894,400 XP'] });
+    add('레이드', '??? — 패배 채널 안내', '도주하지 않음 · 모든 유저 -200 XP · 지금까지 1인당 잃은 XP', defeatNote);
     const er = vb('attack'); er.phase = 'ended'; er.endedAt = Date.now(); er.frozenAt = Date.now() - 5 * H; er.battle.hp = 0;
     const ev = await raidMod.endView(er, 'clear', [
       { userId: '100', xp: 1000, mvp: true, hackTool: false, gateway: true },

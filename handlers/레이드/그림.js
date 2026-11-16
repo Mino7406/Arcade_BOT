@@ -1197,10 +1197,8 @@ function skillGlitch(ctx, seed) {
     splitRgb(mon.x0 - px(20), mon.y0, mon.x1 + px(20), mon.y1, 3);
     gtxt('CLK ▲ 150%', ctx.mx - 215, ctx.my - 40, 17, '#ff6a78');
   } else if (ctx.fx === 'deadeye') {
-    // 데드아이: 표적 카드의 위·아래 띠가 모자이크로 '초점'이 잠기고, 끊긴 조준 고리 + LOCK
+    // 데드아이: 표적 카드에 끊긴 조준 고리(색 어긋난 복사본) + LOCK
     for (const t of tgts) {
-      pixelate(px(t.x + 4), px(t.y + 4), px(t.x + t.w - 4), px(t.y + 46), px(10)); // 이름·체력 줄은 읽히게 위·아래 띠만 모자이크
-      pixelate(px(t.x + 4), px(t.y + t.h - 52), px(t.x + t.w - 4), px(t.y + t.h - 4), px(10));
       const x1 = t.x + t.w / 2, y1 = t.y + 86;
       // 끊긴 조준 고리: 조각난 호 네 개 + 어긋난 복사본(아이콘 바깥쪽)
       for (let a = 0; a < 4; a++) {
