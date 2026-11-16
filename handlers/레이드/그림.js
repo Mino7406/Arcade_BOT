@@ -1008,7 +1008,8 @@ let themeKey = ''; // 배경 캐시 키 뒤에 붙는다(테마마다 배경을 
 // 직업 아이콘 자리(카드 아이콘 칸)는 건드리지 않는다. 매번 같은 모양(seed).
 const ICON_KEEP = [0, 1, 2, 3].map(i => [Math.round((20 + i * (CARD_W + CARD_GAP) + CARD_W / 2 - 34) * RENDER_SCALE), Math.round((CARD_Y + 46) * RENDER_SCALE), Math.round(68 * RENDER_SCALE), Math.round(80 * RENDER_SCALE)]);
 // 띠를 밀면 안 되는 줄(실제 픽셀) — 시안과 같게
-const BAND_SAFE = { 모집: [[15, 60], [145, 240], [270, 480]], // 모집 카드 아이콘 줄(약 280~330)도 피함 전투: [[10, 80], [150, 240], [260, 480]], 결과: [[10, 140], [150, 480]] };
+// 모집은 카드 아이콘 줄(약 280~330)도 피한다(아이콘은 건드리지 않음 — 사용자 요청)
+const BAND_SAFE = { 모집: [[15, 60], [145, 240], [270, 480]], 전투: [[10, 80], [150, 240], [260, 480]], 결과: [[10, 140], [150, 480]] };
 function corruptPost(scene, seed) {
   const rnd = seeded(seed);
   const w = p.w, h = p.h, buf = p.buf;
