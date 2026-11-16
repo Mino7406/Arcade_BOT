@@ -240,7 +240,7 @@ function makeDraft(match) {
   return { teams, how: canBalance ? 'balance' : 'random', at: Date.now(), draft: true };
 }
 
-// 팀 하나 = 카드 한 칸. 큰 팀 제목 → 평균 티어 → 한 명씩 한 줄(티어 이모지 + 굵은 이름 + 티어 칩).
+// 팀 하나 = 카드 한 칸. 큰 팀 제목 옆에 팀 평균 티어(이모지 + 티어) → 한 명씩 한 줄(티어 이모지 + 굵은 이름 + 티어 칩).
 // 팀이 많으면(5팀 이상) 카드 부품 수 제한에 걸리지 않게 한 칸에 몰아 짧게 쓴다.
 function teamBlocks(teams, match) {
   const game = match.data.game;
@@ -253,11 +253,11 @@ function teamBlocks(teams, match) {
     const scores = memberTiers.map(tr => tiers.tierScore(game, tr)).filter(x => x !== null && x !== undefined);
     const avgTier = scores.length ? tiers.tierFromScore(game, scores.reduce((a, b) => a + b, 0) / scores.length) : null;
     const avgEmoji = avgTier && tiers.tierEmojiId(game, avgTier);
-    const avg = avgTier ? `${avgEmoji ? `<:t:${avgEmoji}> ` : ''}${tiers.tierLabel(game, avgTier)}` : ''; // [평균 <이모지> 다이아몬드4]
+    const avg = avgTier ? `${avgEmoji ? `<:t:${avgEmoji}> ` : ''}${tiers.tierLabel(game, avgTier)}` : ''; // 팀 평균 티어: <이모지> 다이아몬드4
     const title = `${TEAM_ICONS[i] ?? '▫️'} ${t.name ?? `${i + 1} 팀`}`;
     if (compact) {
       const names = t.members.map((n, k) => `${memberTiers[k] ? `${tiers.tierBadge(game, memberTiers[k])} ` : ''}${n}`);
-      return `**${title}**${avg ? ` · 평균 ${avg}` : ''}\n${names.join(' · ')}`;
+      return `**${title}**${avg ? `　·　평균 ${avg}` : ''}\n${names.join(' · ')}`;
     }
     const lines = t.members.map((n, k) => {
       const tr = memberTiers[k];
@@ -266,7 +266,7 @@ function teamBlocks(teams, match) {
       const id = tiers.tierEmojiId(game, tr);
       return `${id ? `<:t:${id}>` : '▸'} **${n}**　${tick}${tiers.tierLabel(game, tr)}${tick}`;
     });
-    return `### ${title}${avg ? `\n**[평균 ${avg}]**` : ''}\n${lines.join('\n')}`;
+    return `### ${title}${avg ? `　·　평균 ${avg}` : ''}\n>>> ${lines.join('\n')}`; // 팀원은 인용 블록(왼쪽 세로 막대)으로 묶는다
   });
   return compact ? [texts.join('\n\n')] : texts;
 }
