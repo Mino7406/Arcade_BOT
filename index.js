@@ -15,7 +15,7 @@ require('./migrate').migrateOldDbFiles();
 const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleNaejeonNotifyModal, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload: buildNaejeonMessagePayload } = require('./handlers/매치/내전');
 const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipNotifyModal, handleMojipMemberAdd, handleMojipMemberRemove, buildMojipMessagePayload } = require('./handlers/매치/모집');
 const { armAutoEnd, autoEndAt, AUTO_CLOSE_DELAY_MS, GENERAL_MESSAGE_DELETE_DELAY_MS, announceMatchCompletionXp, scheduleCancelledDelete, scheduleMessageDelete, deleteMentionMessage, armNotifyReminder, ADMIN_IDS, saveAll, enableSaveNow, loadRows, recoverCancelledEmbeds, ensureMatchRole } = require('./handlers/매치/공용');
-const { handleTeamMatchSelect, handleTeamButton, handleTeamAssignSelect, handleTeamModal } = require('./handlers/매치/팀');
+const { handleTeamSelect, handleTeamButton, handleTeamAssignSelect, handleTeamModal } = require('./handlers/매치/팀');
 const { handleRMatchSelect } = require('./handlers/매치/불러오기');
 const { handleWcButton, handleWcMessage } = require('./handlers/게임/끝말잇기');
 const { handleTttButton } = require('./handlers/게임/틱택토');
@@ -342,6 +342,7 @@ async function onReady(c) {
   // 카드 게임 썸네일(여백 넣어 65%)용 앱 이모지 확인·등록 — 복원하며 카드를 다시 그리기 전에 준비한다.
   await require('./handlers/게임/해킹툴').ensureHackToolEmoji(c); // 해킹 툴 앱 이모지(없으면 등록, 실패하면 🛠️)
   await require('./handlers/공통/썸네일').ensureThumbEmojis(c).catch(err => console.error('썸네일 이모지 준비 실패(원래 그림으로 표시):', err));
+  await require('./handlers/매치/티어').ensureTierEmojis(c).catch(err => console.error('티어 이모지 준비 실패(글자로 표시):', err));
   await restoreMatches(c); // ⬅️ 추가: 저장된 내전/모집 복원
   enableSaveNow(); // 복원이 끝났으므로 이제부터는 게시/취소 직후 바로 저장해도 안전하다
   await recoverCancelledEmbeds(c, new Set([...allowedChannels, MATCH_BONUS_CHANNEL_ID])); // 저장 파일에서 빠진 취소 임베드 삭제 예약 복구
@@ -500,8 +501,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleMojipGameSelect(interaction);
       } else if (interaction.customId.startsWith('mojip:member_remove_select:')) {
         await handleMojipMemberRemove(interaction);
-      } else if (interaction.customId === 'team:match_select') {
-        await handleTeamMatchSelect(interaction);
+      } else if (interaction.customId === 'team:match_select' || interaction.customId.startsWith('team:tier_')) {
+        await handleTeamSelect(interaction); // /팀 내전 고르기, 🏅 내 티어 고르기
       } else if (interaction.customId === 'reload:select') {
         await handleRMatchSelect(interaction);
       } else if (interaction.customId.startsWith('panel:match_delete_select:')) {

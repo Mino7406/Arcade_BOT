@@ -119,7 +119,7 @@ async function buildScreens() {
   add('내전 · 모집', '취소된 내전', '', card.payload(common.buildCancelledCard({ label: '내전', data: base('lol'), byOrganizer: true })));
   add('내전 · 모집', '팀 배정 완료 알림', '팀을 나누면 채널에 올라오는 카드', card.payload(common.buildTeamResultCard(base('lol'), { team1: users(10).slice(0, 5), team2: users(10).slice(5) })));
   add('내전 · 모집', '팀 짜기 카드(처음)', '내전이 마감되면 내전채팅에 자동으로 올라가는 카드', team.buildBoardPayload({ data: base('lol'), participants: users(10), closed: true }, '1'));
-  add('내전 · 모집', '팀 짜기 카드(3판째)', '최근 판은 크게, 지난 판은 작게', team.buildBoardPayload({ data: base('lol'), participants: users(10), closed: true, board: { rounds: [1, 2, 3].map(n => ({ at: n, teams: [{ name: null, members: users(10).slice(0, 5).map(u => u.displayName) }, { name: n === 3 ? '맵' : null, members: users(10).slice(5).map(u => u.displayName) }] })) } }, '1'));
+  add('내전 · 모집', '팀 짜기 카드(팀 정한 뒤)', '지금 팀은 크게, 이전 팀표는 작게', team.buildBoardPayload({ data: base('lol'), participants: users(10), closed: true, board: { current: { how: 'balance', at: Date.now(), teams: [{ name: null, members: users(10).slice(0, 5).map(u => u.displayName) }, { name: '맵', members: users(10).slice(5).map(u => u.displayName) }] }, history: [1, 2].map(n => ({ at: Date.now() - n * 3600e3, how: 'input', teams: [{ name: null, members: users(10).slice(0, 5).map(u => u.displayName) }, { name: null, members: users(10).slice(5).map(u => u.displayName) }] })) } }, '1'));
   add('내전 · 모집', '안내 한 줄 — 만료', '모든 짧은 안내가 같은 카드 모양', card.notice('⚠️ **만료된 내전입니다.**', { ephemeral: true }));
   add('내전 · 모집', '안내 한 줄 — 완료', '', card.notice('✅ **채널에 공개 게시되었습니다!**', { ephemeral: true }));
 

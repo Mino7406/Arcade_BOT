@@ -164,7 +164,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     assert(match.message.isV2, '게시글이 v2가 아님');
   });
 
-  await flow('내전: 마감되면 팀 짜기 카드 → 팀 입력 → 다음 판 → 랜덤', async () => {
+  await flow('내전: 마감되면 팀 짜기 카드 → 팀 입력(티어 저장) → 밸런스 → 랜덤 → 내 티어', async () => {
     await naejeon.handleNaejeonModal(mkInteraction({ user: ADMIN, customId: 'naejeon:modal:lol', fields: { title: '팀 내전', datetime: '내일 8시', players: '4', description: '' } }));
     await naejeon.handleNaejeonButton(mkInteraction({ user: ADMIN, customId: 'naejeon:publish', message: new FakeMsg(require(path.join(root, 'handlers/공통/카드.js')).notice('p'), channel) }));
     const match = [...client.naejeonMatches.values()].at(-1);
@@ -183,20 +183,36 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     assert(!outsider.modalShown, '참가자가 아닌데 입력 창이 뜸');
 
     const first = boardMsg();
-    await team.handleTeamModal(mkInteraction({ user: 'u2', customId: `team:modal:${id}`, fields: { teams: ['이름u1-이름u2', '이름u3-이름u4'].join('\n') } }));
-    assert(match.board.rounds.length === 1, `1판이 저장되지 않음(${match.board.rounds.length})`);
+    // 이름u1 = 참가자 u1 의 표시 이름. 티어를 같이 적으면 저장된다.
+    await team.handleTeamModal(mkInteraction({ user: 'u2', customId: `team:modal:${id}`, fields: { teams: ['이름u1 다2-이름u2 골1', '이름u3-이름u4 마스터'].join(String.fromCharCode(10)) } }));
+    assert(match.board.current?.teams?.length === 2, '입력한 팀이 저장되지 않음');
     assert(first.deleted && boardMsg() !== first, '카드가 맨 아래로 다시 올라오지 않음');
-    assert(JSON.stringify(boardMsg().components).includes('1판'), '카드에 1판 표시가 없음');
+    assert(JSON.stringify(boardMsg().components).includes('지금 팀'), '카드에 지금 팀 표시가 없음');
+    const tierMod = require(path.join(root, 'handlers/매치/티어.js'));
+    assert(tierMod.getTier('u1', 'lol')?.tier === 'diamond' && tierMod.getTier('u1', 'lol')?.div === 2, '팀 입력의 티어(다2)가 저장되지 않음');
+    assert(tierMod.getTier('u4', 'lol')?.tier === 'master', '팀 입력의 티어(마스터)가 저장되지 않음');
+    assert(match.board.current.teams[0].members.join() === '이름u1,이름u2', `티어 글자가 이름에 섞임(${match.board.current.teams[0].members})`);
 
-    await team.handleTeamModal(mkInteraction({ user: 'u2', customId: `team:modal:${id}`, fields: { teams: ['이름u1-이름u3', '이름u2-이름u4'].join('\n') } }));
-    assert(match.board.rounds.length === 1, '10분 안에 다시 입력하면 같은 판을 고쳐야 함');
-    match.board.rounds[0].at -= 11 * 60 * 1000;
+    await team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:balance:${id}` }));
+    assert(match.board.current.how === 'balance' && match.board.history.length === 1, '밸런스 후 이전 팀표로 안 밀림');
     await team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:random:${id}` }));
-    assert(match.board.rounds.length === 2, '10분이 지나면 다음 판으로 쌓여야 함');
+    assert(match.board.history.length === 2, '랜덤 후 이전 팀표가 안 쌓임');
 
     const bad = mkInteraction({ user: 'u2', customId: `team:modal:${id}`, fields: { teams: '혼자' } });
     await team.handleTeamModal(bad);
-    assert(match.board.rounds.length === 2, '잘못된 입력인데 판이 늘어남');
+    assert(match.board.history.length === 2, '잘못된 입력인데 팀이 바뀜');
+
+    // 🏅 내 티어: 티어 고르기 → 단계 고르기 → 저장 / 단계 없는 티어 / 지우기
+    const tierBtn = mkInteraction({ user: 'u3', customId: `team:tier:lol:${id}` });
+    await team.handleTeamButton(tierBtn);
+    assert(tierBtn._reply, '내 티어 메뉴가 안 뜸');
+    await team.handleTeamSelect(mkInteraction({ user: 'u3', customId: `team:tier_pick:lol:${id}`, values: ['emerald'], message: tierBtn._reply }));
+    await team.handleTeamSelect(mkInteraction({ user: 'u3', customId: `team:tier_div:lol:emerald:${id}`, values: ['3'], message: tierBtn._reply }));
+    assert(tierMod.getTier('u3', 'lol')?.tier === 'emerald' && tierMod.getTier('u3', 'lol')?.div === 3, '내 티어(에메랄드3)가 저장되지 않음');
+    await team.handleTeamSelect(mkInteraction({ user: 'u3', customId: `team:tier_pick:valorant:${id}`, values: ['radiant'], message: tierBtn._reply }));
+    assert(tierMod.getTier('u3', 'valorant')?.tier === 'radiant', '단계 없는 티어(레디언트)가 저장되지 않음');
+    await team.handleTeamSelect(mkInteraction({ user: 'u3', customId: `team:tier_pick:valorant:${id}`, values: ['none'], message: tierBtn._reply }));
+    assert(!tierMod.getTier('u3', 'valorant'), '티어 지우기가 안 됨');
 
     match.closed = false; // 마감 해제 후 다시 마감돼도 카드를 또 올리지 않는다
     const before = channel.sent.length;
@@ -205,7 +221,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     assert(channel.sent.length === before, '다시 마감됐는데 카드를 또 올림');
 
     const sel = mkInteraction({ user: 'u3', customId: 'team:match_select', values: [id], message: new FakeMsg(require(path.join(root, 'handlers/공통/카드.js')).notice('s'), channel) });
-    await team.handleTeamMatchSelect(sel);
+    await team.handleTeamSelect(sel);
     assert(boardMsg() && !boardMsg().deleted, '/팀으로 카드를 다시 못 올림');
     common.clearNotifyTimer?.(match);
     client.naejeonMatches.delete(id);
