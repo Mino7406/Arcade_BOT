@@ -152,11 +152,19 @@ function parseTierToken(game, token) {
 }
 
 // ── 저장 ────────────────────────────────────────────────────
-// DB/티어.json: { 유저ID: { lol: { tier, div, at }, valorant: { ... } } }
+// DB/tier.json: { 유저ID: { lol: { tier, div, at }, valorant: { ... } } }
 
 const DB_DIR = path.join(__dirname, '..', '..', 'DB');
-const DB_PATH = path.join(DB_DIR, '티어.json');
+const DB_PATH = path.join(DB_DIR, 'tier.json');
 fs.mkdirSync(DB_DIR, { recursive: true });
+
+// 예전 이름(DB/티어.json)으로 저장돼 있으면 새 이름으로 옮긴다
+const OLD_DB_PATH = path.join(DB_DIR, '티어.json');
+try {
+  if (!fs.existsSync(DB_PATH) && fs.existsSync(OLD_DB_PATH)) fs.renameSync(OLD_DB_PATH, DB_PATH);
+} catch (err) {
+  console.error('티어 저장 파일 이름 바꾸기 실패:', err);
+}
 
 let store = {};
 try {
