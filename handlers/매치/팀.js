@@ -457,7 +457,7 @@ function buildInputModal(match, matchMsgId) {
 
 // ── 🏅 내 티어 설정 ──────────────────────────────────────────────
 // 나만 보이는 카드들: (패널에서) 게임 고르기 → 티어 고르기 → 단계 고르기 / 점수 적기 → 저장 완료.
-// 단계마다 ↩️ 뒤로 버튼이 있다. matchMsgId 가 'panel' 이면 게임모집 패널에서 연 것이라 게임 고르기로 돌아갈 수 있다.
+// 단계마다 ↩️ 뒤로 버튼이 있다(이름은 모두 '↩️ 뒤로'). matchMsgId 가 'panel' 이면 게임모집 패널에서 연 것이라 게임 고르기로 돌아갈 수 있다.
 
 const GAME_COLORS = { lol: 0xC89B3C, valorant: 0xFF4655, overwatch: 0xF99E1A, pubg: 0xC8A96E };
 
@@ -540,7 +540,7 @@ function buildTierPickPayload(game, matchMsgId, userId) {
     .setPlaceholder('티어를 고르세요')
     .addOptions(options);
   const rows = [new ActionRowBuilder().addComponents(menu)];
-  if (matchMsgId === 'panel') rows.push(new ActionRowBuilder().addComponents(backButton('team:tier_games:panel', '↩️ 게임 다시 고르기')));
+  if (matchMsgId === 'panel') rows.push(new ActionRowBuilder().addComponents(backButton('team:tier_games:panel', '↩️ 뒤로')));
   return payload(tierCard(game, {
     header: '🏅 내 티어 설정',
     thumbTier: mine,
@@ -567,7 +567,7 @@ function buildTierDivPayload(game, tierKey, matchMsgId) {
     blocks: [`-# ${ladder.divOrder === 'desc' ? '숫자가 작을수록 높아요' : '숫자가 클수록 높아요'} (${t.name} ${divs[0]}이 가장 높음)`],
     rows: [
       new ActionRowBuilder().addComponents(menu),
-      new ActionRowBuilder().addComponents(backButton(`team:tier_back:${game}:${matchMsgId}`, '↩️ 티어 다시 고르기')),
+      new ActionRowBuilder().addComponents(backButton(`team:tier_back:${game}:${matchMsgId}`, '↩️ 뒤로')),
     ],
   }));
 }
@@ -583,7 +583,7 @@ function buildTierScoreAskPayload(game, key, matchMsgId) {
     rows: [new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`team:tier_score:${game}:${key}:${matchMsgId}`).setLabel(`✏️ ${unit} 적기`).setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId(`team:tier_save:${game}:${key}:${matchMsgId}`).setLabel('점수 없이 저장').setStyle(ButtonStyle.Primary),
-      backButton(`team:tier_back:${game}:${matchMsgId}`, '↩️ 티어 다시 고르기'),
+      backButton(`team:tier_back:${game}:${matchMsgId}`, '↩️ 뒤로'),
     )],
   }));
 }
@@ -600,12 +600,12 @@ function buildTierScoreModal(game, key, matchMsgId) {
 }
 
 function buildTierSavedPayload(game, tier, matchMsgId) {
-  const buttons = [backButton(`team:tier_back:${game}:${matchMsgId}`, '🔁 다시 설정')];
-  if (matchMsgId === 'panel') buttons.push(backButton('team:tier_games:panel', '↩️ 다른 게임'));
+  // 뒤로: 패널에서 열었으면 게임 고르기(내 티어 목록)로, 카드에서 열었으면 티어 고르기로
+  const buttons = [backButton(matchMsgId === 'panel' ? 'team:tier_games:panel' : `team:tier_back:${game}:${matchMsgId}`, '↩️ 뒤로')];
   return payload(tierCard(game, {
     header: tier ? '✅ 티어를 저장했어요' : '🗑️ 저장한 티어를 지웠어요',
     thumbTier: tier,
-    blocks: [tier ? `## ${tierLine(game, tier)}` : '-# 다시 설정하려면 아래 버튼을 눌러 주세요.'],
+    blocks: [tier ? `## ${tierLine(game, tier)}` : '-# 다시 설정하려면 ↩️ 뒤로를 눌러 주세요.'],
     footer: tier ? '팀 짜기 카드의 이름 옆 이모지와 ⚖️ 밸런스에 바로 반영돼요' : undefined,
     rows: [new ActionRowBuilder().addComponents(...buttons)],
   }));
