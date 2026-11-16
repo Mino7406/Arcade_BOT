@@ -124,7 +124,7 @@ async function buildScreens() {
   // 포지션: 저장 파일을 건드리지 않게 티어 조회 함수만 잠깐 바꿔 끼워 그린다.
   {
     const tm = req('handlers/매치/티어.js');
-    const orig = { getTier: tm.getTier, getPositions: tm.getPositions, getRoleTiers: tm.getRoleTiers };
+    const orig = { getTier: tm.getTier, getPositions: tm.getPositions, getRoleTiers: tm.getRoleTiers, openTier: tm.openTier, hasRoleQueueTier: tm.hasRoleQueueTier };
     const LOL = ['top', 'jungle', 'mid', 'adc', 'support'];
     const lolTiers = [['diamond', 2], ['emerald', 1], ['platinum', 3], ['diamond', 4], ['gold', 1], ['emerald', 3], ['diamond', 1], ['platinum', 1], ['emerald', 4], ['gold', 2]];
     const owTiers = { 100: { tank: ['diamond', 2] }, 101: { damage: ['master', 4], support: ['diamond', 1] }, 102: { damage: ['platinum', 2] }, 103: { support: ['emerald', 3] }, 104: { support: ['gold', 1], tank: ['platinum', 5] }, 105: { tank: ['emerald', 2] }, 106: { damage: ['diamond', 3] }, 107: { damage: ['emerald', 1] }, 108: { support: ['diamond', 5] }, 109: { support: ['platinum', 1] } };
@@ -143,6 +143,8 @@ async function buildScreens() {
     };
     tm.getTier = fake;
     tm.getRoleTiers = uid => Object.fromEntries(tm.OW_ROLES.map(r => [r.key, fake(uid, `overwatch.${r.key}`)]));
+    tm.openTier = uid => tm.getTier(uid, 'overwatch.open') ?? tm.getTier(uid, 'overwatch');
+    tm.hasRoleQueueTier = uid => tm.OW_ROLES.some(r => !r.open && tm.getTier(uid, `overwatch.${r.key}`));
     tm.getPositions = (uid, game) => {
       const i = Number(uid) - 100;
       if (uid === 'me') return game === 'lol' ? ['mid', 'jungle'] : [];
@@ -156,7 +158,8 @@ async function buildScreens() {
     add('내전 · 모집', '팀 짜기 카드(오버워치 역할별 티어)', '돌격1·공격2·지원2로 맡기고, 맡은 역할의 티어를 보여 줌', team.buildBoardPayload({ data: { ...base('lol'), game: 'overwatch', gameInfo: owInfo, title: '오버워치 내전' }, participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: halves(named) }, history: [] } }, '1'));
     const twelve = users(12).map((u, i) => (i >= 10 ? { ...u, displayName: u.displayName + '2' } : u));
     owTiers[110] = { tank: ['master', 3] }; owTiers[111] = { tank: ['gold', 2], damage: ['platinum', 4] };
-    add('내전 · 모집', '팀 짜기 카드(오버워치 6vs6)', '팀이 6명이면 돌격2·공격2·지원2로 저절로 바뀜', team.buildBoardPayload({ data: { ...base('lol'), game: 'overwatch', gameInfo: owInfo, title: '오버워치 6vs6 내전', players: '12' }, participants: twelve, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: [{ name: null, members: twelve.slice(0, 6).map(u => u.displayName) }, { name: null, members: twelve.slice(6).map(u => u.displayName) }] }, history: [] } }, '1'));
+    owTiers[100].open = ['master', 2]; owTiers[103].open = ['diamond', 4]; owTiers[107].open = ['grandmaster', 5];
+    add('내전 · 모집', '팀 짜기 카드(오버워치 6vs6)', '6vs6은 자유(오픈 큐): 역할 없이 자유 티어(없으면 가장 높은 역할 티어)로 계산', team.buildBoardPayload({ data: { ...base('lol'), game: 'overwatch', gameInfo: owInfo, title: '오버워치 6vs6 내전', players: '12' }, participants: twelve, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: [{ name: null, members: twelve.slice(0, 6).map(u => u.displayName) }, { name: null, members: twelve.slice(6).map(u => u.displayName) }] }, history: [] } }, '1'));
     tm.getTier = (uid, gk) => (uid === 'me' ? fake('100', gk) ?? fake('101', gk) : fake(uid, gk));
     tm.getRoleTiers = uid => Object.fromEntries(tm.OW_ROLES.map(r => [r.key, fake(uid === 'me' ? '104' : uid, `overwatch.${r.key}`)]));
     add('나만 보이는 메시지', '🏅 내 티어 설정 — 롤(포지션 버튼)', '티어 고르기 아래 🧭 포지션 설정', team.buildTierPickPayload('lol', '1', 'me'));

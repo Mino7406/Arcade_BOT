@@ -3,7 +3,7 @@
 // 내전에 거의 같은 사람들이 계속 오니까 한 번 저장한 티어를 다음 내전에도 그대로 쓴다.
 // 저장은 두 가지로 들어온다: 팀 짜기 카드의 🏅 내 티어 설정(직접 고르기), 팀 입력에 "승훈 불2"처럼 적은 것(자동 갱신).
 // 이모지는 assets/티어/*.png(각 게임 공식 티어 그림을 128px로 줄인 것)를 봇이 켜질 때 앱 이모지로 등록해 쓴다.
-// 롤·오버워치는 티어마다 그림 하나(단계는 숫자로 붙임), 발로란트·배그는 단계마다 그림이 따로 있다. 오버워치 상위 500은 그림 없음.
+// 롤·오버워치는 티어마다 그림 하나(단계는 숫자로 붙임), 발로란트·배그는 단계마다 그림이 따로 있다.
 
 const fs = require('fs');
 const path = require('path');
@@ -47,7 +47,7 @@ const LADDERS = {
     ],
     scoreUnit: 'RR',
   },
-  // 오버워치: 브론즈~챔피언 모두 5단계(5 낮음 → 1 높음), 2026년 8월에 플래티넘과 다이아 사이에 에메랄드가 생겼다. 상위 500은 순위표.
+  // 오버워치: 브론즈~챔피언 모두 5단계(5 낮음 → 1 높음), 2026년 8월에 플래티넘과 다이아 사이에 에메랄드가 생겼다.
   overwatch: {
     name: '오버워치',
     divOrder: 'desc',
@@ -61,7 +61,6 @@ const LADDERS = {
       { key: 'master',      name: '마스터',       short: '마',   divs: 5, aliases: ['마', '마스터'] },
       { key: 'grandmaster', name: '그랜드마스터', short: '그마', divs: 5, aliases: ['그', '그마', '그랜드마스터'] },
       { key: 'champion',    name: '챔피언',       short: '챔',   divs: 5, aliases: ['챔', '챔피언'] },
-      { key: 'top500',      name: '상위 500',     short: '탑500', divs: 0, aliases: ['탑오백', '상위오백'] },
     ],
   },
   // 배그(PC): 브론즈~다이아 4단계(4 낮음 → 1 높음), 마스터·서바이버는 RP 점수제.
@@ -127,6 +126,8 @@ const OW_ROLES = [
   { key: 'tank', name: '돌격', icon: '🛡️', slots: 1, aliases: ['돌격', '탱', '탱커'] },
   { key: 'damage', name: '공격', icon: '⚔️', slots: 2, aliases: ['공격', '딜', '딜러'] },
   { key: 'support', name: '지원', icon: '💉', slots: 2, aliases: ['지원', '힐', '힐러', '서폿'] },
+  // 자유(오픈 큐): 6vs6 은 역할 제한이 없어서 이 티어로 계산한다. 자리가 아니라 직접 입력의 역할 글자로는 안 받는다.
+  { key: 'open', name: '자유', icon: '🔓', slots: 0, aliases: [], open: true },
 ];
 
 function positionName(game, key) {
@@ -281,6 +282,16 @@ function getTier(userId, gk) {
 
 function getRoleTiers(userId) {
   return Object.fromEntries(OW_ROLES.map(r => [r.key, getTier(userId, `overwatch.${r.key}`)]));
+}
+
+// 역할 고정(5vs5) 티어를 하나라도 저장했는지(자유 티어는 빼고)
+function hasRoleQueueTier(userId) {
+  return OW_ROLES.some(r => !r.open && getTier(userId, `overwatch.${r.key}`));
+}
+
+// 6vs6(자유) 계산용 티어: 자유 티어 → 없으면 역할 티어 중 가장 높은 것
+function openTier(userId) {
+  return getTier(userId, 'overwatch.open') ?? getTier(userId, 'overwatch');
 }
 
 function getPositions(userId, game) {
@@ -446,6 +457,8 @@ module.exports = {
   parseTierToken,
   getTier,
   getRoleTiers,
+  hasRoleQueueTier,
+  openTier,
   getPositions,
   setTier,
   setPositions,

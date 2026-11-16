@@ -690,12 +690,13 @@ async function handleNaejeonButton(interaction) {
           const t = list[(match.participants.length * 3) % (list.length - 1)];
           tier = t.divs ? { tier: t.key, div: (match.participants.length % t.divs) + 1 } : { tier: t.key, score: 250 };
         }
-        if (game === 'overwatch') { // 오버워치는 롤별 티어로: 사람마다 1~2개 롤
+        if (game === 'overwatch') { // 오버워치는 역할별 티어로: 사람마다 1~2개 역할 + 자유(6vs6) 티어
           tiers.setTier(id, game, null);
           const k = match.participants.length;
-          const roles = tiers.OW_ROLES.map(r => r.key);
+          const roles = tiers.OW_ROLES.filter(r => !r.open).map(r => r.key);
           const mine = tier ? [roles[k % 3], ...(k % 2 ? [roles[(k + 1) % 3]] : [])] : [];
           for (const r of roles) tiers.setTier(id, `overwatch.${r}`, mine.includes(r) ? tier : null);
+          tiers.setTier(id, 'overwatch.open', tier);
           continue;
         }
         tiers.setTier(id, game, tier);

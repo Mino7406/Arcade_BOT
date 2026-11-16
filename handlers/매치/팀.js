@@ -266,8 +266,9 @@ function randomTeams(participants) {
 }
 
 // 참가자마다 점수. 티어를 모르는 사람은 아는 사람들의 중간값(아무도 모르면 0)으로 친다.
-function participantScores(participants, game) {
-  const known = participants.map(u => tiers.tierScore(game, tiers.getTier(u.id, game)));
+// open: 오버워치 6vs6(자유) — 자유 티어를 먼저 쓴다
+function participantScores(participants, game, { open = false } = {}) {
+  const known = participants.map(u => tiers.tierScore(game, open ? tiers.openTier(u.id) : tiers.getTier(u.id, game)));
   const sorted = known.filter(s => s !== null).sort((a, b) => a - b);
   const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
   return known.map(s => (s === null ? median : s));
@@ -276,15 +277,14 @@ function participantScores(participants, game) {
 // ── 포지션 배정 ─────────────────────────────────────────────
 // 롤·오버워치에서 팀 인원이 맞으면 자리를 하나씩 맡긴다.
 //  - 롤 5명: 탑~서폿
-//  - 오버워치 5명(5vs5): 돌격1·공격2·지원2 / 6명(6vs6): 돌격2·공격2·지원2 — 팀 인원으로 저절로 바뀐다(내전 정원 12명이면 6vs6)
+//  - 오버워치 5명(5vs5): 돌격1·공격2·지원2
+//  - 오버워치 6명(6vs6)은 자유(오픈 큐)라 역할을 정해 주지 않고, 사람마다 자유 티어(없으면 가장 높은 역할 티어)로 계산한다
 // 맡긴 자리가 그 사람 생각과 얼마나 다른지를 "비용"으로 매겨, 밸런스 때 티어 차이에 더해 함께 줄인다(티어 한 단계 = 1).
 const LINEUP_SLOTS = {
   lol: { 5: ['top', 'jungle', 'mid', 'adc', 'support'] },
-  overwatch: {
-    5: ['tank', 'damage', 'damage', 'support', 'support'],
-    6: ['tank', 'tank', 'damage', 'damage', 'support', 'support'],
-  },
+  overwatch: { 5: ['tank', 'damage', 'damage', 'support', 'support'] },
 };
+const isOwOpen = (game, size) => game === 'overwatch' && size === 6; // 6vs6 자유
 const slotsFor = (game, size) => LINEUP_SLOTS[game]?.[size] ?? null;
 const POS_SUB_COST = 0.5; // 롤: 부 포지션을 맡음
 const POS_OFF_COST = 1.5; // 롤: 주·부 둘 다 아닌 자리 / 오버워치: 티어를 저장 안 한 롤
@@ -322,7 +322,7 @@ function slotFit(user, game, slot, base) {
   }
   const roleTier = user?.id ? tiers.getTier(user.id, `overwatch.${slot}`) : null;
   if (roleTier) return { cost: 0, score: tiers.tierScore(game, roleTier) };
-  const hasRoles = !!user?.id && Object.values(tiers.getRoleTiers(user.id)).some(Boolean);
+  const hasRoles = !!user?.id && tiers.hasRoleQueueTier(user.id);
   return hasRoles ? { cost: POS_OFF_COST, score: base - OW_OFF_ROLE } : { cost: 0, score: base };
 }
 
@@ -349,7 +349,7 @@ function balanceTeams(participants, game) {
   const n = participants.length;
   const order = shuffle(participants.map((u, i) => i)); // 같은 차이 중 고를 때 매번 다르게
   const users = order.map(i => participants[i]);
-  const scores = participantScores(users, game);
+  const scores = participantScores(users, game, { open: isOwOpen(game, Math.ceil(n / 2)) }); // 오버워치 6vs6 은 자유 티어로
   const total = scores.reduce((a, b) => a + b, 0);
   const size = Math.ceil(n / 2);
   const withLineup = !!(slotsFor(game, size) || slotsFor(game, n - size));
@@ -444,7 +444,7 @@ function makeDraft(match) {
 // 카드에 보여 줄 팀의 자리 배정. 롤·오버워치 팀 인원이 맞고, 누구라도 포지션(오버워치는 역할 티어)을 저장했거나 직접 고정한 자리가 있을 때만.
 function teamLineup(resolved, game, match, pins = []) {
   if (!slotsFor(game, resolved.length)) return null;
-  const hasData = pins.some(Boolean) || resolved.some(u => u && (game === 'lol' ? tiers.getPositions(u.id, 'lol').length : Object.values(tiers.getRoleTiers(u.id)).some(Boolean)));
+  const hasData = pins.some(Boolean) || resolved.some(u => u && (game === 'lol' ? tiers.getPositions(u.id, 'lol').length : tiers.hasRoleQueueTier(u.id)));
   if (!hasData) return null;
   const allScores = participantScores(match.participants, game);
   const byId = new Map(match.participants.map((u, i) => [u.id, allScores[i]]));
@@ -486,6 +486,7 @@ function teamBlocks(teams, match) {
     const memberTiers = resolved.map((u, k) => {
       if (!withTiers || !u) return null;
       if (game === 'overwatch' && slots[k]) return tiers.getTier(u.id, `overwatch.${slots[k]}`) ?? tiers.getTier(u.id, game); // 맡은 역할의 티어
+      if (isOwOpen(game, t.members.length)) return tiers.openTier(u.id); // 6vs6 자유: 자유 티어(없으면 가장 높은 역할 티어)
       return tiers.getTier(u.id, game);
     });
     const scores = memberTiers.map(tr => tiers.tierScore(game, tr)).filter(x => x !== null && x !== undefined);
@@ -903,7 +904,7 @@ function buildOwRolesPayload(matchMsgId, userId) {
     thumbTier: tiers.getTier(userId, 'overwatch'),
     blocks: [
       `**역할별 티어**\n${tiers.OW_ROLES.map(r => `${tiers.positionIcon('overwatch', r.key)} **${r.name}**　${tierLine(`overwatch.${r.key}`, rt[r.key])}`).join('\n')}`,
-      '**어느 역할 티어를 설정할까요?**\n-# 하는 역할만 저장하면 돼요', // 안내를 질문과 같은 칸에(사이 구분선 없이)
+      '**어느 역할 티어를 설정할까요?**\n-# 하는 역할만 저장하면 돼요 · 6vs6은 🔓 자유 티어를 써요', // 안내를 질문과 같은 칸에(사이 구분선 없이)
     ],
     rows: [new ActionRowBuilder().addComponents(...buttons)],
   }), { ephemeral: true });
