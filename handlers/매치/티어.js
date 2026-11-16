@@ -401,6 +401,12 @@ function positionIcon(game, key) {
   return baseGame(game) === 'overwatch' ? owRole(key)?.icon ?? '' : '';
 }
 
+// 역할이 없는 사람 자리에 넣는 투명 아이콘(pos_blank.png). 역할 아이콘 칸을 세로로 맞추려고 쓴다. 없으면 ''.
+function blankIcon() {
+  const id = emojiIds.get('pos_blank');
+  return id ? `<:pos_blank:${id}>` : '';
+}
+
 // 이름 앞에 붙일 글자. 이모지가 준비됐으면 이모지(롤은 단계 숫자를 뒤에), 아니면 "[다2]" 같은 글자.
 function tierBadge(gk, tier) {
   const game = baseGame(gk);
@@ -439,6 +445,7 @@ module.exports = {
   positionEmojiId,
   positionEmoji,
   positionIcon,
+  blankIcon,
   // 화면 모음 전용: 봇 없이 포지션 아이콘을 그릴 수 있게 자리표시 ID를 넣는다
   usePreviewPositionEmojis: () => allEmojiFiles().filter(f => f.startsWith('pos_')).forEach(f => emojiIds.set(f, '0')),
   EMOJI_DIR,

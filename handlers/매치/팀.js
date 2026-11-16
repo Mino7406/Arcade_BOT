@@ -450,13 +450,14 @@ function teamLineup(resolved, game, match, pins = []) {
   return lineup(resolved, game, resolved.map(u => (u ? byId.get(u.id) ?? median : median)), pins);
 }
 
-// 팀원마다 맡은 자리 키(자리 배정 → 직접 고정 → 발로는 저장한 주 역할 순서로). 없으면 null.
+// 팀원마다 맡은 자리 키(자리 배정 → 직접 고정 → 롤·발로는 저장한 주 포지션 순서로). 없으면 null.
+// 롤도 팀 인원이 5명이 아니면 자리 배정이 없어서, 저장한 주 포지션을 보여 준다.
 function memberSlots(t, resolved, game, lu) {
   const pins = t.pos || [];
   return t.members.map((n, k) => {
     if (lu) return lu.slots[k];
     if (pins[k]) return pins[k];
-    if (game === 'valorant' && resolved[k]) return tiers.getPositions(resolved[k].id, 'valorant')[0] ?? null;
+    if ((game === 'valorant' || game === 'lol') && resolved[k]) return tiers.getPositions(resolved[k].id, game)[0] ?? null;
     return null;
   });
 }
@@ -496,14 +497,18 @@ function teamBlocks(teams, match) {
     }
     const order = t.members.map((n, k) => k);
     if (lu) { const order0 = slotsFor(game, t.members.length); order.sort((a, b) => order0.indexOf(lu.slots[a]) - order0.indexOf(lu.slots[b])); }
+    // 역할 아이콘은 맨 앞 한 칸에 세로로 맞춘다: [역할] [티어] 이름 · 티어
+    // 역할이 없는 사람(발로 미저장 등)은 투명 아이콘으로 칸을 채워 줄이 들쭉날쭉하지 않게 한다.
+    // 아이콘 이모지가 아직 없으면(봇 등록 전) 예전처럼 이름 뒤에 글자로 붙인다.
+    const blank = tiers.blankIcon();
+    const iconCol = slots.some(Boolean)
+      && slots.every(s => (s ? tiers.positionEmojiId(game, s) : blank));
     const lines = order.map(k => {
       const n = t.members[k];
       const tr = memberTiers[k];
       const slot = slotLabel(game, slots[k]);
-      // 자리 배정(롤·오버워치)은 모두에게 있고 줄도 자리 순서라, 아이콘을 맨 앞에 두면 세로로 한 줄로 맞는다: [역할] [티어] 이름 · 티어
-      // 발로 역할·인원이 안 맞는 팀의 고정 자리는 일부만 있어 맨 앞에 두면 줄이 들쭉날쭉해지므로 뒤에 붙인다. 아이콘 이모지가 없을 때(글자)도 뒤에.
-      const lead = lu && slot && tiers.positionEmojiId(game, slots[k]) ? `${slot} ` : '';
-      const tail = slot && !lead ? ` · ${slot}` : '';
+      const lead = iconCol ? `${slots[k] ? slot : blank} ` : '';
+      const tail = slot && !iconCol ? ` · ${slot}` : '';
       if (!withTiers) return `▸ **${escapeMarkdown(n)}**`;
       if (!tr) return `${lead}❓ **${escapeMarkdown(n)}**${tail}`;
       const id = tiers.tierEmojiId(game, tr);
