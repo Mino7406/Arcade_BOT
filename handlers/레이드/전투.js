@@ -39,7 +39,7 @@ const PARTY_DAMAGE_RATE = { 1: 1.35, 2: 1.07, 3: 1.28, 4: 1.8 }; // 4인: 치유
 // 몬스터가 주는 피해(기술·독) 배율 = 인원별 배율 × 몬스터 파일의 damageRate(없으면 1).
 // damageRate는 baseHp를 줄여 전투를 짧게 하면서 승률은 그대로 두려고 몬스터마다 맞춘 값.
 function monsterDamageRate(battle) {
-  return (PARTY_DAMAGE_RATE[battle.members.length] ?? 1) * (battle.monster.damageRate ?? 1);
+  return (PARTY_DAMAGE_RATE[battle.members.length] ?? 1) * (battle.monster.damageRate ?? 1) * (battle.members.length === 1 ? (battle.monster.soloDamageRate ?? 1) : 1); // soloDamageRate: 1인(테스트 서버 전용) 보정
 }
 const PARTY_BASE_SIZE = 4;       // 몬스터 baseHp가 기준으로 삼는 인원(역할 4종 한 명씩).
 // 인원수별 HP 보정. 목표는 2~4인 모두 약 19~20턴(예전 24턴에서 줄임 — 실측 턴당 혼자 5~7초, 여럿이면 더 걸려 3~5분).
@@ -121,6 +121,7 @@ function monsterProblems(m) {
   if (!(m.baseHp > 0)) problems.push('baseHp는 0보다 큰 숫자');
   if (m.enabled !== undefined && typeof m.enabled !== 'boolean') problems.push('enabled는 true/false');
   if (m.damageRate !== undefined && !(m.damageRate > 0)) problems.push('damageRate는 0보다 큰 숫자');
+  if (m.soloDamageRate !== undefined && !(m.soloDamageRate > 0)) problems.push('soloDamageRate는 0보다 큰 숫자');
   const s = m.sprite;
   if (!Array.isArray(s?.rows) || !s.rows.length || !s.palette) problems.push('sprite.rows/palette 없음');
   else {

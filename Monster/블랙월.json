@@ -6,7 +6,7 @@
     "raid 블록(이 몬스터만의 레이드 규칙 — index.js): persistent = 모집 시간 제한·도주 없음(토벌할 때까지 남음). drain = 모집 대기 동안 서버 모든 유저의 XP를 intervalMs(5초)마다 min~max(3~5)만큼 깎는다(값은 매번 무작위), 전투 중에는 멈춘다. defeatPenaltyXp = 패배 1번당 모든 유저 고정 차감. clearXp = 파티원 전원 보상(MVP도 같은 XP), mvpBonusXp = MVP 추가 XP(0 — 이 몬스터는 MVP에게 XP를 더 주지 않고), mvpItem = MVP가 받는 아이템(gateway = 블랙월 게이트웨이, 룰렛에서 발동하면 100% 잭팟).",
     "ui.moveBanner \"terminal\": 기술 이름을 말풍선 대신 터미널 명령줄 띠(> EXEC …)로 보여 준다.",
     "평타 없음: 기본 키 attack이 데이터 크래시(전원 공격 + 오류)다. error(오류): 맞은 사람(방어하면 안 걸림) 2턴 동안 고른 행동이 무작위 다른 행동으로 바뀜. vuln(취약): 전원 2턴 받는 피해 +30%. doom(즉사, kill -9): 다음 턴 확률로 HP 0(방어하면 안 걸림). 셋 다 치유사 스킬로 해제.",
-    "baseHp는 4인 기준 HP, damageRate는 이 몬스터가 주는 피해 배율. 바꾸면 node tests/raid/밸런스시뮬.js void 로 승률·턴을 다시 확인한다. 이 몬스터는 다른 몬스터보다 훨씬 어렵게(보통 플레이 승률 30~45%) 맞춘다. 전투 시간은 슬라임(평균 약 18턴 ≈ 실전 5분)의 약 1.7배(약 30턴 ≈ 8~10분)가 목표.",
+    "baseHp는 4인 기준 HP, damageRate는 이 몬스터가 주는 피해 배율. 바꾸면 node tests/raid/밸런스시뮬.js void 로 승률·턴을 다시 확인한다. 이 몬스터는 다른 몬스터보다 훨씬 어렵게(보통 플레이 승률 30~45%) 맞춘다. soloDamageRate는 파티원이 1명일 때(테스트 서버 전용)만 곱하는 추가 피해 배율(1.6 — 1인 보통 승률 약 27%). 전투 시간은 슬라임(평균 약 18턴 ≈ 실전 5분)의 약 1.7배(약 30턴 ≈ 8~10분)가 목표.",
     "예고(telegraph) 문구는 터미널 명령 실행 투(> NAME 설명)로 쓴다 — 다음 행동 칸이 ui.moveBanner terminal 전용 디자인(검은 명령줄 칸 + > NEXT 칩 + 커서)이라서."
   ],
   "enabled": false,
@@ -18,6 +18,7 @@
   "theme": "corrupt",
   "baseHp": 8500,
   "damageRate": 0.45,
+  "soloDamageRate": 1.6,
   "rage": {
     "hpRatio": 0.4,
     "damageRate": 0.8
