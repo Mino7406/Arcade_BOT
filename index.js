@@ -23,6 +23,7 @@ const { handleOmokButton, handleOmokMessage } = require('./handlers/게임/오�
 const { loadRoulette, saveRoulette, handleRouletteButton } = require('./handlers/게임/룰렛');
 const { loadBotMatchXp, saveBotMatchXp } = require('./handlers/게임/봇전한도');
 const { loadHackTools } = require('./handlers/게임/해킹툴');
+const { loadGateways, handleGatewayPick, handleGatewayButton } = require('./handlers/게임/블랙월게이트웨이');
 const { loadDmPrefs, saveDmPrefs, buildDmSettingPayload, handleDmSettingButton } = require('./handlers/매치/DM설정');
 const { loadRealmRoster, saveRealmRoster } = require('./forms/마크/명단');
 const { startQuizScheduler, handleQuizMessage } = require('./handlers/게임/퀴즈');
@@ -341,6 +342,7 @@ async function onReady(c) {
   c.startedAt = new Date();
   // 카드 게임 썸네일(여백 넣어 65%)용 앱 이모지 확인·등록 — 복원하며 카드를 다시 그리기 전에 준비한다.
   await require('./handlers/게임/해킹툴').ensureHackToolEmoji(c); // 해킹 툴 앱 이모지(없으면 등록, 실패하면 🛠️)
+  await require('./handlers/게임/블랙월게이트웨이').ensureGatewayEmoji(c); // 블랙월 게이트웨이 앱 이모지(없으면 등록, 실패하면 🌐)
   await require('./handlers/공통/썸네일').ensureThumbEmojis(c).catch(err => console.error('썸네일 이모지 준비 실패(원래 그림으로 표시):', err));
   await require('./handlers/매치/티어').ensureTierEmojis(c).catch(err => console.error('티어 이모지 준비 실패(글자로 표시):', err));
   require('./handlers/매치/티어').refreshFileNames(c).catch(err => console.error('티어 파일 이름 채우기 실패:', err)); // 기다리지 않음: tier.json 을 이름·보기가 붙은 모양으로 다시 씀
@@ -351,6 +353,7 @@ async function onReady(c) {
   loadXpState(); // XP 긴급정지/뉴비부스트 스위치 상태 복원
   loadRoulette(); // 룰렛 일일 플레이 기록 복원
   loadHackTools(); // 레이드 보상 해킹 툴 보유량 복원(바뀔 때마다 바로 저장)
+  loadGateways(); // ??? 레이드 MVP 보상 블랙월 게이트웨이 보유량 복원
   loadBotMatchXp(); // 끝말잇기·틱택토 봇전 일일 XP 한도 기록 복원
   loadDmPrefs(); // 내전/모집 DM 알림 끈 유저 목록 복원
   loadRealmRoster(); // 마인크래프트 렐름 승인 명단 복원
@@ -465,6 +468,7 @@ client.on('interactionCreate', async (interaction) => {
       interaction.customId?.startsWith('realm:') ||
       interaction.customId?.startsWith('cobblemon:') ||
       interaction.customId?.startsWith('raid:') || // 레이드는 출현한 채널(놀이터·테스트 채널)에서 그대로 진행
+      interaction.customId?.startsWith('gateway:') || // 블랙월 게이트웨이는 나만 보이는 화면이라 어느 채널에서든
       interaction.customId?.startsWith('form:');
 
     if (!isChannelExempt && !skipChannelLimits) {
@@ -489,6 +493,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleMojipMemberAdd(interaction);
       } else if (interaction.customId === 'xp:pick') {
         await handleXpUserSelect(interaction);
+      } else if (interaction.customId === 'gateway:pick') {
+        await handleGatewayPick(interaction);
       }
 
     } else if (interaction.isStringSelectMenu()) {
@@ -606,6 +612,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleCobblemonButton(interaction);
       } else if (interaction.customId.startsWith('raid:')) {
         await handleRaidButton(interaction);
+      } else if (interaction.customId.startsWith('gateway:')) {
+        await handleGatewayButton(interaction);
       }
     }
   } catch (error) {

@@ -97,8 +97,8 @@ const MONSTER_DIR = path.join(__dirname, '..', '..', 'Monster');
 const REQUIRED_MOVES = ['attack', 'smash'];
 // 그림(레이드그림.js)이 아는 연출 종류. 새 연출은 레이드그림.js의 monsterFx·hitFx에 그리고 여기에 이름을 더한다.
 const MOVE_FX = ['attack', 'sweep', 'charge', 'smash', 'heal', 'spore', 'hypno', 'absorb', 'burst', 'frost', 'icefall',
-  'curse', 'wail', 'phase', 'storm', 'dust', 'smoke', 'ignite', 'boom', 'summon', 'peel', 'fart'];
-const EFFECTS = ['slow', 'stun', 'shield', 'poison', 'confuse', 'chill', 'fear', 'phase', 'smoke', 'summon', 'stench'];
+  'curse', 'wail', 'phase', 'storm', 'dust', 'smoke', 'ignite', 'boom', 'summon', 'peel', 'fart', 'overclock', 'deadeye', 'vuln', 'killnine'];
+const EFFECTS = ['slow', 'stun', 'shield', 'poison', 'confuse', 'chill', 'fear', 'phase', 'smoke', 'summon', 'stench', 'error', 'vuln', 'doom'];
 // stench(악취 — 원숭이 대장 구린 방귀): 맞은 사람(guardBlocks면 방어한 사람 제외)은 effectTurns턴 동안 회복약을 못 쓰고,
 //   치유사 스킬 회복량 × effectRate(씻어내지 못함). followUp: 이 기술을 쓴 다음 턴엔 반드시 그 기술(바나나 껍질 → 구린 방귀).
 // 부하(minions 블록이 있는 몬스터만 — 원숭이 대장):
@@ -108,6 +108,9 @@ const EFFECTS = ['slow', 'stun', 'shield', 'poison', 'confuse', 'chill', 'fear',
 //   아군 행동으로 부하를 다 처치하면 penalty(우울 상태): 다음 턴부터 turns턴 동안 몬스터가 받는 피해 × weakRate, 주는 피해 × dealRate(행동은 그대로).
 //   needMinions 기술(부하 합동 필살기)은 부하가 살아 있을 때만 고르고, 살아 있는 부하 한 마리마다 perMinion 피해를 더한다(그 턴 부하는 따로 공격하지 않음).
 //   ultimate: 필살기 2 — 필살기 1(smash)을 못 쓸 때 7턴 보장을 대신 채운다. 필살기끼리는 연속으로 나오지 않는다.
+// 오류(error — ??? 데이터 크래시): 맞은 사람(guardBlocks면 방어한 사람 제외)은 effectTurns턴 동안 고른 행동이 무작위 다른 행동으로 바뀐다(치유사 스킬로 해제).
+// 취약(vuln — 취약점 분석, target none이면 살아 있는 전원): effectTurns턴 동안 받는 몬스터 피해 × effectRate(치유사 스킬로 해제).
+// 즉사(doom — kill -9): 다음 턴 아군 행동이 끝난 뒤 effectRate 확률로 HP 0(분노 중 rageRate). 방어한 사람은 안 걸리고(guardBlocks) 치유사 스킬로 해제.
 const SUMMON_COOLDOWN = 2; // 부하를 다 잃은 뒤 이만큼은 다시 부르지 않는다(바로 또 불러서 벌칙이 의미 없어지지 않게)
 const moveFx = (key, move) => move?.fx || key;
 
@@ -155,6 +158,13 @@ function monsterProblems(m) {
       if (missing.length) problems.push(`minions.sprite.palette에 없는 글자: ${missing.join(' ')}`);
     }
   }
+  if (m.raid !== undefined) {
+    const rd = m.raid;
+    if (rd?.persistent !== undefined && typeof rd.persistent !== 'boolean') problems.push('raid.persistent는 true/false');
+    for (const k of ['defeatPenaltyXp', 'clearXp', 'mvpBonusXp']) if (rd?.[k] !== undefined && !(Number.isInteger(rd[k]) && rd[k] >= 0)) problems.push(`raid.${k}는 0 이상 정수`);
+    const dr = rd?.drain;
+    if (dr !== undefined && !(dr.basePerMin >= 0 && dr.stepPerMin >= 0 && dr.stepMs > 0 && dr.maxPerMin >= 1)) problems.push('raid.drain은 basePerMin·stepPerMin(0 이상), stepMs(0 초과), maxPerMin(1 이상) 필요');
+  }
   const TARGETS = ['single', 'all', 'none', 'self'];
   const range = (v) => Array.isArray(v) && v.length === 2 && v.every(Number.isFinite) && v[0] >= 0 && v[0] <= v[1];
   for (const [key, move] of Object.entries(m.moves ?? {})) {
@@ -185,6 +195,9 @@ function monsterProblems(m) {
     if (move.effect === 'fear' && !named(move.status)) problems.push(`moves.${key}.status.name·emoji 필요`);
     if (move.effect === 'stench' && (!named(move.status) || !int(move.effectTurns, 1) || !rate(move.effectRate))) problems.push(`moves.${key}: stench는 status.name·emoji, effectTurns(1 이상), effectRate(치유사 회복 배율 0~1) 필요`);
     if (move.followUp !== undefined && !m.moves?.[move.followUp]) problems.push(`moves.${key}.followUp "${move.followUp}"이 moves에 없음`);
+    if (move.effect === 'error' && (!named(move.status) || !int(move.effectTurns, 1))) problems.push(`moves.${key}: error는 status.name·emoji, effectTurns(1 이상) 필요`);
+    if (move.effect === 'vuln' && (!named(move.status) || !int(move.effectTurns, 1) || !(move.effectRate > 1 && move.effectRate <= 3))) problems.push(`moves.${key}: vuln은 status.name·emoji, effectTurns(1 이상), effectRate(1 초과 3 이하) 필요`);
+    if (move.effect === 'doom' && (!named(move.status) || !rate(move.effectRate) || (move.rageRate !== undefined && !rate(move.rageRate)))) problems.push(`moves.${key}: doom은 status.name·emoji, effectRate(0~1), rageRate(0~1) 필요`);
     if (move.effect === 'summon' && (!m.minions || move.target !== 'none')) problems.push(`moves.${key}: summon은 target none 기술에만, minions 블록 필요`);
     if (move.needMinions && !m.minions) problems.push(`moves.${key}: needMinions는 minions 블록 필요`);
     if (move.perMinion !== undefined && !range(move.perMinion)) problems.push(`moves.${key}.perMinion은 [최소, 최대] 숫자`);
@@ -379,6 +392,14 @@ function createBattle(monster, party, rng = Math.random, { minParty = HP_MIN_PAR
       stenchUntil: 0,   // 이 턴까지 악취(회복약 못 씀, 치유사 회복 감소)
       stenchRate: 1,    // 악취 중 치유사 스킬 회복 배율
       stenchStatus: null,
+      errorUntil: 0,    // 이 턴까지 오류(행동이 무작위로 바뀜)
+      errorStatus: null,
+      vulnUntil: 0,     // 이 턴까지 취약(받는 피해 증가)
+      vulnRate: 1,
+      vulnStatus: null,
+      doomTurn: 0,      // 이 턴에 즉사 판정
+      doomRate: 0,
+      doomStatus: null,
     })),
   };
   battle.intent = pickNextIntent(battle, rng);
@@ -411,6 +432,11 @@ function poisonDamage(battle, m) {
 function isConfused(battle, m) { return m.confuseTurn === battle.turn; }
 function isFeared(battle, m) { return m.fearTurn === battle.turn; }
 function isPhased(battle) { return battle.phaseTurn === battle.turn; }
+function isErrored(battle, m) { return m.hp > 0 && battle.turn <= (m.errorUntil ?? 0); }
+function errorTurnsLeft(battle, m) { return isErrored(battle, m) ? m.errorUntil - battle.turn + 1 : 0; }
+function isVulnerable(battle, m) { return m.hp > 0 && battle.turn <= (m.vulnUntil ?? 0); }
+function vulnTurnsLeft(battle, m) { return isVulnerable(battle, m) ? m.vulnUntil - battle.turn + 1 : 0; }
+function isDoomed(battle, m) { return m.hp > 0 && m.doomTurn === battle.turn; }
 function isStenched(battle, m) { return m.hp > 0 && battle.turn <= (m.stenchUntil ?? 0); }
 function stenchTurnsLeft(battle, m) { return isStenched(battle, m) ? m.stenchUntil - battle.turn + 1 : 0; }
 // 부하(원숭이 대장): 살아 있는 부하 목록 · 체면 구김(부하를 다 잃은 다음 턴 받는 피해 증가). 예전 기록엔 칸이 없을 수 있다.
@@ -594,10 +620,24 @@ function resolveTurn(battle, rng = Math.random) {
     }
     const auto = !m.choice;
     // 공포 중 스킬은 고를 수 없다(checkChoice) — 혹시 들어오면 공격으로
-    const action = (m.choice === 'skill' && isFeared(battle, m) ? 'attack' : m.choice) || 'attack';
+    let action = (m.choice === 'skill' && isFeared(battle, m) ? 'attack' : m.choice) || 'attack';
     if (!auto) m.manualActions++;
+    // 오류: 고른 행동이 무작위 다른 행동으로 바뀐다(쓸 수 없는 행동은 후보에서 뺀다)
+    let errored = false;
+    if (isErrored(battle, m)) {
+      const pool = ['attack', 'guard'];
+      if (m.cooldown <= 0 && !isFeared(battle, m)) pool.push('skill');
+      if (m.potions > 0 && m.hp < PLAYER_MAX_HP) pool.push('potion');
+      const others = pool.filter(a => a !== action);
+      if (others.length) {
+        const before = action;
+        action = others[Math.floor(rng() * others.length)];
+        errored = true;
+        log.push(`${m.errorStatus.emoji} **${m.name}** ${m.errorStatus.name}로 행동이 바뀌었다 (${ACTIONS[before].name} → ${ACTIONS[action].name})`);
+      }
+    }
     m.guarding = action === 'guard';
-    const tag = auto ? ' *(자동)*' : '';
+    const tag = (auto ? ' *(자동)*' : '') + (errored ? ` *(${m.errorStatus.emoji}${m.errorStatus.name}로 바뀜)*` : '');
     // 환각: 방어가 아닌 행동은 확률로 빗나간다(회복약·쿨타임은 쓰지 않음)
     if (action !== 'guard' && isConfused(battle, m) && rng() < m.confuseRate) {
       m.guarding = false;
@@ -654,6 +694,9 @@ function resolveTurn(battle, rng = Math.random) {
           if (slowTurnsLeft(battle, t) > 0) { t.slowUntil = 0; cleansed.add(t.slowStatus.name); } // 점액(slow)도 씻어낸다
           if (poisonStacks(battle, t) > 0) { t.poisonStacks = 0; t.poisonUntil = 0; cleansed.add(t.poisonStatus.name); } // 독도 씻어낸다
           if (chill && (t.chillStacks || 0) > 0) { t.chillStacks = 0; cleansed.add(chill.status.name); } // 냉기도 녹인다
+          if (isErrored(battle, t)) { t.errorUntil = 0; cleansed.add(t.errorStatus.name); } // 오류·취약·즉사도 씻어낸다
+          if (isVulnerable(battle, t)) { t.vulnUntil = 0; cleansed.add(t.vulnStatus.name); }
+          if (isDoomed(battle, t)) { t.doomTurn = 0; cleansed.add(t.doomStatus.name); }
         }
         m.healing += healed;
         m.support += healed;
@@ -716,6 +759,15 @@ function resolveTurn(battle, rng = Math.random) {
     if (m.poisonStacks && (m.hp <= 0 || (m.poisonUntil || 0) <= battle.turn)) m.poisonStacks = 0;
   }
   if (poisonLog.length) log.push(poisonLog.join(' · '));
+  // 1-2b) 즉사(kill -9): 이번 턴 즉사 판정을 받은 사람은 확률로 HP 0 — 치유사가 이번 턴 씻어냈으면 이미 해제됨
+  for (const m of ordered) {
+    if (!isDoomed(battle, m)) continue;
+    const dead = rng() < m.doomRate;
+    last.effects[m.userId] = dead ? 'doomed' : last.effects[m.userId];
+    if (dead) { m.hp = 0; log.push(`${m.doomStatus.emoji} **${m.name}** ${m.doomStatus.name}! 💀`); last.doomedIds = [...(last.doomedIds ?? []), m.userId]; }
+    else log.push(`${m.doomStatus.emoji} **${m.name}** ${m.doomStatus.name} 판정을 넘겼다`);
+    m.doomTurn = 0;
+  }
   if (aliveMembers(battle).length === 0) {
     for (const m of battle.members) { m.choice = null; m.guarding = false; }
     log.push('☠️ 파티가 전멸했다…');
@@ -757,6 +809,7 @@ function resolveTurn(battle, rng = Math.random) {
       // 도발로 아군 대신 맞은 한 명 공격은 줄이기 전 피해를 수호자의 기여(막아 준 피해)로 센다
       if (target === taunter && move.target === 'single') target.protected += Math.round(dmg);
       const rawDmg = Math.round(dmg);
+      if (isVulnerable(battle, target)) dmg *= target.vulnRate; // 취약
       if (target.guarding) dmg *= move.guardRate ?? GUARD_DAMAGE_RATE; // 대폭발처럼 방어가 덜 먹히는 기술은 guardRate
       if (target === taunter) { dmg *= TAUNT_DAMAGE_RATE; reflectRaw += rawDmg; }
       dmg = Math.max(1, Math.round(dmg));
@@ -783,6 +836,10 @@ function resolveTurn(battle, rng = Math.random) {
         : `${battle.monster.emoji} **${monsterName}**의 **${move.name}**! HP **+${last.monsterHeal.toLocaleString()}**`);
     } else if (move.target === 'none') {
       log.push(`${battle.monster.emoji} **${monsterName}**의 **${move.name}**!`);
+      if (move.effect === 'vuln') {
+        for (const t of aliveMembers(battle)) { t.vulnUntil = battle.turn + move.effectTurns; t.vulnRate = move.effectRate; t.vulnStatus = move.status; last.effects[t.userId] = 'vuln'; }
+        log.push(`${move.status.emoji} 전원 **${move.status.name}** — ${move.effectTurns}턴 동안 받는 피해 **+${Math.round((move.effectRate - 1) * 100)}%**`);
+      }
     } else {
       const targets = move.target === 'all'
         ? aliveMembers(battle)
@@ -811,6 +868,9 @@ function resolveTurn(battle, rng = Math.random) {
           last.effects[t.userId] = 'chill';
           tag = ` ${st.emoji}${st.name}×${t.chillStacks}`;
         }
+        if (t.hp > 0 && move.effect === 'error' && !blocked) { t.errorUntil = battle.turn + move.effectTurns; t.errorStatus = move.status; last.effects[t.userId] = 'error'; tag = ` ${move.status.emoji}${move.status.name}`; }
+        if (t.hp > 0 && move.effect === 'doom' && !blocked) { t.doomTurn = battle.turn + 1; t.doomRate = battle.rage ? (move.rageRate ?? move.effectRate) : move.effectRate; t.doomStatus = move.status; last.effects[t.userId] = 'doom'; tag = ` ${move.status.emoji}${move.status.name}`; }
+        if (t.hp > 0 && move.effect === 'vuln' && !blocked) { t.vulnUntil = battle.turn + move.effectTurns; t.vulnRate = move.effectRate; t.vulnStatus = move.status; last.effects[t.userId] = 'vuln'; tag = ` ${move.status.emoji}${move.status.name}`; }
         if (t.hp > 0 && move.effect === 'stench' && !blocked) { t.stenchUntil = battle.turn + move.effectTurns; t.stenchRate = move.effectRate; t.stenchStatus = move.status; last.effects[t.userId] = 'stench'; tag = ` ${move.status.emoji}${move.status.name}`; }
         if (t.hp > 0 && move.effect === 'fear' && !blocked) { t.fearTurn = battle.turn + 1; t.fearStatus = move.status; last.effects[t.userId] = 'fear'; tag = ` ${move.status.emoji}${move.status.name}`; }
         if (t.hp > 0 && move.effect === 'stun' && !t.guarding) { t.stunTurn = battle.turn + 1; t.stunStatus = move.status; last.effects[t.userId] = 'stun'; tag = ` ${move.status.emoji}${move.status.name}`; }
@@ -949,6 +1009,11 @@ module.exports = {
   isPhased,
   isStenched,
   stenchTurnsLeft,
+  isErrored,
+  errorTurnsLeft,
+  isVulnerable,
+  vulnTurnsLeft,
+  isDoomed,
   minionsAlive,
   isWeak,
   weakTurnsLeft,

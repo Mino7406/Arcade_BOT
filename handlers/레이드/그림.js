@@ -10,7 +10,7 @@
 
 const path = require('path');
 const { Painter, loadFont } = require('./그림판');
-const { ROLES, ROLE_ORDER, PLAYER_MAX_HP, ACTIONS, createBattle, choose, resolveTurn, isStunned, slowTurnsLeft, isShielded, isPowered, poisonStacks, isConfused, chillStacks, isFeared, isPhased, isIntentHidden, isWarnIntent, telegraphText, moveFx, isWeak, weakTurnsLeft, isStenched, stenchTurnsLeft } = require('./전투');
+const { ROLES, ROLE_ORDER, PLAYER_MAX_HP, ACTIONS, createBattle, choose, resolveTurn, isStunned, slowTurnsLeft, isShielded, isPowered, poisonStacks, isConfused, chillStacks, isFeared, isPhased, isIntentHidden, isWarnIntent, telegraphText, moveFx, isWeak, weakTurnsLeft, isStenched, stenchTurnsLeft, isErrored, errorTurnsLeft, isVulnerable, vulnTurnsLeft, isDoomed } = require('./전투');
 
 const W = 900; // 설계 크기(좌표는 전부 이 기준)
 const H = 640;
@@ -393,7 +393,34 @@ function statusBadges(b, mem, x, y) {
   const chill = chillStacks(b, mem);
   if (chill) { chillBadge(x, by, chill); by += 44; }
   const stench = stenchTurnsLeft(b, mem);
-  if (stench) stenchBadge(x, by, stench);
+  if (stench) { stenchBadge(x, by, stench); by += 44; }
+  if (isErrored(b, mem)) { errorBadge(x, by, errorTurnsLeft(b, mem)); by += 44; }
+  if (isVulnerable(b, mem)) { vulnBadge(x, by, vulnTurnsLeft(b, mem)); by += 44; }
+  if (isDoomed(b, mem)) doomBadge(x, by);
+}
+// 오류(???): 노란 경고 삼각형 + ! + 남은 턴
+function errorBadge(cx, cy, turns) {
+  p.poly([cx, cy - 13, cx + 14, cy + 10, cx - 14, cy + 10], '#2a1a04');
+  p.poly([cx, cy - 9, cx + 10, cy + 8, cx - 10, cy + 8], '#ffcf3a');
+  p.rect(cx - 1.5, cy - 3, 3, 8, '#2a1a04'); p.rect(cx - 1.5, cy + 6, 3, 2.5, '#2a1a04');
+  text(`${turns}턴`, cx, cy + 24, 15, '#ffe08a');
+}
+// 취약: 열린 자물쇠(붉은) + 남은 턴
+function vulnBadge(cx, cy, turns) {
+  p.roundRect(cx - 11, cy - 3, 22, 16, 3, '#2a0a10');
+  p.roundRect(cx - 9, cy - 1, 18, 12, 2, '#ff4a5a');
+  p.strokeRoundRect(cx - 6, cy - 13, 12, 12, 5, 3, '#ff8a94');
+  p.rect(cx - 12, cy - 9, 8, 8, '#17120e'); // 걸쇠 한쪽이 열려 있다
+  p.circle(cx, cy + 5, 2, '#2a0a10');
+  text(`${turns}턴`, cx, cy + 24, 15, '#ffb4bc');
+}
+// 즉사: 해골(이번 턴 판정)
+function doomBadge(cx, cy) {
+  p.roundRect(cx - 12, cy - 12, 24, 20, 8, '#1a0a14');
+  p.roundRect(cx - 10, cy - 10, 20, 16, 7, '#f1ecff');
+  p.circle(cx - 4, cy - 3, 3, '#1a0a14'); p.circle(cx + 4, cy - 3, 3, '#1a0a14');
+  p.rect(cx - 5, cy + 8, 10, 5, '#f1ecff'); p.rect(cx - 3, cy + 8, 1.5, 5, '#1a0a14'); p.rect(cx + 1.5, cy + 8, 1.5, 5, '#1a0a14');
+  text('판정', cx, cy + 24, 15, '#e6dcff');
 }
 // 점액: 독 거품처럼 방울 세 개(어두운 테두리 → 점액색 → 흰 반사광) + 아래에 남은 턴
 function slowBadge(cx, cy, turns, color) {
@@ -1319,11 +1346,25 @@ function renderBattle(r) {
     // 몬스터 기술 말풍선은 그 기술을 쓴 턴의 결과 화면에서만(다음 턴 선택 화면에는 남기지 않는다)
     if (r.showingResult && (last?.monsterMove || last?.defused)) {
       const label = last.defused ? '불이 꺼졌다!' : `${last.monsterMove}!`; // 불끄기 성공 턴은 기술 대신
+      if (m.ui?.moveBanner === 'terminal' && !last.defused) {
+        // 터미널 명령줄 띠: 검은 바탕 + 붉은 테두리, 왼쪽 '>' 프롬프트, 가운데 기술 이름(밝은 붉은색), 오른쪽 위 깜빡이는 커서 블록.
+        // 말풍선(크림색 말꼬리)과 달리 몬스터 칸 아래 가운데에 가로로 깔려 몬스터·피해 숫자와 겹치지 않는다(글자는 읽히게 색 어긋남 1px만).
+        const word = last.monsterMove;
+        const tw = Math.min(p.textWidth(B(), word, 24), 330);
+        const bw = tw + 118, bx = W / 2 - bw / 2, by = 290; // 결과 화면엔 예고 상자가 없어 몬스터 아래가 비어 있다
+        p.roundRect(bx, by, bw, 38, 4, '#0a0204');
+        p.strokeRoundRect(bx, by, bw, 38, 4, 1.5, '#ff2a3c');
+        p.rect(bx + 3, by + 3, bw - 6, 4, '#3a0a12'); // 윗줄 제목 띠 느낌
+        text('> EXEC', bx + 40, by + 21, 14, '#a8323f');
+        glitchText(word, bx + 86 + tw / 2, by + 21, 24, '#ff5a68', { seed: word.length * 7 + 11, off: 1, strips: 0, holes: 0, maxWidth: 330 });
+        p.rect(bx + bw - 22, by + 11, 9, 17, '#ff2a3c'); // 커서
+      } else {
       const bw = Math.min(p.textWidth(B(), label, 22), 200) + 36;
       const bx = W / 2 - 92 - bw, by = 132;
       p.roundRect(bx, by, bw, 44, 14, '#f4e6cf');
       p.poly([bx + bw - 26, by + 40, bx + bw - 6, by + 40, bx + bw + 12, by + 58], '#f4e6cf'); // 말꼬리 → 몬스터
       text(label, bx + bw / 2, by + 22, 22, '#3a1a12', { maxWidth: 200 });
+      }
     }
 
     // 다음 행동 예고 상자 — 왼쪽에 '다음 행동' 칩, 큰 공격(방어해야 할 때)은 빨간 상자 + 경고 삼각형.

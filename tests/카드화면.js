@@ -352,6 +352,59 @@ async function buildScreens() {
     rk.showingResult = false;
     await shot('우울 상태', '오른쪽 위 배지 · 받는 피해 증가 · 남은 턴');
   }
+  // ??? (블랙월 느낌): 모집 시간 제한 없음 · 대기 XP 실시간 차감 · 패배해도 도주 안 함 · 승리 시 MVP 아이템
+  const voidM = raidMonsters.find(m => m.id === 'void');
+  if (voidM) {
+    const H = 3600e3;
+    const wait = async (title, sub, extra, partyN = 2) => {
+      const rv = { ...raidState(voidM, partyN), waitSince: Date.now(), ...extra };
+      const v = await raidMod.recruitView(rv);
+      add('레이드', `??? — ${title}`, sub, v, rf(v));
+    };
+    await wait('대기창 (막 출현)', '전용 디자인: 깨진 시계 · 잃은 XP · 패배 횟수 · 보상(MVP 아이템)', { waitedMs: 0, lostPerUser: 0, defeatStacks: 0 });
+    await wait('대기창 (3시간 경과)', '대기가 길수록 분당 차감량이 커짐 · 1인당 잃은 XP가 계속 늘어남', { waitedMs: 3 * H, lostPerUser: 240, defeatStacks: 0 });
+    await wait('대기창 (패배 2회 후)', '졌어도 도주하지 않고 다시 모집 · 패배 1회마다 모든 유저 -100 XP', { waitedMs: 5 * H, lostPerUser: 640, defeatStacks: 2 }, 0);
+    // 전투 장면들
+    const vb = (intent, choice = 'attack', n = 4) => {
+      const rr = raidState(voidM, n);
+      rr.phase = 'battle'; rr.battle = createBattle(voidM, rr.party, Math.random, { minParty: 1 });
+      rr.battleStartedAt = Date.now() - 5 * 60e3; rr.battleEndsAt = Date.now() + 15 * 60e3; rr.turnEndsAt = Date.now() + 25e3;
+      rr.battle.intent = intent;
+      raidBattle.assignMarks(rr.battle);
+      return rr;
+    };
+    const vshot = async (rr, title, sub) => { const v = await raidMod.battleView(rr); add('레이드', `??? — ${title}`, sub, v, rf(v)); };
+    let rr = vb('smash');
+    await vshot(rr, '전투 — 필살기 경고', '블랙월 게이트웨이(필살기) 예고 · 빨간 경고 상자');
+    rr = vb('deadeye');
+    await vshot(rr, '전투 — 데드아이 예고', '표식 저격: 대상 이름이 예고에 · 카드에 빛나는 눈');
+    rr = vb('attack');
+    rr.battle.members.forEach(mm => choose(rr.battle, mm.userId, 'attack'));
+    resolveTurn(rr.battle, () => 0.99); rr.showingResult = true;
+    await vshot(rr, '전투 — 데이터 크래시 결과', '터미널 명령줄 띠(말풍선 대신) · 방어 안 한 사람은 ⚠️오류 배지');
+    rr.showingResult = false;
+    await vshot(rr, '전투 — 오류 상태 선택 화면', '⚠️ 오류: 고른 행동이 무작위로 바뀐다는 안내(아래 글자)');
+    rr = vb('analyze');
+    rr.battle.members.forEach(mm => choose(rr.battle, mm.userId, 'guard'));
+    resolveTurn(rr.battle, () => 0.5); rr.showingResult = true;
+    await vshot(rr, '전투 — 취약점 분석 결과', '전원 🔓취약(받는 피해 +30%) 2턴');
+    rr = vb('killnine');
+    rr.battle.members.forEach(mm => choose(rr.battle, mm.userId, 'attack'));
+    resolveTurn(rr.battle, () => 0.01); rr.showingResult = false;
+    await vshot(rr, '전투 — kill -9 다음 턴(즉사 판정)', '☠️ 판정 배지 · 이번 턴 끝에 확률로 쓰러짐(치유사 스킬·방어로 대처)');
+    // 결과와 안내
+    const pn = await raidMod.battleView({ ...vb('attack'), showingResult: false });
+    const defeatNote = raidMod.buildEndNoticePayload({ kind: 'defeat', xp: 100, stacks: 2, lost: 640, details: ['128명 · 합계 : -12,800 XP'] });
+    add('레이드', '??? — 패배 채널 안내', '도주하지 않음 · 모든 유저 -100 XP · 지금까지 1인당 잃은 XP', defeatNote);
+    const er = vb('attack'); er.phase = 'ended'; er.endedAt = Date.now(); er.frozenAt = Date.now() - 5 * H; er.battle.hp = 0;
+    const ev = await raidMod.endView(er, 'clear', [
+      { userId: '100', xp: 2000, mvp: true, hackTool: false, gateway: true },
+      { userId: '101', xp: 1000, mvp: false, hackTool: false, gateway: false },
+      { userId: '102', xp: 1000, mvp: false, hackTool: false, gateway: false },
+    ]);
+    add('레이드', '??? — 토벌 성공 결과', '파티원 +1000 XP · MVP +1000 XP 더 + 🌐 블랙월 게이트웨이(해킹 툴은 없음)', ev, rf(ev));
+    void pn;
+  }
   const endR = (outcome, rewards) => { const rr = startBattle(m0); rr.phase = 'ended'; rr.endedAt = Date.now(); rr.frozenAt = Date.now() - 20 * 60e3; if (outcome === 'clear') rr.battle.hp = 0; return raidMod.endView(rr, outcome, rewards); };
   const ec = await endR('clear', [{ userId: '100', xp: 150, mvp: true, hackTool: true }, { userId: '101', xp: 100, mvp: false, hackTool: false }]);
   add('레이드', '종료 — 토벌 성공', 'MVP · 보상 · 해킹 툴(한 명은 보유 한도)', ec, rf(ec));

@@ -823,6 +823,38 @@ let ok4;
       assert(!E.isFeared(b, M('x')) && E.isFeared(b, M('t')), '필살 원혼 폭풍: 방어 안 한 사람 공포');
     }
   }
+  // 14-3a) ???(Monster-all): 오류(행동 바뀜) · 취약(받는 피해 증가) · 즉사(다음 턴 확률로 쓰러짐)
+  {
+    const E = require(path.join(root, 'handlers/레이드/전투.js'));
+    const voidM = E.loadMonsters(path.join(root, 'Monster-all')).find(m => m.id === 'void');
+    assert(voidM?.theme === 'corrupt' && voidM.raid?.persistent && !voidM.moves.attack.mark && voidM.moves.attack.name === '데이터 크래시', '??? 몬스터를 불러옴(평타 없이 데이터 크래시가 기본 키, 오염 테마)');
+    if (voidM) {
+      const party = [{ userId: 'x', name: 'X', role: 'sword' }, { userId: 'y', name: 'Y', role: 'healer' }];
+      const mk = () => { const b = E.createBattle(voidM, party, () => 0.5); b.intent = 'attack'; return b; };
+      // 오류: 고른 행동(공격)이 다른 행동으로 바뀐다
+      let b = mk(); const st = voidM.moves.attack.status;
+      Object.assign(E.getMember(b, 'x'), { errorUntil: b.turn, errorStatus: st });
+      E.choose(b, 'x', 'attack'); E.choose(b, 'y', 'attack'); E.resolveTurn(b, () => 0.5);
+      assert(b.lastTurn.acts.x.label !== '공격' && b.log.join().includes('오류로 행동이 바뀌었다') && b.lastTurn.acts.y.label === '공격', '오류: 걸린 사람의 행동만 무작위 다른 행동으로 바뀜');
+      // 데이터 크래시: 방어 안 한 사람만 오류(2턴), 방어한 사람은 안 걸림
+      b = mk(); E.choose(b, 'x', 'attack'); E.choose(b, 'y', 'guard'); E.resolveTurn(b, () => 0.5);
+      assert(E.isErrored(b, E.getMember(b, 'x')) && E.errorTurnsLeft(b, E.getMember(b, 'x')) === 2 && !E.isErrored(b, E.getMember(b, 'y')), '데이터 크래시: 방어 안 한 사람만 오류 2턴');
+      // 취약: 같은 공격도 더 아프다
+      const hitOf = (vuln) => { const bb = mk(); if (vuln) Object.assign(E.getMember(bb, 'x'), { vulnUntil: bb.turn, vulnRate: 1.3, vulnStatus: voidM.moves.analyze.status }); E.choose(bb, 'x', 'attack'); E.choose(bb, 'y', 'attack'); E.resolveTurn(bb, () => 0.5); return bb.lastTurn.hits.x; };
+      assert(hitOf(true) > hitOf(false), '취약: 받는 피해가 늘어남');
+      // 취약점 분석(target none)은 살아 있는 전원에게
+      b = mk(); b.intent = 'analyze'; E.choose(b, 'x', 'guard'); E.choose(b, 'y', 'guard'); E.resolveTurn(b, () => 0.5);
+      assert(b.members.every(m => E.isVulnerable(b, m) && E.vulnTurnsLeft(b, m) === 2), '취약점 분석: 전원 취약 2턴');
+      // 즉사: 다음 턴 확률 판정 — 100%면 쓰러지고 0%면 산다, 치유사 스킬이 이번 턴 씻어내면 안전
+      const doomRun = (rate, healFirst) => {
+        const bb = mk(); bb.intent = 'attack';
+        Object.assign(E.getMember(bb, 'x'), { doomTurn: bb.turn, doomRate: rate, doomStatus: voidM.moves.killnine.status });
+        E.choose(bb, 'x', 'guard'); E.choose(bb, 'y', healFirst ? 'skill' : 'guard'); E.resolveTurn(bb, () => 0.5);
+        return E.getMember(bb, 'x').hp;
+      };
+      assert(doomRun(1, false) === 0 && doomRun(0, false) > 0 && doomRun(1, true) > 0, '즉사(kill -9): 확률 판정, 치유사 스킬로 해제');
+    }
+  }
   // 14-3b) 원숭이 대장(Monster-all): 부하 부르기(필살기 1) · 공격이 부하에게 먼저 · 바나나 투척 · 합동 필살기(필살기 2) · 우울 상태
   {
     const E = require(path.join(root, 'handlers/레이드/전투.js'));
@@ -1068,6 +1100,71 @@ let ok4;
       assert(m && num(m[1]) === allBefore.length && num(m[2]) === wantTotal, `전멸 안내 합계 N명 · -N XP / 다음 줄에 중단 시간 (실제 깎인 값 ${allBefore.length}명/${wantTotal})`);
     }
     assert(!lv.isRaidXpFrozen() && !mod.isPlaygroundPaused('gMain'), '전멸 후 XP 정지 해제');
+
+    // (마) ??? 남아 있는 몬스터: 모집 마감 없음 · 대기 XP 1분 단위 차감 · 패배해도 도주 안 함(-100) · 승리 보상(MVP +아이템)
+    {
+      const voidM = E.loadMonsters(path.join(root, 'Monster-all')).find(m => m.id === 'void');
+      E.MONSTERS.push(voidM); // 테스트용 Monster 폴더엔 슬라임만 있어 잠깐 등록한다
+      const gw = require(path.join(root, 'handlers/게임/블랙월게이트웨이.js'));
+      const ht = require(path.join(root, 'handlers/게임/해킹툴.js'));
+      const realNow = Date.now;
+      const at = (ms, fn) => { Date.now = () => realNow() + ms; return Promise.resolve(fn()).finally(() => { Date.now = realNow; }); };
+      try {
+        lv.applyXp('gMain', 'v1', 500); lv.applyXp('gMain', 'v2', 50);
+        const chV = mkChannel('chV', 'gMain');
+        const errV = await mod.forceSpawnRaid({ guildId: 'other', channel: chV, client: rclient }, 'void');
+        await settle();
+        const raidMsg = () => [...chV.msgs.values()].filter(m => btnsOf(m).some(b => b.custom_id?.startsWith('raid:'))).pop();
+        const mV = raidMsg();
+        const t0 = mV ? textOf(mV) : '';
+        assert(!errV && lv.isRaidXpFrozen(), '??? 출현 → XP 정지');
+        assert(t0.includes('ERR_0x7F') && t0.includes('지금까지 잃은 XP : -0 XP') && !/## ⏳ \d\d:\d\d:\d\d/.test(t0) && t0.includes('패배 0회') && t0.includes('+1000 XP') && t0.includes('블랙월 게이트웨이'), '??? 모집 화면: 전용 문구 · 잃은 XP · 깨진 시계(남은 시간 없음) · 보상(MVP 아이템)');
+        await runTimers(); await settle();
+        assert(mod.getRaidStatus('gMain').active && mod.getRaidStatus('gMain').monsterName === '???', '모집 시간이 지나도 도주하지 않음(마감 타이머 없음)');
+        // 대기 차감: 10분 흐른 것으로 하고 틱 → 분당 1 XP × 10분 = -10
+        const v1a = lv.getXp('gMain', 'v1'), v2a = lv.getXp('gMain', 'v2');
+        await at(10 * 60_000, async () => { await runTimers(); await settle(); });
+        assert(lv.getXp('gMain', 'v1') === v1a - 10 && lv.getXp('gMain', 'v2') === Math.max(0, v2a - 10), '대기 10분 → 모든 유저 -10 XP(분당 1, 0 밑으로는 안 내려감)');
+        assert(textOf(raidMsg()).includes('지금까지 잃은 XP : -10 XP'), '대기창에 지금까지 잃은 XP 표시');
+        // 전투 시작(차감 멈춤) → 시간 초과 패배 → 도주하지 않고 다시 모집 + 모든 유저 -100
+        await press(mod, raidMsg(), '11', 'raid:role:sword'); await press(mod, raidMsg(), '12', 'raid:role:archer');
+        await press(mod, raidMsg(), '11', 'raid:start'); await settle();
+        assert(textOf(raidMsg()).includes('TURN 1'), '??? 전투 시작');
+        const v1b = lv.getXp('gMain', 'v1'), v2b = lv.getXp('gMain', 'v2');
+        await at(25 * 60_000, async () => { await runTimers(); await settle(); });
+        // (테스트용 가짜 채널은 새 메시지 id가 겹쳐 레이드 메시지를 덮어쓸 수 있어, 저장된 상태로 확인한다)
+        const sv = () => JSON.parse(fs.readFileSync(statePath, 'utf8')).active.gMain;
+        assert(mod.getRaidStatus('gMain').active && mod.getRaidStatus('gMain').phase === 'recruit' && sv().phase === 'recruit' && sv().defeatStacks === 1 && sv().party.length === 0 && sv().battle === undefined, '패배해도 도주하지 않고 다시 모집으로(패배 1회, 파티·전투 초기화)');
+        assert(lv.getXp('gMain', 'v1') === v1b - 100 && lv.getXp('gMain', 'v2') === Math.max(0, v2b - 100), '패배 1회 → 모든 유저 -100 XP(고정)');
+        assert(Math.round(sv().lostPerUser) === 110 && lv.isRaidXpFrozen(), '잃은 XP는 대기 -10 + 패배 -100 = -110, XP 정지는 그대로');
+        const notes = [...chV.msgs.values()].map(m => (m.last ? noteText(m.last) : '')).filter(Boolean);
+        assert(notes.some(c => c.includes('패배 1회') && c.includes('100 XP') && c.includes('도주하지 않았습니다')), '패배 채널 안내(도주하지 않음)');
+        await mod.forceEndRaid('gMain'); await settle();
+        assert(!lv.isRaidXpFrozen() && !mod.getRaidStatus('gMain').active, '관리자 종료로 끝낼 수 있음(XP 정지 해제)');
+        // 승리 보상: 저장된 전투(보스 HP 1)를 이어서 한 방에 쓰러뜨림
+        const before = { v1: lv.getXp('gMain', 'v1'), v2: lv.getXp('gMain', 'v2') };
+        const { monster: _m, ...battle } = E.createBattle(voidM, [{ userId: 'v1', name: '유저v1', role: 'sword' }, { userId: 'v2', name: '유저v2', role: 'archer' }]);
+        battle.hp = 1; battle.intent = 'analyze';
+        const chW = mkChannel('chW', 'gMain');
+        const mW = mkMsg(chW, 'mW', legacyPayload('옛 화면', 'raid:act:attack'));
+        const modW = await restart({ gMain: { channelId: 'chW', messageId: 'mW', monsterId: 'void', phase: 'battle', recruitEndsAt: null, party: [{ userId: 'v1', name: '유저v1', role: 'sword' }, { userId: 'v2', name: '유저v2', role: 'archer' }], battle, battleStartedAt: Date.now() - 60_000, battleEndsAt: Date.now() + 600_000, waitedMs: 3600_000, lostPerUser: 70, defeatStacks: 0 } });
+        assert(modW.isPlaygroundPaused('gMain') && textOf(mW).includes('TURN 1'), '재시작 후 ??? 전투 이어가기');
+        await press(modW, mW, 'v1', 'raid:act:attack');
+        await press(modW, mW, 'v2', 'raid:act:attack'); // 둘 다 골라야 턴이 진행된다(검사가 먼저 쓰러뜨리면 궁수는 행동하지 않아 보상 없음)
+        assert(lv.getXp('gMain', 'v1') === before.v1 + 2000 && lv.getXp('gMain', 'v2') === before.v2, '토벌 보상: MVP 1000 + 1000 보너스(직접 행동한 사람만)');
+        assert(gw.getGateways('gMain', 'v1') === 1 && gw.getGateways('gMain', 'v2') === 0 && ht.getHackTools('gMain', 'v1') === 0, 'MVP에게만 블랙월 게이트웨이(해킹 툴은 안 줌)');
+        assert(textOf(mW).includes('블랙월 게이트웨이') && !lv.isRaidXpFrozen(), '결과 화면에 아이템 표시 + XP 시스템 복구');
+        // 블랙월 게이트웨이: 시간제 XP 정지(1시간)
+        const until = lv.freezeUserXpFor('gMain', 'v2', 3600_000);
+        const xpBefore = lv.getXp('gMain', 'v2');
+        lv.applyXp('gMain', 'v2', 50, '정지 중 지급 시험');
+        assert(until > Date.now() && lv.isUserXpFrozen('gMain', 'v2') && lv.getXp('gMain', 'v2') === xpBefore, '게이트웨이: 1시간 동안 그 유저에게 XP가 안 쌓임');
+        assert(gw.useGateway('gMain', 'v1') && gw.getGateways('gMain', 'v1') === 0 && !gw.useGateway('gMain', 'v1'), '게이트웨이 아이템 사용은 개수만큼만');
+      } finally {
+        Date.now = realNow;
+        const i = E.MONSTERS.indexOf(voidM); if (i >= 0) E.MONSTERS.splice(i, 1);
+      }
+    }
   }
   console.log('그림 업로드 횟수:', images.length, '· RSS', Math.round(process.memoryUsage().rss/1048576), 'MB');
 })().catch(e => { console.error('테스트 실패', e); process.exitCode = 1; });
