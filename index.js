@@ -453,7 +453,7 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     const isChannelExempt =
-      (interaction.isChatInputCommand() && ['관리'].includes(interaction.commandName)) ||
+      (interaction.isChatInputCommand() && ['관리', '티어'].includes(interaction.commandName)) || // /티어는 나만 보이는 화면이라 어느 채널에서든
       interaction.customId?.startsWith('team:') || // 팀 짜기 카드는 내전채팅에 올라간다(참가자·주최자만 누를 수 있음)
       isWordchainOrRanking ||
       isReload ||
