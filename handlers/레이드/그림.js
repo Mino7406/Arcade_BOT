@@ -281,25 +281,22 @@ const STATUS_ICONS = {
   },
 };
 // 악취 기운(카드 아이콘 위): 작은 방귀 구름 + 맴도는 파리 두 마리(냄새 줄은 X자처럼 보여 뺌 — 사용자 요청)
-function stenchAura(cx, cy) {
-  stenchHaze(cx, cy, 0.8);
-  stenchFlies(cx, cy);
+// 악취(구린 방귀): 악취 아이콘 색(갈색 #8a4f1e · 주황 #c47a32 · 밝은 주황 #eaa860)으로 은은하게. k = 진하기(맞은 순간 1, 남아 있는 동안 0.6)
+const STENCH_C = { dark: '#8a4f1e', mid: '#c47a32', light: '#eaa860' };
+// 반투명 뭉게구름 하나: 가운데 큰 동그라미 + 양옆·위 작은 동그라미를 옅게 겹친다(겹친 곳이 조금 더 진해 입체감)
+function softCloud(x, y, s, color, alpha) {
+  for (const [dx, dy, r] of [[0, 0, 14], [-13, 4, 10], [13, 4, 10], [-5, -8, 9], [7, -7, 8]]) haze(x + dx * s, y + dy * s, r * s, color, alpha);
 }
-// 악취 기운: 악취 아이콘 색(갈색·주황·밝은 주황)의 반투명 기운이 아이콘 아래쪽에 은은하게 깔리고 작은 방울이 피어오름.
-// k로 진하기(맞은 순간 1.4 · 남아 있는 동안 0.8)
-function stenchHaze(cx, cy, k = 1) {
-  haze(cx, cy + 14, 36, '#8a4f1e', 0.2 * k);
-  haze(cx - 14, cy + 6, 22, '#c47a32', 0.18 * k);
-  haze(cx + 16, cy, 18, '#eaa860', 0.14 * k);
-  for (const [dx, dy, r] of [[-22, -32, 6], [18, -42, 5], [-4, -54, 4]]) haze(cx + dx, cy + dy, r, '#c47a32', 0.4 * k);
+// 아이콘 뒤: 아래쪽에 옅은 구름 두 덩이가 깔림
+function stenchBehind(role, cx, cy, k) {
+  softCloud(cx - 26, cy + 18, 1.3, STENCH_C.dark, 0.16 * k);
+  softCloud(cx + 28, cy + 14, 1.2, STENCH_C.dark, 0.16 * k);
 }
-// 악취 파리 두 마리(검은 몸 + 흰 날개)
-function stenchFlies(cx, cy) {
-  for (const [fx, fy] of [[-34, -40], [36, -8]]) {
-    p.rect(fx + cx - 2, fy + cy - 2, 5, 5, '#1a120a');
-    p.rect(fx + cx - 5, fy + cy - 6, 4, 3, '#d8e4ee');
-    p.rect(fx + cx + 2, fy + cy - 6, 4, 3, '#d8e4ee');
-  }
+// 아이콘 앞: 작은 구름이 아이콘 아래쪽에 살짝 걸치고, 위로 아주 작은 구름이 떠오름(아이콘은 비쳐 보이게 옅게)
+function stenchFront(cx, cy, k) {
+  softCloud(cx - 4, cy + 30, 1.1, STENCH_C.mid, 0.16 * k);
+  softCloud(cx + 34, cy - 30, 0.55, STENCH_C.light, 0.22 * k);
+  softCloud(cx - 30, cy - 40, 0.45, STENCH_C.light, 0.2 * k);
 }
 // 악취: 갈색 냄새 구름 배지 + 냄새 줄 + 남은 턴
 function stenchBadge(cx, cy, turns) {
@@ -806,10 +803,7 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
 // 맞은 파티원 카드 아이콘 위 타격 표시: 박치기는 할퀸 자국, 흩뿌리기는 점액 얼룩, 짓누르기는 충격 별.
 function hitFx(move, cx, cy, color, spore = color, accent = spore) {
   if (move === 'fart') {
-    // 구린 방귀에 맞음: 악취 아이콘과 같은 갈색·주황 기운이 아이콘 둘레에 은은하게 퍼지고 파리가 꼬인다
-    stenchHaze(cx, cy, 1.4);
-    stenchFlies(cx, cy);
-    return;
+    return; // 구린 방귀 피격·악취는 카드에서 stenchBehind·stenchFront로(아이콘 뒤·앞에 나눠 그림)
   }
   if (move === 'peel') {
     // 바나나 껍질에 맞음: 아이콘 옆에 껍질 두 개 + 미끄러진 자국
@@ -1221,7 +1215,11 @@ function renderBattle(r) {
         text(`${mem.stunStatus?.name ?? (iced ? '빙결' : '기절')}!`, x + w / 2, y + 27, 19, ribbon.color, { maxWidth: w - 36 });
       }
 
+      // 악취(구린 방귀): 맞은 순간은 진하게, 남아 있는 동안은 옅게 — 아이콘 뒤·앞에 나눠 그린다
+      const stenchK = down ? 0 : (usedFx === 'fart' && last?.hits[mem.userId]) ? 1 : isStenched(b, mem) ? 0.7 : 0;
+      if (stenchK) stenchBehind(roleKey, x + w / 2, y + 86, stenchK);
       roleIcon(roleKey, x + w / 2, y + 86, down);
+      if (stenchK) stenchFront(x + w / 2, y + 86, stenchK);
       // 표식(영혼 사냥 예고 대상): 선택 화면에서 카드 오른쪽 위에 빛나는 눈
       if (!down && !r.showingResult && !isIntentHidden(b) && b.marks?.includes(mem.userId)) markEye(x + w - 36, y + 66);
       if (!down && isIced(b, mem)) iceCover(x + w / 2, y + 86); // 빙결: 아이콘이 얼음에 갇힘
@@ -1238,7 +1236,6 @@ function renderBattle(r) {
       // 상태 효과 아이콘(카드 왼쪽, 리본 아래): 점액(남은 턴) · 기절
       if (!down) statusBadges(b, mem, x + 32, y + 66);
       // 환각(최면) 상태는 점액처럼 카드 아이콘 위에 소용돌이로 보여 준다. 최면술에 막 맞은 결과 화면은 타격 표시(작은 최면 물결)만.
-      if (!down && isStenched(b, mem) && !(usedFx === 'fart' && hit)) stenchAura(x + w / 2, y + 86);
       if (!down && isConfused(b, mem) && !(usedFx === 'hypno' && hit)) confuseSwirl(x + w / 2 + 14, y + 98); // 아이콘 오른쪽 아래에 걸쳐 아이콘도 보이게
       // 기절(별): 환각과 같은 자리(아이콘 오른쪽 아래). 빙결은 얼음 덮개라 그리지 않는다.
       // 기절: 아이콘 머리 위를 도는 별(사용자 요청 — 아이콘 옆 별은 점액 얼룩과 겹쳤음)
