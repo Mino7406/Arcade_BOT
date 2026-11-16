@@ -65,7 +65,7 @@ function buildAdminHome({ guildId, note } = {}) {
   return payload(card({
     color: bad ? COLORS.warn : COLORS.ok,
     header: '🛠️ ARCADE 관리',
-    sub: '소식 알림 · XP · 퀴즈 · 패널 · 게시물 · 채널',
+    sub: '소식 알림 · XP · 퀴즈 · 패널 · 게시물 · 채널 · 티어',
     blocks: [
       note || null,
       ...buildPatchBlocks(patch),
@@ -89,6 +89,7 @@ ${xpLine}`,
             new ButtonBuilder().setCustomId('admin:panels').setLabel('패널 게시').setEmoji('📌').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId('admin:refresh').setLabel('새로고침').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId('admin:channel').setLabel('게임모집 관리').setEmoji('🧹').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('admin:tier:reset').setLabel('티어 정보 초기화').setEmoji('🏅').setStyle(ButtonStyle.Danger),
           ),
           // 테스트 전용 버튼은 테스트 서버에서만 보인다(다른 관리자가 본서버에서 잘못 누르지 않도록)
           ...(isTestGuild(guildId) ? [new ActionRowBuilder().addComponents(
@@ -98,6 +99,26 @@ ${xpLine}`,
         ],
       },
     ],
+  }));
+}
+
+// 🏅 티어 정보 초기화 확인 화면. 되돌릴 수 없어서 한 번 더 묻는다. 테스트 서버 가짜 인원만 지우는 버튼도 둔다.
+function buildTierResetPayload() {
+  const { users, entries, testUsers } = require('../매치/티어').tierStats();
+  const rows = [new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('admin:tier:reset:all').setLabel('전부 초기화').setEmoji('🗑️').setStyle(ButtonStyle.Danger).setDisabled(users === 0),
+    new ButtonBuilder().setCustomId('admin:tier:reset:test').setLabel(`가짜 인원만 (${testUsers}명)`).setEmoji('🧪').setStyle(ButtonStyle.Secondary).setDisabled(testUsers === 0),
+    new ButtonBuilder().setCustomId('admin:home').setLabel('메뉴로').setEmoji('↩️').setStyle(ButtonStyle.Secondary),
+  )];
+  return payload(card({
+    color: COLORS.warn,
+    header: '🏅 티어 정보 초기화',
+    sub: '내 티어 설정·팀 입력으로 저장된 롤·발로·오버워치·배그 티어',
+    blocks: [
+      `**저장된 티어**　${users}명 · ${entries}개${testUsers ? `\n-# 그중 테스트 서버 🧪 가짜 인원 ${testUsers}명` : ''}`,
+      '⚠️ **전부 초기화**하면 모든 사람의 저장된 티어가 지워지고 되돌릴 수 없어요.\n팀 짜기 카드의 티어 이모지·⚖️ 밸런스도 처음부터 다시 쌓여요.',
+    ],
+    rows,
   }));
 }
 
@@ -153,6 +174,19 @@ async function handleAdminButton(interaction) {
       note = `⚠️ **테스트 알림 전송 실패:** ${err?.message ?? err}`;
     }
     await interaction.editReply(buildAdminHome({ guildId, note }));
+    return;
+  }
+
+  if (sub === 'tier:reset') {
+    await interaction.update(buildTierResetPayload());
+    return;
+  }
+
+  if (sub === 'tier:reset:all' || sub === 'tier:reset:test') {
+    const onlyTest = sub === 'tier:reset:test';
+    const n = require('../매치/티어').clearTiers({ onlyTest });
+    logAction(interaction, '관리', `티어 정보 초기화 — ${onlyTest ? '가짜 인원만' : '전부'} ${n}명`);
+    await interaction.update(buildAdminHome({ guildId, note: onlyTest ? `🧪 **가짜 인원 ${n}명의 티어를 지웠어요.**` : `🗑️ **저장된 티어를 모두 지웠어요.** (${n}명)` }));
     return;
   }
 

@@ -176,6 +176,21 @@ function save() {
   }
 }
 
+// /관리 티어 초기화용: 저장된 사람 수·티어 개수, 테스트 서버 가짜 인원(test_ 로 시작) 수
+function tierStats() {
+  const ids = Object.keys(store).filter(id => Object.keys(store[id] || {}).length > 0);
+  const entries = ids.reduce((n, id) => n + Object.keys(store[id]).length, 0);
+  return { users: ids.length, entries, testUsers: ids.filter(id => id.startsWith('test_')).length };
+}
+
+// onlyTest: 테스트 서버 가짜 인원만 지운다. 지운 사람 수를 돌려준다.
+function clearTiers({ onlyTest = false } = {}) {
+  const ids = Object.keys(store).filter(id => !onlyTest || id.startsWith('test_'));
+  for (const id of ids) delete store[id];
+  save();
+  return ids.length;
+}
+
 function getTier(userId, game) {
   const tier = store[userId]?.[game] ?? null;
   return tier && findTier(game, tier.tier) ? tier : null; // 티어 목록이 바뀌어 없어진 값은 없는 것으로
@@ -260,6 +275,8 @@ module.exports = {
   parseTierToken,
   getTier,
   setTier,
+  tierStats,
+  clearTiers,
   ensureTierEmojis,
   tierEmojiId,
   tierBadge,
