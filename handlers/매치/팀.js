@@ -31,7 +31,7 @@ const {
 } = require('./공용');
 const { card, notice, payload } = require('../공통/카드');
 const { logError } = require('../공통/로그');
-const { NAEJEON_CHAT_CHANNEL_IDS = {} } = require('../../config');
+const { NAEJEON_CHAT_CHANNEL_IDS = {}, GAME_EMOJIS = {} } = require('../../config');
 const tiers = require('./티어');
 
 const MAX_TEAMS = 10;
@@ -470,8 +470,10 @@ function tierOptionEmoji(game, tier) {
 function buildTierGamePayload() {
   return notice('🏅 **어느 게임 티어를 설정할까요?**\n-# 한 번 저장하면 내전 팀 짜기 카드의 ⚖️ 밸런스에 쓰여요.', {
     rows: [new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('team:tier:lol:panel').setLabel('리그 오브 레전드').setEmoji({ id: '1510933684750913626' }).setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('team:tier:valorant:panel').setLabel('발로란트').setEmoji({ id: '1510933698349109268' }).setStyle(ButtonStyle.Secondary),
+      ...Object.entries(tiers.LADDERS).map(([game, ladder]) => {
+        const b = new ButtonBuilder().setCustomId(`team:tier:${game}:panel`).setLabel(ladder.name).setStyle(ButtonStyle.Secondary);
+        return GAME_EMOJIS[game] ? b.setEmoji({ id: GAME_EMOJIS[game] }) : b;
+      }),
     )],
     ephemeral: true,
   });
@@ -508,6 +510,30 @@ function buildTierDivPayload(game, tierKey, matchMsgId) {
   return notice(`🏅 **${t.name}** 몇 단계인가요?`, { rows: [new ActionRowBuilder().addComponents(menu)] });
 }
 
+// 점수제 티어(마스터 이상·레디언트 등): 점수를 적을지 묻는다. 안 적어도 저장된다.
+function buildTierScoreAskPayload(game, key, matchMsgId) {
+  const t = tiers.findTier(game, key);
+  const unit = tiers.LADDERS[game].scoreUnit || '점';
+  return notice(`🏅 **${t.name}**은 점수로 순위가 갈려요.
+점수(${unit})도 적어 둘까요? 적으면 ⚖️ 밸런스가 더 정확해져요.`, {
+    rows: [new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`team:tier_score:${game}:${key}:${matchMsgId}`).setLabel(`✏️ ${unit} 적기`).setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`team:tier_save:${game}:${key}:${matchMsgId}`).setLabel('점수 없이 저장').setStyle(ButtonStyle.Secondary),
+    )],
+  });
+}
+
+function buildTierScoreModal(game, key, matchMsgId) {
+  const t = tiers.findTier(game, key);
+  const unit = tiers.LADDERS[game].scoreUnit || '점';
+  return new ModalBuilder()
+    .setCustomId(`team:tier_modal:${game}:${key}:${matchMsgId}`)
+    .setTitle(`${t.name} 점수`)
+    .addComponents(new ActionRowBuilder().addComponents(
+      new TextInputBuilder().setCustomId('score').setLabel(`${unit} (숫자만)`).setStyle(TextInputStyle.Short).setPlaceholder('예: 350').setRequired(true).setMaxLength(5),
+    ));
+}
+
 async function saveMyTier(interaction, game, tier, matchMsgId) {
   tiers.setTier(interaction.user.id, game, tier);
   const match = getMatches(interaction.client).get(matchMsgId);
@@ -526,6 +552,7 @@ async function handleTeamSelect(interaction) {
     if (key === 'none') return saveMyTier(interaction, game, null, matchMsgId);
     const t = tiers.findTier(game, key);
     if (!t) return interaction.update(notice('⚠️ **알 수 없는 티어예요.**'));
+    if (t.scored) return interaction.update(buildTierScoreAskPayload(game, key, matchMsgId));
     if (!t.divs) return saveMyTier(interaction, game, { tier: key }, matchMsgId);
     return interaction.update(buildTierDivPayload(game, key, matchMsgId));
   }
@@ -568,6 +595,13 @@ async function handleTeamButton(interaction) {
     return;
   }
 
+  if (customId.startsWith('team:tier_score:') || customId.startsWith('team:tier_save:')) {
+    const [, action, game, key, matchMsgId] = customId.split(':');
+    if (!tiers.findTier(game, key)) return interaction.update(notice('⚠️ **알 수 없는 티어예요.**'));
+    if (action === 'tier_score') return interaction.showModal(buildTierScoreModal(game, key, matchMsgId));
+    return saveMyTier(interaction, game, { tier: key }, matchMsgId);
+  }
+
   if (customId.startsWith('team:tier:')) {
     const [, , game, matchMsgId] = customId.split(':');
     if (!tiers.hasTiers(game)) {
@@ -601,6 +635,16 @@ async function handleTeamButton(interaction) {
 }
 
 async function handleTeamModal(interaction) {
+  if (interaction.customId.startsWith('team:tier_modal:')) {
+    const [, , game, key, matchMsgId] = interaction.customId.split(':');
+    const raw = interaction.fields.getTextInputValue('score').replace(/[^0-9]/g, '');
+    const score = Number(raw);
+    if (!raw || !Number.isFinite(score)) {
+      await interaction.reply(notice('⚠️ **점수는 숫자로 적어 주세요.** (예: 350)', { ephemeral: true }));
+      return;
+    }
+    return saveMyTier(interaction, game, { tier: key, score }, matchMsgId);
+  }
   const matchMsgId = interaction.customId.slice('team:modal:'.length);
   const match = await getEditableMatch(interaction, matchMsgId);
   if (!match) return;

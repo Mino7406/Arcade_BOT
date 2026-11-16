@@ -179,6 +179,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     const panelTier = mkInteraction({ user: 'u7', customId: 'team:tier:lol:panel', message: new FakeMsg(team.buildTierGamePayload(), channel) });
     await team.handleTeamButton(panelTier);
     await team.handleTeamSelect(mkInteraction({ user: 'u7', customId: 'team:tier_pick:lol:panel', values: ['challenger'], message: panelTier.message }));
+    await team.handleTeamButton(mkInteraction({ user: 'u7', customId: 'team:tier_save:lol:challenger:panel', message: panelTier.message }));
     assert(require(path.join(root, 'handlers/매치/티어.js')).getTier('u7', 'lol')?.tier === 'challenger', '패널에서 고른 티어가 저장되지 않음');
 
     const input = mkInteraction({ user: 'u2', customId: `team:input:${id}` });
@@ -216,9 +217,22 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await team.handleTeamSelect(mkInteraction({ user: 'u3', customId: `team:tier_div:lol:emerald:${id}`, values: ['3'], message: tierBtn._reply }));
     assert(tierMod.getTier('u3', 'lol')?.tier === 'emerald' && tierMod.getTier('u3', 'lol')?.div === 3, '내 티어(에메랄드3)가 저장되지 않음');
     await team.handleTeamSelect(mkInteraction({ user: 'u3', customId: `team:tier_pick:valorant:${id}`, values: ['radiant'], message: tierBtn._reply }));
+    await team.handleTeamButton(mkInteraction({ user: 'u3', customId: `team:tier_save:valorant:radiant:${id}`, message: tierBtn._reply }));
     assert(tierMod.getTier('u3', 'valorant')?.tier === 'radiant', '단계 없는 티어(레디언트)가 저장되지 않음');
     await team.handleTeamSelect(mkInteraction({ user: 'u3', customId: `team:tier_pick:valorant:${id}`, values: ['none'], message: tierBtn._reply }));
     assert(!tierMod.getTier('u3', 'valorant'), '티어 지우기가 안 됨');
+    // 점수제 티어: 마스터 → ✏️ LP 적기 → 입력창 → 저장 / 점수 없이 저장
+    await team.handleTeamSelect(mkInteraction({ user: 'u3', customId: `team:tier_pick:lol:${id}`, values: ['master'], message: tierBtn._reply }));
+    const scoreBtn = mkInteraction({ user: 'u3', customId: `team:tier_score:lol:master:${id}`, message: tierBtn._reply });
+    await team.handleTeamButton(scoreBtn);
+    assert(scoreBtn.modalShown, '점수 입력창이 안 뜸');
+    await team.handleTeamModal(mkInteraction({ user: 'u3', customId: `team:tier_modal:lol:master:${id}`, fields: { score: '350LP' }, message: tierBtn._reply }));
+    assert(tierMod.getTier('u3', 'lol')?.score === 350, '마스터 LP가 저장되지 않음');
+    await team.handleTeamButton(mkInteraction({ user: 'u3', customId: `team:tier_save:pubg:survivor:${id}`, message: tierBtn._reply }));
+    assert(tierMod.getTier('u3', 'pubg')?.tier === 'survivor', '배그 서바이버(점수 없이)가 저장되지 않음');
+    await team.handleTeamSelect(mkInteraction({ user: 'u3', customId: `team:tier_pick:overwatch:${id}`, values: ['champion'], message: tierBtn._reply }));
+    await team.handleTeamSelect(mkInteraction({ user: 'u3', customId: `team:tier_div:overwatch:champion:${id}`, values: ['5'], message: tierBtn._reply }));
+    assert(tierMod.getTier('u3', 'overwatch')?.div === 5, '오버워치 챔피언5가 저장되지 않음');
 
     match.closed = false; // 마감 해제 후 다시 마감돼도 카드를 또 올리지 않는다
     const before = channel.sent.length;

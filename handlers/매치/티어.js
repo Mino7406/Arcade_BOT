@@ -10,7 +10,8 @@ const path = require('path');
 const { writeJsonIfChanged } = require('../공통/저장');
 const { logSystem, logError } = require('../공통/로그');
 
-// divs: 단계 수(0이면 단계 없음). 롤은 4(낮음)→1(높음), 발로란트는 1(낮음)→3(높음).
+// divs: 단계 수(0이면 단계 없음). 롤·오버워치·배그는 숫자가 작을수록 높고(롤 4→1, 오버워치 5→1, 배그 4→1), 발로란트는 1(낮음)→3(높음).
+// scored: 단계 대신 점수(LP·RR·RP)로 순위를 매기는 최상위 티어. 고를 때 점수를 적을 수 있다(선택).
 // aliases: 팀 입력에서 알아듣는 글자. 한 글자 줄임말(다·불…)은 숫자가 붙을 때만 티어로 본다(이름과 헷갈리지 않게).
 const LADDERS = {
   lol: {
@@ -24,10 +25,11 @@ const LADDERS = {
       { key: 'platinum',    name: '플래티넘',     short: '플',   divs: 4, aliases: ['플', '플래', '플레', '플래티넘', '플레티넘'] },
       { key: 'emerald',     name: '에메랄드',     short: '에',   divs: 4, aliases: ['에', '에메', '에메랄드'] },
       { key: 'diamond',     name: '다이아몬드',   short: '다',   divs: 4, aliases: ['다', '다야', '다이아', '다이아몬드'] },
-      { key: 'master',      name: '마스터',       short: '마',   divs: 0, aliases: ['마스터'] },
-      { key: 'grandmaster', name: '그랜드마스터', short: '그마', divs: 0, aliases: ['그마', '그랜드마스터'] },
-      { key: 'challenger',  name: '챌린저',       short: '챌',   divs: 0, aliases: ['챌', '챌린저'] },
+      { key: 'master',      name: '마스터',       short: '마',   divs: 0, scored: true, aliases: ['마스터'] },
+      { key: 'grandmaster', name: '그랜드마스터', short: '그마', divs: 0, scored: true, aliases: ['그마', '그랜드마스터'] },
+      { key: 'challenger',  name: '챌린저',       short: '챌',   divs: 0, scored: true, aliases: ['챌', '챌린저'] },
     ],
+    scoreUnit: 'LP',
   },
   valorant: {
     name: '발로란트',
@@ -41,10 +43,48 @@ const LADDERS = {
       { key: 'dia',     name: '다이아몬드', short: '다', divs: 3, aliases: ['다', '다야', '다이아', '다이아몬드'] },
       { key: 'asc',     name: '초월자',     short: '초', divs: 3, aliases: ['초', '초월', '초월자'] },
       { key: 'imm',     name: '불멸',       short: '불', divs: 3, aliases: ['불', '불멸'] },
-      { key: 'radiant', name: '레디언트',   short: '레디', divs: 0, aliases: ['레디', '레디언트', '래디언트'] },
+      { key: 'radiant', name: '레디언트',   short: '레디', divs: 0, scored: true, aliases: ['레디', '레디언트', '래디언트'] },
+    ],
+    scoreUnit: 'RR',
+  },
+  // 오버워치: 브론즈~챔피언 모두 5단계(5 낮음 → 1 높음), 2026년 8월에 플래티넘과 다이아 사이에 에메랄드가 생겼다. 상위 500은 순위표.
+  overwatch: {
+    name: '오버워치',
+    divOrder: 'desc',
+    tiers: [
+      { key: 'bronze',      name: '브론즈',       short: '브',   divs: 5, aliases: ['브', '브론즈'] },
+      { key: 'silver',      name: '실버',         short: '실',   divs: 5, aliases: ['실', '실버'] },
+      { key: 'gold',        name: '골드',         short: '골',   divs: 5, aliases: ['골', '골드'] },
+      { key: 'platinum',    name: '플래티넘',     short: '플',   divs: 5, aliases: ['플', '플래', '플레', '플래티넘', '플레티넘'] },
+      { key: 'emerald',     name: '에메랄드',     short: '에',   divs: 5, aliases: ['에', '에메', '에메랄드'] },
+      { key: 'diamond',     name: '다이아몬드',   short: '다',   divs: 5, aliases: ['다', '다야', '다이아', '다이아몬드'] },
+      { key: 'master',      name: '마스터',       short: '마',   divs: 5, aliases: ['마', '마스터'] },
+      { key: 'grandmaster', name: '그랜드마스터', short: '그마', divs: 5, aliases: ['그', '그마', '그랜드마스터'] },
+      { key: 'champion',    name: '챔피언',       short: '챔',   divs: 5, aliases: ['챔', '챔피언'] },
+      { key: 'top500',      name: '상위 500',     short: '탑500', divs: 0, aliases: ['탑오백', '상위오백'] },
     ],
   },
+  // 배그(PC): 브론즈~다이아 4단계(4 낮음 → 1 높음), 마스터·서바이버는 RP 점수제.
+  pubg: {
+    name: '배틀그라운드',
+    divOrder: 'desc',
+    tiers: [
+      { key: 'bronze',   name: '브론즈',     short: '브',   divs: 4, aliases: ['브', '브론즈'] },
+      { key: 'silver',   name: '실버',       short: '실',   divs: 4, aliases: ['실', '실버'] },
+      { key: 'gold',     name: '골드',       short: '골',   divs: 4, aliases: ['골', '골드'] },
+      { key: 'platinum', name: '플래티넘',   short: '플',   divs: 4, aliases: ['플', '플래', '플레', '플래티넘', '플레티넘'] },
+      { key: 'crystal',  name: '크리스탈',   short: '크',   divs: 4, aliases: ['크', '크리', '크리스탈'] },
+      { key: 'diamond',  name: '다이아몬드', short: '다',   divs: 4, aliases: ['다', '다야', '다이아', '다이아몬드'] },
+      { key: 'master',   name: '마스터',     short: '마',   divs: 0, scored: true, aliases: ['마스터'] },
+      { key: 'survivor', name: '서바이버',   short: '서바', divs: 0, scored: true, aliases: ['서바', '서바이버'] },
+    ],
+    scoreUnit: 'RP',
+  },
 };
+
+// 점수제 티어의 점수를 밸런스 점수에 얹는 비율: 200점마다 한 단계, 최대 3000점까지만 친다.
+const SCORE_PER_STEP = 200;
+const SCORE_CAP = 3000;
 
 function hasTiers(game) {
   return !!LADDERS[game];
@@ -61,7 +101,7 @@ function tierScore(game, tier) {
   let score = 0;
   for (const t of ladder.tiers) {
     if (t.key === tier.tier) {
-      if (!t.divs) return score;
+      if (!t.divs) return score + (t.scored && tier.score ? Math.min(Number(tier.score) || 0, SCORE_CAP) / SCORE_PER_STEP : 0);
       const div = Math.min(Math.max(Number(tier.div) || 1, 1), t.divs);
       return score + (ladder.divOrder === 'desc' ? t.divs - div : div - 1);
     }
@@ -87,14 +127,15 @@ function tierFromScore(game, score) {
 function tierLabel(game, tier, { short = false } = {}) {
   const t = findTier(game, tier?.tier);
   if (!t) return '';
-  return `${short ? t.short : t.name}${t.divs && tier.div ? tier.div : ''}`;
+  const unit = LADDERS[game].scoreUnit || '점';
+  return `${short ? t.short : t.name}${t.divs && tier.div ? tier.div : ''}${t.scored && tier.score ? ` ${tier.score}${unit}` : ''}`;
 }
 
 // 팀 입력의 낱말 하나를 티어로 읽는다. "다3" "다이아3" "불멸1" "마스터" "챌" "레디" → { tier, div } / 아니면 null
 function parseTierToken(game, token) {
   const ladder = LADDERS[game];
   if (!ladder) return null;
-  const m = /^([가-힣]+)([1-4])?$/.exec(String(token).trim());
+  const m = /^([가-힣]+)([1-5])?$/.exec(String(token).trim());
   if (!m) return null;
   const [, word, digit] = m;
   for (const t of ladder.tiers) {
@@ -142,7 +183,7 @@ function getTier(userId, game) {
 function setTier(userId, game, tier) {
   if (!hasTiers(game)) return;
   if (!store[userId]) store[userId] = {};
-  if (tier) store[userId][game] = { tier: tier.tier, ...(tier.div ? { div: tier.div } : {}), at: Date.now() };
+  if (tier) store[userId][game] = { tier: tier.tier, ...(tier.div ? { div: tier.div } : {}), ...(tier.score ? { score: tier.score } : {}), at: Date.now() };
   else delete store[userId][game];
   save();
 }
@@ -154,6 +195,8 @@ const emojiIds = new Map(); // 파일 이름(lol_gold, val_imm2 …) → 앱 이
 
 function emojiFileName(game, tier) {
   if (game === 'lol') return `lol_${tier.tier}`;
+  if (game === 'overwatch') return `ow_${tier.tier}`;
+  if (game === 'pubg') return `pubg_${tier.tier}`;
   if (game === 'valorant') {
     const t = findTier(game, tier.tier);
     return t?.divs ? `val_${tier.tier}${tier.div || 1}` : `val_${tier.tier}`;

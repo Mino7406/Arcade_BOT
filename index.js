@@ -510,7 +510,7 @@ client.on('interactionCreate', async (interaction) => {
       }
 
     } else if (interaction.isModalSubmit()) {
-      if (interaction.customId.startsWith('team:modal:')) {
+      if (interaction.customId.startsWith('team:modal:') || interaction.customId.startsWith('team:tier_modal:')) {
         await handleTeamModal(interaction);
       } else if (interaction.customId.startsWith('naejeon:modal:')) {
         await handleNaejeonModal(interaction);

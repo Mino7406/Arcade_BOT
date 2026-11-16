@@ -18,7 +18,7 @@ const { displayNameFromInteraction } = require('../공통/이름');
 const { logAction, logError } = require('../공통/로그');
 const { OWNER_IDS, isTestGuild } = require('../../config');
 
-// 테스트 서버의 🧪 가짜 인원 채우기에 쓰는 이름과 티어(롤·발로). 두 명은 티어 없이 둬서 "티어 모름" 안내도 보이게 한다.
+// 테스트 서버의 🧪 가짜 인원 채우기에 쓰는 이름과 티어(롤·발로, 오버워치·배그는 아래에서 채움). 두 명은 티어 없이 둬서 "티어 모름" 안내도 보이게 한다.
 const TEST_FILL = [
   ['윤진', { lol: { tier: 'emerald', div: 2 }, valorant: { tier: 'dia', div: 2 } }],
   ['승훈', { lol: { tier: 'diamond', div: 1 }, valorant: { tier: 'imm', div: 2 } }],
@@ -682,7 +682,16 @@ async function handleNaejeonButton(interaction) {
       const id = `test_${name}`;
       if (match.participants.some(u => u.id === id || u.displayName === name)) continue;
       match.participants.push({ id, displayName: name });
-      for (const game of ['lol', 'valorant']) tiers.setTier(id, game, saved?.[game] ?? null);
+      for (const game of Object.keys(tiers.LADDERS)) {
+        // 롤·발로는 위 표 그대로, 오버워치·배그는 표에 없으니 이름 순서로 적당히 골라 넣는다(티어 없는 두 명은 그대로 없음)
+        let tier = saved?.[game] ?? null;
+        if (saved && !tier) {
+          const list = tiers.LADDERS[game].tiers;
+          const t = list[(match.participants.length * 3) % (list.length - 1)];
+          tier = t.divs ? { tier: t.key, div: (match.participants.length % t.divs) + 1 } : { tier: t.key, score: 250 };
+        }
+        tiers.setTier(id, game, tier);
+      }
     }
     for (let n = 1; match.participants.length < max; n++) { // 준비한 이름보다 정원이 크면 번호로
       if (!match.participants.some(u => u.id === `test_${n}`)) match.participants.push({ id: `test_${n}`, displayName: `테스트${n}` });
