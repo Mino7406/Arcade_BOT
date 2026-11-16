@@ -477,7 +477,7 @@ function tierIconUrl(game, tier) {
 
 // 저장된 티어 한 줄: "<이모지> **에메랄드4**" / 없으면 "아직 저장 안 함"
 function tierLine(game, tier) {
-  if (!tier) return '-# 아직 저장 안 함';
+  if (!tier) return '*아직 저장 안 함*'; // 줄 중간에도 들어가서 -# (줄 맨 앞에서만 작동) 대신 기울임
   const id = tiers.tierEmojiId(game, tier);
   return `${id ? `<:t:${id}> ` : ''}**${tiers.tierLabel(game, tier)}**`;
 }
