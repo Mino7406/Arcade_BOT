@@ -753,6 +753,9 @@ function buildTierPickPayload(gk, matchMsgId, userId) {
   const rows = [new ActionRowBuilder().addComponents(menu)];
   const buttons = [];
   if (tiers.POSITIONS[game]) buttons.push(new ButtonBuilder().setCustomId(`team:tier_posset:${game}:${matchMsgId}`).setLabel(`🧭 ${tiers.POSITION_WORD[game]} 설정`).setStyle(ButtonStyle.Primary));
+  // 🔄 초기화: 이 게임(오버워치는 이 롤)의 티어와 포지션을 한 번에 지운다. 저장된 게 있을 때만.
+  const hasSaved = mine || (tiers.POSITIONS[game] && tiers.getPositions(userId, game).length);
+  if (hasSaved) buttons.push(new ButtonBuilder().setCustomId(`team:tier_reset:${gk}:${matchMsgId}`).setLabel('🔄 초기화').setStyle(ButtonStyle.Danger));
   if (role) buttons.push(backButton(`team:tier_roles:${matchMsgId}`, '↩️ 뒤로'));
   else if (matchMsgId === 'panel') buttons.push(backButton('team:tier_games:panel', '↩️ 뒤로'));
   if (buttons.length) rows.push(new ActionRowBuilder().addComponents(...buttons));
@@ -921,6 +924,17 @@ async function handleTeamButton(interaction) {
   if (customId.startsWith('team:tier_roles:')) {
     const matchMsgId = customId.slice('team:tier_roles:'.length);
     return interaction.update(buildOwRolesPayload(matchMsgId, interaction.user.id));
+  }
+  if (customId.startsWith('team:tier_reset:')) {
+    const [, , gk, matchMsgId] = customId.split(':');
+    const { game, role } = tiers.splitKey(gk);
+    if (!tiers.hasTiers(game) || (role && !tiers.owRole(role))) return interaction.update(notice('⚠️ **이 게임은 티어를 저장하지 않아요.**'));
+    tiers.setTier(interaction.user.id, gk, null);
+    if (tiers.POSITIONS[game]) tiers.setPositions(interaction.user.id, game, []);
+    await interaction.update(buildTierPickPayload(gk, matchMsgId, interaction.user.id));
+    const match = getMatches(interaction.client).get(matchMsgId);
+    if (match) await refreshBoard(interaction.client, matchMsgId, match);
+    return;
   }
   if (customId.startsWith('team:tier_posset:')) {
     const [, , game, matchMsgId] = customId.split(':');

@@ -267,6 +267,17 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await team.handleTeamSelect(mkInteraction({ user: 'u3', customId: `team:tier_pos:main:lol:${id}`, values: ['none'], message: tierBtn._reply }));
     assert(tierMod.getPositions('u3', 'lol').length === 0, '포지션 지우기가 안 됨');
 
+    // 🔄 초기화: 티어와 포지션을 한 번에 지운다(오버워치는 그 롤만)
+    await team.handleTeamSelect(mkInteraction({ user: 'u3', customId: `team:tier_pos:main:lol:${id}`, values: ['mid'], message: tierBtn._reply }));
+    await team.handleTeamButton(mkInteraction({ user: 'u3', customId: `team:tier_back:lol:${id}`, message: tierBtn._reply }));
+    assert(JSON.stringify(tierBtn._reply.components).includes('team:tier_reset:lol'), '저장된 티어가 있는데 초기화 버튼이 없음');
+    await team.handleTeamButton(mkInteraction({ user: 'u3', customId: `team:tier_reset:lol:${id}`, message: tierBtn._reply }));
+    assert(!tierMod.getTier('u3', 'lol') && tierMod.getPositions('u3', 'lol').length === 0, '초기화했는데 티어·포지션이 남음');
+    assert(!JSON.stringify(tierBtn._reply.components).includes('team:tier_reset:lol'), '초기화 후에도 초기화 버튼이 보임');
+    tierMod.setTier('u2', 'overwatch.support', { tier: 'gold', div: 1 });
+    await team.handleTeamButton(mkInteraction({ user: 'u2', customId: `team:tier_reset:overwatch.tank:${id}`, message: owBtn._reply }));
+    assert(!tierMod.getTier('u2', 'overwatch.tank') && tierMod.getTier('u2', 'overwatch.support'), '오버워치 초기화가 그 롤만 지우지 않음');
+
     match.closed = false; // 마감 해제 후 다시 마감돼도 카드를 또 올리지 않는다
     const before = channel.sent.length;
     common.markClosed(client.naejeonMatches, id, match, '내전', false);
