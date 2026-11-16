@@ -313,7 +313,7 @@ function buildBoardPayload(match, matchMsgId) {
   if (tiers.hasTiers(game)) {
     const unknown = match.participants.filter(u => !tiers.getTier(u.id, game)).map(u => escapeMarkdown(u.displayName));
     // 누가 미지정인지 잘 보이게 이름은 보통 크기·굵게, 안내만 작은 글씨로
-    if (unknown.length) blocks.push({ text: `❓ 티어 미지정 : ${unknown.map(n => `**${n}**`).join(' · ')}\n-# ⚖️ 티어를 저장하면 밸런스가 정확해져요`, noDivider: true });
+    if (unknown.length) blocks.push({ text: `❓ 티어 미지정 : ${unknown.map(n => `**${n}**`).join(' · ')}\n-# (⚖️ 티어를 저장하면 밸런스가 정확해져요)`, noDivider: true });
   }
 
   // 내전 내역: 순번(#3)·직전 표시·시각(몇 분 전)·방식 한 줄 + 팀별 인용 줄. 내역마다 칸을 띄워 구분한다.
