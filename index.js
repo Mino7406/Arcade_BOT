@@ -581,7 +581,7 @@ client.on('interactionCreate', async (interaction) => {
         // 새로고침 전 예전 패널의 ⚔️ 팀 짜기 버튼
         await interaction.reply(notice('⚔️ **팀 짜기 카드는 내전이 마감되면 내전채팅에 자동으로 올라가요.**\n-# 카드가 묻혔으면 주최자 관리 메뉴의 📌 팀 불러오기를 눌러 주세요.', { ephemeral: true }));
       } else if (interaction.customId === 'recruit:티어') {
-        await interaction.reply(require('./handlers/매치/팀').buildTierGamePayload());
+        await interaction.reply(require('./handlers/매치/팀').buildTierGamePayload(interaction.user.id));
       } else if (interaction.customId === 'recruit:명령어') {
         await interaction.reply(buildCommandListPayload());
       } else if (interaction.customId === 'recruit:DM알림') {

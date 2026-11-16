@@ -2,7 +2,7 @@
 //
 // 사람들은 내전이 마감되면 내전채팅으로 넘어가 메모장에 팀을 짜서 붙여넣는다(윤진-승훈-시형-연우-강현 / ...).
 // 승패나 판 번호는 귀찮아서 안 쓰니, 카드는 "지금 팀" 하나와 작게 보이는 "이전 팀표"만 둔다.
-//  - 📝 팀 입력: 칸 하나짜리 입력창. 지금 팀(처음엔 마감 인원 초안)이 채워져 있어 바꿀 사람만 고치면 된다.
+//  - 📝 팀 입력: 칸 하나짜리 입력창. 지금 팀(처음엔 마감 때 자동으로 나눈 팀)이 채워져 있어 바꿀 사람만 고치면 된다.
 //  - ⚖️ 밸런스: 저장된 티어로 두 팀 점수 차가 가장 작게 나눈다(롤·발로만).
 //  - 🎲 랜덤: 무작위로 두 팀.
 //  - 🏅 내 티어 설정: 내 티어를 골라 저장한다(롤·발로만). 팀 입력에 "승훈 불2"처럼 적어도 자동으로 저장된다.
@@ -29,7 +29,7 @@ const {
   setCloseHook,
   saveNow,
 } = require('./공용');
-const { card, notice, payload } = require('../공통/카드');
+const { card, notice, payload, emojiUrl } = require('../공통/카드');
 const { logError } = require('../공통/로그');
 const { NAEJEON_CHAT_CHANNEL_IDS = {}, GAME_EMOJIS = {} } = require('../../config');
 const tiers = require('./티어');
@@ -284,17 +284,11 @@ function buildBoardPayload(match, matchMsgId) {
   const cur = board.current;
   const blocks = [];
 
-  if (cur.draft) {
-    const why = cur.how === 'balance'
-      ? '⚖️ 저장된 티어로 밸런스를 맞춰 둔 초안이에요. 📝 팀 입력에서 자리만 바꾸면 돼요.'
-      : tiers.hasTiers(game)
-        ? '🎲 티어가 저장된 사람이 적어서 무작위로 나눈 초안이에요. 🏅 내 티어 설정 후 ⚖️ 밸런스를 눌러 보세요.'
-        : '🎲 무작위로 나눈 초안이에요. 📝 팀 입력에서 자리만 바꾸면 돼요.';
-    blocks.push(`## 📝 초안 · ${match.participants.length}명\n-# ${why}`);
-  } else {
-    const when = cur.at ? ` · <t:${Math.floor(cur.at / 1000)}:t>` : '';
-    blocks.push(`## 🔍 팀 현황\n-# ${cur.no ? `#${cur.no} · ` : ''}${HOW_TEXT[cur.how] ?? HOW_TEXT.input}${when}`);
-  }
+  // 마감 때 자동으로 나눈 팀(draft)도 따로 이름 붙이지 않고 그대로 팀 현황으로 보여 준다.
+  // 티어가 부족해 랜덤으로 나눈 경우만 이유를 한 줄 덧붙인다.
+  const when = cur.at ? ` · <t:${Math.floor(cur.at / 1000)}:t>` : '';
+  const fallback = cur.draft && cur.how === 'random' && tiers.hasTiers(game) ? '\n-# 티어가 저장된 사람이 적어서 무작위로 나눴어요. 🏅 내 티어 설정 후 ⚖️ 밸런스를 눌러 보세요.' : '';
+  blocks.push(`## 🔍 팀 현황\n-# ${cur.no ? `#${cur.no} · ` : ''}${HOW_TEXT[cur.how] ?? HOW_TEXT.input}${when}${fallback}`);
   blocks.push(...teamBlocks(cur.teams, match));
 
   if (tiers.hasTiers(game)) {
@@ -460,40 +454,98 @@ function buildInputModal(match, matchMsgId) {
 }
 
 // ── 🏅 내 티어 설정 ──────────────────────────────────────────────
+// 나만 보이는 카드들: (패널에서) 게임 고르기 → 티어 고르기 → 단계 고르기 / 점수 적기 → 저장 완료.
+// 단계마다 ↩️ 뒤로 버튼이 있다. matchMsgId 가 'panel' 이면 게임모집 패널에서 연 것이라 게임 고르기로 돌아갈 수 있다.
+
+const GAME_COLORS = { lol: 0xC89B3C, valorant: 0xFF4655, overwatch: 0xF99E1A, pubg: 0xC8A96E };
 
 function tierOptionEmoji(game, tier) {
   const id = tiers.tierEmojiId(game, tier);
   return id ? { id } : undefined;
 }
 
-// 게임모집 패널의 🏅 내 티어 설정: 먼저 게임을 고른다.
-function buildTierGamePayload() {
-  return notice('🏅 **어느 게임 티어를 설정할까요?**\n-# 한 번 저장하면 내전 팀 짜기 카드의 ⚖️ 밸런스에 쓰여요.', {
-    rows: [new ActionRowBuilder().addComponents(
-      ...Object.entries(tiers.LADDERS).map(([game, ladder]) => {
-        const b = new ButtonBuilder().setCustomId(`team:tier:${game}:panel`).setLabel(ladder.name).setStyle(ButtonStyle.Secondary);
-        return GAME_EMOJIS[game] ? b.setEmoji({ id: GAME_EMOJIS[game] }) : b;
-      }),
-    )],
-    ephemeral: true,
+function gameIconUrl(game) {
+  return GAME_EMOJIS[game] ? gameThumb({ emoji: `<:g:${GAME_EMOJIS[game]}>` }) : undefined;
+}
+
+function tierIconUrl(game, tier) {
+  const id = tier && tiers.tierEmojiId(game, tier);
+  return id ? emojiUrl(id) : gameIconUrl(game);
+}
+
+// 저장된 티어 한 줄: "<이모지> **에메랄드4**" / 없으면 "아직 저장 안 함"
+function tierLine(game, tier) {
+  if (!tier) return '-# 아직 저장 안 함';
+  const id = tiers.tierEmojiId(game, tier);
+  return `${id ? `<:t:${id}> ` : ''}**${tiers.tierLabel(game, tier)}**`;
+}
+
+function backButton(id, label) {
+  return new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(ButtonStyle.Secondary);
+}
+
+function tierCard(game, { header, thumbTier = null, blocks, rows, footer }) {
+  return card({
+    color: GAME_COLORS[game] ?? 0x5865F2,
+    header,
+    sub: [tiers.LADDERS[game]?.name ?? '', '🏅 내 티어 설정'],
+    thumb: tierIconUrl(game, thumbTier),
+    blocks,
+    footer,
+    rows,
   });
 }
 
-function buildTierPickPayload(game, matchMsgId, userId, note) {
+// 게임모집 패널의 🏅 내 티어 설정: 저장된 티어가 있으면 바로 보여 주고, 아래에서 게임을 고른다.
+function buildTierGamePayload(userId) {
+  const games = Object.keys(tiers.LADDERS);
+  const saved = games.filter(g => userId && tiers.getTier(userId, g));
+  const blocks = [];
+  if (saved.length) {
+    blocks.push(`### 📋 내 티어\n${games.map(g => `**${tiers.LADDERS[g].name}**　${tierLine(g, tiers.getTier(userId, g))}`).join('\n')}`);
+  } else {
+    blocks.push('아직 저장한 티어가 없어요.\n티어를 저장해 두면 내전 팀 짜기에서 **⚖️ 밸런스**로 팀을 고르게 나눠 줘요.');
+  }
+  blocks.push('**어느 게임 티어를 설정할까요?**');
+  const buttons = games.map(g => {
+    const b = new ButtonBuilder().setCustomId(`team:tier:${g}:panel`).setLabel(tiers.LADDERS[g].name).setStyle(saved.includes(g) ? ButtonStyle.Success : ButtonStyle.Secondary);
+    return GAME_EMOJIS[g] ? b.setEmoji({ id: GAME_EMOJIS[g] }) : b;
+  });
+  return payload(card({
+    color: 0x5865F2,
+    header: '🏅 내 티어 설정',
+    sub: '롤 · 발로란트 · 오버워치 · 배틀그라운드',
+    blocks,
+    footer: saved.length ? '초록 버튼은 이미 저장된 게임이에요 · 한 번 저장하면 다음 내전에도 그대로 써요' : '한 번 저장하면 다음 내전에도 그대로 써요',
+    rows: [new ActionRowBuilder().addComponents(...buttons)],
+  }), { ephemeral: true });
+}
+
+function buildTierPickPayload(game, matchMsgId, userId) {
   const ladder = tiers.LADDERS[game];
   const mine = tiers.getTier(userId, game);
-  const options = [...ladder.tiers].reverse().map(t => ({
-    label: t.name,
-    value: t.key,
-    emoji: tierOptionEmoji(game, { tier: t.key, div: t.divs ? (ladder.divOrder === 'desc' ? 1 : t.divs) : undefined }),
-  }));
-  options.push({ label: '저장한 티어 지우기', value: 'none', emoji: '🗑️' });
+  const options = [...ladder.tiers].reverse().map(t => {
+    const o = { label: t.name, value: t.key };
+    const desc = t.scored ? `점수(${ladder.scoreUnit})로 순위` : t.divs ? `${t.divs}단계` : null;
+    if (desc) o.description = desc;
+    const emoji = tierOptionEmoji(game, { tier: t.key, div: t.divs ? (ladder.divOrder === 'desc' ? 1 : t.divs) : undefined });
+    if (emoji) o.emoji = emoji;
+    return o;
+  });
+  if (mine) options.push({ label: '저장한 티어 지우기', value: 'none', emoji: '🗑️' });
   const menu = new StringSelectMenuBuilder()
     .setCustomId(`team:tier_pick:${game}:${matchMsgId}`)
     .setPlaceholder('티어를 고르세요')
-    .addOptions(options.map(o => (o.emoji ? o : { label: o.label, value: o.value })));
-  const now = mine ? `${tiers.tierBadge(game, mine)} **${tiers.tierLabel(game, mine)}**` : '아직 없음';
-  return notice(`${note ? `${note}\n` : ''}🏅 **내 ${ladder.name} 티어**　${now}\n-# 한 번 저장하면 다음 내전에도 그대로 써요.`, { rows: [new ActionRowBuilder().addComponents(menu)], ephemeral: true });
+    .addOptions(options);
+  const rows = [new ActionRowBuilder().addComponents(menu)];
+  if (matchMsgId === 'panel') rows.push(new ActionRowBuilder().addComponents(backButton('team:tier_games:panel', '↩️ 게임 다시 고르기')));
+  return payload(tierCard(game, {
+    header: '🏅 내 티어 설정',
+    thumbTier: mine,
+    blocks: [`**지금 저장된 티어**\n${tierLine(game, mine)}`],
+    rows,
+    footer: '한 번 저장하면 다음 내전에도 그대로 써요',
+  }), { ephemeral: true });
 }
 
 function buildTierDivPayload(game, tierKey, matchMsgId) {
@@ -507,20 +559,31 @@ function buildTierDivPayload(game, tierKey, matchMsgId) {
       const emoji = tierOptionEmoji(game, { tier: tierKey, div: d });
       return { label: `${t.name} ${d}`, value: String(d), ...(emoji ? { emoji } : {}) };
     }));
-  return notice(`🏅 **${t.name}** 몇 단계인가요?`, { rows: [new ActionRowBuilder().addComponents(menu)] });
+  return payload(tierCard(game, {
+    header: `${t.name} 몇 단계인가요?`,
+    thumbTier: { tier: tierKey, div: divs[0] },
+    blocks: [`-# ${ladder.divOrder === 'desc' ? '숫자가 작을수록 높아요' : '숫자가 클수록 높아요'} (${t.name} ${divs[0]}이 가장 높음)`],
+    rows: [
+      new ActionRowBuilder().addComponents(menu),
+      new ActionRowBuilder().addComponents(backButton(`team:tier_back:${game}:${matchMsgId}`, '↩️ 티어 다시 고르기')),
+    ],
+  }));
 }
 
 // 점수제 티어(마스터 이상·레디언트 등): 점수를 적을지 묻는다. 안 적어도 저장된다.
 function buildTierScoreAskPayload(game, key, matchMsgId) {
   const t = tiers.findTier(game, key);
   const unit = tiers.LADDERS[game].scoreUnit || '점';
-  return notice(`🏅 **${t.name}**은 점수로 순위가 갈려요.
-점수(${unit})도 적어 둘까요? 적으면 ⚖️ 밸런스가 더 정확해져요.`, {
+  return payload(tierCard(game, {
+    header: t.name,
+    thumbTier: { tier: key },
+    blocks: [`**${t.name}**은 단계 없이 점수(${unit})로 순위가 갈려요.\n점수를 적어 두면 ⚖️ 밸런스가 더 정확해져요. 안 적어도 괜찮아요.`],
     rows: [new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`team:tier_score:${game}:${key}:${matchMsgId}`).setLabel(`✏️ ${unit} 적기`).setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId(`team:tier_save:${game}:${key}:${matchMsgId}`).setLabel('점수 없이 저장').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`team:tier_save:${game}:${key}:${matchMsgId}`).setLabel('점수 없이 저장').setStyle(ButtonStyle.Primary),
+      backButton(`team:tier_back:${game}:${matchMsgId}`, '↩️ 티어 다시 고르기'),
     )],
-  });
+  }));
 }
 
 function buildTierScoreModal(game, key, matchMsgId) {
@@ -534,11 +597,22 @@ function buildTierScoreModal(game, key, matchMsgId) {
     ));
 }
 
+function buildTierSavedPayload(game, tier, matchMsgId) {
+  const buttons = [backButton(`team:tier_back:${game}:${matchMsgId}`, '🔁 다시 설정')];
+  if (matchMsgId === 'panel') buttons.push(backButton('team:tier_games:panel', '↩️ 다른 게임'));
+  return payload(tierCard(game, {
+    header: tier ? '✅ 티어를 저장했어요' : '🗑️ 저장한 티어를 지웠어요',
+    thumbTier: tier,
+    blocks: [tier ? `## ${tierLine(game, tier)}` : '-# 다시 설정하려면 아래 버튼을 눌러 주세요.'],
+    footer: tier ? '팀 짜기 카드의 이름 옆 이모지와 ⚖️ 밸런스에 바로 반영돼요' : undefined,
+    rows: [new ActionRowBuilder().addComponents(...buttons)],
+  }));
+}
+
 async function saveMyTier(interaction, game, tier, matchMsgId) {
   tiers.setTier(interaction.user.id, game, tier);
   const match = getMatches(interaction.client).get(matchMsgId);
-  const text = tier ? `✅ **저장했어요:** ${tiers.tierBadge(game, tier)} ${tiers.tierLabel(game, tier)}` : '🗑️ **저장한 티어를 지웠어요.**';
-  await interaction.update(notice(text));
+  await interaction.update(buildTierSavedPayload(game, tier, matchMsgId));
   if (match) await refreshBoard(interaction.client, matchMsgId, match);
 }
 
@@ -595,6 +669,12 @@ async function handleTeamButton(interaction) {
     return;
   }
 
+  if (customId === 'team:tier_games:panel') return interaction.update(buildTierGamePayload(interaction.user.id));
+  if (customId.startsWith('team:tier_back:')) {
+    const [, , game, matchMsgId] = customId.split(':');
+    if (!tiers.hasTiers(game)) return interaction.update(notice('⚠️ **이 게임은 티어를 저장하지 않아요.**'));
+    return interaction.update(buildTierPickPayload(game, matchMsgId, interaction.user.id));
+  }
   if (customId.startsWith('team:tier_score:') || customId.startsWith('team:tier_save:')) {
     const [, action, game, key, matchMsgId] = customId.split(':');
     if (!tiers.findTier(game, key)) return interaction.update(notice('⚠️ **알 수 없는 티어예요.**'));

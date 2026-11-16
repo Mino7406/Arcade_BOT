@@ -181,6 +181,15 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await team.handleTeamSelect(mkInteraction({ user: 'u7', customId: 'team:tier_pick:lol:panel', values: ['challenger'], message: panelTier.message }));
     await team.handleTeamButton(mkInteraction({ user: 'u7', customId: 'team:tier_save:lol:challenger:panel', message: panelTier.message }));
     assert(require(path.join(root, 'handlers/매치/티어.js')).getTier('u7', 'lol')?.tier === 'challenger', '패널에서 고른 티어가 저장되지 않음');
+    // 뒤로 가기: 저장 완료 → 🔁 다시 설정(티어 고르기) → ↩️ 게임 다시 고르기(내 티어 목록이 보임) → 단계 고르기에서 ↩️ 뒤로
+    await team.handleTeamButton(mkInteraction({ user: 'u7', customId: 'team:tier_back:lol:panel', message: panelTier.message }));
+    await team.handleTeamButton(mkInteraction({ user: 'u7', customId: 'team:tier_games:panel', message: panelTier.message }));
+    assert(JSON.stringify(panelTier.message.components).includes('내 티어'), '게임 고르기 화면에 저장된 내 티어가 안 보임');
+    await team.handleTeamButton(mkInteraction({ user: 'u7', customId: 'team:tier:pubg:panel', message: panelTier.message }));
+    await team.handleTeamSelect(mkInteraction({ user: 'u7', customId: 'team:tier_pick:pubg:panel', values: ['crystal'], message: panelTier.message }));
+    await team.handleTeamButton(mkInteraction({ user: 'u7', customId: 'team:tier_back:pubg:panel', message: panelTier.message }));
+    await team.handleTeamSelect(mkInteraction({ user: 'u7', customId: 'team:tier_pick:pubg:panel', values: ['master'], message: panelTier.message }));
+    await team.handleTeamButton(mkInteraction({ user: 'u7', customId: 'team:tier_back:pubg:panel', message: panelTier.message }));
 
     const input = mkInteraction({ user: ADMIN, customId: `team:input:${id}` });
     await team.handleTeamButton(input);
