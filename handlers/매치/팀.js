@@ -503,7 +503,7 @@ function buildTierGamePayload(userId) {
   const saved = games.filter(g => userId && tiers.getTier(userId, g));
   const blocks = [];
   if (saved.length) {
-    blocks.push(`### 📋 내 티어\n${games.map(g => `**${tiers.LADDERS[g].name}** : ${tierLine(g, tiers.getTier(userId, g))}`).join('\n')}`);
+    blocks.push(`### 📋 내 티어 정보\n${games.map(g => `${GAME_EMOJIS[g] ? `<:g:${GAME_EMOJIS[g]}> ` : ''}**${tiers.LADDERS[g].name}** : ${tierLine(g, tiers.getTier(userId, g))}`).join('\n')}`);
   } else {
     blocks.push('아직 저장한 티어가 없어요.\n티어를 저장해 두면 내전 팀 짜기에서 **⚖️ 밸런스**로 팀을 고르게 나눠 줘요.');
   }
