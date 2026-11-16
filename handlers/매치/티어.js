@@ -194,7 +194,7 @@ function parseTierToken(game, token) {
 }
 
 // ── 저장 ────────────────────────────────────────────────────
-// DB/tier.json: { 유저ID: { lol: { tier, div, at, pos: ['mid', 'jungle'] }, overwatch: { roles: { tank: { tier, div } … }, at }, … } }
+// DB/tier.json(가짜 인원 test_… 은 DB/test.tier.json): { 유저ID: { lol: { tier, div, at, pos: ['mid', 'jungle'] }, overwatch: { roles: { tank: { tier, div } … }, at }, … } }
 // pos 는 [주, 부] 순서. 오버워치 맨 위의 tier 는 롤을 모르는 티어(팀 입력에 "승훈 다2"처럼 적은 것)다.
 
 const DB_DIR = path.join(__dirname, '..', '..', 'DB');
@@ -209,30 +209,51 @@ try {
   console.error('티어 저장 파일 이름 바꾸기 실패:', err);
 }
 
-let store = {};
-try {
-  if (fs.existsSync(DB_PATH)) store = JSON.parse(fs.readFileSync(DB_PATH, 'utf8')) || {};
-} catch (err) {
-  console.error('티어 저장 파일 읽기 실패(빈 상태로 시작):', err);
-  logSystem({ 유형: '저장 오류', 내용: `티어 저장 파일 읽기 실패 — 빈 상태로 시작: ${err?.message ?? err}` });
-  store = {};
-}
+// 테스트 서버의 🧪 가짜 인원(ID가 test_ 로 시작)은 DB/test.tier.json 에 따로 저장한다.
+// 진짜 유저 티어 파일(tier.json)에 테스트 데이터가 섞이지 않게 하고, 테스트가 끝나면 test.tier.json 만 지우면 된다.
+const TEST_DB_PATH = path.join(DB_DIR, 'test.tier.json');
+const isTestUser = userId => String(userId).startsWith('test_');
 
-function save() {
+function loadStore(file, label) {
   try {
-    writeJsonIfChanged(DB_PATH, store);
+    return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) || {} : {};
   } catch (err) {
-    console.error('티어 저장 실패:', err);
-    logError('저장 오류', '티어 저장 실패', err);
+    console.error(`${label} 읽기 실패(빈 상태로 시작):`, err);
+    logSystem({ 유형: '저장 오류', 내용: `${label} 읽기 실패 — 빈 상태로 시작: ${err?.message ?? err}` });
+    return {};
   }
 }
+
+const realStore = loadStore(DB_PATH, '티어 저장 파일');
+const testStore = loadStore(TEST_DB_PATH, '테스트 티어 저장 파일');
+
+function save(userId) {
+  const test = isTestUser(userId);
+  try {
+    writeJsonIfChanged(test ? TEST_DB_PATH : DB_PATH, test ? testStore : realStore);
+  } catch (err) {
+    console.error('티어 저장 실패:', err);
+    logError('저장 오류', `${test ? '테스트 ' : ''}티어 저장 실패`, err);
+  }
+}
+
+// 예전에 tier.json 에 섞여 들어간 test_ 항목은 test.tier.json 으로 옮긴다
+{
+  const moved = Object.keys(realStore).filter(isTestUser);
+  if (moved.length) {
+    for (const id of moved) { testStore[id] = realStore[id]; delete realStore[id]; }
+    save('test_'); save('');
+  }
+}
+
+const storeOf = userId => (isTestUser(userId) ? testStore : realStore);
 
 const tierOnly = t => ({ tier: t.tier, ...(t.div ? { div: t.div } : {}), ...(t.score ? { score: t.score } : {}) });
 
 // 저장된 티어. 'overwatch.tank' 는 그 롤 티어, 'overwatch' 는 롤 티어 중 가장 높은 것(없으면 롤 모르는 티어).
 function getTier(userId, gk) {
   const { game, role } = splitKey(gk);
-  const entry = store[userId]?.[game];
+  const entry = storeOf(userId)[userId]?.[game];
   if (!entry || !LADDERS[game]) return null;
   const valid = t => (t && findTier(game, t.tier) ? t : null); // 티어 목록이 바뀌어 없어진 값은 없는 것으로
   if (role) return valid(entry.roles?.[role]);
@@ -249,25 +270,25 @@ function getRoleTiers(userId) {
 }
 
 function getPositions(userId, game) {
-  const list = store[userId]?.[game]?.pos;
+  const list = storeOf(userId)[userId]?.[game]?.pos;
   return Array.isArray(list) ? list.filter(k => positionName(game, k)) : [];
 }
 
 function cleanEntry(userId, game) {
-  const e = store[userId]?.[game];
+  const e = storeOf(userId)[userId]?.[game];
   if (!e) return;
   if (e.roles && !Object.keys(e.roles).length) delete e.roles;
   if (e.pos && !e.pos.length) delete e.pos;
-  if (!e.tier && !e.roles && !e.pos) delete store[userId][game];
-  if (store[userId] && !Object.keys(store[userId]).length) delete store[userId];
+  if (!e.tier && !e.roles && !e.pos) delete storeOf(userId)[userId][game];
+  if (storeOf(userId)[userId] && !Object.keys(storeOf(userId)[userId]).length) delete storeOf(userId)[userId];
 }
 
 // 티어를 저장한다(null 이면 지운다). 포지션·다른 롤 티어는 그대로 둔다.
 function setTier(userId, gk, tier) {
   const { game, role } = splitKey(gk);
   if (!LADDERS[game] || (role && (game !== 'overwatch' || !owRole(role)))) return;
-  if (!store[userId]) store[userId] = {};
-  const e = (store[userId][game] = store[userId][game] || {});
+  if (!storeOf(userId)[userId]) storeOf(userId)[userId] = {};
+  const e = (storeOf(userId)[userId][game] = storeOf(userId)[userId][game] || {});
   if (role) {
     e.roles = { ...(e.roles || {}) };
     if (tier) e.roles[role] = tierOnly(tier); else delete e.roles[role];
@@ -277,19 +298,19 @@ function setTier(userId, gk, tier) {
   }
   e.at = Date.now();
   cleanEntry(userId, game);
-  save();
+  save(userId);
 }
 
 // 포지션 저장: [주, 부] (빈 배열이면 지움)
 function setPositions(userId, game, list) {
   if (!POSITIONS[game]) return;
   const clean = [...new Set((list || []).filter(k => positionName(game, k)))].slice(0, 2);
-  if (!store[userId]) store[userId] = {};
-  const e = (store[userId][game] = store[userId][game] || {});
+  if (!storeOf(userId)[userId]) storeOf(userId)[userId] = {};
+  const e = (storeOf(userId)[userId][game] = storeOf(userId)[userId][game] || {});
   e.pos = clean;
   e.at = Date.now();
   cleanEntry(userId, game);
-  save();
+  save(userId);
 }
 
 // ── 이모지 ──────────────────────────────────────────────────
