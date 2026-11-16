@@ -37,7 +37,7 @@
   },
   "ui": {
     "moveBanner": "terminal",
-    "resultMs": 6000
+    "resultMs": 5500
   },
   "sprite": {
     "rows": [
