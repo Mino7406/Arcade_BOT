@@ -555,7 +555,7 @@ function buildBoardPayload(match, matchMsgId) {
   // 내전 내역: 순번(#3)·직전 표시·시각(몇 분 전)·방식 한 줄 + 팀별 인용 줄. 내역마다 칸을 띄워 구분한다.
   const shown = board.history.slice(0, HISTORY_SHOWN);
   if (shown.length) {
-    blocks.push('### 📜 내전 내역');
+    blocks.push({ text: '### 📜 내전 내역', button: new ButtonBuilder().setCustomId(`team:hist_clear:${matchMsgId}`).setLabel('🗑️ 내역 삭제').setStyle(ButtonStyle.Danger) });
     shown.forEach((h, k) => {
       const no = h.no ? `#${h.no}` : '이전';
       const tag = k === 0 ? ' · 직전 팀' : '';
@@ -1205,6 +1205,18 @@ async function handleTeamButton(interaction) {
     const match = await getEditableMatch(interaction, matchMsgId);
     if (!match) return;
     await interaction.showModal(buildInputModal(match, matchMsgId));
+    return;
+  }
+
+  // 🗑️ 내전 내역 삭제: 지금 팀은 그대로 두고 아래 내역(이전 팀표)만 비운다.
+  if (customId.startsWith('team:hist_clear:')) {
+    const matchMsgId = customId.slice('team:hist_clear:'.length);
+    const match = await getEditableMatch(interaction, matchMsgId);
+    if (!match) return;
+    const board = normalizeBoard(match);
+    board.history = [];
+    await interaction.update(buildBoardPayload(match, matchMsgId));
+    saveNow(interaction.client);
     return;
   }
 
