@@ -654,10 +654,27 @@ tiers.onChange(userId => {
   tierRefreshTimers.set(userId, setTimeout(async () => {
     tierRefreshTimers.delete(userId);
     for (const [id, m] of getMatches(client)) {
-      if (m.board?.messageId && m.participants?.some(u => u.id === userId)) await refreshBoard(client, id, m).catch(() => {});
+      if (!m.board?.messageId || !m.participants?.some(u => u.id === userId)) continue;
+      rebalanceForTierChange(m);
+      await refreshBoard(client, id, m).catch(() => {});
     }
   }, TIER_REFRESH_DELAY_MS));
 });
+
+// 티어가 바뀌면 자동으로 나눈 팀(자동 초안·⚖️ 밸런스)은 새 티어로 밸런스를 다시 맞춘다. 순번·내역은 그대로 두고 지금 팀만 바꾼다.
+// 직접 입력한 팀(✏️)과 🎲 랜덤으로 나눈 팀은 사람이 정한 것이라 건드리지 않고 표시(티어 배지)만 새로 그린다.
+function rebalanceForTierChange(match) {
+  const cur = match.board?.current;
+  const game = match.data.game;
+  if (!cur || !tiers.hasTiers(game) || match.participants.length < 2) return;
+  if (cur.how === 'input' || (cur.how === 'random' && !cur.draft)) return;
+  if (cur.draft) {
+    match.board.current = { ...makeDraft(match), no: cur.no }; // 티어가 모이면 랜덤 초안이 밸런스로 바뀐다
+    return;
+  }
+  cur.teams = balanceTeams(match.participants, game);
+  cur.at = Date.now();
+}
 
 // 카드 내용만 고친다(자리는 그대로).
 async function refreshBoard(client, matchMsgId, match) {
