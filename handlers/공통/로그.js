@@ -19,6 +19,21 @@ const fs = require('fs');
 const path = require('path');
 const { KST_OFFSET_MS, kstDateString } = require('./시간');
 const { displayNameFromInteraction } = require('./이름');
+const { LOG_EXCLUDE_IDS = [] } = require('../../config');
+
+// 제외 유저(config.LOG_EXCLUDE_IDS)가 유저·내용 어디에든 나오는 기록인지
+const isExcludedEntry = (e) => LOG_EXCLUDE_IDS.length > 0 && LOG_EXCLUDE_IDS.some(id => String(e?.유저).includes(id) || String(e?.내용).includes(id));
+
+// 이미 저장된 날짜 파일에서 제외 유저의 기록을 지운다(바뀐 파일만 다시 씀). 봇이 켜진 뒤 첫 기록 때 한 번.
+function purgeExcluded() {
+  if (!LOG_EXCLUDE_IDS.length) return;
+  for (const f of listLogFiles()) {
+    const file = path.join(LOG_DIR, f.name);
+    const arr = readArray(file);
+    const kept = arr.filter(e => !isExcludedEntry(e));
+    if (kept.length !== arr.length) writeAtomicSync(file, kept);
+  }
+}
 
 // 로그는 날짜별 파일로 나눠 저장한다: DB/log/2026-11-12.json (KST 날짜).
 // 예전엔 DB/log.json 하나에 최근 10000개를 담았는데, pretty-print로 2MB를 넘기면서 호스팅 사이트
@@ -181,9 +196,11 @@ function flushLogsSync() {
 }
 
 function writeEntry(entry) {
+  if (isExcludedEntry(entry)) return; // 제외 유저(config.LOG_EXCLUDE_IDS)는 남기지 않는다
   if (!initialized) {
     initialized = true;
     try { migrateLegacy(); } catch (err) { console.error('예전 로그(DB/log.json) 이전 실패:', err); }
+    try { purgeExcluded(); } catch (err) { console.error('제외 유저 로그 정리 실패:', err); }
   }
   const date = String(entry.시각).slice(0, 10);
   if (!cur || cur.date !== date) {
