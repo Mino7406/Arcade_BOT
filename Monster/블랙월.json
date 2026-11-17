@@ -26,7 +26,7 @@
   "raid": {
     "persistent": true,
     "defeatPenaltyXp": 200,
-    "clearXp": 1000,
+    "clearXp": 500,
     "mvpBonusXp": 0,
     "mvpItem": "gateway",
     "drain": {

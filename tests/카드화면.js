@@ -437,7 +437,7 @@ async function buildScreens() {
       { userId: '101', xp: 1000, mvp: false, hackTool: true, gateway: false },
       { userId: '102', xp: 1000, mvp: false, hackTool: true, gateway: false },
     ]);
-    add('레이드', '??? — 토벌 성공 결과', '파티원 +1000 XP + 해킹 툴 1개 · MVP는 +1000 XP + 🌐 블랙월 게이트웨이(MVP는 해킹 툴 대신)', ev, rf(ev));
+    add('레이드', '??? — 토벌 성공 결과', '파티원 +500 XP + 해킹 툴 1개 · MVP는 +500 XP + 🌐 블랙월 게이트웨이(MVP는 해킹 툴 대신)', ev, rf(ev));
     void pn;
   }
   const endR = (outcome, rewards) => { const rr = startBattle(m0); rr.phase = 'ended'; rr.endedAt = Date.now(); rr.frozenAt = Date.now() - 20 * 60e3; if (outcome === 'clear') rr.battle.hp = 0; return raidMod.endView(rr, outcome, rewards); };
