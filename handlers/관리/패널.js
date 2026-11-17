@@ -172,6 +172,7 @@ function buildAdminMenuPayload(panelMessageId, notice) {
     notice || null,
     fromAdmin ? null : { text: '### 🔄 새로고침\n-# 이 안내 패널을 지금 코드의 디자인으로 다시 그려요', button: btn('refresh', '새로고침', ButtonStyle.Primary) },
     { text: '### 🧹 게임모집 채널 청소\n-# 게임모집 채널의 유저 메시지를 한꺼번에 지워요(봇 메시지는 그대로) · 어느 채널에서 눌러도 게임모집 채널만 청소해요', button: btn('purge', '청소', ButtonStyle.Danger) },
+    { text: '### 🔁 모집 ↔ 내전 변환\n-# 잘못 올린 모집을 내전으로(또는 반대로) 바꿔요 · 참가자·마감 상태는 그대로 유지돼요', button: btn('match_convert', '변환', ButtonStyle.Primary) },
     { text: '### 🗑️ 내전/모집 삭제\n-# 목록에서 골라 지우거나 전부 지워요', button: btn('match_delete', '삭제', ButtonStyle.Danger) },
     { text: '### 🤖 봇 메시지 삭제\n-# 메시지 ID나 링크로 봇이 보낸 메시지를 지워요', button: btn('bot_msg_delete', '삭제', ButtonStyle.Secondary) },
   ];
@@ -341,6 +342,108 @@ async function buildMatchDeleteListPayload(interaction, panelMessageId) {
   });
 }
 
+// ── 모집 ↔ 내전 변환 ─────────────────────────────────────────────
+const CONVERT_LABEL = { naejeon: '내전', mojip: '모집' };
+
+// 변환 가능한 항목: 진행 중/마감된 내전·모집(취소된 게시글은 제외).
+async function collectConvertEntries(interaction) {
+  const entries = await collectGuildMatchEntries(interaction);
+  return entries.filter(e => e.type === 'naejeon' || e.type === 'mojip');
+}
+
+function buildMatchConvertListPayload(entries, panelMessageId) {
+  if (entries.length === 0) {
+    return menu({ color: 'warn', header: '🔁 모집 ↔ 내전 변환', note: '⚠️ **변환할 수 있는 내전/모집이 없습니다.**', rows: [buildBackRow(panelMessageId)] });
+  }
+  return menu({
+    header: '🔁 모집 ↔ 내전 변환',
+    note: '변환할 게시글을 선택하세요. 내전은 모집으로, 모집은 내전으로 바뀌어요.',
+    rows: [
+      new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`panel:match_convert_select:${panelMessageId}`)
+          .setPlaceholder('내전 / 모집 선택...')
+          .addOptions(entries.slice(0, 25).map(e => ({ label: e.label, description: e.description, value: `${e.type}:${e.msgId}` }))),
+      ),
+      buildBackRow(panelMessageId),
+    ],
+  });
+}
+
+function buildMatchConvertConfirmPayload(panelMessageId, type, msgId, entry) {
+  const to = type === 'naejeon' ? 'mojip' : 'naejeon';
+  const extra = to === 'naejeon'
+    ? '\n-# 이미 마감된 모집이면 내전채팅에 팀 짜기 카드도 바로 올라가요.'
+    : '\n-# 팀 정보는 사라지고 참가자 명단만 남아요.';
+  return menu({
+    color: 'warn',
+    header: '⚠️ 변환 확인',
+    note: `**${entry.confirmText}**을 **${CONVERT_LABEL[to]}**(으)로 변환할까요?${extra}`,
+    rows: [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`panel:match_convert_confirm:${panelMessageId}:${type}:${msgId}`).setLabel(`✅ ${CONVERT_LABEL[to]}(으)로 변환`).setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`panel:menu:${panelMessageId}`).setLabel('↩️ 취소').setStyle(ButtonStyle.Secondary),
+      ),
+    ],
+  });
+}
+
+// 내전 ↔ 모집 변환. 게시글(메시지)은 그대로 두고 버튼·카드만 새 종류로 고치며, 추적 맵·타이머를 옮긴다.
+// 반환: 성공 시 { to }, 실패 시 null.
+async function convertMatchType(interaction, fromType, msgId) {
+  const { buildPublicMessagePayload } = require('../매치/내전');
+  const { buildMojipMessagePayload } = require('../매치/모집');
+  const { armAutoEnd, armNotifyReminder, saveNow, runCloseHook } = require('../매치/공용');
+  const { logAction } = require('../공통/로그');
+
+  const client = interaction.client;
+  if (!client.naejeonMatches) client.naejeonMatches = new Map();
+  if (!client.mojipMatches) client.mojipMatches = new Map();
+  const toType = fromType === 'naejeon' ? 'mojip' : 'naejeon';
+  const fromMap = fromType === 'naejeon' ? client.naejeonMatches : client.mojipMatches;
+  const toMap = toType === 'naejeon' ? client.naejeonMatches : client.mojipMatches;
+  const match = fromMap.get(msgId);
+  if (!match || match.guildId !== interaction.guildId) return null;
+
+  const fromLabel = CONVERT_LABEL[fromType];
+  const toLabel = CONVERT_LABEL[toType];
+
+  // 옛 종류에 걸린 타이머를 걷고 맵에서 옮긴다(타이머는 맵·라벨을 붙잡고 있어 새 종류로 다시 건다).
+  disarmAutoEnd(match);
+  clearNotifyTimer(match);
+  fromMap.delete(msgId);
+
+  // 기본 제목("롤 모집")이면 새 종류에 맞게 바꾼다. 직접 지은 제목은 그대로 둔다.
+  const gameName = match.data.gameInfo?.name;
+  if (gameName && match.data.title === `${gameName} ${fromLabel}`) match.data.title = `${gameName} ${toLabel}`;
+
+  if (toType === 'naejeon') {
+    match.teams = null;
+  } else {
+    delete match.teams;
+    delete match.board;
+  }
+  toMap.set(msgId, match);
+
+  // 게시글을 새 종류의 카드·버튼으로 다시 그린다(메시지는 그대로라 ID·위치가 유지된다).
+  const build = toType === 'naejeon' ? buildPublicMessagePayload : buildMojipMessagePayload;
+  await match.message.edit(build(match)).catch(err => {
+    console.error('내전/모집 변환 중 게시글 수정 실패:', err);
+  });
+
+  if (match.closed && match.data?.autoClose) {
+    const remaining = match.closedAt ? autoEndAt(match) - Date.now() : 0;
+    armAutoEnd(toMap, msgId, match, toLabel, Math.max(0, remaining));
+  }
+  if (match.data?.notifyAt) armNotifyReminder(toMap, msgId, match, toLabel);
+  saveNow(client);
+  logAction(interaction, '매치 변환', `${fromLabel} '${match.data.title}'(${msgId})을(를) ${toLabel}(으)로 변환`);
+
+  // 이미 마감된 모집을 내전으로 바꾼 경우: 마감 때 했어야 할 내전채팅 팀 짜기 카드를 지금 올린다.
+  if (toType === 'naejeon' && match.closed) await runCloseHook('내전', msgId, match);
+  return { to: toLabel };
+}
+
 function buildMatchDeleteConfirmPayload(panelMessageId, type, msgId, confirmText) {
   return menu({
     color: 'warn',
@@ -478,6 +581,20 @@ async function handlePanelButton(interaction) {
     return;
   }
 
+  if (action === 'match_convert') {
+    await interaction.deferUpdate();
+    await interaction.editReply(buildMatchConvertListPayload(await collectConvertEntries(interaction), panelMessageId));
+    return;
+  }
+
+  if (action === 'match_convert_confirm') {
+    const [type, msgId] = extra;
+    await interaction.deferUpdate();
+    const result = await convertMatchType(interaction, type, msgId);
+    await interaction.editReply(buildAdminMenuPayload(panelMessageId, result ? `✅ **${result.to}(으)로 변환했습니다.**` : '⚠️ **이미 삭제됐거나 없는 내전/모집입니다.**'));
+    return;
+  }
+
   if (action === 'match_delete_confirm') {
     const [type, msgId] = extra;
     await interaction.deferUpdate();
@@ -570,6 +687,28 @@ async function handlePanelMatchDeleteSelect(interaction) {
   await interaction.editReply(buildMatchDeleteConfirmPayload(panelMessageId, type, msgId, entry.confirmText));
 }
 
+// ── 관리 메뉴 셀렉트 메뉴 처리 ("🔁 모집 ↔ 내전 변환" 목록) ──────────
+async function handlePanelMatchConvertSelect(interaction) {
+  if (!ADMIN_IDS.includes(interaction.user.id)) {
+    await interaction.reply(quick('❌ **권한이 없습니다.**', { ephemeral: true }));
+    return;
+  }
+  const panelMessageId = interaction.customId.split(':')[2];
+  const value = interaction.values[0];
+  const colonIdx = value.indexOf(':');
+  const type = value.slice(0, colonIdx);
+  const msgId = value.slice(colonIdx + 1);
+
+  await interaction.deferUpdate();
+  const entry = (await collectConvertEntries(interaction)).find(e => e.type === type && e.msgId === msgId);
+  if (!entry) {
+    await interaction.editReply(buildAdminMenuPayload(panelMessageId, '⚠️ **해당 항목을 찾을 수 없습니다.**'));
+    return;
+  }
+  await interaction.editReply(buildMatchConvertConfirmPayload(panelMessageId, type, msgId, entry));
+}
+
+module.exports.handlePanelMatchConvertSelect = handlePanelMatchConvertSelect;
 module.exports.handlePanelButton = handlePanelButton;
 module.exports.handlePanelMatchDeleteSelect = handlePanelMatchDeleteSelect;
 module.exports.handlePanelBotMessageDeleteModal = handlePanelBotMessageDeleteModal;

@@ -36,7 +36,7 @@ const RAID_PAUSED_COMMANDS = {
 };
 const { handleQuizAdminButton, handleQuizCreateModal } = require('./handlers/관리/퀴즈관리');
 const { buildNaejeonGameSelectPayload, buildMojipGameSelectPayload, buildReloadListPayload } = require('./handlers/매치/메뉴');
-const { buildCommandListPayload, buildAdminMenuPayload, handlePanelButton, handlePanelMatchDeleteSelect, handlePanelBotMessageDeleteModal, handlePanelSelectButton } = require('./handlers/관리/패널');
+const { buildCommandListPayload, buildAdminMenuPayload, handlePanelButton, handlePanelMatchDeleteSelect, handlePanelMatchConvertSelect, handlePanelBotMessageDeleteModal, handlePanelSelectButton } = require('./handlers/관리/패널');
 const { handleRealmButton, handleRealmModal, handleRealmRosterModal, initRulesAgreementCache, handleRealmRulesReactionAdd, handleRealmRulesReactionRemove } = require('./forms/마크');
 const { handleCobblemonButton, startCobblemonOpenTimer } = require('./forms/코블몬');
 const { handleLevelShareButton } = require('./handlers/레벨/레벨카드');
@@ -511,6 +511,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleRMatchSelect(interaction);
       } else if (interaction.customId.startsWith('panel:match_delete_select:')) {
         await handlePanelMatchDeleteSelect(interaction);
+      } else if (interaction.customId.startsWith('panel:match_convert_select:')) {
+        await handlePanelMatchConvertSelect(interaction);
       }
 
     } else if (interaction.isModalSubmit()) {

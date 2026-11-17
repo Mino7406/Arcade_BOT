@@ -756,6 +756,7 @@ npm start
 | `handlePanelButton(interaction)` | 관리 메뉴의 모든 버튼(`panel:` 프리픽스) 처리 — 메뉴 이동/새로고침/채널 청소(확인 없이 즉시)/매치 단건·전체 삭제(확인 포함)/봇 메시지 삭제 모달 오픈 |
 | `handlePanelBotMessageDeleteModal(interaction)` | "🤖 봇 메시지 삭제" 모달 제출(`panel:bot_msg_delete_modal:`) 처리 — `deferReply` 후 `findBotMessage`로 찾아 봇 메시지인지 확인하고 삭제, 삭제 실패는 사유와 함께 안내 |
 | `handlePanelMatchDeleteSelect(interaction)` | 관리 메뉴의 내전/모집 삭제 셀렉트(`panel:match_delete_select:`) 처리 → 삭제 확인 화면 표시 |
+| `handlePanelMatchConvertSelect(interaction)` | 관리 메뉴의 모집 ↔ 내전 변환 셀렉트(`panel:match_convert_select:`) 처리 → 변환 확인 화면 표시 |
 
 </details>
 

@@ -655,6 +655,17 @@ function setCloseHook(label, fn) {
   closeHooks[label] = fn;
 }
 
+// 이미 마감된 매치를 모집 → 내전으로 바꿀 때처럼, 마감 처리 없이 마감 후 할 일만 다시 돌려야 할 때 쓴다.
+async function runCloseHook(label, msgId, match) {
+  if (!closeHooks[label]) return;
+  try {
+    await closeHooks[label](msgId, match);
+  } catch (err) {
+    console.error('마감 후 처리 중 오류:', err);
+    logError('매치 마감', `${matchTag(match, label)} 마감 후 처리(팀 짜기 카드) 실패`, err, { 채널: matchChannelName(match) });
+  }
+}
+
 function markClosed(matchesMap, msgId, match, label, notify = true) {
   match.closed = true;
   match.closedAt = Date.now();
@@ -1254,6 +1265,7 @@ module.exports = {
   armAutoEnd,
   disarmAutoEnd,
   markClosed,
+  runCloseHook,
   markReopened,
   toggleAutoCloseWhileClosed,
   announceMatchCompletionXp,
