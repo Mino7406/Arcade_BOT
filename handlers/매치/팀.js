@@ -638,13 +638,22 @@ async function postBoardNow(client, matchMsgId, match) {
   return msg;
 }
 
-// 게임모집 채널의 내전 게시글에 "팀 짜기 카드가 올라왔어요" 바로가기를 답장으로 단다(내전채팅이 다른 채널일 때만).
-// 다시 올라가면 옛 바로가기는 지우고 새로 단다. 실패해도 팀 짜기 카드에는 영향이 없다.
+// 게임모집 채널의 내전 게시글에 "팀 설정이 올라왔어요" 바로가기를 답장으로 단다(내전채팅이 다른 채널일 때만).
+// 처음 한 번만 새로 달고, 팀 카드가 다시 올라갈 때(밸런스·랜덤·직접 입력)는 이미 단 바로가기의 링크만 새 카드로 고쳐 둔다
+// (새 메시지로 또 달면 게임모집 채널에 같은 안내가 계속 쌓인다). 실패해도 팀 짜기 카드에는 영향이 없다.
 async function postBoardShortcut(client, match, boardMsg) {
   try {
-    await deleteBoardShortcut(client, match);
     if (!match.message || match.message.channelId === boardMsg.channelId) return;
-    const reply = await match.message.reply({ ...buildBoardShortcutPayload(match, boardMsg, { style: 'plain' }), failIfNotExists: false });
+    const payload = buildBoardShortcutPayload(match, boardMsg, { style: 'plain' });
+    if (match.boardShortcutId) {
+      const ch = client.channels.cache.get(match.message.channelId) || await client.channels.fetch(match.message.channelId).catch(() => null);
+      const old = ch && await ch.messages.fetch(match.boardShortcutId).catch(() => null);
+      if (old) {
+        await old.edit(payload);
+        return;
+      }
+    }
+    const reply = await match.message.reply({ ...payload, failIfNotExists: false });
     match.boardShortcutId = reply.id;
     saveNow(client);
   } catch (err) {
