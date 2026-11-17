@@ -796,9 +796,9 @@ function startCountdown(r) {
 async function spawnRaid(client, channel, { forced = false, monsterId = null } = {}) {
   if (raids.has(channel.guildId)) return '이 서버에 이미 진행 중인 레이드가 있어요.';
   if (!MONSTERS.length) return '등록된 몬스터가 없어요. Monster 폴더의 JSON 파일과 콘솔 오류를 확인하세요.';
-  // 꺼 둔 몬스터(???)는 테스트 서버에서 관리자가 직접 고를 때만 소환된다(무작위·자동 출현·본서버는 제외)
+  // 꺼 둔 몬스터(???)는 관리자가 직접 고를 때만 소환된다(서버 무관 · 무작위·자동 출현은 제외)
   const monster = monsterId
-    ? (MONSTERS.find(m => m.id === monsterId) ?? (isExcludedGuild(channel.guildId) ? ALL_MONSTERS.find(m => m.id === monsterId) : undefined))
+    ? (MONSTERS.find(m => m.id === monsterId) ?? ALL_MONSTERS.find(m => m.id === monsterId))
     : MONSTERS[Math.floor(Math.random() * MONSTERS.length)];
   if (!monster) return '그 몬스터를 찾을 수 없어요. 다시 골라 주세요.';
   const now = Date.now();

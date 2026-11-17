@@ -169,7 +169,7 @@ function raidButton(raid) {
 function buildRaidPickView(guildId, notice) {
   const buttons = [
     new ButtonBuilder().setCustomId('xp:summon:random').setEmoji('🎲').setLabel('무작위').setStyle(ButtonStyle.Primary),
-    ...(isExcludedGuild(guildId) ? ALL_MONSTERS : MONSTERS).map(m => new ButtonBuilder().setCustomId(`xp:summon:${m.id}`) // 테스트 서버는 꺼 둔 몬스터(???)도 고를 수 있다
+    ...ALL_MONSTERS.map(m => new ButtonBuilder().setCustomId(`xp:summon:${m.id}`) // 꺼 둔 몬스터(???)도 관리자 선택 소환은 가능
     .setEmoji(m.emoji).setLabel(m.name).setStyle(ButtonStyle.Danger)),
   ];
   const rows = [];
