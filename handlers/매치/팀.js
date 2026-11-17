@@ -639,13 +639,44 @@ async function postBoardShortcut(client, match, boardMsg) {
   }
 }
 
-// 티어만 바뀌었을 때: 자리는 그대로 두고 카드 내용만 고친다.
+// 누가 티어·포지션을 바꾸면(내 티어 설정·/티어·초기화 어디서든) 그 사람이 들어 있는 팀 짜기 카드를 바로 고친다.
+// 한 번 설정에 저장이 여러 번 일어나도(오버워치 역할 등) 카드는 한 번만 고치도록 사람마다 잠깐 모았다가 처리한다.
+// 클라이언트는 팀·티어 화면을 처음 누른 순간 기억해 둔다(그 화면을 통해서만 티어가 바뀌므로 빠질 일이 없다).
+let boardClient = null;
+const tierRefreshTimers = new Map();
+const TIER_REFRESH_DELAY_MS = 700;
+function rememberClient(interaction) {
+  if (interaction?.client) boardClient = interaction.client;
+}
+tiers.onChange(userId => {
+  if (!boardClient || tierRefreshTimers.has(userId)) return;
+  const client = boardClient;
+  tierRefreshTimers.set(userId, setTimeout(async () => {
+    tierRefreshTimers.delete(userId);
+    for (const [id, m] of getMatches(client)) {
+      if (m.board?.messageId && m.participants?.some(u => u.id === userId)) await refreshBoard(client, id, m).catch(() => {});
+    }
+  }, TIER_REFRESH_DELAY_MS));
+});
+
+// 카드 내용만 고친다(자리는 그대로).
 async function refreshBoard(client, matchMsgId, match) {
   const board = match?.board;
   if (!board?.channelId || !board.messageId) return;
   const ch = await fetchChannel(client, board.channelId);
   const msg = ch && await ch.messages.fetch(board.messageId).catch(() => null);
   if (msg) await msg.edit(buildBoardPayload(match, matchMsgId)).catch(() => {});
+}
+
+// 봇이 켜질 때: 이미 올라가 있는 팀 짜기 카드를 지금 티어 DB·지금 디자인으로 다시 그린다(꺼져 있던 동안 바뀐 티어도 반영).
+// 한꺼번에 고치면 디스코드 제한에 걸리므로 하나씩 천천히 처리하고, 실패한 카드는 건너뛴다.
+async function refreshAllBoards(client) {
+  boardClient = client;
+  for (const [id, m] of getMatches(client)) {
+    if (!m.board?.messageId) continue;
+    await refreshBoard(client, id, m).catch(() => {});
+    await new Promise(r => setTimeout(r, 300));
+  }
 }
 
 // 마감되면 자동으로 한 번 올린다. 마감 해제 후 다시 마감돼도 이미 있으면 그대로 둔다.
@@ -1100,13 +1131,12 @@ function buildTierSavedPayload(gk, tier, matchMsgId, userId) {
 async function saveMyTier(interaction, gk, tier, matchMsgId) {
   tiers.setName(interaction.user.id, displayNameFromInteraction(interaction)); // 파일에서 누군지 알아보게
   tiers.setTier(interaction.user.id, gk, tier);
-  const match = getMatches(interaction.client).get(matchMsgId);
   await interaction.update(buildTierSavedPayload(gk, tier, matchMsgId, interaction.user.id));
-  if (match) await refreshBoard(interaction.client, matchMsgId, match);
 }
 
 // 🏅 내 티어 설정 선택 메뉴
 async function handleTeamSelect(interaction) {
+  rememberClient(interaction);
   const { customId } = interaction;
   if (customId.startsWith('team:tier')) tiers.setName(interaction.user.id, displayNameFromInteraction(interaction));
 
@@ -1139,8 +1169,6 @@ async function handleTeamSelect(interaction) {
     tiers.setName(interaction.user.id, displayNameFromInteraction(interaction));
     tiers.setPositions(interaction.user.id, game, next.filter(Boolean));
     await interaction.update(buildPositionPayload(game, matchMsgId, interaction.user.id));
-    const match = getMatches(interaction.client).get(matchMsgId);
-    if (match) await refreshBoard(interaction.client, matchMsgId, match);
     return;
   }
 
@@ -1151,6 +1179,7 @@ async function handleTeamSelect(interaction) {
 // ── 카드 버튼 ───────────────────────────────────────────────
 
 async function handleTeamButton(interaction) {
+  rememberClient(interaction);
   const { customId } = interaction;
   if (customId.startsWith('team:tier')) tiers.setName(interaction.user.id, displayNameFromInteraction(interaction)); // 티어 파일에 이름 채우기(이미 저장된 사람만 기록됨)
 
@@ -1183,10 +1212,6 @@ async function handleTeamButton(interaction) {
     const userId = interaction.user.id;
     tiers.resetAll(userId);
     await interaction.update(buildTierGamePayload(userId, '🗑️ **모든 티어와 포지션을 지웠어요.**'));
-    // 이 사람이 들어 있는 팀 카드는 바로 고친다
-    for (const [id, m] of getMatches(interaction.client)) {
-      if (m.board?.messageId && m.participants?.some(u => u.id === userId)) await refreshBoard(interaction.client, id, m).catch(() => {});
-    }
     return;
   }
   if (customId.startsWith('team:tier_back:')) {
@@ -1206,8 +1231,6 @@ async function handleTeamButton(interaction) {
     tiers.setTier(interaction.user.id, gk, null);
     if (tiers.POSITIONS[game]) tiers.setPositions(interaction.user.id, game, []);
     await interaction.update(buildTierPickPayload(gk, matchMsgId, interaction.user.id));
-    const match = getMatches(interaction.client).get(matchMsgId);
-    if (match) await refreshBoard(interaction.client, matchMsgId, match);
     return;
   }
   if (customId.startsWith('team:tier_posset:')) {
@@ -1259,6 +1282,7 @@ async function handleTeamButton(interaction) {
 }
 
 async function handleTeamModal(interaction) {
+  rememberClient(interaction);
   if (interaction.customId.startsWith('team:tier_modal:')) {
     const [, , game, key, matchMsgId] = interaction.customId.split(':');
     const raw = interaction.fields.getTextInputValue('score').replace(/[^0-9]/g, '');
@@ -1308,6 +1332,7 @@ module.exports = {
   buildOwRolesPayload,
   buildResetAllConfirmPayload,
   postBoard,
+  refreshAllBoards,
   handleTeamSelect,
   handleTeamButton,
   handleTeamModal,

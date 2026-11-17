@@ -386,6 +386,17 @@ function cleanEntry(userId, game) {
   if (storeOf(userId)[userId] && !Object.keys(storeOf(userId)[userId]).length) delete storeOf(userId)[userId];
 }
 
+// 티어·포지션이 바뀌면 알려 달라고 등록해 두는 곳(팀 짜기 카드가 바로 고쳐지도록). 어느 경로로 바뀌든(내 티어 설정·/티어·초기화) 여기서 한 번에 알린다.
+const changeListeners = [];
+function onChange(fn) {
+  changeListeners.push(fn);
+}
+function notifyChange(userId) {
+  for (const fn of changeListeners) {
+    try { fn(userId); } catch (err) { console.error('티어 변경 알림 처리 중 오류:', err); }
+  }
+}
+
 // 티어를 저장한다(null 이면 지운다). 포지션·다른 롤 티어는 그대로 둔다.
 function setTier(userId, gk, tier) {
   const { game, role } = splitKey(gk);
@@ -402,6 +413,7 @@ function setTier(userId, gk, tier) {
   e.at = Date.now();
   cleanEntry(userId, game);
   save(userId);
+  notifyChange(userId);
 }
 
 // 봇이 켜질 때 한 번: 이름이 없는 사람은 서버 멤버 목록에서 별명을 찾아 채우고, 파일을 지금 모양(이름·보기)으로 다시 쓴다.
@@ -434,6 +446,7 @@ function resetAll(userId) {
   if (!store[userId]) return false;
   delete store[userId];
   save(userId);
+  notifyChange(userId);
   return true;
 }
 
@@ -447,6 +460,7 @@ function setPositions(userId, game, list) {
   e.at = Date.now();
   cleanEntry(userId, game);
   save(userId);
+  notifyChange(userId);
 }
 
 // ── 이모지 ──────────────────────────────────────────────────
@@ -567,6 +581,7 @@ module.exports = {
   clearTiers,
   setPositions,
   resetAll,
+  onChange,
   setName,
   refreshFileNames,
   ensureTierEmojis,
