@@ -288,8 +288,9 @@ const LINEUP_SLOTS = {
 };
 const isOwOpen = (game, size) => game === 'overwatch' && size === 6; // 6vs6 자유
 const slotsFor = (game, size) => LINEUP_SLOTS[game]?.[size] ?? null;
-const POS_SUB_COST = 0.5; // 롤: 부 포지션을 맡음
-const POS_OFF_COST = 1.5; // 롤: 주·부 둘 다 아닌 자리 / 오버워치: 티어를 저장 안 한 롤
+const POS_SUB_COST = 1;   // 롤: 부 포지션을 맡음(포지션을 더 중요하게 보려고 티어 한 단계만큼)
+const POS_OFF_COST = 2.5; // 롤: 주·부 둘 다 아닌 자리 / 오버워치: 티어를 저장 안 한 롤
+const POS_DUP_COST = 2;   // 자리 배정이 없는 경우(롤 5명이 아닌 팀·발로란트): 한 팀에 같은 주 포지션이 겹칠 때 겹친 사람마다
 const OW_OFF_ROLE = 2;    // 오버워치: 저장 안 한 롤을 맡으면 가장 높은 롤 티어에서 이만큼 낮춰 계산
 
 function uniquePerms(list) {
@@ -354,12 +355,24 @@ function balanceTeams(participants, game) {
   const scores = participantScores(users, game, { open: isOwOpen(game, Math.ceil(n / 2)) }); // 오버워치 6vs6 은 자유 티어로
   const total = scores.reduce((a, b) => a + b, 0);
   const size = Math.ceil(n / 2);
-  const withLineup = !!(slotsFor(game, size) || slotsFor(game, n - size));
+  // 포지션을 저장한 사람이 있는 롤·발로란트는 자리 배정이 없는 팀(인원이 5명이 아니거나 발로)도 주 포지션이 겹치지 않게 맞춘다.
+  const posGame = (game === 'lol' || game === 'valorant') && participants.some(u => tiers.getPositions(u.id, game).length);
+  const withLineup = !!(slotsFor(game, size) || slotsFor(game, n - size)) || posGame;
 
   // 한 팀의 { sum, cost }: 5명이면 자리를 맡긴 기준(오버워치는 그 롤 티어), 아니면 그냥 합
   const evalTeam = idxs => {
     const lu = lineup(idxs.map(i => users[i]), game, idxs.map(i => scores[i]));
-    return lu ? { sum: lu.sum, cost: lu.cost } : { sum: idxs.reduce((a, i) => a + scores[i], 0), cost: 0 };
+    if (lu) return { sum: lu.sum, cost: lu.cost };
+    const sum = idxs.reduce((a, i) => a + scores[i], 0);
+    if (!posGame) return { sum, cost: 0 };
+    const seen = new Map();
+    for (const i of idxs) {
+      const main = tiers.getPositions(users[i].id, game)[0];
+      if (main) seen.set(main, (seen.get(main) || 0) + 1);
+    }
+    let dup = 0;
+    for (const c of seen.values()) if (c > 1) dup += c - 1;
+    return { sum, cost: dup * POS_DUP_COST };
   };
 
   let best = [];
