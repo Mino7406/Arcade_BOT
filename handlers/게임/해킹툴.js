@@ -30,7 +30,7 @@ const EMOJIS = {
 };
 const EMOJI_NAME = EMOJIS.tool.name;
 const EMOJI_FILE = path.join(EMOJI_DIR, EMOJIS.tool.file);
-const HACK_TOOL_MAX = 3; // 최대 보유 개수. 꽉 찬 상태에서 받으면 그 1개는 버려진다
+const HACK_TOOL_MAX = 2; // 최대 보유 개수. 꽉 찬 상태에서 받으면 그 1개는 버려진다
 
 const HACK_TOOL_PATH = path.join(__dirname, '..', '..', 'DB', 'hacktool.json');
 
