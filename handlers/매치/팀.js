@@ -530,6 +530,7 @@ function buildBoardRows(match, matchMsgId) {
   if (tiers.hasTiers(game)) buttons.push(new ButtonBuilder().setCustomId(`team:balance:${matchMsgId}`).setLabel('⚖️ 밸런스').setStyle(ButtonStyle.Secondary));
   buttons.push(new ButtonBuilder().setCustomId(`team:random:${matchMsgId}`).setLabel('🎲 랜덤').setStyle(ButtonStyle.Secondary));
   if (tiers.hasTiers(game)) buttons.push(new ButtonBuilder().setCustomId(`team:tier:${game}:${matchMsgId}`).setLabel('🏅 내 티어 설정').setStyle(ButtonStyle.Success));
+  buttons.push(new ButtonBuilder().setCustomId(`team:refresh:${matchMsgId}`).setLabel('🔄 새로고침').setStyle(ButtonStyle.Secondary));
   return [new ActionRowBuilder().addComponents(...buttons)];
 }
 
@@ -1208,6 +1209,20 @@ async function handleTeamButton(interaction) {
     return;
   }
 
+  // 🔄 새로고침: 최신 티어 DB로 카드를 다시 그린다(자동으로 나눈 팀은 새 티어로 밸런스도 다시 맞춘다). 누구나 누를 수 있다.
+  if (customId.startsWith('team:refresh:')) {
+    const matchMsgId = customId.slice('team:refresh:'.length);
+    const match = getMatches(interaction.client).get(matchMsgId);
+    if (!match) {
+      await interaction.reply(notice('⚠️ **끝났거나 취소된 내전이에요.**', { ephemeral: true }));
+      return;
+    }
+    rebalanceForTierChange(match);
+    await interaction.update(buildBoardPayload(match, matchMsgId));
+    saveNow(interaction.client);
+    return;
+  }
+
   // 🗑️ 내전 내역 삭제: 지금 팀은 그대로 두고 아래 내역(이전 팀표)만 비운다.
   if (customId.startsWith('team:hist_clear:')) {
     const matchMsgId = customId.slice('team:hist_clear:'.length);
@@ -1215,6 +1230,8 @@ async function handleTeamButton(interaction) {
     if (!match) return;
     const board = normalizeBoard(match);
     board.history = [];
+    board.count = 1; // 순번도 #1 부터 다시 시작
+    if (board.current) board.current.no = 1;
     await interaction.update(buildBoardPayload(match, matchMsgId));
     saveNow(interaction.client);
     return;
