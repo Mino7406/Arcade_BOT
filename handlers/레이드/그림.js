@@ -10,7 +10,7 @@
 
 const path = require('path');
 const { Painter, loadFont } = require('./그림판');
-const { ROLES, ROLE_ORDER, PLAYER_MAX_HP, ACTIONS, createBattle, choose, resolveTurn, isStunned, slowTurnsLeft, isShielded, isPowered, poisonStacks, isConfused, chillStacks, isFeared, isPhased, isIntentHidden, isWarnIntent, telegraphText, moveFx } = require('./전투');
+const { ROLES, ROLE_ORDER, PLAYER_MAX_HP, ACTIONS, createBattle, choose, resolveTurn, isStunned, slowTurnsLeft, isShielded, isPowered, poisonStacks, isConfused, chillStacks, isFeared, isPhased, isIntentHidden, isWarnIntent, telegraphText, moveFx, isWeak, weakTurnsLeft, isStenched, stenchTurnsLeft, isErrored, errorTurnsLeft, isVulnerable, vulnTurnsLeft, isDoomed } = require('./전투');
 
 const W = 900; // 설계 크기(좌표는 전부 이 기준)
 const H = 640;
@@ -63,6 +63,80 @@ const B = () => fonts.bold;
 const R = () => fonts.regular;
 function text(s, x, y, size, color, opts = {}) {
   p.text(opts.regular ? R() : B(), s, x, y, { size, color, align: opts.align || 'center', maxWidth: opts.maxWidth });
+}
+// ── 깨진 글자(오염 테마) ──
+// 글자가 깨진 것처럼(사용자 결정 — 지금은 ① 끄고 ② 글리치를 세게: rate 0): ① 문자 깨짐 — 일부 글자를 �(직접 그림 — 나눔고딕에 없음)·▒로 바꾸고, errCode면 끝에 흐린 ERR_0x?? 코드
+// ② 6번째 시안의 색 어긋남 — 청록·붉은 그림자를 좌우로 off px, 글자 상자 안 가로 띠 밀림(strips), 빠진 칸(holes). 같은 글자는 매번 같은 모양(seed).
+// ???처럼 기호뿐인 글자는 ①이 없고 ②만.
+function seeded(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1103515245 + 12345) >>> 0) / 4294967296); }
+function isCorrupt(monster) { return monster?.theme === 'corrupt'; }
+const REPLACEMENT = '\uFFFD';
+function corruptChars(s, seed, rate) {
+  const rnd = seeded(seed * 7919 + s.length);
+  const chars = [...s];
+  const idx = chars.map((ch, i) => (/[\s!?.,()]/.test(ch) ? -1 : i)).filter(i => i >= 0);
+  const n = idx.length && rate > 0 ? Math.max(1, Math.round(idx.length * rate)) : 0;
+  for (let k = 0; k < n; k++) {
+    const i = idx.splice(Math.floor(rnd() * idx.length), 1)[0];
+    chars[i] = rnd() < 0.6 ? REPLACEMENT : '▒';
+  }
+  return { chars, code: 'ERR_0x' + Math.floor(rnd() * 256).toString(16).toUpperCase().padStart(2, '0') };
+}
+function glitchText(s, x, y, size, color, { seed = 1, rate = 0, errCode = false, off = 2, strips = 2, shift = 3, holes = 2, tint = false, maxWidth } = {}) {
+  const k = RENDER_SCALE;
+  const { chars, code } = corruptChars(s, seed, rate);
+  const repW = size * 0.86;
+  const charW = (ch) => (ch === ' ' ? size * 0.3 : p.textWidth(B(), ch, size)); // 공백 하나는 글꼴 폭이 0으로 나와 따로
+  const widthOf = (ch) => (ch === REPLACEMENT ? repW : charW(ch));
+  const codeSize = Math.round(size * 0.72);
+  const codeW = errCode ? p.textWidth(B(), code, codeSize) + size * 0.4 : 0;
+  let total = chars.reduce((sum, ch) => sum + widthOf(ch), 0) + codeW;
+  const sc = maxWidth && total > maxWidth ? maxWidth / total : 1; // 넘치면 글자 크기를 줄인다
+  const fs_ = size * sc;
+  total *= sc;
+  const left = x - total / 2;
+  // 색 어긋남: 청록(왼쪽) → 붉은(오른쪽) → 본래 색 순서로 세 번 그린다(off는 실제 픽셀)
+  for (const [dx, col] of [[-off / k, '#2fb8c0'], [off / k, '#bf1e2d'], [0, color]]) {
+    let cx = left + dx;
+    for (const ch of chars) {
+      const w = widthOf(ch) * sc;
+      if (ch === REPLACEMENT) {
+        const r = fs_ * 0.42, mx = cx + w / 2;
+        p.poly([mx, y - r, mx + r, y, mx, y + r, mx - r, y], col);
+        if (dx === 0) text('?', mx, y + fs_ * 0.02, Math.round(fs_ * 0.62), C.bg);
+      } else if (ch !== ' ') {
+        text(ch, cx, y, fs_, col, { align: 'left' });
+      }
+      cx += w;
+    }
+    if (errCode && dx === 0) text(code, cx + size * 0.4 * sc, y + fs_ * 0.06, Math.round(codeSize * sc), C.dim, { align: 'left' });
+  }
+  // 띠 밀림 · 빠진 칸(실제 픽셀)
+  const rnd = seeded(seed * 9973 + s.length);
+  const bx0 = Math.max(0, Math.round(left * k) - 6), bx1 = Math.min(p.w, Math.round((left + total) * k) + 6);
+  const by0 = Math.max(0, Math.round((y - fs_ * 0.6) * k)), by1 = Math.min(p.h, Math.round((y + fs_ * 0.6) * k));
+  const rowBytes = (bx1 - bx0) * 3, hh = by1 - by0;
+  if (rowBytes <= 0 || hh <= 4) return;
+  for (let i = 0; i < strips; i++) {
+    const sy = Math.floor(rnd() * (hh - 3)), sh = 2 + Math.floor(rnd() * Math.max(1, Math.floor(hh / 7) - 1));
+    const dx = (rnd() < 0.5 ? -1 : 1) * (1 + Math.floor(rnd() * shift));
+    for (let yy = by0 + sy; yy < by0 + sy + sh && yy < by1; yy++) {
+      const start = (yy * p.w + bx0) * 3;
+      const row = Buffer.from(p.buf.subarray(start, start + rowBytes));
+      p.buf.fill(0, start, start + rowBytes);
+      row.copy(p.buf, start + Math.max(0, dx) * 3, Math.max(0, -dx) * 3, rowBytes - Math.max(0, dx) * 3);
+      if (tint) { // 밀린 줄은 붉은/청록으로 물든다(밝은 글자 픽셀만)
+        const tc = i % 2 ? [40, 220, 230] : [255, 50, 70];
+        for (let j = start; j < start + rowBytes; j += 3) if (p.buf[j] + p.buf[j + 1] + p.buf[j + 2] > 300) { p.buf[j] = tc[0]; p.buf[j + 1] = tc[1]; p.buf[j + 2] = tc[2]; }
+      }
+    }
+  }
+  const cols = [[8, 2, 4], [180, 20, 36], [40, 200, 210]];
+  for (let i = 0; i < holes; i++) {
+    const hx = bx0 + Math.floor(rnd() * Math.max(1, bx1 - bx0 - 6)), hy = by0 + Math.floor(rnd() * Math.max(1, hh - 4));
+    const w = 3 + Math.floor(rnd() * 3), c = cols[Math.floor(rnd() * 3)];
+    for (let yy = hy; yy < hy + 2; yy++) for (let xx = hx; xx < hx + w && xx < p.w; xx++) { const j = (yy * p.w + xx) * 3; p.buf[j] = c[0]; p.buf[j + 1] = c[1]; p.buf[j + 2] = c[2]; }
+  }
 }
 function bar(x, y, w, h, ratio, color) {
   p.roundRect(x, y, w, h, h / 2, C.hpBack);
@@ -280,21 +354,87 @@ const STATUS_ICONS = {
     palette: { d: '#2a1410', w: '#ffffff', s: '#b9c6d6', y: '#f0b84a', b: '#8b5a2b', g: '#7ccf5a' },
   },
 };
+// 악취 기운(카드 아이콘 위): 작은 방귀 구름 + 맴도는 파리 두 마리(냄새 줄은 X자처럼 보여 뺌 — 사용자 요청)
+// 악취(구린 방귀): 악취 아이콘 색(갈색 #8a4f1e · 주황 #c47a32 · 밝은 주황 #eaa860)으로 은은하게. k = 진하기(맞은 순간 1, 남아 있는 동안 0.6)
+const STENCH_C = { dark: '#8a4f1e', mid: '#c47a32', light: '#eaa860' };
+// 반투명 뭉게구름 하나: 가운데 큰 동그라미 + 양옆·위 작은 동그라미를 옅게 겹친다(겹친 곳이 조금 더 진해 입체감)
+function softCloud(x, y, s, color, alpha) {
+  for (const [dx, dy, r] of [[0, 0, 14], [-13, 4, 10], [13, 4, 10], [-5, -8, 9], [7, -7, 8]]) haze(x + dx * s, y + dy * s, r * s, color, alpha);
+}
+// 아이콘 뒤: 아래쪽에 옅은 구름 두 덩이가 깔림
+function stenchBehind(role, cx, cy, k) {
+  softCloud(cx - 26, cy + 18, 1.3, STENCH_C.dark, 0.16 * k);
+  softCloud(cx + 28, cy + 14, 1.2, STENCH_C.dark, 0.16 * k);
+}
+// 아이콘 앞: 작은 구름이 아이콘 아래쪽에 살짝 걸치고, 위로 아주 작은 구름이 떠오름(아이콘은 비쳐 보이게 옅게)
+function stenchFront(cx, cy, k) {
+  softCloud(cx - 4, cy + 30, 1.1, STENCH_C.mid, 0.16 * k);
+  softCloud(cx + 34, cy - 30, 0.55, STENCH_C.light, 0.22 * k);
+  softCloud(cx - 30, cy - 40, 0.45, STENCH_C.light, 0.2 * k);
+}
+// 악취: 갈색 냄새 구름 배지 + 냄새 줄 + 남은 턴
+function stenchBadge(cx, cy, turns) {
+  drawPixels(STENCH_ICON, cx, cy, 2.4);
+  btext(`${turns}턴`, cx, cy + 24, 15, '#e0c49a');
+}
 // 카드 왼쪽 위 상태 아이콘: 기절(별). 점액는 아이콘 없이 점액 얼룩으로 표시한다.
 // 카드 왼쪽 상태 배지: 기절(별) · 독(거품). 환각은 배지 대신 아이콘 위 소용돌이(카드 그리는 곳에서, 점액처럼).
 // 냉기는 독 아래(같은 자리 규칙). 빙결(stunStatus.fx 'ice')은 별 대신 아이콘 위 얼음 덮개(iceCover)로 보인다.
 // 기절 별은 배지 대신 환각 소용돌이처럼 아이콘 오른쪽 아래에 걸쳐 그린다(카드 그리는 곳 — 사용자 요청).
+let badgeCompact = false; // 상태이상이 3개 이상이면 2열 격자 + 숫자를 아이콘 모서리로
+const btext = (...a) => { if (!badgeCompact) text(...a); };
 function statusBadges(b, mem, x, y) {
-  let by = y;
+  const items = []; // { draw(cx, cy), step: 세로 간격, label: 숫자(압축 모드에서 모서리에 표시) }
   const stacks = poisonStacks(b, mem);
-  // 독은 카드 왼쪽 위, 냉기는 그 아래
-  if (stacks) { poisonBadge(x, by, stacks, mem.poisonStatus?.color); by += stacks > 1 ? 44 : 34; }
-  if (isFeared(b, mem)) { fearBadge(x, by); by += 34; }
-  // 점액(slow)도 독처럼 배지로(사용자 요청 — 예전엔 아이콘 위 점액 얼룩): 몬스터 겉면 색 방울 + 남은 턴
+  if (stacks) items.push({ draw: (cx, cy) => poisonBadge(cx, cy, stacks, mem.poisonStatus?.color), step: stacks > 1 ? 44 : 34, label: stacks > 1 ? `×${stacks}` : '' });
+  if (isFeared(b, mem)) items.push({ draw: fearBadge, step: 34, label: '' });
+  // 점액(slow)도 독처럼 배지로: 몬스터 겉면 색 방울 + 남은 턴
   const slowLeft = slowTurnsLeft(b, mem);
-  if (slowLeft > 0) { slowBadge(x, by, slowLeft, b.monster.sprite?.palette?.o || '#7fdc8c'); by += 44; }
+  if (slowLeft > 0) items.push({ draw: (cx, cy) => slowBadge(cx, cy, slowLeft, b.monster.sprite?.palette?.o || '#7fdc8c'), step: 44, label: String(slowLeft) });
   const chill = chillStacks(b, mem);
-  if (chill) chillBadge(x, by, chill);
+  if (chill) items.push({ draw: (cx, cy) => chillBadge(cx, cy, chill), step: 44, label: `×${chill}` });
+  const stench = stenchTurnsLeft(b, mem);
+  if (stench) items.push({ draw: (cx, cy) => stenchBadge(cx, cy, stench), step: 44, label: String(stench) });
+  if (isErrored(b, mem)) { const t = errorTurnsLeft(b, mem); items.push({ draw: (cx, cy) => errorBadge(cx, cy, t), step: 44, label: String(t) }); }
+  if (isVulnerable(b, mem)) { const t = vulnTurnsLeft(b, mem); items.push({ draw: (cx, cy) => vulnBadge(cx, cy, t), step: 44, label: String(t) }); }
+  if (isDoomed(b, mem)) items.push({ draw: doomBadge, step: 34, label: mem.doomStacks ? `${mem.doomStacks + 1}` : '' });
+  if (items.length < 3) { // 둘 이하면 예전처럼 세로로 쌓는다
+    let by = y;
+    for (const it of items) { it.draw(x, by); by += it.step; }
+    return;
+  }
+  // 셋 이상: 아이콘 왼쪽 띠에 2열 격자로 촘촘히, 숫자는 아이콘 오른쪽 아래 모서리에(카드 아래 이름·체력 줄을 가리지 않게)
+  badgeCompact = true;
+  try {
+    items.forEach((it, i) => {
+      const cx = x - 12 + (i % 2) * 28, cy = y - 10 + Math.floor(i / 2) * 28;
+      it.draw(cx, cy);
+      if (it.label) { text(it.label, cx + 11, cy + 14, 12, '#000000'); text(it.label, cx + 10, cy + 13, 12, '#ffffff'); }
+    });
+  } finally { badgeCompact = false; }
+}
+// ── ??? 상태 아이콘(검은 바탕 + 붉은 선, 터미널 느낌) ──
+// 오류: 붉은 테두리 네모 + 청록 그림자가 어긋난 느낌표 + 끊긴 줄 + 남은 턴
+function errorBadge(cx, cy, turns) {
+  p.rect(cx - 13, cy - 13, 26, 26, '#1a0608'); p.strokeRoundRect(cx - 13, cy - 13, 26, 26, 2, 2, '#ff3a4a');
+  p.rect(cx + 0.5, cy - 8, 3.5, 10, '#2ad0d8'); p.rect(cx + 0.5, cy + 4, 3.5, 3.5, '#2ad0d8');
+  p.rect(cx - 2, cy - 8, 3.5, 10, '#ff3a4a'); p.rect(cx - 2, cy + 4, 3.5, 3.5, '#ff3a4a');
+  p.rect(cx - 13, cy + 1, 10, 2, '#0d0406'); p.rect(cx + 4, cy - 5, 9, 2, '#0d0406');
+  btext(`${turns}턴`, cx, cy + 26, 15, '#ffb0b8');
+}
+// 취약: 조준선(락온) + 남은 턴
+function vulnBadge(cx, cy, turns) {
+  p.circle(cx, cy, 12, '#ff3a4a'); p.circle(cx, cy, 9.5, '#14040a'); p.circle(cx, cy, 5, '#ff3a4a'); p.circle(cx, cy, 3, '#14040a');
+  for (const [x, y, w, h] of [[-1, -17, 2, 8], [-1, 9, 2, 8], [-17, -1, 8, 2], [9, -1, 8, 2]]) p.rect(cx + x, cy + y, w, h, '#ff3a4a');
+  p.rect(cx - 1, cy - 1, 2, 2, '#ffb0b8');
+  btext(`${turns}턴`, cx, cy + 26, 15, '#ffb4bc');
+}
+// 즉사: 글리치 해골(붉은 해골 + 청록 그림자 + 잘린 줄) — 이번 턴 판정
+function doomBadge(cx, cy) {
+  for (const [dx, c] of [[2, '#2ad0d8'], [0, '#ff3a4a']]) { p.roundRect(cx - 11 + dx, cy - 13, 22, 18, 8, c); p.rect(cx - 6 + dx, cy + 4, 12, 7, c); }
+  p.circle(cx - 4, cy - 4, 3.2, '#0d0406'); p.circle(cx + 4, cy - 4, 3.2, '#0d0406'); p.rect(cx - 1, cy, 2, 3, '#0d0406');
+  p.rect(cx - 3, cy + 7, 1.5, 4, '#0d0406'); p.rect(cx + 1.5, cy + 7, 1.5, 4, '#0d0406');
+  p.rect(cx - 14, cy - 1, 12, 2, '#0d0406'); p.rect(cx + 3, cy + 3, 12, 1.5, '#0d0406');
 }
 // 점액: 독 거품처럼 방울 세 개(어두운 테두리 → 점액색 → 흰 반사광) + 아래에 남은 턴
 function slowBadge(cx, cy, turns, color) {
@@ -302,7 +442,7 @@ function slowBadge(cx, cy, turns, color) {
   for (const [dx, dy, r] of blobs) p.circle(cx + dx, cy + dy, r + 2.5, '#0e2a14');
   for (const [dx, dy, r] of blobs) p.circle(cx + dx, cy + dy, r, color);
   p.circle(cx - 8, cy, 2.5, '#f4fff0');
-  text(`${turns}턴`, cx, cy + 24, 15, color);
+  btext(`${turns}턴`, cx, cy + 24, 15, color);
 }
 function isIced(b, mem) { return isStunned(b, mem) && mem.stunStatus?.fx === 'ice'; }
 // 눈송이: 세 갈래 선(어두운 테두리 → 하늘색) + 가운데 흰 점
@@ -318,7 +458,7 @@ function flake(cx, cy, r) {
 // 냉기: 눈송이 + 아래에 중첩 수(몇 개인지가 중요해서 1부터 표시)
 function chillBadge(cx, cy, stacks) {
   flake(cx, cy, 12);
-  text(`×${stacks}`, cx, cy + 24, 15, '#bfeaff');
+  btext(`×${stacks}`, cx, cy + 24, 15, '#bfeaff');
 }
 // 빙결: 역할 아이콘을 덮는 반투명 얼음 덩어리 + 흰 반사선
 function iceCover(cx, cy) {
@@ -348,7 +488,7 @@ function poisonBadge(cx, cy, stacks, color) {
   p.circle(cx + 7, cy - 4, 7, '#b45fe0');
   p.circle(cx + 4, cy + 9, 5, '#c98af0');
   p.circle(cx - 8, cy, 3, '#f1cdfb');
-  if (stacks > 1) text(`×${stacks}`, cx, cy + 22, 15, '#e2b8ff');
+  if (stacks > 1) btext(`×${stacks}`, cx, cy + 22, 15, '#e2b8ff');
 }
 // 불꽃 모양(겹겹이: 어두운 테두리 → 빨강 → 주황 → 노란 심). 화상 배지·혼불·피격 연출에 쓴다.
 function flame(cx, cy, s, layers = [['#4a1206', 1.25], ['#e8401c', 1], ['#ff9a3c', 0.72], ['#ffe066', 0.42]]) {
@@ -505,6 +645,31 @@ function gooBlob(x, y, r, color) {
 function haze(x, y, r, color, alpha) { p.roundRect(x - r, y - r, r * 2, r * 2, r, color, alpha); }
 function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
   if (!move) return;
+  if (move === 'fart' && layer === 'front') {
+    // 구린 방귀: 뒤돌아선 엉덩이에서 뿜어진 커다란 가스 덩어리 하나가 파티 쪽(아래·양옆)으로 뭉게뭉게 부풀어 퍼진다.
+    // 겹친 원들의 합집합을 8px 도트로 칠하고(외곽선·그늘·밝은 면), 엉덩이 쪽엔 '뿌웅' 충격선.
+    const G2 = 8;
+    const puffs = [[0, 52, 44], [-78, 74, 40], [78, 74, 40], [-160, 96, 38], [160, 96, 38], [-240, 112, 32], [240, 112, 32],
+      [-36, 106, 40], [36, 106, 40], [-118, 122, 34], [118, 122, 34], [-300, 126, 22], [300, 126, 22]];
+    const inside = (x, y) => puffs.some(([dx, dy, r]) => (x - (cx + dx)) ** 2 + (y - (cy + dy)) ** 2 <= r * r);
+    const nearTop = (x, y) => puffs.some(([dx, dy, r]) => { const ux = x - (cx + dx), uy = y - (cy + dy); return ux * ux + uy * uy <= r * r && uy < -r * 0.35 && ux < r * 0.3; });
+    const bottom = cy + 146; // 몬스터 칸 아래 끝 위에서 멈춘다
+    for (let y = cy + 4; y <= bottom; y += G2) for (let x = cx - 330; x <= cx + 330; x += G2) {
+      if (!inside(x, y)) continue;
+      const edge = !inside(x - G2, y) || !inside(x + G2, y) || !inside(x, y - G2) || !inside(x, y + G2) || y + G2 > bottom;
+      const shade = !inside(x, y + G2 * 2) || y + G2 * 2 > bottom;
+      p.rect(x - G2 / 2, y - G2 / 2, G2, G2, edge ? '#4a3c18' : nearTop(x, y) ? '#e6dca0' : shade ? '#8c7c3a' : '#bcae5c');
+    }
+    // 뿌웅: 엉덩이 바로 아래 양옆으로 짧은 충격선
+    for (const [x1, y1, x2, y2] of [[-62, 22, -96, 8], [62, 22, 96, 8], [-56, 40, -100, 40], [56, 40, 100, 40]]) p.line(cx + x1, cy + y1, cx + x2, cy + y2, 4, '#f4ecc0');
+    return;
+  }
+  if (move === 'peel' && layer === 'front') {
+    // 바나나 껍질 뿌리기: 몸 둘레로 흩날리는 바나나 껍질 + 작은 노란 조각
+    for (const [dx, dy] of [[-150, -46], [156, -40], [-182, 30], [188, 36], [-96, 70], [104, 74]]) drawPixels(PEEL, cx + dx, cy + dy, 6);
+    for (const [dx, dy] of [[-120, -10], [126, -6], [-60, 84], [66, 86]]) dot(cx + dx, cy + dy, 5, '#f5d040');
+    return;
+  }
   const G = 8;
   const cell = (x, y, c) => p.rect(cx + Math.round((x - cx) / G) * G - G / 2, cy + Math.round((y - cy) / G) * G - G / 2, G, G, c);
   if (move === 'spore' && layer === 'front') {
@@ -752,6 +917,16 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
 }
 // 맞은 파티원 카드 아이콘 위 타격 표시: 박치기는 할퀸 자국, 흩뿌리기는 점액 얼룩, 짓누르기는 충격 별.
 function hitFx(move, cx, cy, color, spore = color, accent = spore) {
+  if (move === 'fart') {
+    return; // 구린 방귀 피격·악취는 카드에서 stenchBehind·stenchFront로(아이콘 뒤·앞에 나눠 그림)
+  }
+  if (move === 'peel') {
+    // 바나나 껍질에 맞음: 아이콘 옆에 껍질 두 개 + 미끄러진 자국
+    drawPixels(PEEL, cx - 30, cy + 20, 5);
+    drawPixels(PEEL, cx + 30, cy - 18, 5);
+    p.line(cx - 40, cy + 40, cx - 8, cy + 40, 3, '#f5d040');
+    return;
+  }
   if (move === 'spore') {
     // 포자 흩뿌리기: 점액 얼룩(동그라미)과 구분되게 — 대폭발과 같은 동그란 포자 알갱이 두 개 + 흩날리는 네모 가루
     puff(cx - 22, cy - 16, 4, spore, '#f1cdfb');
@@ -847,6 +1022,7 @@ function cards(members, drawCard, border = () => ({ color: C.gold, width: 2 })) 
 // 다음부터는 복사만 한다. 큰 도형 칠하기가 그림 시간의 대부분이었다(장면당 약 1.7MB × 3장면).
 const backgrounds = new Map();
 function background(key, boxY, boxH) {
+  key += themeKey;
   const cached = backgrounds.get(key);
   if (cached) { cached.copy(painter.buf); return; }
   frame();
@@ -862,12 +1038,223 @@ function background(key, boxY, boxH) {
 // render 공통: 엔진 준비 → 그리기 → PNG. 실패하면 null(레이드.js가 글자 화면으로 대신).
 // 전부 동기라 중간에 다른 처리가 끼지 않고, 호출부(레이드.js의 화면 대기열)가 한 번에 하나씩만 부른다.
 // (async인 건 호출부와의 약속일 뿐 — 그리기 시간 측정에 다른 작업이 섞이지 않게 await 없이 끝낸다)
-async function render(scene, draw) {
+// 오염 테마 색: 화면 틀(배경·테두리·상자·제목·리본)만 붉게. 직업 아이콘(ROLE_SPRITES)·HP 바(hpColor)는 자기 색이라 그대로.
+const CORRUPT_C = {
+  bg: '#120507', frame: '#8a1c24', gold: '#ff3a4a', box: '#080203', card: '#1e0a0d', cardEmpty: '#3a1418',
+  orange: '#ff6a5a', sub: '#f2dada', dim: '#7a5a5e', muted: '#b08a8a', hpBack: '#2e1418',
+};
+let themeKey = ''; // 배경 캐시 키 뒤에 붙는다(테마마다 배경을 따로 저장)
+// 화면 오염 후처리(6번째 시안 그대로, 실제 픽셀 675×480 단위): ① 가장자리 붉은 빛 ② 네 모서리 오염(옆 칸이 붉게 끌려와 어긋난 블록 ·
+// 붉은 블록 · 빠진 칸 · 회로 막대, 테두리를 따라 흐르는 세로 줄기) ③ 붉은 잡음 점 ④ 약한 가로 띠 밀림(글자 줄은 피함).
+// 직업 아이콘 자리(카드 아이콘 칸)는 건드리지 않는다. 매번 같은 모양(seed).
+const ICON_KEEP = [0, 1, 2, 3].map(i => [Math.round((20 + i * (CARD_W + CARD_GAP) + CARD_W / 2 - 34) * RENDER_SCALE), Math.round((CARD_Y + 46) * RENDER_SCALE), Math.round(68 * RENDER_SCALE), Math.round(80 * RENDER_SCALE)]);
+// 띠를 밀면 안 되는 줄(실제 픽셀) — 시안과 같게
+// 모집은 카드 아이콘 줄(약 280~330)도 피한다(아이콘은 건드리지 않음 — 사용자 요청)
+const BAND_SAFE = { 모집: [[15, 60], [145, 240], [270, 480]], 전투: [[10, 80], [150, 240], [260, 480]], 결과: [[10, 140], [150, 480]] };
+function corruptPost(scene, seed) {
+  const rnd = seeded(seed);
+  const w = p.w, h = p.h, buf = p.buf;
+  const inIcon = (x, y, bw, bh) => scene !== '모집' && scene !== '전투' ? false : ICON_KEEP.some(([kx, ky, kw, kh]) => x < kx + kw && x + bw > kx && y < ky + kh && y + bh > ky);
+  const setPx = (x, y, c) => { if (x < 0 || y < 0 || x >= w || y >= h || inIcon(x, y, 1, 1)) return; const j = (y * w + x) * 3; buf[j] = c[0]; buf[j + 1] = c[1]; buf[j + 2] = c[2]; };
+  // ① 가장자리 붉은 빛
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const e = Math.min(Math.min(x, w - 1 - x) / w, Math.min(y, h - 1 - y) / h);
+      if (e >= 0.06) { if (x > w * 0.06 && x < w * 0.94) x = Math.floor(w * 0.94); continue; }
+      const k = ((0.06 - e) / 0.06) ** 2, j = (y * w + x) * 3;
+      buf[j] = Math.min(255, buf[j] + Math.round(62 * k));
+    }
+  }
+  // ② 모서리 오염
+  const src = Buffer.from(buf);
+  const B6 = 6;
+  for (const [cx, cy, sx, sy] of [[0, 0, 1, 1], [w, 0, -1, 1], [0, h, 1, -1], [w, h, -1, -1]]) {
+    const R = 90 + Math.floor(rnd() * 31);
+    for (let by = 0; by < R; by += B6) for (let bx = 0; bx < R; bx += B6) {
+      const d = Math.hypot(bx, by) / R;
+      if (d > 1 || rnd() > (1 - d) ** 1.3) continue;
+      const x = cx + sx * bx - (sx < 0 ? B6 : 0), y = cy + sy * by - (sy < 0 ? B6 : 0);
+      if (x < 0 || y < 0 || x >= w - B6 || y >= h - B6 || inIcon(x, y, B6, B6)) continue;
+      const r = rnd();
+      if (r < 0.35) { // 옆 칸 내용을 끌어와 붉게
+        const ox = Math.max(0, Math.min(w - B6, x + [-2, -1, 1, 2][Math.floor(rnd() * 4)] * B6));
+        for (let yy = 0; yy < B6; yy++) for (let xx = 0; xx < B6; xx++) {
+          const s = ((y + yy) * w + ox + xx) * 3, dIdx = ((y + yy) * w + x + xx) * 3;
+          buf[dIdx] = Math.min(255, src[s] + 60); buf[dIdx + 1] = Math.round(src[s + 1] * 0.35); buf[dIdx + 2] = Math.min(255, Math.round(src[s + 2] * 0.4) + 8);
+        }
+      } else if (r < 0.6) { const c = [[150, 16, 30], [90, 8, 18], [220, 34, 52]][Math.floor(rnd() * 3)]; for (let yy = 0; yy < B6; yy++) for (let xx = 0; xx < B6; xx++) setPx(x + xx, y + yy, c); }
+      else if (r < 0.75) { for (let yy = 0; yy < B6; yy++) for (let xx = 0; xx < B6; xx++) setPx(x + xx, y + yy, [6, 2, 4]); }
+      else if (r < 0.9) { const len = B6 * (1 + Math.floor(rnd() * 3)); for (let yy = B6 / 2 - 1; yy <= B6 / 2; yy++) for (let xx = 0; xx < len; xx++) setPx(x + xx, y + yy, [255, 60, 76]); }
+    }
+    for (let i = 0; i < 4; i++) { // 테두리를 따라 흐르는 세로 줄기
+      const x = cx + sx * (4 + Math.floor(rnd() * (R / 2 - 4))), L = Math.floor(R / 2 + rnd() * (R / 2 + 40));
+      for (let tt = 0; tt < L; tt += 2) if (rnd() < 0.85) setPx(x, cy + sy * tt - (sy < 0 ? 1 : 0), rnd() < 0.85 ? [255, 46, 64] : [255, 200, 205]);
+    }
+  }
+  // ③ 붉은 잡음 점
+  for (let i = 0; i < 35; i++) {
+    const x = Math.floor(rnd() * (w - 2)), y = Math.floor(rnd() * (h - 2)), c = rnd() < 0.5 ? [200, 30, 45] : [120, 14, 24];
+    for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) setPx(x + dx, y + dy, c);
+  }
+  // ④ 약한 가로 띠 밀림 5줄(글자 줄은 피함)
+  const safe = BAND_SAFE[scene] ?? [];
+  let n = 0;
+  for (let tries = 0; n < 5 && tries < 500; tries++) {
+    const y0 = Math.floor(rnd() * (h - 8)), hh = 2 + Math.floor(rnd() * 3);
+    if (safe.some(([a, b]) => (a <= y0 && y0 <= b) || (a <= y0 + hh && y0 + hh <= b))) continue;
+    const dx = (rnd() < 0.5 ? -1 : 1) * (4 + Math.floor(rnd() * 7)), rowBytes = w * 3;
+    for (let yy = y0; yy < y0 + hh; yy++) {
+      const start = yy * rowBytes, row = Buffer.from(buf.subarray(start, start + rowBytes));
+      row.copy(buf, start + Math.max(0, dx) * 3, Math.max(0, -dx) * 3, rowBytes - Math.max(0, dx) * 3);
+    }
+    n++;
+  }
+}
+// ── ??? 기술 연출: 그려 넣는 대신 '화면 자체가 깨지는' 글리치 후처리 ──
+// 이미 그려진 장면(buf) 위에서 가로 띠 찢김·RGB 어긋남·블록 뒤섞임·픽셀화·잔상을 만든다. 플레이어 아이콘 칸은 끝에 원본으로 되돌린다(아이콘은 건드리지 않음).
+let skillCtx = null; // 이번 장면의 기술 연출 정보 { fx, mx, my, targets: [{x,y,w,h}] } (설계 좌표)
+const SKILL_FX = ['crash', 'overclock', 'deadeye', 'vuln', 'killnine', 'gateway'];
+function skillGlitch(ctx, seed) {
+  const rnd = seeded(seed), w = p.w, h = p.h, buf = p.buf, S = RENDER_SCALE;
+  const ri = (a, b) => a + Math.floor(rnd() * (b - a + 1));
+  const px = (v) => Math.round(v * S);
+  const clampX = (x) => Math.max(0, Math.min(w, x)), clampY = (y) => Math.max(0, Math.min(h, y));
+  const saved = ICON_KEEP.map(([x, y, kw, kh]) => { const rows = []; for (let yy = y; yy < Math.min(h, y + kh); yy++) rows.push(Buffer.from(buf.subarray((yy * w + x) * 3, (yy * w + Math.min(w, x + kw)) * 3))); return rows; });
+  const grab = (x0, y0, x1, y1) => { x0 = clampX(x0); x1 = clampX(x1); y0 = clampY(y0); y1 = clampY(y1); const rows = []; for (let y = y0; y < y1; y++) rows.push(Buffer.from(buf.subarray((y * w + x0) * 3, (y * w + x1) * 3))); return { x0, y0, x1, y1, rows }; };
+  // 가로 띠를 dx 만큼 밀기(밀려 나간 만큼은 반대편에서 돌아 들어옴)
+  const shiftRows = (x0, y0, x1, y1, dx) => {
+    const g = grab(x0, y0, x1, y1), n = g.x1 - g.x0; if (n <= 0) return;
+    g.rows.forEach((row, k) => { const y = g.y0 + k; for (let i = 0; i < n; i++) { const s = (((i - dx) % n) + n) % n; const d = (y * w + g.x0 + i) * 3; buf[d] = row[s * 3]; buf[d + 1] = row[s * 3 + 1]; buf[d + 2] = row[s * 3 + 2]; } });
+  };
+  // 색 채널 어긋남: 붉은 채널은 왼쪽, 푸른 채널은 오른쪽으로
+  const splitRgb = (x0, y0, x1, y1, off) => {
+    const g = grab(x0, y0, x1, y1), n = g.x1 - g.x0;
+    g.rows.forEach((row, k) => { const y = g.y0 + k; for (let i = 0; i < n; i++) { const d = (y * w + g.x0 + i) * 3; buf[d] = row[Math.min(n - 1, i + off) * 3]; buf[d + 2] = row[Math.max(0, i - off) * 3 + 2]; } });
+  };
+  // 잔상: 영역을 (dx,dy) 만큼 옮겨 tint 색으로 밝은 부분만 겹친다
+  const ghost = (x0, y0, x1, y1, dx, dy, a, tint) => {
+    const g = grab(x0, y0, x1, y1), n = g.x1 - g.x0;
+    for (let k = 0; k < g.rows.length; k++) for (let i = 0; i < n; i++) {
+      const sx = i - dx, sy = k - dy; if (sx < 0 || sx >= n || sy < 0 || sy >= g.rows.length) continue;
+      const s = g.rows[sy], lum = Math.max(s[sx * 3], s[sx * 3 + 1], s[sx * 3 + 2]); if (lum < 70) continue;
+      const d = ((g.y0 + k) * w + g.x0 + i) * 3;
+      for (let c = 0; c < 3; c++) buf[d + c] = Math.max(buf[d + c], Math.round(lum * a * tint[c] / 255));
+    }
+  };
+  // 픽셀화(블록 평균)
+  const pixelate = (x0, y0, x1, y1, sz) => {
+    x0 = clampX(x0); x1 = clampX(x1); y0 = clampY(y0); y1 = clampY(y1);
+    for (let by = y0; by < y1; by += sz) for (let bx = x0; bx < x1; bx += sz) {
+      const ex = Math.min(x1, bx + sz), ey = Math.min(y1, by + sz); let r = 0, g2 = 0, b = 0, c = 0;
+      for (let y = by; y < ey; y++) for (let x = bx; x < ex; x++) { const i = (y * w + x) * 3; r += buf[i]; g2 += buf[i + 1]; b += buf[i + 2]; c++; }
+      r = Math.round(r / c); g2 = Math.round(g2 / c); b = Math.round(b / c);
+      for (let y = by; y < ey; y++) for (let x = bx; x < ex; x++) { const i = (y * w + x) * 3; buf[i] = r; buf[i + 1] = g2; buf[i + 2] = b; }
+    }
+  };
+  // 블록 뒤섞임: 같은 영역 안 다른 곳의 조각을 복사해 붙인다(붉게 물들여)
+  const swapBlocks = (x0, y0, x1, y1, n, bw, bh) => {
+    const g = grab(x0, y0, x1, y1), gw = g.x1 - g.x0, gh = g.rows.length; if (gw <= bw || gh <= bh) return;
+    for (let t = 0; t < n; t++) {
+      const sx = ri(0, gw - bw), sy = ri(0, gh - bh), dx = ri(0, gw - bw), dy = ri(0, gh - bh), red = rnd() < 0.6;
+      for (let yy = 0; yy < bh; yy++) for (let xx = 0; xx < bw; xx++) {
+        const s = g.rows[sy + yy], d = ((g.y0 + dy + yy) * w + g.x0 + dx + xx) * 3, si = (sx + xx) * 3;
+        buf[d] = red ? Math.min(255, s[si] + 70) : s[si]; buf[d + 1] = red ? Math.round(s[si + 1] * 0.3) : s[si + 1]; buf[d + 2] = red ? Math.round(s[si + 2] * 0.35) : s[si + 2];
+      }
+    }
+  };
+  // 한 점을 옆으로 끌어 늘린 자국(멈춘 픽셀)
+  const smearH = (y, x0, len, dir) => {
+    const i0 = (y * w + x0) * 3, c = [buf[i0], buf[i0 + 1], buf[i0 + 2]];
+    for (let k = 1; k <= len; k++) { const x = x0 + dir * k; if (x < 0 || x >= w) break; const a = 0.85 * (1 - k / len), d = (y * w + x) * 3; for (let q = 0; q < 3; q++) buf[d + q] = Math.round(buf[d + q] * (1 - a) + c[q] * a); }
+  };
+  const staticNoise = (x0, y0, x1, y1, dens) => {
+    for (let y = clampY(y0); y < clampY(y1); y++) for (let x = clampX(x0); x < clampX(x1); x++) { if (rnd() > dens) continue; const v = rnd(), d = (y * w + x) * 3; buf[d] = v < 0.5 ? 255 : 30; buf[d + 1] = v < 0.5 ? 58 : 6; buf[d + 2] = v < 0.5 ? 74 : 14; }
+  };
+  const fill = (x0, y0, x1, y1, c) => { for (let y = clampY(y0); y < clampY(y1); y++) for (let x = clampX(x0); x < clampX(x1); x++) { const d = (y * w + x) * 3; buf[d] = c[0]; buf[d + 1] = c[1]; buf[d + 2] = c[2]; } };
+  const gtxt = (s2, x, y, size, color) => { text(s2, x + 2, y + 1, size, '#2ad0d8'); text(s2, x - 1, y, size, '#ff3a4a'); text(s2, x, y, size, color); }; // 어긋난 색 그림자 글자
+  const mon = { x0: px(ctx.mx - 150), x1: px(ctx.mx + 150), y0: px(ctx.my - 84), y1: px(ctx.my + 104) };
+  const bandRows = (x0, y0, x1, y1, n, maxH, maxDx) => { for (let i = 0; i < n; i++) { const hh = ri(2, maxH), yy = ri(y0, Math.max(y0, y1 - hh)); shiftRows(x0, yy, x1, yy + hh, (rnd() < 0.5 ? -1 : 1) * ri(6, maxDx)); } };
+  const tgts = ctx.targets;
+
+  if (ctx.fx === 'crash') {
+    // 데이터 크래시: 몬스터·파티 줄이 찢겨 어긋나고, 조각이 엉뚱한 곳에 붙고, 맞은 카드는 테두리가 두 겹으로 갈라진다
+    bandRows(mon.x0, mon.y0, mon.x1, mon.y1, 5, 9, 34);
+    splitRgb(mon.x0, mon.y0, mon.x1, mon.y1, 4);
+    bandRows(0, px(CARD_Y), w, px(CARD_Y + CARD_H), 9, 12, 46);
+    swapBlocks(0, px(CARD_Y), w, px(CARD_Y + CARD_H), 8, px(44), px(20));
+    swapBlocks(mon.x0, mon.y0, mon.x1, mon.y1, 4, px(30), px(16));
+    splitRgb(0, px(CARD_Y), w, px(CARD_Y + CARD_H), 3);
+    for (const t of tgts) {
+      p.strokeRoundRect(t.x + 7, t.y + 3, t.w - 8, t.h, 10, 2, '#2ad0d8');
+      p.strokeRoundRect(t.x - 5, t.y - 3, t.w, t.h, 10, 2, '#ff3a4a');
+      gtxt(['0x7F3A', '0xC0DE', '0xBAD1', '0xDEAD'][ri(0, 3)], t.x + t.w - 46, t.y + t.h - 18, 14, '#ffb0b8');
+    }
+  } else if (ctx.fx === 'overclock') {
+    // 오버클록: 처리가 빨라져 몬스터가 잔상을 끌고 다니고(프레임 겹침), 옆으로 번지며, 줄마다 박자가 어긋난다
+    for (const [dx, a] of [[-px(34), 0.28], [-px(18), 0.45], [px(18), 0.45], [px(34), 0.28]]) ghost(mon.x0, mon.y0, mon.x1, mon.y1, dx, 0, a, [255, 40, 56]);
+    for (let y = mon.y0; y < mon.y1; y += 3) if ((y >> 1) % 3 === 0) shiftRows(mon.x0, y, mon.x1, y + 1, ri(-6, 6));
+    for (let i = 0; i < 14; i++) { const y = ri(mon.y0 + px(10), mon.y1 - px(10)); smearH(y, mon.x1 - px(52), ri(px(30), px(110)), 1); smearH(y, mon.x0 + px(52), ri(px(30), px(110)), -1); }
+    splitRgb(mon.x0 - px(20), mon.y0, mon.x1 + px(20), mon.y1, 3);
+    gtxt('CLK ▲ 150%', ctx.mx - 215, ctx.my - 40, 17, '#ff6a78');
+  } else if (ctx.fx === 'deadeye') {
+    // 데드아이: 표적 카드에 끊긴 조준 고리(색 어긋난 복사본) + LOCK
+    for (const t of tgts) {
+      const x1 = t.x + t.w / 2, y1 = t.y + 86;
+      // 끊긴 조준 고리: 조각난 호 네 개 + 어긋난 복사본(아이콘 바깥쪽)
+      for (let a = 0; a < 4; a++) {
+        const a0 = a * Math.PI / 2 + 0.25 + rnd() * 0.2;
+        for (const [off, c] of [[0, '#ff3a4a'], [5, '#2ad0d8']]) { const pts = []; for (let q = 0; q <= 8; q++) { const an = a0 + q * 0.1; pts.push([x1 + off + Math.cos(an) * 62, y1 + Math.sin(an) * 62]); } for (let q = 0; q < 8; q++) p.line(pts[q][0], pts[q][1], pts[q + 1][0], pts[q + 1][1], 4, c); }
+      }
+      gtxt('LOCK', x1, t.y + 36, 16, '#ff6a78');
+    }
+  } else if (ctx.fx === 'vuln') {
+    // 취약점 분석: 화면 위로 16진 덤프가 흘러가고, 스캔선이 훑은 자리가 어긋나며, 카드엔 '발견된 구멍'이 픽셀 조각으로 생긴다
+    for (let row = 0; row < 7; row++) { let line = ''; for (let k = 0; k < 14; k++) line += ('0' + ri(0, 255).toString(16)).slice(-2).toUpperCase() + ' '; text(line, ctx.mx, ctx.my - 100 + row * 22 + (row % 2) * 4, 13, row % 3 === 0 ? '#c81e2d' : '#5a0812'); }
+    const sy = px(CARD_Y - 12 + ri(0, 40));
+    shiftRows(0, sy, w, sy + px(14), ri(px(14), px(26))); splitRgb(0, sy, w, sy + px(14), 4);
+    fill(0, sy + px(14), w, sy + px(16), [255, 58, 74]);
+    bandRows(0, sy + px(16), w, px(CARD_Y + CARD_H), 5, 6, 18);
+    for (const t of tgts) { pixelate(px(t.x + 4), px(t.y + 4), px(t.x + t.w - 4), px(t.y + 44), px(10)); for (let k = 0; k < 7; k++) { const bx = t.x + 10 + ri(0, t.w - 40), by = t.y + 46 + ri(0, t.h - 70); p.rect(bx, by, 10, 10, k % 2 ? '#ff3a4a' : '#0d0406'); p.rect(bx + 3, by + 3, 4, 4, '#ff3a4a'); } gtxt('0xBUG', t.x + t.w - 40, t.y + 26, 13, '#ffb0b8'); }
+  } else if (ctx.fx === 'killnine') {
+    // kill -9: 표적 카드가 꺼지는 화면처럼 위아래가 새까맣게 접히고(정적 노이즈) 한 줄만 남아 번쩍, 터미널 문구
+    for (const t of tgts) {
+      for (const [a0, a1] of [[t.y + 4, t.y + 44], [t.y + 128, t.y + t.h - 4]]) { fill(px(t.x + 4), px(a0), px(t.x + t.w - 4), px(a1), [6, 2, 5]); staticNoise(px(t.x + 4), px(a0), px(t.x + t.w - 4), px(a1), 0.16); }
+      const ly = t.y + 86;
+      p.rect(t.x + 6, ly - 3, t.w - 12, 6, '#ff3a4a'); p.rect(t.x + 6, ly - 1, t.w - 12, 2, '#ffffff');
+      smearH(px(ly), px(t.x + 6), px(70), -1); smearH(px(ly), px(t.x + t.w - 6), px(70), 1);
+      text('> kill -9 ' + (1000 + ri(0, 8999)), t.x + t.w / 2, t.y + 28, 15, '#ff6a78');
+      text('Killed', t.x + t.w / 2, t.y + t.h - 28, 22, '#ff3a4a'); p.rect(t.x + t.w / 2 + 40, t.y + t.h - 46, 10, 20, '#ff3a4a');
+      splitRgb(px(t.x), px(t.y), px(t.x + t.w), px(t.y + t.h), 3);
+    }
+  } else if (ctx.fx === 'gateway') {
+    // 블랙월 게이트웨이: 화면 전체가 세로 조각으로 갈라져 위아래로 어긋나고, 새까만 공허 사각형이 뚫리며 붉은 선이 간다
+    const full = grab(0, 0, w, h);
+    let x = 0; while (x < w) {
+      const cw = ri(px(20), px(70)), dy = ri(-px(26), px(26));
+      if (rnd() < 0.75) for (let i = x; i < Math.min(w, x + cw); i++) for (let y = 0; y < h; y++) { const sy = y - dy; const d = (y * w + i) * 3; if (sy < 0 || sy >= h) { buf[d] = 6; buf[d + 1] = 2; buf[d + 2] = 5; continue; } const s = full.rows[sy]; buf[d] = s[i * 3]; buf[d + 1] = s[i * 3 + 1]; buf[d + 2] = s[i * 3 + 2]; }
+      x += cw;
+    }
+    splitRgb(0, 0, w, h, 6);
+    bandRows(0, 0, w, h, 8, 8, 60);
+    for (let i = 0; i < 5; i++) { const vw = ri(px(70), px(220)), vh = ri(px(24), px(80)), vx = ri(0, w - vw), vy = ri(px(110), h - vh - px(10)); fill(vx, vy, vx + vw, vy + vh, [3, 1, 3]); fill(vx, vy, vx + vw, vy + 2, [255, 58, 74]); fill(vx, vy + vh - 2, vx + vw, vy + vh, [150, 16, 30]); staticNoise(vx, vy, vx + vw, vy + vh, 0.05); }
+    gtxt('▓ BLACKWALL GATEWAY ▓', ctx.mx, ctx.my + 138, 26, '#ff6a78');
+  }
+  // 아이콘 칸 되돌리기
+  ICON_KEEP.forEach(([x, y, kw, kh], i) => saved[i].forEach((row, k) => row.copy(buf, ((y + k) * w + x) * 3)));
+}
+async function render(scene, draw, monster = null) {
   if (!load()) return null;
   p = painter;
+  const corrupt = isCorrupt(monster);
+  const savedC = corrupt ? { ...C } : null;
+  const savedRibbon = corrupt ? RIBBON.pending.fill : null;
+  if (corrupt) { Object.assign(C, CORRUPT_C); RIBBON.pending.fill = '#b81c2a'; themeKey = ':corrupt'; }
   try {
     const t0 = process.hrtime.bigint();
+    skillCtx = null;
     draw();
+    if (corrupt && skillCtx && SKILL_FX.includes(skillCtx.fx)) skillGlitch(skillCtx, (skillCtx.fx.length * 977 + 13) >>> 0);
+    if (corrupt) corruptPost(scene, scene.length * 31 + 7);
     const t1 = process.hrtime.bigint();
     const png = painter.png();
     logRender(scene, Number(t1 - t0) / 1e6, Number(process.hrtime.bigint() - t1) / 1e6, png.length);
@@ -875,6 +1262,8 @@ async function render(scene, draw) {
   } catch (err) {
     console.error(`레이드 ${scene} 그림 실패:`, err);
     return null;
+  } finally {
+    if (corrupt) { Object.assign(C, savedC); RIBBON.pending.fill = savedRibbon; themeKey = ''; }
   }
 }
 
@@ -884,11 +1273,15 @@ function renderRecruit(r) {
     background('recruit', 102, 240);
     const title = '몬스터 출현!';
     const tw = p.textWidth(B(), title, 46);
-    text(title, W / 2, 47, 46, C.gold);
+    if (isCorrupt(r.monster)) glitchText(title, W / 2, 47, 46, C.gold, { seed: 1, off: 5, strips: 6, shift: 9, holes: 6, tint: true });
+    else text(title, W / 2, 47, 46, C.gold);
     titleIcon(W / 2 - tw / 2 - 46, 47); titleIcon(W / 2 + tw / 2 + 46, 47);
-    text(`${r.monster.name}${subjectJosa(r.monster.name)} XP 시스템을 망가뜨렸어요!`, W / 2, 84, 21, '#ff8f7a', { maxWidth: W - 120 });
+    const sub = `${r.monster.name}${subjectJosa(r.monster.name)} XP 시스템을 망가뜨렸어요!`;
+    if (isCorrupt(r.monster)) glitchText(sub, W / 2, 84, 21, '#ff8f7a', { seed: 2, off: 2, strips: 2, shift: 3, holes: 2, tint: true, maxWidth: W - 120 });
+    else text(sub, W / 2, 84, 21, '#ff8f7a', { maxWidth: W - 120 });
     drawMonster(r.monster, W / 2, 206, 112);
-    text(r.monster.name, W / 2, 298, 38, C.gold);
+    if (isCorrupt(r.monster)) glitchText(r.monster.name, W / 2, 298, 38, C.gold, { seed: 3, off: 4, strips: 5, shift: 8, holes: 4, tint: true });
+    else text(r.monster.name, W / 2, 298, 38, C.gold);
     cards(r.party, (x, y, w, h, roleKey, m) => {
       const role = ROLES[roleKey];
       roleIcon(roleKey, x + w / 2, y + 50, !m);
@@ -899,7 +1292,7 @@ function renderRecruit(r) {
       pill(x + 14, y + 176, w - 28, 34, role.skill.name, 20);
       text(m ? '참가 완료' : '참가 대기', x + w / 2, y + 234, 22, m ? C.ok : C.muted);
     });
-  });
+  }, r.monster);
 }
 
 // 카드 상태: 아직 고르지 않음(주황 리본·굵은 금테) / 고름(초록 리본·초록테, 고른 행동 표시) / 쓰러짐(회색).
@@ -928,6 +1321,43 @@ function actLabel(act) {
   return act.heal ? `${act.label} +${act.value}` : `${act.label} ${act.value}`;
 }
 
+// 원숭이 부하(몬스터 minions): 몬스터 양옆에 작게 + 아래 HP 막대. 결과 화면엔 이번 턴 받은 피해(빨강)를 HP 막대 아래에,
+// 이번 턴 쓰러진 부하는 회색으로 한 번 더 보여 주고 그다음부턴 그리지 않는다. 부하를 불러낸 턴엔 발밑에 흙먼지.
+// 그린 부하가 있으면 true(오른쪽 피해 숫자를 바깥으로 비킨다).
+// 방귀 구름(외곽선 있는 겨자색 뭉게구름) · 악취 아이콘(소용돌이 갈색 구름)
+const FART_CLOUD = { rows: ['..aaa.aaa..', '.ahhhahhha.', 'ahhoooooooa', 'aoooooooooa', '.aoooooooa.', '..aaaaaaa..'], palette: { a: '#4f441a', h: '#ece2a0', o: '#c2b450' } };
+const STENCH_ICON = {
+  rows: ['......aaaa......', '.....ahhhha.....', '....ahooooha....', '...ahoodddoha...', '...ahoddoddda...', '..ahoddoooodda..', '..ahoddodooodha.', '.aoooodddooodoa.', '.adooooooooddoa.', '..adooooooddooa.', '...aaaaaaaaaaa..'],
+  palette: { a: '#3a1e0a', o: '#c47a32', h: '#eaa860', d: '#6a3812' },
+};
+const PEEL = { rows: ['y...y', 'yy.yy', '.yyy.', '..d..'], palette: { y: '#f5d040', d: '#7a5410' } };
+const BANANA = { rows: ['...y', '..yy', '.yyd', 'yyd.', 'dd..'], palette: { y: '#f5d040', d: '#a8781a' } };
+const MINION_SPOTS = [-172, 172, -262];
+function drawMinions(b, last, showingResult) {
+  const mn = b.monster.minions;
+  const list = b.minions ?? [];
+  if (!mn || !list.length) return false;
+  let shown = false;
+  list.forEach((mi, i) => {
+    const hitNow = showingResult ? last?.minionHits?.[i] : 0;
+    if (mi.hp <= 0 && !hitNow) return;
+    shown = true;
+    const cx = W / 2 + MINION_SPOTS[i % MINION_SPOTS.length], cy = 222;
+    if (showingResult && last?.summoned) {
+      for (const [dx, dy, r] of [[-30, 26, 12], [28, 28, 11], [0, 34, 14]]) haze(cx + dx, cy + dy, r, '#c9a27a', 0.45);
+      for (const [dx, dy] of [[-40, 10], [42, 6], [-22, -30], [24, -34]]) dot(cx + dx, cy + dy, 4, '#e8d0b0');
+    }
+    drawPixels(mn.sprite, cx, cy, 6, { dim: mi.hp <= 0, colors: b.rage ? mn.sprite.rageColors : null });
+    bar(cx - 36, cy + 42, 72, 10, mi.hp / mi.maxHp, '#f0b232');
+    if (hitNow) {
+      // 머리 위는 몬스터 기술 말풍선과 겹쳐서 HP 막대 아래에(결과 화면엔 예고 상자가 없음)
+      p.roundRect(cx - 34, cy + 58, 68, 28, 8, '#100c09');
+      text(`-${hitNow}`, cx, cy + 72, 22, '#ff5a45');
+    }
+  });
+  return shown;
+}
+
 function renderBattle(r) {
   return render('전투', () => {
     const b = r.battle;
@@ -944,7 +1374,8 @@ function renderBattle(r) {
     const name = b.rage ? m.rageName : m.name;
     const NAME_MAX = 420;
     const nw = Math.min(p.textWidth(B(), name, 36), NAME_MAX);
-    text(name, W / 2, 41, 36, b.rage ? C.red : C.gold, { maxWidth: NAME_MAX });
+    if (isCorrupt(m)) glitchText(name, W / 2, 41, 36, b.rage ? C.red : C.gold, { seed: 4, off: 4, strips: 5, shift: 8, holes: 4, tint: true, maxWidth: NAME_MAX });
+    else text(name, W / 2, 41, 36, b.rage ? C.red : C.gold, { maxWidth: NAME_MAX });
     if (b.rage) {
       p.roundRect(W / 2 + nw / 2 + 12, 24, 64, 34, 8, '#5c1410');
       text('분노', W / 2 + nw / 2 + 44, 41, 22, '#ffb4a8');
@@ -962,11 +1393,13 @@ function renderBattle(r) {
     // 자세: 턴 결과면 방금 쓴 기술(불이 꺼진 턴은 어지러운 dizzy), 선택 화면이면 예고한 기술의 readyPose(연막이면 숨김),
     // 점화 카운트다운 중이면 lit, 아니면 평상시
     const poses = m.sprite?.poses ?? {};
-    const pose = usedMove
+    const pose = (r.showingResult && last?.penalty && poses.cry ? 'cry' : null) // 부하를 다 잃은 턴 결과는 우는 얼굴
+      || usedMove
       || (r.showingResult && last?.defused && poses.dizzy ? 'dizzy' : null)
       || (!isIntentHidden(b) ? m.moves[b.intent]?.readyPose : null)
       || (isShielded(b) && poses.shielded ? 'shielded' : null) // 보호막(갑옷)이 남은 턴엔 그 모습
-      || (b.fuse && poses.lit ? 'lit' : null);
+      || (b.fuse && poses.lit ? 'lit' : null)
+      || (isWeak(b) && poses.cry ? 'cry' : null); // 우울 상태(부하를 다 잃음) 동안
     // 기술·피격·디버프 연출 색은 분노해도 원래 색(몸 색만 분노 색으로 바뀜 — 사용자 요청)
     const fxColor = m.sprite?.palette?.o || '#7fdc8c';
     const sporeColor = m.sprite?.palette?.x || fxColor; // 포자 연출 색
@@ -983,10 +1416,11 @@ function renderBattle(r) {
     }
     if (b.rage) rageFx(m, W / 2, monsterY, 112, pose, 'aura');
     const shaking = !usedMove && isWarnIntent(b); // 필살기·대폭발 예고 중(선택 화면)
+    if (usedFx && SKILL_FX.includes(usedFx)) skillCtx = { fx: usedFx, mx: W / 2, my: monsterY, targets: [] };
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'back', sporeColor, accentColor);
     // 투명화(유령): 다음 턴 동안 몸을 흐리게(회색)
     drawMonster(m, W / 2, monsterY, 112, { rage: b.rage, pose, outline: shielded ? '#cfe8ff' : null, gray: isPhased(b) });
-    if (shaking) shakeFx(m, W / 2, monsterY, 112, pose);
+    if (shaking && !m.ui?.noShake) shakeFx(m, W / 2, monsterY, 112, pose); // ui.noShake 몬스터(???)는 떨림 대신 준비 자세(readyPose)만
     // 점화 카운트다운 중엔 어떤 자세·기술이든 도화선 끝에 불꽃 + 열기(sprite.fuseTip = [칸, 줄])
     if (b.fuse && m.sprite?.fuseTip) {
       const rowsNow = (pose && m.sprite.poses?.[pose]) || m.sprite.rows;
@@ -997,8 +1431,9 @@ function renderBattle(r) {
       flame(tx + 1, ty - 4, 0.75, [['#4a1206', 1.25], ['#ff6a2c', 1], ['#ffe066', 0.6], ['#ffffff', 0.25]]);
       for (const [dx, dy] of [[-11, -10], [12, -14], [14, 4], [-10, 6]]) dot(tx + dx, ty + dy, 3, '#ffe066');
     }
-    if (b.rage) rageFx(m, W / 2, monsterY, 112, pose, 'mark');
+    if (b.rage && !m.ui?.noRageMark) rageFx(m, W / 2, monsterY, 112, pose, 'mark'); // ui.noRageMark 몬스터(???)는 붉은 핏줄 분노 마크를 그리지 않는다
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'front', sporeColor, accentColor);
+    const minionsShown = drawMinions(b, last, r.showingResult);
     // 몬스터 오른쪽: 이번 턴 받은 피해(빨강) · 재생 회복량(초록, 피해 아래). 결과 화면에서만.
     const dealtNow = r.showingResult ? last?.monsterDamage : 0;
     // 점액 줄기(오른쪽 끝 약 W/2+190)와 오른쪽 위 '방어력 증가' 배지(y 186까지)를 피해 그 오른쪽 아래에,
@@ -1007,7 +1442,7 @@ function renderBattle(r) {
     if (dealtNow) numbers.push([`-${dealtNow.toLocaleString()}`, '#ff5a45']);
     if (usedMove && (last?.monsterHeal || last?.fizzled)) numbers.push([`+${(last.monsterHeal || 0).toLocaleString()}`, last.fizzled ? '#9a9a9a' : '#7cff9a']); // 독기 흡수 실패는 회색 +0
     numbers.forEach(([label, color], i) => {
-      const nx = W / 2 + 250, ny = 212 + i * 38;
+      const nx = W / 2 + (minionsShown ? 292 : 250), ny = 212 + i * 38; // 오른쪽 부하가 있으면 더 바깥으로
       p.roundRect(nx - 56, ny - 17, 112, 34, 9, '#100c09');
       text(label, nx, ny, 28, color);
     });
@@ -1027,6 +1462,14 @@ function renderBattle(r) {
       p.strokeRoundRect(W - 216, slotY, 180, 54, 12, 2, '#b9a6ff');
       text('투명화', W - 126, slotY + 17, 19, '#e6dcff');
       text('일반 공격 빗나감', W - 126, slotY + 40, 15, '#b9a6ff');
+      slotY += 60;
+    }
+    if (isWeak(b)) {
+      // 우울 상태(부하를 다 잃음): 받는 피해 증가 + 남은 턴(이번 턴 포함)
+      p.roundRect(W - 216, slotY, 180, 54, 12, '#1e2440');
+      p.strokeRoundRect(W - 216, slotY, 180, 54, 12, 2, '#8fd8ff');
+      text('우울 상태', W - 126, slotY + 17, 19, '#dff4ff');
+      text(`받는 피해 +${Math.round(((b.weakRate ?? 1) - 1) * 100)}%`, W - 126, slotY + 40, 15, '#8fd8ff');
       slotY += 60;
     }
     if (b.fuse) {
@@ -1052,11 +1495,25 @@ function renderBattle(r) {
     // 몬스터 기술 말풍선은 그 기술을 쓴 턴의 결과 화면에서만(다음 턴 선택 화면에는 남기지 않는다)
     if (r.showingResult && (last?.monsterMove || last?.defused)) {
       const label = last.defused ? '불이 꺼졌다!' : `${last.monsterMove}!`; // 불끄기 성공 턴은 기술 대신
+      if (m.ui?.moveBanner === 'terminal' && !last.defused) {
+        // 터미널 명령줄 띠: 검은 바탕 + 붉은 테두리, 왼쪽 '>' 프롬프트, 가운데 기술 이름(밝은 붉은색), 오른쪽 위 깜빡이는 커서 블록.
+        // 말풍선(크림색 말꼬리)과 달리 몬스터 칸 아래 가운데에 가로로 깔려 몬스터·피해 숫자와 겹치지 않는다(글자는 읽히게 색 어긋남 1px만).
+        const word = last.monsterMove;
+        const tw = Math.min(p.textWidth(B(), word, 24), 330);
+        const bw = tw + 118, bx = W / 2 - bw / 2, by = 290; // 결과 화면엔 예고 상자가 없어 몬스터 아래가 비어 있다
+        p.roundRect(bx, by, bw, 38, 4, '#0a0204');
+        p.strokeRoundRect(bx, by, bw, 38, 4, 1.5, '#ff2a3c');
+        p.rect(bx + 3, by + 3, bw - 6, 4, '#3a0a12'); // 윗줄 제목 띠 느낌
+        text('> EXEC', bx + 40, by + 21, 14, '#a8323f');
+        glitchText(word, bx + 86 + tw / 2, by + 21, 24, '#ff5a68', { seed: word.length * 7 + 11, off: 1, strips: 0, holes: 0, maxWidth: 330 });
+        p.rect(bx + bw - 22, by + 11, 9, 17, '#ff2a3c'); // 커서
+      } else {
       const bw = Math.min(p.textWidth(B(), label, 22), 200) + 36;
       const bx = W / 2 - 92 - bw, by = 132;
       p.roundRect(bx, by, bw, 44, 14, '#f4e6cf');
       p.poly([bx + bw - 26, by + 40, bx + bw - 6, by + 40, bx + bw + 12, by + 58], '#f4e6cf'); // 말꼬리 → 몬스터
       text(label, bx + bw / 2, by + 22, 22, '#3a1a12', { maxWidth: 200 });
+      }
     }
 
     // 다음 행동 예고 상자 — 왼쪽에 '다음 행동' 칩, 큰 공격(방어해야 할 때)은 빨간 상자 + 경고 삼각형.
@@ -1068,10 +1525,13 @@ function renderBattle(r) {
       const tele = telegraphText(b); // 표식 대상 이름·연막을 반영한 예고 문구
       const boxW = 540, boxH = 46, boxX = (W - boxW) / 2, boxY = 276;
       const midY = boxY + boxH / 2;
-      p.roundRect(boxX, boxY, boxW, boxH, 11, warn ? '#4a1410' : '#201810');
-      p.strokeRoundRect(boxX, boxY, boxW, boxH, 11, 1.5, warn ? C.red : C.frame);
-      p.roundRect(boxX + 9, boxY + 9, 94, 28, 7, warn ? '#7a1f16' : '#3a2f22');
-      text('다음 행동', boxX + 56, midY, 16, warn ? '#ffd0c4' : C.muted);
+      // ??? 같은 터미널 몬스터(ui.moveBanner)는 검은 명령줄 칸 + '> NEXT' 칩 + 깜빡이는 커서
+      const term = m.ui?.moveBanner === 'terminal';
+      p.roundRect(boxX, boxY, boxW, boxH, term ? 3 : 11, term ? '#0a0204' : warn ? '#4a1410' : '#201810');
+      p.strokeRoundRect(boxX, boxY, boxW, boxH, term ? 3 : 11, 1.5, term ? (warn ? '#ff2a3c' : '#8a1424') : warn ? C.red : C.frame);
+      if (term) p.rect(boxX + 3, boxY + 3, boxW - 6, 3, '#3a0a12');
+      p.roundRect(boxX + 9, boxY + 9, 94, 28, term ? 2 : 7, term ? (warn ? '#7a0f1c' : '#3a0a12') : warn ? '#7a1f16' : '#3a2f22');
+      text(term ? '> NEXT' : '다음 행동', boxX + 56, midY, 16, term ? '#ff6a78' : warn ? '#ffd0c4' : C.muted);
       const tx = boxX + 112 + (boxW - 120) / 2;
       if (warn) {
         const tw = p.textWidth(B(), tele, 22);
@@ -1080,7 +1540,8 @@ function renderBattle(r) {
         p.rect(ix - 1.5, midY - 4, 3, 7, '#4a1410');
         p.rect(ix - 1.5, midY + 4, 3, 3, '#4a1410');
       }
-      text(tele, tx, midY, 22, warn ? '#ffc4b8' : C.sub, { maxWidth: boxW - 170 });
+      text(tele, tx, midY, 22, term ? (warn ? '#ffd0d4' : '#ff8a96') : warn ? '#ffc4b8' : C.sub, { maxWidth: boxW - 170 });
+      if (term) { const tw = Math.min(p.textWidth(B(), tele, 22), boxW - 170); p.rect(tx + tw / 2 + 8, midY - 9, 9, 18, '#ff2a3c'); }
     }
 
     cards(b.members, (x, y, w, h, roleKey, mem) => {
@@ -1107,7 +1568,11 @@ function renderBattle(r) {
         text(`${mem.stunStatus?.name ?? (iced ? '빙결' : '기절')}!`, x + w / 2, y + 27, 19, ribbon.color, { maxWidth: w - 36 });
       }
 
+      // 악취(구린 방귀): 맞은 순간은 진하게, 남아 있는 동안은 옅게 — 아이콘 뒤·앞에 나눠 그린다
+      const stenchK = down ? 0 : (usedFx === 'fart' && last?.hits[mem.userId]) ? 1 : isStenched(b, mem) ? 0.7 : 0;
+      if (stenchK) stenchBehind(roleKey, x + w / 2, y + 86, stenchK);
       roleIcon(roleKey, x + w / 2, y + 86, down);
+      if (stenchK) stenchFront(x + w / 2, y + 86, stenchK);
       // 표식(영혼 사냥 예고 대상): 선택 화면에서 카드 오른쪽 위에 빛나는 눈
       if (!down && !r.showingResult && !isIntentHidden(b) && b.marks?.includes(mem.userId)) markEye(x + w - 36, y + 66);
       if (!down && isIced(b, mem)) iceCover(x + w / 2, y + 86); // 빙결: 아이콘이 얼음에 갇힘
@@ -1115,6 +1580,8 @@ function renderBattle(r) {
       if (!down && slowTurnsLeft(b, mem) > 0 && !(usedMove && last?.hits[mem.userId])) hitFx('sweep', x + w / 2, y + 86, fxColor);
       const hit = last?.hits[mem.userId];
       if (hit && usedFx) hitFx(usedFx, x + w / 2, y + 86, fxColor, sporeColor, accentColor);
+      if (hit && skillCtx) skillCtx.targets.push({ x, y, w, h });
+      if (r.showingResult && last?.minionTargets?.[mem.userId]) drawPixels(BANANA, x + w / 2 + 40, y + 110, 6); // 부하의 바나나 투척에 맞음
       // 받은 피해 숫자도 그 턴의 결과 화면에서만(다음 턴 선택 화면에는 남기지 않는다)
       if (hit && r.showingResult) text(`-${hit}`, x + w - 38, y + 78, 24, '#ff5a45');
       // 독 피해(아군 행동 뒤)는 보라 숫자로 그 아래에
@@ -1160,7 +1627,7 @@ function renderBattle(r) {
     }, (mem) => {
       const state = memberState(b, mem, r.showingResult);
       if (usedMove && last?.hits[mem.userId]) return { color: '#ff4a3a', width: 4 }; // 이번 턴에 맞은 카드
-      if (state === 'pending') return { color: '#ffb52e', width: 4 };
+      if (state === 'pending') return { color: isCorrupt(m) ? '#ff3a4a' : '#ffb52e', width: 4 }; // 오염 테마는 붉은 테두리
       if (state === 'ready') return { color: '#3ecf6e', width: 2.5 };
       if (state === 'stunned') return { color: '#ffd23f', width: 2.5 };
       return null;
@@ -1174,7 +1641,7 @@ function renderBattle(r) {
         curseLink(W / 2, monsterY, 20 + i * (CARD_W + CARD_GAP) + CARD_W / 2, CARD_Y + 86);
       }
     }
-  });
+  }, r.battle?.monster ?? r.monster);
 }
 
 // ── 종료 화면 ──────────────────────────────────────────────────
@@ -1242,7 +1709,8 @@ function renderEnd(r, outcome, rewards = []) {
       p.roundRect(mcx - 34, 172, 68, 28, 8, '#5c1410');
       text('도주', mcx, 186, 17, '#ffb4a8');
     }
-    text(r.monster.name, mcx, 362, 28, C.gold, { maxWidth: LP.w - 30 });
+    if (isCorrupt(r.monster)) glitchText(r.monster.name, mcx, 362, 28, C.gold, { seed: 5, off: 3, strips: 4, shift: 6, holes: 3, tint: true, maxWidth: LP.w - 30 });
+    else text(r.monster.name, mcx, 362, 28, C.gold, { maxWidth: LP.w - 30 });
     if (b) {
       statRow('턴', `${b.turn}턴`, 420);
       statRow('걸린 시간', r.battleStartedAt ? formatDuration((r.endedAt || Date.now()) - r.battleStartedAt) : '-', 470);
@@ -1288,7 +1756,7 @@ function renderEnd(r, outcome, rewards = []) {
       if (reward) pill(COL.reward - 34, y + 27, 68, 32, `+${reward.xp}`, 20, mvp ? '#6b4e12' : '#1f4a2c', mvp ? '#ffe39a' : '#bff0cf');
       else text('-', COL.reward, y + 43, 22, C.dim);
     });
-  });
+  }, r.monster);
 }
 
 // ── 미리 데우기 ────────────────────────────────────────────────

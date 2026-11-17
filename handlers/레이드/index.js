@@ -29,11 +29,13 @@ const { logSystem, logError, userLabel } = require('../공통/로그');
 const { card, payload: cardPayload, notice } = require('../공통/카드');
 const { writeJsonIfChanged } = require('../공통/저장');
 const { grantHackTool, HACK_TOOL_NAME, hackToolWith, hackToolEmoji } = require('../게임/해킹툴');
+const { GATEWAY_NAME, gatewayEmoji, grantGateway } = require('../게임/블랙월게이트웨이');
 const { displayNameFromInteraction } = require('../공통/이름');
 const {
-  PLAYER_MAX_HP, POTIONS_PER_BATTLE, POTION_HEAL, GUARD_DAMAGE_RATE, ROLES, ROLE_ORDER, ACTIONS, MONSTERS,
+  PLAYER_MAX_HP, POTIONS_PER_BATTLE, POTION_HEAL, GUARD_DAMAGE_RATE, ROLES, ROLE_ORDER, ACTIONS, MONSTERS, ALL_MONSTERS,
   createBattle, checkChoice, choose, allChosen, resolveTurn,
-  isStunned, slowTurnsLeft, isShielded, isPowered, poisonTurnsLeft, poisonStacks, poisonDamage, isConfused, chillStacks, isFeared, isPhased, telegraphText, isWarnIntent, minusPct, contribution,
+  isErrored, errorTurnsLeft, isVulnerable, vulnTurnsLeft, isDoomed,
+  isStunned, slowTurnsLeft, isShielded, isPowered, poisonTurnsLeft, poisonStacks, poisonDamage, isConfused, chillStacks, isFeared, isPhased, isStenched, stenchTurnsLeft, minionsAlive, isWeak, weakTurnsLeft, telegraphText, isWarnIntent, minusPct, contribution,
 } = require('./전투');
 const { renderRecruit, renderBattle, renderEnd, warmUp } = require('./그림');
 
@@ -54,6 +56,13 @@ const FAIL_PENALTY_XP_MIN = 50;
 const FAIL_PENALTY_XP_MAX = 200;
 const PENALTY_OUTCOMES = new Set(['wipe', 'timeout', 'noshow']);
 const rollPenaltyXp = () => FAIL_PENALTY_XP_MIN + Math.floor(Math.random() * (FAIL_PENALTY_XP_MAX - FAIL_PENALTY_XP_MIN + 1));
+// ??? 같은 '남아 있는' 몬스터의 레이드 규칙은 몬스터 파일의 raid 블록이 정한다(Monster/블랙월.json):
+// persistent = 모집 시간 제한·도주 없음 · drain = 대기 중 모든 유저 XP 실시간 차감 · defeatPenaltyXp = 패배 1번당 고정 차감 · clearXp·mvpBonusXp·mvpItem = 보상.
+const raidRules = (r) => r?.monster?.raid ?? null;
+const isPersistent = (r) => !!raidRules(r)?.persistent;
+const clearXpOf = (r) => raidRules(r)?.clearXp ?? CLEAR_XP;
+const mvpBonusOf = (r) => raidRules(r)?.mvpBonusXp ?? MVP_BONUS_XP;
+const DRAIN_LOG_MS = 10 * 60 * 1000; // 대기 차감은 5초마다라 로그는 10분에 한 번만 요약해서 남긴다
 const SCHEDULER_TICK_MS = 60 * 1000;
 // 남은 시간 표시(00:52:30)를 글자만 고쳐 갱신하는 주기. 디스코드는 채널당 메시지 수정이 대략 5초에 5번까지라
 // 1초마다는 불가능하고 버튼 반응까지 밀린다 — 모집(최대 1시간)은 10초, 전투 턴(60초)은 5초마다.
@@ -142,6 +151,8 @@ function clock(deadline, withHours = false) {
 }
 // 컨테이너(임베드 창) 왼쪽 색 줄: 모집 빨강 · 전투 금색 · 분노 빨강 · 클리어 초록 · 그 외 종료 회색
 const ACCENT = { recruit: 0xED4245, battle: 0xD9A93F, rage: 0xED4245, clear: 0x57F287, end: 0x4E5058 };
+// 오염 테마 몬스터(monster.theme 'corrupt')는 모집·전투·결과 카드 색 띠를 전부 짙은 붉은색으로
+const accentOf = (r, accent) => (r?.monster?.theme === 'corrupt' ? 0xB81C2A : accent);
 
 function bar(value, max, length) {
   const filled = Math.max(0, Math.min(length, Math.round((value / max) * length)));
@@ -192,6 +203,21 @@ function rememberImageUrl(r, message) {
   }
 }
 
+// 깨진 시계: 시간이 흐르지 않는 것처럼 00:00:00 에서 숫자 몇 개가 ▒░▓#로 깜빡인다(10초마다 모양이 바뀜).
+function glitchClock() {
+  let seed = Math.floor(Date.now() / 10000) >>> 0 || 1;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296);
+  const digits = '00:00:00'.split('');
+  const bad = ['▒', '░', '▓', '#', '?'];
+  for (let i = 0; i < 3; i++) { const at = [0, 1, 3, 4, 6, 7][Math.floor(rnd() * 6)]; digits[at] = bad[Math.floor(rnd() * bad.length)]; }
+  return digits.join('');
+}
+// 대기 차감 한 번(intervalMs 마다)의 몫(소수): 분당 minPerMin~maxPerMin 중 무작위 값을 intervalMs 만큼의 시간으로 환산
+const drainShare = (cfg) => (cfg.minPerMin + Math.random() * (cfg.maxPerMin - cfg.minPerMin)) * (cfg.intervalMs / 60000);
+// 잃은 XP 표시: 정수로 깎인 양 + 아직 안 깎인 소수점(내림, 소수 첫째 자리) — 숫자가 틱마다 움직여 보이게
+const lostShown = (r) => (Math.floor(((r.lostPerUser || 0) + (r.drainCarry || 0)) * 10) / 10).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const waitedNow = (r, now = Date.now()) => (r.waitedMs || 0) + (r.waitSince ? Math.max(0, now - r.waitSince) : 0);
+
 async function recruitView(r, { redraw = true } = {}) {
   const image = await pickImage(r, redraw, () => renderRecruit(r));
   const m = r.monster;
@@ -208,13 +234,27 @@ async function recruitView(r, { redraw = true } = {}) {
   }
   // XP 시스템이 고장 나 멈췄다는 걸 그림 바로 아래 큰 제목으로 강조해 참가 동기를 준다
   // (레벨 시스템이 없는 테스트 서버에서도 문구는 보여줌)
+  if (isPersistent(r)) {
+    const rules = raidRules(r);
+    sections.push({
+      text: '>>> ## ⚠️ ░ERR_0x7F░ XP 시스템 오류\n' +
+        `${m.name}${subjectJosa(m.name)} XP 시스템을 ▓▓하고 있습니다.\n**채팅 · 통화방 · 미니게임 XP 지급이 정지**되었습니다.\n` +
+        '-# 토벌하지 않으면 사라지지 않아요 · 기다리는 동안 모두의 XP가 계속 줄어요',
+    });
+    sections.push({
+      text: `## ⏳ \`${glitchClock()}\` ░TIME_ERR\n` +
+        `📉 **지금까지 잃은 XP :** \`-${lostShown(r)} XP\` *(1인당)*\n` +
+        `💀 **패배 ${r.defeatStacks || 0}회** · 패배 1회마다 모든 유저 **-${rules.defeatPenaltyXp ?? 0} XP**\n` +
+        `**파티 ${r.party.length} / ${PARTY_MAX}** · 역할 버튼을 눌러 참가하세요`,
+    });
+  } else
   sections.push({
     text: '>>> ## 🚫 XP 시스템 고장!\n' + // 인용 블록(>>>)으로 세 줄 모두 묶는다
       `${m.name}${subjectJosa(m.name)} XP 시스템을 망가뜨려 **채팅 · 통화방 · 미니게임 XP 지급이 정지**되었습니다.\n` +
       '-# 몬스터를 토벌하면 XP 시스템이 다시 작동해요',
   });
   // 큰 타이머 → 파티 인원과 할 일
-  sections.push({
+  if (!isPersistent(r)) sections.push({
     text: `## ⏳ ${clock(r.recruitEndsAt, true)}\n` +
       `**파티 ${r.party.length} / ${PARTY_MAX}** · 역할 버튼을 눌러 참가하세요`,
   });
@@ -242,10 +282,12 @@ async function recruitView(r, { redraw = true } = {}) {
   });
   sections.push({
     // 이름표를 붙인 인용 블록 두 줄 — 보상과 시작 규칙을 한눈에
-    text: `> 🎁 **보상** : +${CLEAR_XP} XP · ${hackToolEmoji()} ${HACK_TOOL_NAME} 1개\n` +
+    text: (isPersistent(r)
+      ? `> 🎁 **보상** : +${clearXpOf(r)} XP\n` // ???: 다른 몬스터처럼 XP만 적는다(MVP 게이트웨이는 안내하지 않음)
+      : `> 🎁 **보상** : +${CLEAR_XP} XP · ${hackToolEmoji()} ${HACK_TOOL_NAME} 1개\n`) +
       '> ▶️ **바로 시작** : 첫 참가자가 방장이 되며 시작 여부를 결정할 수 있어요.',
   });
-  return assemble(ACCENT.recruit, image, sections);
+  return assemble(accentOf(r, ACCENT.recruit), image, sections);
 }
 
 function memberStatus(b, mem) {
@@ -292,6 +334,18 @@ function effectLines(b) {
   }
   const feared = b.members.filter(mem => mem.hp > 0 && isFeared(b, mem));
   for (const [label, mems] of byStatus(feared, 'fearStatus')) lines.push(`${label}: ${mems.map(mem => mem.name).join(', ')} - **이번 턴 스킬 사용 불가**`);
+  // 부하(원숭이 대장): 살아 있는 부하 수·HP, 우울 상태(부하를 다 잃음)
+  const mnAlive = minionsAlive(b);
+  if (mnAlive.length) lines.push(`${b.monster.minions.emoji} ${b.monster.minions.name}: ${mnAlive.map(x => `${x.hp}/${x.maxHp}`).join(' · ')} - **공격·스킬은 부하에게 먼저 감, 다 처치하면 ${b.monster.minions.penalty.emoji ?? ''}${b.monster.minions.penalty.name}**`);
+  if (isWeak(b)) lines.push(`${b.monster.minions.penalty.emoji ?? ''} ${b.monster.minions.penalty.name}: ${monsterName} - **받는 피해 +${Math.round(((b.weakRate ?? 1) - 1) * 100)}%**`);
+  const stenched = b.members.filter(mem => isStenched(b, mem));
+  for (const [label, mems] of byStatus(stenched, 'stenchStatus')) lines.push(`${label}: ${mems.map(mem => `${mem.name}(${stenchTurnsLeft(b, mem)}턴)`).join(', ')} - **회복약 사용 불가 · 치유사 회복 -${minusPct(mems[0].stenchRate ?? 1)}%**`);
+  const errored = b.members.filter(mem => isErrored(b, mem));
+  for (const [label, mems] of byStatus(errored, 'errorStatus')) lines.push(`${label}: ${mems.map(mem => `${mem.name}(${errorTurnsLeft(b, mem)}턴)`).join(', ')} - **고른 행동이 무작위로 바뀜(치유사 스킬로 해제)**`);
+  const vuln = b.members.filter(mem => isVulnerable(b, mem));
+  for (const [label, mems] of byStatus(vuln, 'vulnStatus')) lines.push(`${label}: ${mems.map(mem => `${mem.name}(${vulnTurnsLeft(b, mem)}턴)`).join(', ')} - **받는 피해 +${Math.round(((mems[0].vulnRate ?? 1) - 1) * 100)}%(치유사 스킬로 해제)**`);
+  const doomed = b.members.filter(mem => isDoomed(b, mem));
+  for (const [label, mems] of byStatus(doomed, 'doomStatus')) lines.push(`${label}: ${mems.map(mem => mem.name).join(', ')} - **이번 턴 행동이 끝난 뒤 ${Math.round((mems[0].doomRate ?? 0) * 100)}% 확률로 쓰러짐${mems[0].doomStacks ? `(중첩 ${mems[0].doomStacks})` : ''}(치유사 스킬로 해제)**`);
   if (isPhased(b)) lines.push(`👻 투명화: ${monsterName} - **이번 턴 일반 공격은 빗나감(스킬은 맞음)**`);
   // 점화(꼬마 폭탄): 불끄기 진행 — 이번 턴 포함 남은 턴
   if (b.fuse) lines.push(`💣 도화선: 남은 불 **${Math.max(0, b.fuse.need - b.fuse.dealt).toLocaleString()} / ${b.fuse.need.toLocaleString()}** · 남은 ${Math.max(1, b.fuse.until - b.turn + 1)}턴 - **피해로 불을 다 끄면 기절, 못 끄면 대폭발**`);
@@ -358,7 +412,7 @@ async function battleView(r, { redraw = true } = {}) {
   });
   // 전투 전체 제한 시간은 턴 타이머와 헷갈리지 않게 버튼 아래 작은 글씨로 따로 둔다.
   sections.push({ text: `-# ⌛ 전투 종료까지 ${clock(r.battleEndsAt)}` });
-  return assemble(b.rage ? ACCENT.rage : ACCENT.battle, image, sections);
+  return assemble(accentOf(r, b.rage ? ACCENT.rage : ACCENT.battle), image, sections);
 }
 
 const OUTCOME_TEXT = {
@@ -395,8 +449,9 @@ function endNoticeDetail(r, deducted) {
 }
 
 // 레이드 결과 메시지 아래 답장으로 올라오는 카드. kind: 'recover'(토벌 성공, XP 복구) | 'penalty'(토벌 실패, 모든 유저 XP 차감)
-function buildEndNoticePayload({ kind, xp, details = [] }) {
-  const penalty = kind === 'penalty';
+function buildEndNoticePayload({ kind, xp, details = [], stacks, lost }) {
+  const defeat = kind === 'defeat'; // 남아 있는 몬스터에게 졌을 때(도주하지 않음)
+  const penalty = kind === 'penalty' || defeat;
   const detailBlocks = [];
   for (const detail of details) {
     const affected = /^(\d[\d,]*)명 · 합계 : (-[\d,]+) XP$/.exec(detail);
@@ -410,10 +465,10 @@ function buildEndNoticePayload({ kind, xp, details = [] }) {
   }
   return cardPayload(card({
     color: penalty ? 'err' : 'ok',
-    top: penalty ? '-# ☠️ **복구 실패**' : '-# 🔧 **복구 완료**',
-    header: penalty ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : 'XP 시스템이 복구되었습니다.',
+    top: defeat ? `-# ☠️ **패배 ${stacks}회**` : penalty ? '-# ☠️ **복구 실패**' : '-# 🔧 **복구 완료**',
+    header: defeat ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : penalty ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : 'XP 시스템이 복구되었습니다.',
     headerLevel: 3,
-    blocks: detailBlocks,
+    blocks: defeat ? [...detailBlocks, { text: `📉 **지금까지 1인당 잃은 XP :** -${(lost ?? 0).toLocaleString()} XP\n-# 몬스터는 도주하지 않았습니다. 다시 도전할 때까지 XP가 계속 줄어요.` }] : detailBlocks,
   }));
 }
 // 이름 끝 글자 받침에 따라 '이'/'가'를 고른다(한글이 아니면 '이(가)')
@@ -423,11 +478,11 @@ function subjectJosa(name) {
   return code % 28 ? '이' : '가';
 }
 // 보상 괄호 안 글자: XP와 (받았으면) 해킹 툴을 한 줄에. 해킹 툴은 최대 보유면 못 받으므로 사람마다 다를 수 있다.
-const rewardText = (xp, hackTool) => `(+${xp} XP${hackTool ? ` · ${hackToolEmoji()} ${HACK_TOOL_NAME} 1개` : ''})`;
+const rewardText = (xp, hackTool, gateway, gatewayFull) => `(+${xp} XP${hackTool ? ` · ${hackToolEmoji()} ${HACK_TOOL_NAME} 1개` : ''}${gateway ? ` · ${gatewayEmoji()} ${GATEWAY_NAME} 1개` : ''}${gatewayFull ? ` · ${GATEWAY_NAME} 보유 한도` : ''})`;
 
 // 해킹 툴을 최대로 갖고 있어 못 받은 사람 안내(작은 글씨). 없으면 null.
 function hackToolFullLine(r, rewards) {
-  const full = rewards.filter(x => !x.hackTool).map(x => r.battle?.members.find(mem => mem.userId === x.userId)?.name).filter(Boolean);
+  const full = rewards.filter(x => !x.hackTool && !x.gateway && !x.gatewayFull).map(x => r.battle?.members.find(mem => mem.userId === x.userId)?.name).filter(Boolean);
   return full.length ? `-# ${hackToolEmoji()} ${full.join(', ')}님은 ${hackToolWith('을')} 최대로 갖고 있어 받지 못했어요` : null;
 }
 
@@ -440,11 +495,11 @@ function endSummary(r, outcome, rewards) {
     lines.push(`${name} 토벌되어 XP 시스템이 복구되었습니다.`);
     const mvp = rewards.find(x => x.mvp);
     const mvpName = mvp && b?.members.find(mem => mem.userId === mvp.userId)?.name;
-    if (mvpName) lines.push(`> 👑 **MVP** : ${mvpName} · ${rewardText(mvp.xp, mvp.hackTool)}`);
+    if (mvpName) lines.push(`> 👑 **MVP** : ${mvpName} · ${rewardText(mvp.xp, mvp.hackTool, mvp.gateway, mvp.gatewayFull)}`);
     // MVP 가 아닌 사람은 받은 것(해킹 툴 받았나)이 같은 사람끼리 한 줄로 묶는다 — 보통은 한 줄.
     for (const got of [true, false]) {
       const names = rewards.filter(x => !x.mvp && !!x.hackTool === got).map(x => b.members.find(mem => mem.userId === x.userId)?.name).filter(Boolean);
-      if (names.length) lines.push(`> 🎁 **보상** : ${names.join(', ')} · ${rewardText(CLEAR_XP, got)}`);
+      if (names.length) lines.push(`> 🎁 **보상** : ${names.join(', ')} · ${rewardText(clearXpOf(r), got)}`);
     }
     const full = hackToolFullLine(r, rewards);
     if (full) lines.push(full);
@@ -482,7 +537,7 @@ async function endView(r, outcome, rewards = []) {
   } else {
     sections.push({ text: endSummary(r, outcome, rewards) });
   }
-  return assemble(outcome === 'clear' ? ACCENT.clear : ACCENT.end, image, sections);
+  return assemble(accentOf(r, outcome === 'clear' ? ACCENT.clear : ACCENT.end), image, sections);
 }
 
 // ❔ 플레이 방법(본인에게만). 모든 몬스터에 공통인 규칙만 담는다 — 점액·단단해지기·재생처럼 몬스터마다
@@ -523,7 +578,7 @@ function buildHelpView(monster) {
       '### 🧑‍🤝‍🧑 역할',
       ...ROLE_ORDER.map(k => `${ROLES[k].emoji} **${ROLES[k].name}** - ✨${ROLES[k].skill.name}: ${ROLES[k].skill.desc} · 쿨타임 ${ROLES[k].skill.cooldown}턴`),
     ].join('\n') },
-    { text: `-# ⌛ 제한 시간 ${BATTLE_LIMIT_MS / 60000}분 · 시간 안에 쓰러뜨리지 못하거나 전멸하면 몬스터가 도망쳐요(보상 없음)` },
+    { text: isPersistent({ monster }) ? `-# ⌛ 제한 시간 ${BATTLE_LIMIT_MS / 60000}분 · 시간 안에 쓰러뜨리지 못하거나 전멸하면 패배 — 몬스터는 도주하지 않고 모든 유저가 XP를 잃어요` : `-# ⌛ 제한 시간 ${BATTLE_LIMIT_MS / 60000}분 · 시간 안에 쓰러뜨리지 못하거나 전멸하면 몬스터가 도망쳐요(보상 없음)` },
   ];
   // 그림 없는 컨테이너 — 비공개 응답이라 Ephemeral과 Components V2 플래그를 함께 단다.
   return { ...assemble(ACCENT.battle, undefined, sections), flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral };
@@ -571,7 +626,7 @@ async function flush(r) {
       const result = buried ? await repostRaidMessage(r, payload) : await editRaidMessage(r, payload);
       saveActive(r); // 파티 변동·턴 진행 등 바뀐 상태를 저장(바뀐 게 없으면 쓰지 않음)
       // 채널이 없어졌거나 권한이 없으면 화면을 계속 보여줄 수 없으므로 레이드를 끝낸다(XP 정지가 남지 않게).
-      if (result === 'fatal' && r.phase !== 'ended') finishRaid(r, r.phase === 'battle' ? 'timeout' : 'noshow');
+      if (result === 'fatal' && r.phase !== 'ended') finishRaid(r, isPersistent(r) ? 'admin' : r.phase === 'battle' ? 'timeout' : 'noshow');
       // 일시적인 오류면 다음 갱신(타이머 글자 갱신 등) 때 다시 보낸다. 새 그림을 못 올렸으면 그때 다시 그린다.
       if (result === 'retry' && redraw) r.imageDirty = true;
       // 결과 화면을 처음 올린 뒤 채널 안내(복구 완료·XP 손실)를 보낸다. 실패해도 안내는 빠뜨리지 않는다.
@@ -706,6 +761,9 @@ function saveActive(r) {
     party: r.party,
   };
   if (r.frozenAt) saved.frozenAt = r.frozenAt; // 재시작해도 '중단 시간' 안내가 출현 시각부터 세도록
+  if (isPersistent(r)) { // 남아 있는 몬스터: 대기 시간·차감 기록·패배 횟수도 재시작 후 이어서
+    Object.assign(saved, { waitedMs: r.waitedMs || 0, waitSince: r.waitSince || null, drainedMs: r.drainedMs || 0, lostPerUser: r.lostPerUser || 0, defeatStacks: r.defeatStacks || 0 });
+  }
   if (r.battle) {
     const { monster, ...battle } = r.battle; // 몬스터는 그림 데이터까지 커서 id만 남긴다
     Object.assign(saved, { battle, battleStartedAt: r.battleStartedAt, battleEndsAt: r.battleEndsAt });
@@ -726,6 +784,7 @@ function startCountdown(r) {
   const tick = () => {
     r.countdownTimer = null;
     if (!isCurrent(r) || r.phase === 'ended') return;
+    tickDrain(r);
     if (!(r.phase === 'battle' && r.showingResult)) requestRender(r);
     r.countdownTimer = setTimeout(tick, COUNTDOWN_TICK_MS[r.phase] ?? COUNTDOWN_TICK_MS.recruit);
   };
@@ -737,7 +796,10 @@ function startCountdown(r) {
 async function spawnRaid(client, channel, { forced = false, monsterId = null } = {}) {
   if (raids.has(channel.guildId)) return '이 서버에 이미 진행 중인 레이드가 있어요.';
   if (!MONSTERS.length) return '등록된 몬스터가 없어요. Monster 폴더의 JSON 파일과 콘솔 오류를 확인하세요.';
-  const monster = monsterId ? MONSTERS.find(m => m.id === monsterId) : MONSTERS[Math.floor(Math.random() * MONSTERS.length)];
+  // 꺼 둔 몬스터(???)는 테스트 서버에서 관리자가 직접 고를 때만 소환된다(무작위·자동 출현·본서버는 제외)
+  const monster = monsterId
+    ? (MONSTERS.find(m => m.id === monsterId) ?? (isExcludedGuild(channel.guildId) ? ALL_MONSTERS.find(m => m.id === monsterId) : undefined))
+    : MONSTERS[Math.floor(Math.random() * MONSTERS.length)];
   if (!monster) return '그 몬스터를 찾을 수 없어요. 다시 골라 주세요.';
   const now = Date.now();
   const r = {
@@ -749,7 +811,12 @@ async function spawnRaid(client, channel, { forced = false, monsterId = null } =
     imageUrl: null,
     phase: 'recruit',
     party: [], // { userId, name, role }
-    recruitEndsAt: now + RECRUIT_MS,
+    recruitEndsAt: monster.raid?.persistent ? null : now + RECRUIT_MS,
+    waitedMs: 0,       // 남아 있는 몬스터: 모집(대기) 상태로 지낸 누적 시간(전투 시간은 뺌)
+    waitSince: monster.raid?.persistent ? now : null,
+    drainedMs: 0,      // 그중 XP 차감이 끝난 시간
+    lostPerUser: 0,    // 지금까지 1인당 잃은 XP(대기 차감 + 패배 차감) — 대기창에 표시
+    defeatStacks: 0,
     battle: null,
     battleEndsAt: 0,
     turnEndsAt: 0,
@@ -771,7 +838,7 @@ async function spawnRaid(client, channel, { forced = false, monsterId = null } =
   }
   if (r.freezesXp) { setRaidXpFrozen(true); r.frozenAt = Date.now(); }
   saveActive(r);
-  r.timer = setTimeout(() => onRecruitEnd(r).catch(err => console.error('레이드 모집 마감 처리 실패:', err)), RECRUIT_MS);
+  if (!isPersistent(r)) r.timer = setTimeout(() => onRecruitEnd(r).catch(err => console.error('레이드 모집 마감 처리 실패:', err)), RECRUIT_MS);
   startCountdown(r);
   logSystem({ 유형: '레이드', 채널: `#${channel.name ?? channel.id}`, 내용: `레이드 출현 — ${monster.name}${forced ? ' (관리자 소환)' : ''}${r.freezesXp ? ', XP 정지' : ''}` });
   return null;
@@ -794,7 +861,30 @@ function closeHelpReplies(r) {
 
 // by: 시작을 누른 사람(바로 시작·4번째 참가). 그 사람은 이미 화면을 보고 있으니 멘션에서 뺀다.
 // 모집 시간이 끝나 저절로 시작하면 by가 없어 파티원 전원을 부른다.
+// 남아 있는 몬스터: 모집 대기 중 흐른 시간만큼 XP를 깎는다(drain.intervalMs=5초마다 min~max 무작위). 전투 중·끝난 뒤에는 안 깎는다.
+// 봇이 꺼져 있던 사이에 흐른 시간도 다음 틱에서 한꺼번에 따라잡는다. 레벨 시스템이 없는 서버(테스트 서버)는 숫자만 센다.
+function tickDrain(r, now = Date.now()) {
+  const rules = raidRules(r);
+  if (!rules?.persistent || !rules.drain || r.phase !== 'recruit' || !r.waitSince) return;
+  const step = rules.drain.intervalMs;
+  const waited = waitedNow(r, now);
+  const steps = Math.min(Math.floor((waited - (r.drainedMs || 0)) / step), Math.floor((14 * 24 * 60 * 60 * 1000) / step));
+  if (steps <= 0) return;
+  let total = 0;
+  for (let i = 0; i < steps; i++) { r.drainCarry = (r.drainCarry || 0) + drainShare(rules.drain); const whole = Math.floor(r.drainCarry); r.drainCarry -= whole; total += whole; } // 소수점은 이월
+  r.drainedMs = (r.drainedMs || 0) + steps * step;
+  r.lostPerUser = (r.lostPerUser || 0) + total;
+  if (total > 0 && r.freezesXp && !isExcludedGuild(r.guildId)) {
+    deductXpFromAll(r.guildId, total, '', { quiet: true });
+    r.drainLogAcc = (r.drainLogAcc || 0) + total;
+    if (!r.drainLogAt) r.drainLogAt = now;
+    else if (now - r.drainLogAt >= DRAIN_LOG_MS) { logSystem({ 유형: "XP 지급", 내용: "레이드 대기 차감 " + r.monster.name + " — 최근 " + Math.round((now - r.drainLogAt) / 60000) + "분간 모든 유저 -" + r.drainLogAcc + " XP" }); r.drainLogAt = now; r.drainLogAcc = 0; }
+  }
+  saveActive(r);
+}
+
 function startBattle(r, { by = null } = {}) {
+  if (isPersistent(r)) { tickDrain(r); r.waitedMs = waitedNow(r); r.waitSince = null; } // 전투 중에는 차감을 멈춘다
   clearTimer(r);
   closeHelpReplies(r); // 모집 중에 열어 둔 가이드는 전투가 시작되면 닫는다
   r.phase = 'battle';
@@ -840,11 +930,38 @@ function advanceTurn(r) {
     if (allChosen(r.battle)) { advanceTurn(r); return; }
     armTurnTimer(r);
     requestRender(r, { image: true, immediate: true });
-  }, RESULT_MS);
+  }, r.battle.monster.ui?.resultMs ?? RESULT_MS); // 몬스터가 ui.resultMs 를 정하면 그 시간(??? 는 글리치 연출이 잘 보이게 더 길게)
 }
 
 // 레이드를 끝낸다. XP 정지 해제 · 보상 지급 · 상태 저장 · 복구 안내 후 결과 화면을 바로 보내게 한다.
+// 남아 있는 몬스터가 전멸·시간 초과로 이겼을 때: 도주하지 않고 모집 상태로 돌아가며, 모든 유저가 고정 XP를 잃는다.
+// XP 정지는 그대로 두고(레이드가 이어짐), 대기 차감은 다시 시작한다.
+function onPersistentDefeat(r, outcome) {
+  clearTimer(r);
+  closeHelpReplies(r);
+  deleteStartMention(r);
+  const penaltyXp = raidRules(r).defeatPenaltyXp ?? 0;
+  let deducted = null;
+  if (penaltyXp > 0 && r.freezesXp && !isExcludedGuild(r.guildId)) deducted = deductXpFromAll(r.guildId, penaltyXp, `레이드 패배 '${r.monster.name}' (${OUTCOME_TEXT[outcome]})`);
+  r.defeatStacks = (r.defeatStacks || 0) + 1;
+  r.lostPerUser = (r.lostPerUser || 0) + penaltyXp;
+  logSystem({ 유형: '레이드', 내용: `패배 ${r.defeatStacks}회 — ${r.monster.name} / ${OUTCOME_TEXT[outcome]}${r.battle ? `, ${r.battle.turn}턴, 남은 HP ${r.battle.hp}/${r.battle.maxHp}` : ''} / 모든 유저 -${penaltyXp} XP (${deducted?.affected ?? 0}명)` });
+  const channel = r.message?.channel;
+  const notice = { kind: 'defeat', xp: penaltyXp, stacks: r.defeatStacks, lost: Math.round(r.lostPerUser), details: deducted?.affected ? [`${deducted.affected.toLocaleString()}명 · 합계 : -${deducted.total.toLocaleString()} XP`] : [] };
+  // 모집 상태로 되돌린다(파티·전투 초기화, 대기 시간은 이어서)
+  r.party = [];
+  r.battle = null;
+  r.showingResult = false;
+  r.phase = 'recruit';
+  r.waitSince = Date.now();
+  saveActive(r);
+  if (channel) channel.send({ ...buildEndNoticePayload(notice), allowedMentions: { parse: [] } }).catch(() => {});
+  requestRender(r, { image: true, immediate: true });
+  startCountdown(r);
+}
+
 function finishRaid(r, outcome) {
+  if (isPersistent(r) && (outcome === 'wipe' || outcome === 'timeout') && isCurrent(r)) { onPersistentDefeat(r, outcome); return; }
   clearTimer(r);
   if (r.countdownTimer) { clearTimeout(r.countdownTimer); r.countdownTimer = null; }
   if (r.bumpTimer) { clearTimeout(r.bumpTimer); r.bumpTimer = null; }
@@ -865,10 +982,13 @@ function finishRaid(r, outcome) {
     const eligible = r.battle.members.filter(mem => mem.manualActions > 0);
     const mvp = eligible.reduce((best, mem) => (!best || contribution(r.battle, mem) > contribution(r.battle, best) ? mem : best), null);
     for (const mem of eligible) {
-      const xp = CLEAR_XP + (mem === mvp ? MVP_BONUS_XP : 0);
+      const xp = clearXpOf(r) + (mem === mvp ? mvpBonusOf(r) : 0);
       // 해킹 툴(룰렛 꽝 번복권)도 1개씩 — 레벨 시스템이 없는 테스트 서버에도 줘서 룰렛에서 시험해 볼 수 있게 한다.
-      const hackTool = grantHackTool(r.guildId, mem.userId); // 최대 보유면 false(못 받음)
-      rewards.push({ userId: mem.userId, xp, mvp: mem === mvp, hackTool });
+      // 남아 있는 몬스터(???)는 MVP에게 해킹 툴 대신 자기 아이템(블랙월 게이트웨이)을 주고, 일반 파티원은 해킹 툴 1개씩.
+      const wantsGateway = isPersistent(r) && mem === mvp && raidRules(r).mvpItem === 'gateway';
+      const hackTool = wantsGateway ? false : grantHackTool(r.guildId, mem.userId); // 최대 보유면 false(못 받음)
+      const gateway = wantsGateway ? grantGateway(r.guildId, mem.userId) : false; // 최대 보유면 false(못 받음)
+      rewards.push({ userId: mem.userId, xp, mvp: mem === mvp, hackTool, gateway, gatewayFull: wantsGateway && !gateway });
       if (isExcludedGuild(r.guildId)) continue;
       const result = applyXp(r.guildId, mem.userId, xp, `레이드 토벌 '${r.monster.name}'${mem === mvp ? ' (MVP)' : ''}`);
       if (result.leveledUp) announceLevelUp(r.client, r.guildId, mem.userId, result.newLevel);
@@ -887,7 +1007,7 @@ function finishRaid(r, outcome) {
     유형: '레이드',
     내용: `레이드 종료 — ${r.monster.name} / ${OUTCOME_TEXT[outcome]}` +
       (r.battle ? ` / ${r.battle.turn}턴, 남은 HP ${r.battle.hp}/${r.battle.maxHp}` : '') +
-      (rewards.length ? ` / 보상: ${rewards.map(x => `${userLabel(x.userId)} +${x.xp}${x.hackTool ? ` +${HACK_TOOL_NAME}` : ` (${HACK_TOOL_NAME} 보유 한도)`}`).join(', ')}` : '') +
+      (rewards.length ? ` / 보상: ${rewards.map(x => `${userLabel(x.userId)} +${x.xp}${x.gateway ? ` +${GATEWAY_NAME}` : x.gatewayFull ? ` (${GATEWAY_NAME} 보유 한도)` : x.hackTool ? ` +${HACK_TOOL_NAME}` : ` (${HACK_TOOL_NAME} 보유 한도)`}`).join(', ')}` : '') +
       (penalized ? ` / 벌칙: 모든 유저 -${penaltyXp} XP (${penalized}명)` : ''),
   });
 
@@ -1075,7 +1195,7 @@ async function resumeRaid(client, message, saved) {
   const info = saved?.phase ? saved : readLegacyRecruit(message);
   if (!info || (info.phase !== 'recruit' && info.phase !== 'battle')) return false;
   if (info.phase === 'battle' && !info.battle) return false;
-  const monster = MONSTERS.find(x => x.id === info.monsterId) ?? MONSTERS[0];
+  const monster = MONSTERS.find(x => x.id === info.monsterId) ?? ALL_MONSTERS.find(x => x.id === info.monsterId) ?? MONSTERS[0]; // 이미 출현한 레이드는 꺼 둔 몬스터여도 이어간다
   const now = Date.now();
   const r = {
     client,
@@ -1086,7 +1206,12 @@ async function resumeRaid(client, message, saved) {
     imageUrl: null,
     phase: info.phase,
     party: Array.isArray(info.party) ? info.party : [],
-    recruitEndsAt: info.recruitEndsAt || now,
+    recruitEndsAt: monster.raid?.persistent ? null : info.recruitEndsAt || now,
+    waitedMs: info.waitedMs || 0,
+    waitSince: monster.raid?.persistent && info.phase === 'recruit' ? (info.waitSince || now) : null,
+    drainedMs: info.drainedMs || 0,
+    lostPerUser: info.lostPerUser || 0,
+    defeatStacks: info.defeatStacks || 0,
     battle: null,
     battleEndsAt: 0,
     turnEndsAt: 0,
@@ -1112,11 +1237,15 @@ async function resumeRaid(client, message, saved) {
   saveActive(r);
   logSystem({
     유형: '레이드',
-    내용: `재시작 후 레이드 이어가기 — ${monster.name} / ${r.phase === 'recruit' ? `모집 중(파티 ${r.party.length}명, 마감 ${clock(r.recruitEndsAt, true)} 남음)` : `전투 ${r.battle.turn}턴`}` +
+    내용: `재시작 후 레이드 이어가기 — ${monster.name} / ${r.phase === 'recruit' ? `모집 중(파티 ${r.party.length}명${isPersistent(r) ? ', 마감 없음' : `, 마감 ${clock(r.recruitEndsAt, true)} 남음`})` : `전투 ${r.battle.turn}턴`}` +
       (saved?.phase ? '' : ' (예전 기록에서 복구)'),
   });
 
-  if (r.phase === 'recruit') {
+  if (r.phase === 'recruit' && isPersistent(r)) {
+    // 남아 있는 몬스터: 마감 없음. 꺼져 있던 사이 대기 차감을 따라잡는다.
+    tickDrain(r);
+    if (r.party.length >= PARTY_MAX) { startBattle(r); return true; }
+  } else if (r.phase === 'recruit') {
     const left = r.recruitEndsAt - Date.now();
     if (left <= 0) { await onRecruitEnd(r); return true; } // 꺼져 있던 사이 모집이 끝났으면 바로 마감 처리
     if (r.party.length >= PARTY_MAX) { startBattle(r); return true; }

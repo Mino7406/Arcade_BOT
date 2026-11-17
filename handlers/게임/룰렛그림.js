@@ -268,13 +268,13 @@ function getBg() {
 }
 
 // ── 변하는 부분 ────────────────────────────────────────────────
-function drawSpinningWindow(p, x, phase, reel, base = getBg()) {
+function drawSpinningWindow(p, x, phase, reel, base = getBg(), only = null) {
   // 도는 릴: 릴 띠(심볼 여러 개가 세로로 이어진 것)를 그리고 세로로 길게 번지게(모션 블러) 해서 빠르게 돌아가는 느낌을 낸다.
   const sc = p.s;
   const gap = 104; // 심볼 사이 간격(설계 좌표)
   const shift = ((phase * 37 + reel * 53) % gap) - gap / 2;
   for (let k = -2; k <= 2; k++) {
-    const key = SYMBOLS[(((phase * 2 + reel * 3 + k) % SYMBOLS.length) + SYMBOLS.length) % SYMBOLS.length];
+    const key = only || SYMBOLS[(((phase * 2 + reel * 3 + k) % SYMBOLS.length) + SYMBOLS.length) % SYMBOLS.length]; // only: 블랙월은 7️⃣만 돈다
     const [ox, oy] = SYMBOL_OFFSET[key] || [0, 0];
     drawSymbol(p, key, x + WIN_W / 2 + ox, WIN_CY + oy + shift + k * gap);
   }
@@ -511,16 +511,17 @@ function drawBulbs(p, phase) {
  * @param {number} [o.phase]            돌아가는 연출 프레임 번호(0~)
  * @param {boolean} [o.hacked]         해킹 툴로 번복 중 — 해킹된 기계(보라·시안 + 해골 + 글리치)로 그린다
  */
-function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = '#ffe9a8', badge = '', badgeColor = '#ffd23f', winIdx = [], jackpot = false, phase = 0, hacked = false } = {}) {
+function paintSlot({ reels = [null, null, null], bet, right = '', rightColor = '#ffe9a8', badge = '', badgeColor = '#ffd23f', winIdx = [], jackpot = false, phase = 0, hacked = false, wall = false } = {}) {
   const p = getPainter();
-  const base = hacked ? getHackBg() : getBg();
+  const base = hacked && !wall ? getHackBg() : getBg();
   base.copy(p.buf);
   const f = getFont();
-  if (hacked) drawHackDecor(p, phase); else drawBulbs(p, phase);
+  if (wall) drawWallBg(p); else if (hacked) drawHackDecor(p, phase); else drawBulbs(p, phase);
+  const spinBase = wall ? Buffer.from(p.buf) : base; // 블랙월은 도는 칸 둘레도 블랙월 바탕으로 되돌린다
 
   for (let i = 0; i < 3; i++) {
     const x = WIN_X[i];
-    if (reels[i] === null) { drawSpinningWindow(p, x, phase, i, base); continue; }
+    if (reels[i] === null) { drawSpinningWindow(p, x, phase, i, spinBase, wall ? '7️⃣' : null); continue; }
     const [ox, oy] = SYMBOL_OFFSET[reels[i]] || [0, 0];
     drawSymbol(p, reels[i], x + WIN_W / 2 + ox, WIN_CY + oy);
   }
@@ -528,7 +529,7 @@ function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = 
   // 당첨 릴 강조: 당첨 안 된 칸은 어둡게 눌러 대비를 키우고, 당첨 칸엔 굵고 밝은 테두리 + 바깥 빛 번짐.
   if (winIdx.length) {
     for (let i = 0; i < 3; i++) if (!winIdx.includes(i)) dimWindow(p, WIN_X[i], 0.42);
-    const [glow, mid, line] = jackpot ? ['#7a5a00', '#d9a400', '#ffe14d'] : hacked ? ['#0f4a5c', '#2bb5d6', '#7ff3ff'] : ['#0f5a2a', '#25c25a', '#5dff8f'];
+    const [glow, mid, line] = jackpot ? ['#7a5a00', '#d9a400', '#ffe14d'] : hacked && !wall ? ['#0f4a5c', '#2bb5d6', '#7ff3ff'] : ['#0f5a2a', '#25c25a', '#5dff8f'];
     for (const i of winIdx) {
       p.strokeRoundRect(WIN_X[i] - 6, WIN_Y - 6, WIN_W + 12, WIN_H + 12, 16, 6, glow);
       p.strokeRoundRect(WIN_X[i] - 4, WIN_Y - 4, WIN_W + 8, WIN_H + 8, 14, 5, mid);
@@ -550,8 +551,126 @@ function renderSlot({ reels = [null, null, null], bet, right = '', rightColor = 
     p.text(f, badge, rightX - w / 2, py, { size: 20, color: '#3a1a00' });
   }
 
-  if (hacked) applyGlitch(p, phase);
-  return p.png();
+  if (hacked && !wall) applyGlitch(p, phase);
+  if (wall) { wallPlate(p, phase, 0); wallOverlay(p, phase + 3); applyGlitch(p, phase + 11, 0.3); } // 글리치는 조금만
+  return p;
+}
+
+// 침식 합성: 평범한 룰렛(A)을 칸(8px) 단위로 블랙월(B, 지금 p.buf)로 바꾼다. 가장자리에서 가운데로 번지고(번지는 앞쪽 칸은 붉게 물듦), erosion 이 1이면 전부 블랙월.
+function mixErosion(p, A, erosion, seed) {
+  let st = (seed * 2654435761 + 7) >>> 0;
+  const rnd = () => ((st = (st * 1103515245 + 12345) >>> 0) / 4294967296);
+  const w = p.w, h = p.h, S = 6, b = p.buf;
+  const cols = Math.ceil(w / S), rows = Math.ceil(h / S);
+  const limit = erosion * 1.3 - 0.05;
+  // 칸마다 블랙월(true)/평범(false): 가장자리에서 안쪽으로 들쭉날쭉하게 번진다
+  const wallCell = [];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const bx = c * S, by = r * S;
+    const edge = Math.min(bx, w - S - bx, by, h - S - by) / (Math.min(w, h) / 2);
+    wallCell[r * cols + c] = edge + (rnd() - 0.5) * 0.3 < limit;
+  }
+  const isWall = (c, r) => c < 0 || r < 0 || c >= cols || r >= rows ? true : wallCell[r * cols + c];
+  const put = (x, y, rr, gg, bb) => { if (x < 0 || y < 0 || x >= w || y >= h) return; const i = (y * w + x) * 3; b[i] = rr; b[i + 1] = gg; b[i + 2] = bb; };
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    if (wallCell[r * cols + c]) continue; // 블랙월 칸은 이미 그려져 있음
+    for (let y = r * S; y < Math.min(h, r * S + S); y++) for (let x = c * S; x < Math.min(w, c * S + S); x++) {
+      const i = (y * w + x) * 3; b[i] = A[i]; b[i + 1] = A[i + 1]; b[i + 2] = A[i + 2];
+    }
+  }
+  // 번지는 앞쪽: 채운 사각형 대신 가는 붉은 세로선·가로 막대·테두리만 있는 사각형(회로/글리치 느낌)이 쌓인다
+  const reds = [[255, 58, 74], [220, 34, 52], [150, 16, 30], [255, 110, 120]];
+  const inWall = (x, y) => isWall(Math.floor(x / S), Math.floor(y / S));
+  const nearFront = (x, y) => { const c = Math.floor(x / S), r = Math.floor(y / S); for (let d = -3; d <= 3; d++) for (let e = -3; e <= 3; e++) if (!isWall(c + d, r + e)) return true; return false; };
+  const px = (x, y, c) => { if (inWall(x, y)) put(Math.floor(x), Math.floor(y), c[0], c[1], c[2]); };
+  const rect = (x, y, rw, rh, c) => { for (let yy = y; yy < y + rh; yy++) for (let xx = x; xx < x + rw; xx++) px(xx, yy, c); };
+  const count = Math.floor(30 + erosion * 70);
+  for (let n = 0, tries = 0; n < count && tries < count * 40; tries++) {
+    const x = Math.floor(rnd() * w), y = Math.floor(rnd() * h);
+    if (!inWall(x, y) || !nearFront(x, y)) continue;
+    n++;
+    const c = reds[Math.floor(rnd() * reds.length)], k = rnd();
+    if (k < 0.4) rect(x, y, rnd() < 0.7 ? 1 : 2, 14 + Math.floor(rnd() * 56), c); // 세로선
+    else if (k < 0.65) rect(x, y, 14 + Math.floor(rnd() * 46), rnd() < 0.7 ? 1 : 3, c); // 가로 막대
+    else if (k < 0.9) { // 테두리만 있는 사각형
+      const rw = 12 + Math.floor(rnd() * 30), rh = 8 + Math.floor(rnd() * 22);
+      rect(x, y, rw, 1, c); rect(x, y + rh, rw, 1, c); rect(x, y, 1, rh, c); rect(x + rw, y, 1, rh + 1, c);
+    } else rect(x, y, 3 + Math.floor(rnd() * 4), 3 + Math.floor(rnd() * 4), [90, 8, 20]); // 어두운 작은 조각
+  }
+}
+
+// 룰렛 그림 한 장(PNG). wall 이고 erosion(0~1 미만)이 있으면 평범한 룰렛이 블랙월로 침식당하는 중간 모습.
+function renderSlot(o = {}) {
+  if (o.wall && o.erosion === 0) return paintSlot({ ...o, wall: false, hacked: false }).png(); // 잠식 0단계: 멀쩡한 평범한 룰렛
+  if (o.wall && o.erosion != null && o.erosion < 1) {
+    const normal = paintSlot({ ...o, wall: false, hacked: false });
+    const A = Buffer.from(normal.buf);
+    const p = paintSlot({ ...o, wall: true });
+    mixErosion(p, A, o.erosion, (o.phase ?? 0) + 5);
+    return p.png();
+  }
+  return paintSlot(o).png();
+}
+
+// 블랙월 게이트웨이 룰렛의 위 판: 'ARCADE ROULETTE' 대신 깨진 'BLACKWALL GATEWAY'
+function wallPlate(p, seed = 0, level = 0) {
+  const f = getFont();
+  p.roundRect(53, TOP_PLATE_Y + 3, 494, PLATE_H - 6, 10, '#0a0204');
+  drawBrokenPlate(p, f, TOP_PLATE_Y, [{ text: 'BLACKWALL GATEWAY', x: 300, align: 'center', size: 19, color: '#ff3a4a' }], level, 31 + seed * 7);
+}
+// ── 블랙월 룰렛 바탕·오염(??? 화면과 같은 느낌) ──
+// 바탕: 새까만 공허 + 얇은 붉은 테두리 + 어두운 릴 창(심볼은 원래 색 그대로). 판 글자 자리는 검은 판 + 붉은 테두리.
+function drawWallBg(p) {
+  p.clear('#0d0406');
+  p.strokeRoundRect(4, 4, W - 8, H - 8, 16, 2.5, '#9a1c28');
+  p.strokeRoundRect(12, 12, W - 24, H - 24, 12, 1, '#4a0f16');
+  for (const y of [TOP_PLATE_Y, BOTTOM_PLATE_Y]) {
+    p.roundRect(50, y, 500, PLATE_H, 8, '#080203');
+    p.strokeRoundRect(50, y, 500, PLATE_H, 8, 1.5, '#8a1424');
+  }
+  for (let i = 0; i < 3; i++) {
+    p.roundRect(WIN_X[i], WIN_Y, WIN_W, WIN_H, 10, '#1a0a0d');
+    p.strokeRoundRect(WIN_X[i], WIN_Y, WIN_W, WIN_H, 10, 1.5, '#ff3a4a');
+  }
+}
+// 오염: 네 모서리 블록(붉은·어두운·빠진 칸·회로 막대) + 테두리를 따라 흐르는 붉은 줄기 + 드문 붉은 점. seed 로 모양이 정해진다.
+function wallOverlay(p, seed = 0) {
+  let st = (seed * 2654435761 + 12345) >>> 0;
+  const rnd = () => ((st = (st * 1103515245 + 12345) >>> 0) / 4294967296);
+  for (const [cx, cy, sx, sy] of [[0, 0, 1, 1], [W, 0, -1, 1], [0, H, 1, -1], [W, H, -1, -1]]) {
+    for (let by = 0; by < 56; by += 6) for (let bx = 0; bx < 70; bx += 6) {
+      const d = Math.hypot(bx / 70, by / 56);
+      if (d > 1 || rnd() > (1 - d) ** 1.2) continue;
+      const x = sx > 0 ? cx + bx : cx - bx - 6, y = sy > 0 ? cy + by : cy - by - 6, r = rnd();
+      if (r < 0.5) p.rect(x, y, 6, 6, ['#96101e', '#5a0812', '#dc2234'][Math.floor(rnd() * 3)]);
+      else if (r < 0.7) p.rect(x, y, 6, 6, '#060204');
+      else if (r < 0.85) p.rect(x, y + 2, 6 * (1 + Math.floor(rnd() * 3)), 2, '#ff3c4c');
+    }
+    for (let i = 0; i < 3; i++) { const x = sx > 0 ? cx + 8 + rnd() * 30 : cx - 8 - rnd() * 30, len = 26 + rnd() * 46; p.rect(x, sy > 0 ? cy : cy - len, 1.5, len, '#ff2e40'); }
+  }
+  for (let i = 0; i < 14; i++) p.rect(rnd() * (W - 2), rnd() * (H - 2), 2, 2, rnd() < 0.5 ? '#c81e2d' : '#781420');
+}
+
+// ── 블랙월 물들이기(예전 방식 — 지금은 쓰지 않음) ──────────────────────
+// 해킹된 기계 그림을 검정+붉은 단색으로 바꾸고, 주사선·붉은 세로 데이터 줄기·모서리 블록·가로 띠 어긋남을 얹는다. seed 로 모양이 정해진다(같은 장면은 같은 모양).
+function tintBlackwall(p, seed = 0) {
+  const b = p.buf;
+  for (let i = 0; i < b.length; i += 3) {
+    const r = b[i], g = b[i + 1], bl = b[i + 2];
+    const lum = 0.3 * r + 0.59 * g + 0.11 * bl;
+    const mx = Math.max(r, g, bl);
+    b[i] = Math.min(255, Math.round(lum * 0.55 + mx * 0.7));
+    b[i + 1] = Math.round(lum * 0.14);
+    b[i + 2] = Math.round(lum * 0.18);
+  }
+  let st = (seed * 2654435761 + 12345) >>> 0;
+  const rnd = () => ((st = (st * 1103515245 + 12345) >>> 0) / 4294967296);
+  const W = p.w / p.s, H = p.h / p.s;
+  for (let y = 0; y < H; y += 4) p.rect(0, y, W, 1, '#000000'); // 주사선
+  for (let i = 0; i < 14; i++) { const x = rnd() * W, y = rnd() * H * 0.6, len = 30 + rnd() * H * 0.5; p.rect(x, y, 2, len, rnd() < 0.8 ? '#ff2a3c' : '#ffc8cc'); } // 세로 데이터 줄기
+  for (const [cx, cy, sx, sy] of [[0, 0, 1, 1], [W, 0, -1, 1], [0, H, 1, -1], [W, H, -1, -1]]) { // 모서리 블록
+    for (let k = 0; k < 9; k++) { const bx = rnd() * 46, by = rnd() * 36, bw = 6 + rnd() * 12; p.rect(sx > 0 ? cx + bx : cx - bx - bw, sy > 0 ? cy + by : cy - by - 6, bw, 6, ['#96101e', '#5a0812', '#dc2234', '#060204'][Math.floor(rnd() * 4)]); }
+  }
 }
 
 // ── 해킹 침입 연출(해킹 툴을 쓰면 다시 돌리기 전에 짧게) ─────────────────────

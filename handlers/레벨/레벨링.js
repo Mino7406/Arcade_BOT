@@ -285,7 +285,7 @@ function writeXp(guildLevels, userId, oldXp, newXp, requestedDelta) {
 // 그 서버에 XP 기록이 있는 모든 유저에게서 amount만큼 뺀다(0 밑으로는 안 내려감). 레이드 토벌 실패 벌칙용.
 // 유저마다 로그를 남기면 수백 줄이 되므로 요약 한 줄만 남기고, 바로 저장한다.
 // 실제로 깎인 유저 수(affected)와 실제로 깎인 XP 합계(total, 0에서 잘린 만큼은 빠짐)를 돌려준다 — 채널 안내에 그대로 보여 준다.
-function deductXpFromAll(guildId, amount, reason) {
+function deductXpFromAll(guildId, amount, reason, { quiet = false } = {}) { // quiet: 자주 부르는 호출(대기 차감)은 로그를 남기지 않는다
   if (!loaded) return { affected: 0, total: 0 }; // 레벨 데이터를 못 읽은 상태에서 깎으면 저장도 안 되고 의미가 없다
   if (!Number.isFinite(amount) || amount <= 0) return { affected: 0, total: 0 };
   const guildLevels = getGuildLevels(guildId);
@@ -298,7 +298,7 @@ function deductXpFromAll(guildId, amount, reason) {
     affected++;
     total += xp - newXp;
   }
-  logSystem({ 유형: 'XP 지급', 내용: `${reason} — 모든 유저 -${amount} XP (${affected}명, 합계 -${total} XP)` });
+  if (!quiet) logSystem({ 유형: 'XP 지급', 내용: `${reason} — 모든 유저 -${amount} XP (${affected}명, 합계 -${total} XP)` });
   saveLevels();
   return { affected, total };
 }

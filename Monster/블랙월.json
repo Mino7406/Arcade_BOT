@@ -1,0 +1,236 @@
+{
+  "_메모": [
+    "enabled false = 아직 공개 전이라 레이드 후보(자동 출현·관리자 선택)에서 빠져 있다. 사용자가 신호하면 \"enabled\": false 한 줄을 지운다.",
+    "일곱 번째 레이드 몬스터 — 블랙월 느낌(방화벽 너머의 정체불명). 화면에 보이는 이름은 ???(파일 이름에는 ?를 못 써서 블랙월.json). 칸 설명은 슬라임.json의 _메모와 같고, 여기에는 ???만의 것을 적는다.",
+    "theme \"corrupt\": 오염 화면 테마(깨진 글자·붉은 화면 틀·모서리 오염·붉은 임베드 색 띠)가 모집·전투·결과 화면 전부에 적용된다(그림.js render·corruptPost, index.js accentOf).",
+    "raid 블록(이 몬스터만의 레이드 규칙 — index.js): persistent = 모집 시간 제한·도주 없음(토벌할 때까지 남음). drain = 모집 대기 동안 서버 모든 유저의 XP를 분당 minPerMin~maxPerMin(12~18)만큼 깎는다. intervalMs(5초)마다 그 몫을 쌓아 정수만큼씩 깎고, 대기창엔 쌓인 소수점까지 보여 숫자가 계속 움직인다. 전투 중에는 멈춘다. defeatPenaltyXp = 패배 1번당 모든 유저 고정 차감. clearXp = 파티원 전원 보상(MVP도 같은 XP), mvpBonusXp = MVP 추가 XP(0 — 이 몬스터는 MVP에게 XP를 더 주지 않고), mvpItem = MVP가 받는 아이템(gateway = 블랙월 게이트웨이, 룰렛에서 발동하면 100% 잭팟).",
+    "ui.moveBanner \"terminal\": 기술 이름을 말풍선 대신 터미널 명령줄 띠(> EXEC …)로 보여 준다.",
+    "평타 없음: 기본 키 attack이 데이터 크래시(전원 공격 + 오류)다. error(오류): 맞은 사람(방어하면 안 걸림) 2턴 동안 고른 행동이 무작위 다른 행동으로 바뀜. vuln(취약): 전원 2턴 받는 피해 +30%. doom(즉사, kill -9): 다음 턴 확률로 HP 0(방어하면 안 걸림). 셋 다 치유사 스킬로 해제.",
+    "baseHp는 4인 기준 HP, damageRate는 이 몬스터가 주는 피해 배율. 바꾸면 node tests/raid/밸런스시뮬.js void 로 승률·턴을 다시 확인한다. 이 몬스터는 다른 몬스터보다 훨씬 어렵게(보통 플레이 승률 30~45%) 맞춘다. soloDamageRate는 파티원이 1명일 때(테스트 서버 전용)만 곱하는 추가 피해 배율(1.6 — 1인 보통 승률 약 27%). 전투 시간은 슬라임(평균 약 18턴 ≈ 실전 5분)의 약 1.7배(약 30턴 ≈ 8~10분)가 목표.",
+    "예고(telegraph) 문구는 터미널 명령 실행 투(> NAME 설명)로 쓴다 — 다음 행동 칸이 ui.moveBanner terminal 전용 디자인(검은 명령줄 칸 + > NEXT 칩 + 커서)이라서."
+  ],
+  "enabled": false,
+  "id": "void",
+  "name": "???",
+  "emoji": "👁️",
+  "rageName": "???",
+  "lore": "방화벽 너머에서 스며 나온 정체불명의 무언가. 이 녀석이 나타난 뒤로 서버의 XP가 서서히 새어 나간다...",
+  "theme": "corrupt",
+  "baseHp": 8500,
+  "damageRate": 0.45,
+  "soloDamageRate": 1.6,
+  "rage": {
+    "hpRatio": 0.4,
+    "damageRate": 0.8
+  },
+  "raid": {
+    "persistent": true,
+    "defeatPenaltyXp": 200,
+    "clearXp": 1000,
+    "mvpBonusXp": 0,
+    "mvpItem": "gateway",
+    "drain": {
+      "intervalMs": 5000,
+      "minPerMin": 12,
+      "maxPerMin": 18
+    }
+  },
+  "ui": {
+    "moveBanner": "terminal",
+    "resultMs": 5500,
+    "noShake": true,
+    "noRageMark": true
+  },
+  "sprite": {
+    "rows": [
+      ".............qqqqq.q..........",
+      ".......q..qqqqddddq.qq........",
+      ".......qq..dddddddddq.q.......",
+      "......qqqddkkkkkkkkkddd.qq....",
+      "....q.qqdqqqqqkkkrqqqqqqd.....",
+      "...q.qddkkkkkkkkkkkkkkkdd.qq..",
+      "......dkrkkkqqqkkkkkkkkkddq...",
+      "...q.dkkkkkkkkkkkkkkkkkkkdq...",
+      ".....dkkkkkkkrrrrrkkkkkkkdqqq.",
+      ".q.qqkkkkkrrrhhkhhrrrkkkkkdqq.",
+      "..qqdkkkrrhhhhhkhhhhhrrkqqdq..",
+      ".qq.dkkkrhhhhhkkkhhhhhrkkkddq.",
+      "..qddkqrrhhhhhkkkhhhhhrrkqdqq.",
+      ".qqqdkkkrhhhhhkkkhhhhhrkkkddq.",
+      "...ddkkkrrhhhhhkhhhhhrrkqqd.qq",
+      "....dkkkkkrrrhhkhhrrrkkkkkddq.",
+      "....ddkkkkkkkrrrrrkkkkkkkdd...",
+      "..qq.qkkkkkkkkkkkkkkkkkkkdqqq.",
+      ".....ddkkkkkkqqqkkkkkqqkdd.q..",
+      "...q.dddkkkkkkkkkkkkkkkd.dq...",
+      ".....q.dqqkqkqqqqqkqqkdqqq....",
+      "......qq.ddkkkkkkkkkddd.qq....",
+      ".........qqqdqdqqqdqq.q.......",
+      "........qq..qqdqdqqq..q.......",
+      ".........q...q.....q..........",
+      "..............q..q............"
+    ],
+    "glitchRows": [
+      3,
+      6,
+      10,
+      17,
+      21
+    ],
+    "palette": {
+      "k": "#060306",
+      "d": "#1e070b",
+      "q": "#7a0c18",
+      "r": "#ff2a3c",
+      "h": "#ffc4c8"
+    },
+    "poses": {
+      "ready": [
+        ".............qqqqq.q..........",
+        ".......q..qqqqddddq.qq........",
+        ".......qq..dddddddddq.q.......",
+        "......qqqddkkkhkkkkkddd.qq....",
+        "....q.qqdqqqqqrkkrqqqqqqd.....",
+        "...q.qddkkkkkkrkkkkkkkkdd.qq..",
+        "......dkrkkkqqrkkkkkkkkkddq...",
+        "...q.dkkkkkkkkkkkkkkkkkkkdq...",
+        ".....dkrkkkkkrhrrrkkkrkkkdqqq.",
+        ".q.qqkkkkkrrrrrrrrrrrkkkkkdqq.",
+        "..qqdkrkrrhrrkkkrrhhhrrkqqdq..",
+        ".qq.dkkkrhhrrkkkrrhhhhrkkkddq.",
+        "hrrrrkqrhhhrrkkkrrhhhhrrrrrrh.",
+        ".qqqdkkkrhhrrkkkrrhhhhrkkkddq.",
+        "...ddkrkrrhrrkkkrrhhhrrkqqd.qq",
+        "....dkkkkkrrrrrrrrrrrkkkkkddq.",
+        "....ddkrkkkkkrhrrrkkkrkkkdd...",
+        "..qq.qkkkkkkkkkkkkkkkkkkkdqqq.",
+        ".....ddkkkkkkqrqkkkkkqqkdd.q..",
+        "...q.dddkkkkkkrkkkkkkkkd.dq...",
+        ".....q.dqqkqkqrqqqkqqkdqqq....",
+        "......qq.ddkkkhkkkkkddd.qq....",
+        ".........qqqdqdqqqdqq.q.......",
+        "........qq..qqdqdqqq..q.......",
+        ".........q...q.....q..........",
+        "..............q..q............"
+]
+    },
+    "scale": 1.3,
+    "rageColors": {
+      "r": "#ff6a2a",
+      "h": "#ffe6c0",
+      "q": "#8a2a10"
+    }
+  },
+  "moves": {
+    "attack": {
+      "name": "데이터 크래시",
+      "telegraph": "> DATA_CRASH 로드 중... 오류가 번진다",
+      "target": "all",
+      "damage": [5, 7],
+      "effect": "error",
+      "effectTurns": 2,
+      "guardBlocks": true,
+      "status": {
+        "name": "오류",
+        "emoji": "⚠️"
+      },
+      "fx": "crash"
+    },
+    "overclock": {
+      "name": "오버클록",
+      "telegraph": "> OVERCLOCK 가동 — 처리 속도가 한계를 넘는다",
+      "target": "none",
+      "buffRate": 1.5,
+      "fx": "overclock"
+    },
+    "deadeye": {
+      "name": "데드아이",
+      "telegraph": "> DEAD_EYE 락온 — {target}을(를) 조준 중",
+      "target": "single",
+      "mark": true,
+      "rageTargets": 2,
+      "damage": [22, 26],
+      "guardRate": 0.6,
+      "fx": "deadeye"
+    },
+    "analyze": {
+      "name": "취약점 분석",
+      "telegraph": "> SCAN 개시 — 아군의 약점을 분석한다",
+      "target": "none",
+      "effect": "vuln",
+      "effectTurns": 2,
+      "effectRate": 1.3,
+      "status": {
+        "name": "취약",
+        "emoji": "🔓"
+      },
+      "fx": "vuln"
+    },
+    "killnine": {
+      "name": "kill -9",
+      "telegraph": "> kill -9 {target} — 프로세스 종료 시도",
+      "target": "single",
+      "mark": true,
+      "rageTargets": 2,
+      "damage": [6, 8],
+      "effect": "doom",
+      "effectRate": 0.3,
+      "rageRate": 0.45,
+      "stackRate": 0.1,
+      "guardBlocks": true,
+      "status": {
+        "name": "즉사",
+        "emoji": "☠️"
+      },
+      "fx": "killnine"
+    },
+    "smash": {
+      "name": "블랙월 게이트웨이",
+      "telegraph": "> BLACKWALL_GATEWAY 개방 중!! 방어하세요",
+      "target": "all",
+      "damage": [16, 20],
+      "guardBlocks": true,
+      "effect": "error",
+      "effectTurns": 1,
+      "status": {
+        "name": "오류",
+        "emoji": "⚠️"
+      },
+      "also": [
+        {
+          "effect": "vuln",
+          "effectTurns": 1,
+          "effectRate": 1.3,
+          "status": { "name": "취약", "emoji": "🔓" }
+        },
+        {
+          "effect": "doom",
+          "effectRate": 0.3,
+          "rageRate": 0.45,
+          "stackRate": 0.1,
+          "status": { "name": "즉사", "emoji": "☠️" }
+        }
+      ],
+      "readyPose": "ready",
+      "fx": "gateway"
+    }
+  },
+  "intentWeights": {
+    "normal": {
+      "attack": 4,
+      "overclock": 2,
+      "deadeye": 2.5,
+      "analyze": 2,
+      "killnine": 1.5,
+      "smash": 1
+    },
+    "rage": {
+      "attack": 3.5,
+      "overclock": 2,
+      "deadeye": 3,
+      "analyze": 2,
+      "killnine": 2,
+      "smash": 1.5
+    }
+  }
+}

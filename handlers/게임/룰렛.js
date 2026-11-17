@@ -13,14 +13,17 @@ const { logSystem, logAction, logError, userLabel } = require('../공통/로그'
 const { writeJsonIfChanged } = require('../공통/저장');
 const { card, payload, notice, COLORS, footerSide, pullButton } = require('../공통/카드');
 const { HACK_TOOL_NAME, hackToolWith, HACK_TOOL_MAX, hackToolEmoji, hackUseButtonEmoji, hackUseEmoji, getHackTools, useHackTool } = require('./해킹툴');
+const { GATEWAY_NAME, gatewayEmoji, gatewayButtonEmoji, getGateways, useGateway, GATEWAY_MAX } = require('./블랙월게이트웨이');
 
 const ROULETTE_PATH = path.join(__dirname, '..', '..', 'DB', 'roulette.json');
 fs.mkdirSync(path.dirname(ROULETTE_PATH), { recursive: true });
 
 const MIN_BET = 10;
 const MAX_BET = 300;
-const BET_PRESETS = [10, 50, 100, 200, 300];
+const BET_PRESETS = [10, 50, 100, 200, 300]; // 한 줄 버튼 최대 5개
 const LOBBY_TIMEOUT_MS = 60 * 1000;
+const WALL_COLOR = 0xB81C2A; // 블랙월 게이트웨이를 발동한 룰렛 카드 띠 색(붉은)
+const wallFooter = () => `${gatewayEmoji()} 블랙월 프로토콜 업로드 완료. [ACCESS_GRANTED]`; // 이모지는 봇이 켜진 뒤에야 정해지므로 쓸 때마다 만든다
 const HACK_COLOR = 0x8B7CF6; // 해킹 툴 확인 메시지 띠 색(이모지와 맞춘 보라)
 const HACK_PROMPT_MS = 60 * 1000; // 꽝이 나온 뒤 해킹 툴을 쓸지 고르는 시간(지나면 결과 확정)
 
@@ -105,11 +108,11 @@ const SPIN_STEP_MS = 1300; // 릴이 하나씩 멈추는 간격(처음 그림 �
 // 실제 슬롯머신처럼 릴이 하나씩 순서대로 멈추는 연출. finalReels 는 이미 정해진 결과이고,
 // 첫 그림(전부 돌아감)은 호출하는 쪽에서 보내고, 여기서는 "첫 릴 멈춤 → 둘째 릴 멈춤"까지 고쳐 준다.
 // 마지막 결과 그림은 호출하는 쪽이 이어서 고친다. 수정은 총 3번(예전엔 6번)이라 디스코드 수정 제한에도 여유가 있다.
-async function animateSpin(message, lobby, bet, finalReels, hacks = 0) {
+async function animateSpin(message, lobby, bet, finalReels, hacks = 0, wall = false) {
   const stages = [[finalReels[0], null, null], [finalReels[0], finalReels[1], null]];
   for (let i = 0; i < stages.length; i++) {
     await sleep(SPIN_STEP_MS);
-    await message.edit(buildSpinningPayload(lobby, bet, stages[i], i + 1, hacks)).catch(() => {});
+    await message.edit(buildSpinningPayload(lobby, bet, stages[i], i + 1, hacks, wall)).catch(() => {});
   }
   await sleep(SPIN_STEP_MS);
 }
@@ -128,6 +131,9 @@ function getHackPrompts(client) {
 // 테스트 서버에서는 해킹 툴을 무제한으로 쓸 수 있다(레이드를 깨지 않아도 시험해 볼 수 있게, 개수도 줄지 않음).
 const hackUnlimited = (guildId) => isTestGuild(guildId);
 const hackToolsOf = (guildId, userId) => (hackUnlimited(guildId) ? Infinity : getHackTools(guildId, userId));
+// 블랙월 게이트웨이(??? 레이드 MVP 보상): 돌리기 전에 발동해 두면 이번 판이 100% 잭팟. 테스트 서버에서는 무제한.
+const gatewaysOf = (guildId, userId) => (hackUnlimited(guildId) ? Infinity : getGateways(guildId, userId));
+const gatewayHaveText = (have) => (have === Infinity ? '테스트 서버 · 무제한' : `${have}/${GATEWAY_MAX}개`);
 const hackHaveText = (have) => (have === Infinity ? '테스트 서버 · 무제한' : `${have}/${HACK_TOOL_MAX}개`);
 
 // 해킹된 카드의 안내 줄: 인코딩이 깨진 것처럼 대체 문자(�)와 오류 코드를 섞는다(읽을 수는 있게).
@@ -167,9 +173,9 @@ function buildLobbyCard(lobby) {
   return card({
     color: COLORS.info,
     header: '🎰 룰렛머신',
-    sub: ['하루 1회', lobby.hackTools > 0 ? `${hackToolEmoji()} ${HACK_TOOL_NAME} ${hackHaveText(lobby.hackTools)}` : null].filter(Boolean),
+    sub: ['하루 1회', lobby.hackTools > 0 ? `${hackToolEmoji()} ${HACK_TOOL_NAME} ${hackHaveText(lobby.hackTools)}` : null, lobby.gateways > 0 ? `${gatewayEmoji()} ${GATEWAY_NAME} ${gatewayHaveText(lobby.gateways)}` : null].filter(Boolean),
     blocks: [
-      `<@${lobby.userId}>님, 베팅 XP를 고른 뒤 **🎰 돌리기**를 누르세요.`,
+      `<@${lobby.userId}>님, 베팅 XP를 고른 뒤 **🎰 돌리기**를 누르세요.${lobby.gateways > 0 ? `\n-# ${gatewayEmoji()} ${GATEWAY_NAME}를 사용하면 이번 판은 **100% 잭팟**이에요(돌리면 1개 소모)` : ''}`,
       { image: SLOT_URL },
       { text: betText, ...(withoutCancel.button ? { button: withoutCancel.button } : {}) },
       payoutTable(),
@@ -188,14 +194,35 @@ function buildLobbyPayload(lobby, extra = {}) {
 }
 
 // 릴이 도는 중: reels 에서 null 인 릴은 아직 돌고 있다(stage 가 오를수록 하나씩 멈춘다).
-function buildSpinningPayload(lobby, bet, reels, phase = 0, hacks = 0) {
-  const png = renderSlot({ reels, bet, phase, right: '돌리는 중...', rightColor: '#c9b8a0', hacked: hacks > 0 });
+function buildSpinningPayload(lobby, bet, reels, phase = 0, hacks = 0, wall = false) {
+  const png = renderSlot({ reels, bet, phase, right: '돌리는 중...', rightColor: '#c9b8a0', hacked: hacks > 0 || wall, wall }); // 블랙월: 돌기 전에 이미 완전히 잠식된 상태
+  if (wall) return payload(card({
+    color: WALL_COLOR,
+    header: `${gatewayEmoji()} 룰렛머신`,
+    sub: [`<@${lobby.userId}>`, `${gatewayEmoji()} ${GATEWAY_NAME} 사용`],
+    blocks: [{ image: SLOT_URL, divider: true }],
+    footer: `${gatewayEmoji()} 블랙월 너머에서 결과를 가져오는 중...`,
+  }), { files: [slotFile(png)] });
   return payload(card({
     color: hacks > 0 ? HACK_COLOR : COLORS.info,
     header: hacks > 0 ? `${hackToolEmoji()} 룰렛머신` : '🎰 룰렛머신',
     sub: [`<@${lobby.userId}>`, hacks > 0 ? null : '릴이 돌아가는 중...', hackLabel(hacks)].filter(Boolean),
     blocks: [{ image: SLOT_URL, divider: true }], // 결과 카드와 같은 자리에 구분선(그림이 위아래로 움직이지 않게)
     footer: hacks > 0 ? `${hackToolEmoji()} ${hackToolWith('으로')} 결과를 다시 돌리는 중...` : '🎰 두근두근... 릴이 하나씩 멈춰요',
+  }), { files: [slotFile(png)] });
+}
+
+// 블랙월 게이트웨이 발동: 돌리기 전에 평범한 룰렛이 가장자리부터 블랙월에 잠식당하는 장면(step 0~3, erosion 은 번진 정도).
+const WALL_EROSION = [0, 0.2, 0.45, 0.7, 0.92]; // 0단계는 잠식 전 멀쩡한 룰렛, 1~4단계가 잠식
+function buildWallErosionPayload(lobby, bet, step) {
+  const intact = step === 0;
+  const png = renderSlot({ reels: [null, null, null], bet, phase: step, right: intact ? '' : '잠식 중...', rightColor: '#ff6a78', hacked: !intact, wall: true, erosion: WALL_EROSION[step] });
+  return payload(card({
+    color: WALL_COLOR,
+    header: `${gatewayEmoji()} 룰렛머신`,
+    sub: [`<@${lobby.userId}>`, `${gatewayEmoji()} ${GATEWAY_NAME} 사용`],
+    blocks: [{ image: SLOT_URL, divider: true }],
+    footer: intact ? `${gatewayEmoji()} ${GATEWAY_NAME} 가동...` : `${gatewayEmoji()} 블랙월이 룰렛을 잠식하는 중... ${'▓'.repeat(step)}${'░'.repeat(Math.max(0, WALL_EROSION.length - 1 - step))}`,
   }), { files: [slotFile(png)] });
 }
 
@@ -212,7 +239,7 @@ function buildHackIntroPayload(lobby, bet, reels, step, hacks) {
   }), { files: [slotFile(png)] });
 }
 
-function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multiplier = 0, hacks = 0 }, extra = {}) {
+function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multiplier = 0, hacks = 0, gateway = false }, extra = {}) {
   const win = net > 0;
   const jackpot = reels[0] === reels[1] && reels[1] === reels[2] && reels[0] === '7️⃣';
   const png = renderSlot({
@@ -221,18 +248,19 @@ function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multi
     rightColor: win ? '#7dff9d' : net === 0 ? '#ffe9a8' : '#ff9a9a',
     badge: multiplier > 0 ? `×${multiplier}` : '',
     badgeColor: jackpot ? '#ffd700' : win ? '#ffd23f' : '#c9b8a0',
-    hacked: hacks > 0,
-    phase: hacks > 0 ? 7 : 0, // 해킹 모드 결과 그림의 글리치 모양(프레임 번호)
+    hacked: hacks > 0 || gateway,
+    wall: gateway,
+    phase: hacks > 0 || gateway ? 7 : 0, // 해킹 모드 결과 그림의 글리치 모양(프레임 번호)
   });
   return payload(card({
-    color: hacks > 0 ? HACK_COLOR : win ? 0xFFD700 : COLORS.muted,
-    header: hacks > 0 ? `${hackToolEmoji()} 룰렛머신` : '🎰 룰렛머신',
-    sub: [`<@${lobby.userId}>`, hacks > 0 ? null : '결과', hackLabel(hacks)].filter(Boolean),
+    color: gateway ? WALL_COLOR : hacks > 0 ? HACK_COLOR : win ? 0xFFD700 : COLORS.muted,
+    header: gateway ? `${gatewayEmoji()} 룰렛머신` : hacks > 0 ? `${hackToolEmoji()} 룰렛머신` : '🎰 룰렛머신',
+    sub: [`<@${lobby.userId}>`, hacks > 0 || gateway ? null : '결과', hackLabel(hacks), gateway ? `${gatewayEmoji()} ${GATEWAY_NAME} 사용` : null].filter(Boolean),
     blocks: [
       { image: SLOT_URL, divider: true }, // 제목·결과 줄 아래 구분선
       `### ${resultLine}　${netLine}`, // 결과와 손익을 한 줄에
     ],
-    footer: hacks > 0 ? HACK_FOOTER : '⏰ 하루에 한 번만 돌릴 수 있어요.',
+    footer: gateway ? wallFooter() : hacks > 0 ? HACK_FOOTER : '⏰ 하루에 한 번만 돌릴 수 있어요.',
   }), { files: [slotFile(png)], ...extra });
 }
 
@@ -267,11 +295,18 @@ function buildBetRow(lobby) {
 
 function buildControlRow(lobby) {
   const maxSelected = lobby.bet === lobby.maxAvailable;
+  // 블랙월 게이트웨이를 갖고 있으면 '발동' 버튼(누르면 켜고 끔). 켜 두고 돌리면 이번 판이 100% 잭팟.
+  const gate = lobby.gateways > 0
+    ? [new ButtonBuilder().setCustomId(`roulette:gate:${lobby.id}`).setEmoji(gatewayButtonEmoji())
+        .setLabel(lobby.gatewayArmed ? '사용됨 (다시 누르면 취소)' : `${GATEWAY_NAME} 사용`)
+        .setStyle(lobby.gatewayArmed ? ButtonStyle.Success : ButtonStyle.Danger)]
+    : [];
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`roulette:max:${lobby.id}`)
       .setLabel(`🔺 최대 (${lobby.maxAvailable})`)
       .setStyle(maxSelected ? ButtonStyle.Success : ButtonStyle.Secondary),
+    ...gate,
     new ButtonBuilder()
       .setCustomId(`roulette:spin:${lobby.id}`)
       .setLabel('🎰 돌리기')
@@ -334,6 +369,8 @@ async function startRouletteCommand(interaction) {
     bet: null,
     maxAvailable: Math.min(MAX_BET, currentLevelXp),
     hackTools: hackToolsOf(guildId, userId),
+    gateways: gatewaysOf(guildId, userId),
+    gatewayArmed: false, // 블랙월 게이트웨이 발동 여부(돌리면 이번 판이 100% 잭팟)
     interaction,
     timeoutId: null,
   };
@@ -383,7 +420,10 @@ async function spinLobby(interaction, lobby, lobbies) {
 
   if (!isTestGuild(lobby.guildId)) markPlayedToday(lobby.guildId, lobby.userId);
 
-  const spin = rollSpin(bet);
+  // 블랙월 게이트웨이를 발동해 뒀으면 아이템 1개를 쓰고 이번 판을 잭팟(7️⃣ 트리플)으로 확정한다. 테스트 서버는 무제한(개수 안 줄음).
+  const useGate = lobby.gatewayArmed && (hackUnlimited(lobby.guildId) || useGateway(lobby.guildId, lobby.userId));
+  const spin = useGate ? jackpotSpin(bet) : rollSpin(bet);
+  if (useGate) logSystem({ 유형: '룰렛', 유저: userLabel(lobby.userId), 내용: `${GATEWAY_NAME} 사용 — 잭팟 확정(베팅 ${bet}, x${spin.multiplier})` });
   const net = spin.payout - bet;
 
   // 테스트 서버는 XP 시스템이 꺼져 있으므로 정산하지 않고 연출만 보여 준다.
@@ -417,6 +457,13 @@ async function spinLobby(interaction, lobby, lobbies) {
   if (shown) await interaction.deleteReply().catch(() => {});
 }
 
+// 블랙월 게이트웨이: 7️⃣ 트리플(잭팟)로 확정. gateway 표시는 결과 카드에 발동했다는 걸 적는 데 쓴다.
+function jackpotSpin(bet) {
+  const reels = ['7️⃣', '7️⃣', '7️⃣'];
+  const { multiplier, kind, symbol } = resolvePayout(reels);
+  return { reels, multiplier, kind, symbol, payout: Math.round(bet * multiplier), gateway: true };
+}
+
 // 릴 3개를 돌려 결과와 지급액을 정한다.
 function rollSpin(bet) {
   const reels = [spinReel(), spinReel(), spinReel()];
@@ -440,12 +487,21 @@ function resultView(bet, spin, hacks) {
         ? `🙂 **더블 매칭!** (×${multiplier})`
         : `😢 **꽝**`;
   const netLine = net >= 0 ? `📈 **+${net} XP**` : `📉 **${net} XP**`;
-  return { bet, resultLine, netLine, net, reels, multiplier, hacks };
+  return { bet, resultLine, netLine, net, reels, multiplier, hacks, gateway: !!spin.gateway };
 }
 
 // 채널에 릴이 하나씩 멈추는 연출을 보여 주고 결과로 고친다. message 가 있으면(해킹 툴로 다시 돌릴 때) 그 카드를 그대로 다시 돌린다.
 // 결과가 실제로 올라간 메시지를 돌려준다(수정이 끝내 실패해 새로 보냈으면 새 메시지).
 async function revealSpin(channel, message, lobby, bet, spin, hacks, introReels = null) {
+  const wall = !!spin.gateway; // 블랙월 게이트웨이 발동: 돌기 전에 평범한 룰렛이 블랙월에 잠식당하고, 덮인 뒤 붉은 블랙월 룰렛이 돈다
+  if (wall) {
+    for (let step = 0; step < WALL_EROSION.length; step++) {
+      const pl = buildWallErosionPayload(lobby, bet, step);
+      if (!message) message = await channel.send(pl);
+      else { try { await message.edit(pl); } catch { message = null; } }
+      if (message) await sleep(INTRO_STEP_MS);
+    }
+  }
   // 해킹 툴을 처음 쓸 때만 바로 돌리지 않고 침입 연출부터(연속 2회째부터는 연출 없이 바로 돈다).
   if (hacks === 1 && introReels && message) {
     for (let step = 0; step < INTRO_STEP_COUNT && message; step++) {
@@ -453,13 +509,13 @@ async function revealSpin(channel, message, lobby, bet, spin, hacks, introReels 
       if (message) await sleep(INTRO_STEP_MS);
     }
   }
-  const first = buildSpinningPayload(lobby, bet, [null, null, null], 0, hacks);
+  const first = buildSpinningPayload(lobby, bet, [null, null, null], 0, hacks, wall);
   if (message) {
     try { await message.edit(first); } catch { message = null; } // 카드가 지워졌으면 새로 올린다
   }
   if (!message) message = await channel.send(first);
 
-  await animateSpin(message, lobby, bet, spin.reels, hacks);
+  await animateSpin(message, lobby, bet, spin.reels, hacks, wall);
 
   // 결과 수정이 일시적 오류(네트워크/레이트리밋)로 한 번 실패하면 메시지가 "릴이 돌아가는 중..."에
   // 영영 멈춰 보였다. 몇 번 재시도하고, 그래도 안 되면 결과를 새 메시지로 보낸다.
@@ -587,7 +643,7 @@ async function handleRouletteButton(interaction) {
   const { customId } = interaction;
   const lobbies = getLobbies(interaction.client);
   const parts = customId.split(':');
-  const action = parts[1]; // bet | max | spin | cancel | hack | keep
+  const action = parts[1]; // bet | max | gate | spin | cancel | hack | keep
   if (action === 'hack' || action === 'keep') {
     await handleHackButton(interaction, action, parts[2]);
     return;
@@ -611,6 +667,14 @@ async function handleRouletteButton(interaction) {
       return;
     }
     lobby.bet = amount;
+    await interaction.update(buildLobbyPayload(lobby));
+    return;
+  }
+
+  if (action === 'gate') {
+    if (!(lobby.gateways > 0)) { await interaction.reply(notice(`⚠️ **${GATEWAY_NAME}가 없어요.**`, { ephemeral: true })); return; }
+    lobby.gatewayArmed = !lobby.gatewayArmed;
+    if (lobby.gatewayArmed && lobby.maxAvailable >= MIN_BET) lobby.bet = lobby.maxAvailable; // 사용하면 걸 수 있는 최댓값으로 자동 베팅(바로 🎰 돌리기가 켜짐)
     await interaction.update(buildLobbyPayload(lobby));
     return;
   }
@@ -639,4 +703,4 @@ async function handleRouletteButton(interaction) {
 }
 
 // buildLobbyPayload/buildResultPayload는 화면 모음·테스트에서 직접 그려 보려고 함께 내보낸다.
-module.exports = { buildLobbyPayload, buildSpinningPayload, buildResultPayload, buildHackPromptPayload, buildHackIntroPayload, startRouletteCommand, handleRouletteButton, loadRoulette, saveRoulette, MIN_BET, MAX_BET };
+module.exports = { buildLobbyPayload, buildWallErosionPayload, WALL_EROSION, buildSpinningPayload, buildResultPayload, buildHackPromptPayload, buildHackIntroPayload, startRouletteCommand, handleRouletteButton, loadRoulette, saveRoulette, MIN_BET, MAX_BET };

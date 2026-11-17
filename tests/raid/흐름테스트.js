@@ -823,6 +823,108 @@ let ok4;
       assert(!E.isFeared(b, M('x')) && E.isFeared(b, M('t')), '필살 원혼 폭풍: 방어 안 한 사람 공포');
     }
   }
+  // 14-3a) ???(Monster-all): 오류(행동 바뀜) · 취약(받는 피해 증가) · 즉사(다음 턴 확률로 쓰러짐)
+  {
+    const E = require(path.join(root, 'handlers/레이드/전투.js'));
+    const voidM = E.loadMonsters(path.join(root, 'Monster-all')).find(m => m.id === 'void');
+    assert(voidM?.theme === 'corrupt' && voidM.raid?.persistent && !voidM.moves.attack.mark && voidM.moves.attack.name === '데이터 크래시', '??? 몬스터를 불러옴(평타 없이 데이터 크래시가 기본 키, 오염 테마)');
+    if (voidM) {
+      const party = [{ userId: 'x', name: 'X', role: 'sword' }, { userId: 'y', name: 'Y', role: 'healer' }];
+      const mk = () => { const b = E.createBattle(voidM, party, () => 0.5); b.intent = 'attack'; return b; };
+      // 오류: 고른 행동(공격)이 다른 행동으로 바뀐다
+      let b = mk(); const st = voidM.moves.attack.status;
+      Object.assign(E.getMember(b, 'x'), { errorUntil: b.turn, errorStatus: st });
+      E.choose(b, 'x', 'attack'); E.choose(b, 'y', 'attack'); E.resolveTurn(b, () => 0.5);
+      assert(b.lastTurn.acts.x.label !== '공격' && b.log.join().includes('오류로 행동이 바뀌었다') && b.lastTurn.acts.y.label === '공격', '오류: 걸린 사람의 행동만 무작위 다른 행동으로 바뀜');
+      // 데이터 크래시: 방어 안 한 사람만 오류(2턴), 방어한 사람은 안 걸림
+      b = mk(); E.choose(b, 'x', 'attack'); E.choose(b, 'y', 'guard'); E.resolveTurn(b, () => 0.5);
+      assert(E.isErrored(b, E.getMember(b, 'x')) && E.errorTurnsLeft(b, E.getMember(b, 'x')) === 2 && !E.isErrored(b, E.getMember(b, 'y')), '데이터 크래시: 방어 안 한 사람만 오류 2턴');
+      // 취약: 같은 공격도 더 아프다
+      const hitOf = (vuln) => { const bb = mk(); if (vuln) Object.assign(E.getMember(bb, 'x'), { vulnUntil: bb.turn, vulnRate: 1.3, vulnStatus: voidM.moves.analyze.status }); E.choose(bb, 'x', 'attack'); E.choose(bb, 'y', 'attack'); E.resolveTurn(bb, () => 0.5); return bb.lastTurn.hits.x; };
+      assert(hitOf(true) > hitOf(false), '취약: 받는 피해가 늘어남');
+      // 취약점 분석(target none)은 살아 있는 전원에게
+      b = mk(); b.intent = 'analyze'; E.choose(b, 'x', 'guard'); E.choose(b, 'y', 'guard'); E.resolveTurn(b, () => 0.5);
+      assert(b.members.every(m => E.isVulnerable(b, m) && E.vulnTurnsLeft(b, m) === 2), '취약점 분석: 전원 취약 2턴');
+      // 즉사: 다음 턴 확률 판정 — 100%면 쓰러지고 0%면 산다, 치유사 스킬이 이번 턴 씻어내면 안전
+      const doomRun = (rate, healFirst) => {
+        const bb = mk(); bb.intent = 'attack';
+        Object.assign(E.getMember(bb, 'x'), { doomTurn: bb.turn, doomRate: rate, doomStatus: voidM.moves.killnine.status });
+        E.choose(bb, 'x', 'guard'); E.choose(bb, 'y', healFirst ? 'skill' : 'guard'); E.resolveTurn(bb, () => 0.5);
+        return E.getMember(bb, 'x').hp;
+      };
+      assert(doomRun(1, false) === 0 && doomRun(0, false) > 0 && doomRun(1, true) > 0, '즉사(kill -9): 확률 판정, 치유사 스킬로 해제');
+      // 즉사 중첩: 판정을 넘긴 바로 그 턴에 kill -9 에 또 맞으면 확률이 stackRate(0.1)씩 오른다 — 끊기면 처음부터
+      b = mk(); b.intent = 'killnine'; b.marks = ['x'];
+      E.choose(b, 'x', 'attack'); E.choose(b, 'y', 'attack'); E.resolveTurn(b, () => 0.5);
+      const m1 = E.getMember(b, 'x');
+      assert(E.isDoomed(b, m1) && m1.doomTurn === b.turn && Math.abs(m1.doomRate - voidM.moves.killnine.effectRate) < 1e-9 && m1.doomStacks === 0, '즉사 첫 걸림: 기본 확률, 중첩 0');
+      b.intent = 'killnine'; b.marks = ['x'];
+      E.choose(b, 'x', 'attack'); E.choose(b, 'y', 'attack'); E.resolveTurn(b, () => 0.99); // 판정 통과(0.99 ≥ 확률) 후 또 걸림
+      const m2 = E.getMember(b, 'x');
+      assert(m2.hp > 0 && m2.doomStacks === 1 && Math.abs(m2.doomRate - (voidM.moves.killnine.effectRate + voidM.moves.killnine.stackRate)) < 1e-9, '즉사 연속으로 또 걸리면 중첩 +1, 확률 +10%p');
+      // 블랙월 게이트웨이: 방어하지 않은 사람에게 오류·취약·즉사가 1턴씩 한꺼번에, 방어한 사람은 안 걸림
+      b = mk(); b.intent = 'smash'; E.choose(b, 'x', 'attack'); E.choose(b, 'y', 'guard'); E.resolveTurn(b, () => 0.5);
+      const gx = E.getMember(b, 'x'), gy = E.getMember(b, 'y');
+      assert(E.isErrored(b, gx) && E.errorTurnsLeft(b, gx) === 1 && E.isVulnerable(b, gx) && E.vulnTurnsLeft(b, gx) === 1 && E.isDoomed(b, gx), '블랙월 게이트웨이: 방어 안 하면 오류·취약·즉사 1턴씩 한꺼번에');
+      assert(!E.isErrored(b, gy) && !E.isVulnerable(b, gy) && !E.isDoomed(b, gy), '블랙월 게이트웨이: 방어한 사람은 아무것도 안 걸림');
+    }
+  }
+  // 14-3b) 원숭이 대장(Monster-all): 부하 부르기(필살기 1) · 공격이 부하에게 먼저 · 바나나 투척 · 합동 필살기(필살기 2) · 우울 상태
+  {
+    const E = require(path.join(root, 'handlers/레이드/전투.js'));
+    const monkey = E.loadMonsters(path.join(root, 'Monster-all')).find(m => m.id === 'monkey');
+    assert(monkey, '원숭이 대장을 Monster 폴더에서 불러옴');
+    if (monkey) {
+      const party = [{ userId: 'x', name: 'X', role: 'sword' }, { userId: 't', name: 'T', role: 'tank' }, { userId: 'y', name: 'Y', role: 'healer' }];
+      const rng = () => 0.5;
+      const b = E.createBattle(monkey, party, rng);
+      const M = (u) => E.getMember(b, u);
+      const turnWith = (intent, choices = {}) => { if (intent) b.intent = intent; for (const [u, a] of Object.entries(choices)) E.choose(b, u, a); return E.resolveTurn(b, rng); };
+      assert(E.isWarnIntent((b.intent = 'smash', b)), '부하 부르기는 빨간 경고(필살기 1)');
+      turnWith('smash', { x: 'guard', t: 'guard', y: 'guard' });
+      const mhp = Math.round(b.maxHp * monkey.minions.hpRate / 10) * 10;
+      assert(E.minionsAlive(b).length === monkey.minions.count && b.minions[0].maxHp === mhp && !Object.keys(b.lastTurn.hits).length, '부하 부르기: 부하 두 마리(HP = 최대 HP × hpRate), 그 턴엔 피해 없음');
+      const bossHp = b.hp;
+      turnWith('attack', { x: 'attack', t: 'skill', y: 'attack' });
+      assert(b.hp === bossHp - (b.lastTurn.reflect?.value || 0) && b.minions[0].hp < mhp && b.log.join().includes(monkey.minions.attack.name), '부하가 있으면 공격은 부하에게 먼저(도발 반격만 대장에게), 부하는 다음 턴부터 바나나 투척');
+      assert(b.lastTurn.reflect?.value > 0 && b.lastTurn.acts.t.label === '반격', '도발한 수호자가 바나나에 맞으면 대장에게 반격');
+      assert(b.lastTurn.minionTargets?.t && !b.lastTurn.minionTargets?.x, '도발하면 바나나도 수호자가 맞음');
+      {
+        // 부하가 살아 있는 동안은 다음 행동으로 부하 부르기가 나오지 않는다(무작위로 여러 턴)
+        const saved = JSON.stringify({ minions: b.minions, members: b.members, hp: b.hp, turn: b.turn, sinceSmash: b.sinceSmash, rage: b.rage });
+        let summonWhileAlive = 0;
+        for (let i = 0; i < 300; i++) {
+          b.minions.forEach(mi => { mi.hp = 999; }); b.members.forEach(m => { m.hp = 100; }); b.hp = b.maxHp; b.intent = 'attack';
+          E.resolveTurn(b, Math.random);
+          if (b.intent === 'smash') summonWhileAlive++;
+        }
+        assert(summonWhileAlive === 0, '부하가 살아 있으면 부하 부르기를 다시 고르지 않음(필살기 보장은 합동 필살기로)');
+        Object.assign(b, JSON.parse(saved));
+      }
+      b.minions.forEach(mi => { if (mi.hp > 0) mi.hp = 30; });
+      const before = b.hp;
+      turnWith('attack', { x: 'attack', t: 'attack', y: 'attack' });
+      assert(!E.minionsAlive(b).length && b.lastTurn.penalty && E.isWeak(b) && E.weakTurnsLeft(b) === monkey.minions.penalty.turns && b.lastTurn.monsterMove && b.hp < before, '부하를 다 처치하면 우울 상태(행동은 그대로, 남은 피해는 대장에게)');
+      const w0 = b.hp; b.members.forEach(m => { m.hp = 100; });
+      turnWith('attack', { x: 'attack', t: 'guard', y: 'guard' });
+      assert(w0 - b.hp === Math.round(100 * monkey.minions.penalty.weakRate), '우울 상태: 받는 피해 × weakRate(검사 공격 100 → 120)');
+      // 합동 필살기: 그 턴 부하는 따로 공격하지 않음
+      b.minions = [{ hp: 100, maxHp: 100, born: 0 }, { hp: 100, maxHp: 100, born: 0 }];
+      b.members.forEach(m => { m.hp = 100; });
+      turnWith('combo', { x: 'guard', t: 'guard', y: 'guard' });
+      assert(b.lastTurn.minionsJoined && !b.log.join().includes(monkey.minions.attack.name) && b.log.join().includes(monkey.moves.combo.name), '합동 필살기 턴엔 부하가 따로 바나나를 던지지 않음');
+      // 바나나 껍질 → 다음 턴 반드시 구린 방귀 → 악취(회복약 못 씀, 치유사 회복 감소 · 씻어내지 못함)
+      b.minions = []; b.members.forEach(m => { m.hp = 60; m.cooldown = 0; });
+      turnWith('peel', { x: 'guard', t: 'guard', y: 'guard' });
+      assert(b.intent === 'fart', '바나나 껍질 뿌리기 다음 행동은 반드시 구린 방귀(연계)');
+      turnWith(null, { x: 'guard', t: 'guard', y: 'guard' });
+      assert(E.isStenched(b, M('x')) && E.stenchTurnsLeft(b, M('x')) === monkey.moves.fart.effectTurns && E.checkChoice(b, 'x', 'potion')?.includes('악취'), '구린 방귀: 방어해도 악취, 회복약 사용 불가');
+      const hx = M('x').hp;
+      turnWith('attack', { y: 'skill', x: 'guard', t: 'guard' });
+      assert(E.isStenched(b, M('x')) && b.log.join().includes('치유의 빛'), '치유사 스킬로 악취를 씻어내지 못함');
+      void hx;
+    }
+  }
   // 14-4) 꼬마 폭탄(Monster-all): 점화 카운트다운(불끄기 성공 → 기절, 실패 → 대폭발) · 화상 · 연막
   {
     const E = require(path.join(root, 'handlers/레이드/전투.js'));
@@ -1012,6 +1114,68 @@ let ok4;
       assert(m && num(m[1]) === allBefore.length && num(m[2]) === wantTotal, `전멸 안내 합계 N명 · -N XP / 다음 줄에 중단 시간 (실제 깎인 값 ${allBefore.length}명/${wantTotal})`);
     }
     assert(!lv.isRaidXpFrozen() && !mod.isPlaygroundPaused('gMain'), '전멸 후 XP 정지 해제');
+
+    // (마) ??? 남아 있는 몬스터: 모집 마감 없음 · 대기 XP 분당 12~18 차감(5초 단위로 쪼갬) · 패배해도 도주 안 함(-200) · 승리 보상(MVP +아이템)
+    {
+      const voidM = E.loadMonsters(path.join(root, 'Monster-all')).find(m => m.id === 'void');
+      E.MONSTERS.push(voidM); // 테스트용 Monster 폴더엔 슬라임만 있어 잠깐 등록한다
+      const gw = require(path.join(root, 'handlers/게임/블랙월게이트웨이.js'));
+      const ht = require(path.join(root, 'handlers/게임/해킹툴.js'));
+      const realNow = Date.now;
+      const at = (ms, fn) => { Date.now = () => realNow() + ms; return Promise.resolve(fn()).finally(() => { Date.now = realNow; }); };
+      try {
+        lv.applyXp('gMain', 'v1', 5000); lv.applyXp('gMain', 'v2', 50);
+        const chV = mkChannel('chV', 'gMain');
+        const errV = await mod.forceSpawnRaid({ guildId: 'other', channel: chV, client: rclient }, 'void');
+        await settle();
+        const raidMsg = () => [...chV.msgs.values()].filter(m => btnsOf(m).some(b => b.custom_id?.startsWith('raid:'))).pop();
+        const mV = raidMsg();
+        const t0 = mV ? textOf(mV) : '';
+        assert(!errV && lv.isRaidXpFrozen(), '??? 출현 → XP 정지');
+        assert(t0.includes('ERR_0x7F') && t0.includes('지금까지 잃은 XP :** ' + '`-0.0 XP`') && !/## ⏳ \d\d:\d\d:\d\d/.test(t0) && t0.includes('패배 0회') && t0.includes('보상** : +1000 XP') && !t0.includes('MVP는 여기에'), '??? 모집 화면: 전용 문구 · 잃은 XP · 깨진 시계(남은 시간 없음) · 보상은 +1000 XP만');
+        await runTimers(); await settle();
+        assert(mod.getRaidStatus('gMain').active && mod.getRaidStatus('gMain').monsterName === '???', '모집 시간이 지나도 도주하지 않음(마감 타이머 없음)');
+        // 대기 차감: 10분 흐른 것으로 하고 틱 → 분당 12~18 XP × 10분 = -120~-180(소수점은 이월되므로 119 이상)
+        const v1a = lv.getXp('gMain', 'v1'), v2a = lv.getXp('gMain', 'v2');
+        await at(10 * 60_000, async () => { await runTimers(); await settle(); });
+        const lost10 = v1a - lv.getXp('gMain', 'v1');
+        assert(lost10 >= 119 && lost10 <= 180 && lv.getXp('gMain', 'v2') === Math.max(0, v2a - lost10), `대기 10분 → 모든 유저 같은 양 -${lost10} XP(분당 12~18, 약 120~180 범위)`);
+        assert(textOf(raidMsg()).includes('지금까지 잃은 XP :** ' + '`-' + lost10 + '.') && !textOf(raidMsg()).includes('도주하지 않아요'), '대기창에 지금까지 잃은 XP 표시(차감 속도·도주 안내 문구는 없음)');
+        // 전투 시작(차감 멈춤) → 시간 초과 패배 → 도주하지 않고 다시 모집 + 모든 유저 -200
+        await press(mod, raidMsg(), '11', 'raid:role:sword'); await press(mod, raidMsg(), '12', 'raid:role:archer');
+        await press(mod, raidMsg(), '11', 'raid:start'); await settle();
+        assert(textOf(raidMsg()).includes('TURN 1'), '??? 전투 시작');
+        const v1b = lv.getXp('gMain', 'v1'), v2b = lv.getXp('gMain', 'v2');
+        await at(25 * 60_000, async () => { await runTimers(); await settle(); });
+        // (테스트용 가짜 채널은 새 메시지 id가 겹쳐 레이드 메시지를 덮어쓸 수 있어, 저장된 상태로 확인한다)
+        const sv = () => JSON.parse(fs.readFileSync(statePath, 'utf8')).active.gMain;
+        assert(mod.getRaidStatus('gMain').active && mod.getRaidStatus('gMain').phase === 'recruit' && sv().phase === 'recruit' && sv().defeatStacks === 1 && sv().party.length === 0 && sv().battle === undefined, '패배해도 도주하지 않고 다시 모집으로(패배 1회, 파티·전투 초기화)');
+        assert(lv.getXp('gMain', 'v1') === v1b - 200 && lv.getXp('gMain', 'v2') === Math.max(0, v2b - 200), '패배 1회 → 모든 유저 -200 XP(고정)');
+        assert(Math.round(sv().lostPerUser) === lost10 + 200 && lv.isRaidXpFrozen(), '잃은 XP는 대기 + 패배 -200, XP 정지는 그대로');
+        const notes = [...chV.msgs.values()].map(m => (m.last ? noteText(m.last) : '')).filter(Boolean);
+        assert(notes.some(c => c.includes('패배 1회') && c.includes('200 XP') && c.includes('도주하지 않았습니다')), '패배 채널 안내(도주하지 않음)');
+        await mod.forceEndRaid('gMain'); await settle();
+        assert(!lv.isRaidXpFrozen() && !mod.getRaidStatus('gMain').active, '관리자 종료로 끝낼 수 있음(XP 정지 해제)');
+        // 승리 보상: 저장된 전투(보스 HP 1)를 이어서 한 방에 쓰러뜨림
+        const before = { v1: lv.getXp('gMain', 'v1'), v2: lv.getXp('gMain', 'v2') };
+        const { monster: _m, ...battle } = E.createBattle(voidM, [{ userId: 'v1', name: '유저v1', role: 'sword' }, { userId: 'v2', name: '유저v2', role: 'archer' }]);
+        battle.hp = 1; battle.intent = 'analyze';
+        const chW = mkChannel('chW', 'gMain');
+        const mW = mkMsg(chW, 'mW', legacyPayload('옛 화면', 'raid:act:attack'));
+        const modW = await restart({ gMain: { channelId: 'chW', messageId: 'mW', monsterId: 'void', phase: 'battle', recruitEndsAt: null, party: [{ userId: 'v1', name: '유저v1', role: 'sword' }, { userId: 'v2', name: '유저v2', role: 'archer' }], battle, battleStartedAt: Date.now() - 60_000, battleEndsAt: Date.now() + 600_000, waitedMs: 3600_000, lostPerUser: 70, defeatStacks: 0 } });
+        assert(modW.isPlaygroundPaused('gMain') && textOf(mW).includes('TURN 1'), '재시작 후 ??? 전투 이어가기');
+        await press(modW, mW, 'v1', 'raid:act:attack');
+        await press(modW, mW, 'v2', 'raid:act:attack'); // 둘 다 골라야 턴이 진행된다(검사가 먼저 쓰러뜨리면 궁수는 행동하지 않아 보상 없음)
+        assert(lv.getXp('gMain', 'v1') === before.v1 + 1000 && lv.getXp('gMain', 'v2') === before.v2, '토벌 보상: 1000 XP(MVP도 같음, 직접 행동한 사람만)');
+        assert(gw.getGateways('gMain', 'v1') === 1 && gw.getGateways('gMain', 'v2') === 0 && ht.getHackTools('gMain', 'v1') === 0 , 'MVP에게만 블랙월 게이트웨이(MVP는 해킹 툴 대신 게이트웨이)');
+        assert(textOf(mW).includes('블랙월 게이트웨이') && !lv.isRaidXpFrozen(), '결과 화면에 아이템 표시 + XP 시스템 복구');
+        // 블랙월 게이트웨이 아이템 사용은 개수만큼만(룰렛에서 발동하면 100% 잭팟 — 룰렛 쪽은 상호작용 테스트)
+        assert(gw.useGateway('gMain', 'v1') && gw.getGateways('gMain', 'v1') === 0 && !gw.useGateway('gMain', 'v1'), '게이트웨이 아이템 사용은 개수만큼만');
+      } finally {
+        Date.now = realNow;
+        const i = E.MONSTERS.indexOf(voidM); if (i >= 0) E.MONSTERS.splice(i, 1);
+      }
+    }
   }
   console.log('그림 업로드 횟수:', images.length, '· RSS', Math.round(process.memoryUsage().rss/1048576), 'MB');
 })().catch(e => { console.error('테스트 실패', e); process.exitCode = 1; });

@@ -185,6 +185,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await team.handleTeamButton(mkInteraction({ user: 'u7', customId: 'team:tier_back:lol:panel', message: panelTier.message }));
     await team.handleTeamButton(mkInteraction({ user: 'u7', customId: 'team:tier_games:panel', message: panelTier.message }));
     assert(JSON.stringify(panelTier.message.components).includes('내 티어'), '게임 고르기 화면에 저장된 내 티어가 안 보임');
+    assert(JSON.stringify(panelTier.message.components).includes('team:tier_resetall:panel'), '내 티어 정보 옆에 전체 초기화 버튼이 없음');
     await team.handleTeamButton(mkInteraction({ user: 'u7', customId: 'team:tier:pubg:panel', message: panelTier.message }));
     await team.handleTeamSelect(mkInteraction({ user: 'u7', customId: 'team:tier_pick:pubg:panel', values: ['crystal'], message: panelTier.message }));
     await team.handleTeamButton(mkInteraction({ user: 'u7', customId: 'team:tier_back:pubg:panel', message: panelTier.message }));
@@ -209,14 +210,34 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     assert(tierMod.getTier('u4', 'lol')?.tier === 'master', '팀 입력의 티어(마스터)가 저장되지 않음');
     assert(match.board.current.teams[0].members.join() === '이름u1,이름u2', `티어 글자가 이름에 섞임(${match.board.current.teams[0].members})`);
 
+    // ✏️ 직접 입력(팀별 칸): 맨 앞 역할은 고정, 이름 뒤 티어는 저장, 첫 줄 [이름]은 팀 이름
+    const NL = String.fromCharCode(10);
+    const boxModal = team.buildInputModal(match, id).toJSON();
+    assert(boxModal.components.length === 2 && boxModal.components[0].components[0].custom_id === 'team0', '직접 입력 창이 팀별 칸으로 안 나옴');
+    await team.handleTeamModal(mkInteraction({ user: ADMIN, customId: `team:modal:${id}`, fields: { team0: ['[공격]', '미드 이름u1', '정글 이름u3 골2'].join(NL), team1: ['이름u2', '서포터 이름u4'].join(NL) } }));
+    const cur = match.board.current;
+    assert(cur.teams[0].name === '공격' && cur.teams[0].members.join() === '이름u1,이름u3', `팀별 칸이 잘못 읽힘(${JSON.stringify(cur.teams)})`);
+    assert(cur.teams[0].pos?.join() === 'mid,jungle' && cur.teams[1].pos?.join() === ',support', `고정 역할이 저장되지 않음(${JSON.stringify(cur.teams.map(t => t.pos))})`);
+    assert(tierMod.getTier('u3', 'lol')?.tier === 'gold', '직접 입력의 티어(골2)가 저장되지 않음');
+    assert(team.buildInputModal(match, id).toJSON().components[0].components[0].value.includes('미드 이름u1'), '다시 열면 고정 역할이 채워져 있어야 함');
+    assert(team.parseTeamBoxes(['윤진-승훈' + NL + '시형-연우', ''], { game: 'lol' }).teams.length === 2, '한 칸에 예전 방식으로 붙여넣으면 예전처럼 읽어야 함');
+    assert(team.parseTeamBoxes(['돌격 가' + NL + '힐 나', '딜 다' + NL + '라'], { game: 'overwatch' }).teams[0].pos.join() === 'tank,support', '오버워치 줄임말(돌격·힐)을 못 읽음');
+    // 구분 글자 아무거나·붙여 쓰기·역할을 뒤에, 참가자 이름과 같으면 쪼개지 않음
+    const P = ['민호', '미드라', '승훈', '지수'].map((n, i) => ({ id: 'x' + i, displayName: n }));
+    const flex = team.parseTeamBoxes(['탑민호' + NL + '미드라' + NL + '정글-승훈-다2', '서포터,지수' + NL + '가 바텀'], { game: 'lol', participants: P });
+    assert(flex.teams[0].members.join() === '민호,미드라,승훈' && flex.teams[0].pos.join() === 'top,,jungle', `붙여 쓴 역할·구분 글자를 못 읽음(${JSON.stringify(flex.teams)})`);
+    assert(flex.teams[1].pos.join() === 'support,adc' && flex.hints.some(h => h.name === '승훈' && h.tier.div === 2), `쉼표·역할 뒤에 쓰기·티어를 못 읽음(${JSON.stringify(flex)})`);
+    const glued = team.parseTeamBoxes(['민호다이아2' + NL + '승훈(골1)', '지수/미드' + NL + '나'], { game: 'lol', participants: P });
+    assert(glued.teams[0].members.join() === '민호,승훈' && glued.hints.length === 2 && glued.teams[1].pos[0] === 'mid', `이름에 붙인 티어·괄호·/ 를 못 읽음(${JSON.stringify(glued)})`);
+
     await team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:balance:${id}` }));
-    assert(match.board.current.how === 'balance' && match.board.history.length === 2, '밸런스 후 이전 팀표로 안 밀림');
+    assert(match.board.current.how === 'balance' && match.board.history.length === 3, '밸런스 후 이전 팀표로 안 밀림');
     await team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:random:${id}` }));
-    assert(match.board.history.length === 3, '랜덤 후 이전 팀표가 안 쌓임');
+    assert(match.board.history.length === 4, '랜덤 후 이전 팀표가 안 쌓임');
 
     const bad = mkInteraction({ user: ADMIN, customId: `team:modal:${id}`, fields: { teams: '혼자' } });
     await team.handleTeamModal(bad);
-    assert(match.board.history.length === 3, '잘못된 입력인데 팀이 바뀜');
+    assert(match.board.history.length === 4, '잘못된 입력인데 팀이 바뀜');
 
     // 🏅 내 티어: 티어 고르기 → 단계 고르기 → 저장 / 단계 없는 티어 / 지우기
     const tierBtn = mkInteraction({ user: 'u3', customId: `team:tier:lol:${id}` });
@@ -242,6 +263,49 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await team.handleTeamSelect(mkInteraction({ user: 'u3', customId: `team:tier_pick:overwatch:${id}`, values: ['champion'], message: tierBtn._reply }));
     await team.handleTeamSelect(mkInteraction({ user: 'u3', customId: `team:tier_div:overwatch:champion:${id}`, values: ['5'], message: tierBtn._reply }));
     assert(tierMod.getTier('u3', 'overwatch')?.div === 5, '오버워치 챔피언5가 저장되지 않음');
+
+    // 오버워치 롤별 티어: 🏅(오버워치) → 롤 고르기 → 🛡️ 탱커 → 티어 → 단계 → 저장 → ↩️ 롤 고르기
+    const owBtn = mkInteraction({ user: 'u2', customId: `team:tier:overwatch:${id}` });
+    await team.handleTeamButton(owBtn);
+    assert(JSON.stringify(owBtn._reply.components).includes('team:tier:overwatch.tank'), '오버워치 롤 고르기 화면이 안 뜸');
+    await team.handleTeamButton(mkInteraction({ user: 'u2', customId: `team:tier:overwatch.tank:${id}`, message: owBtn._reply }));
+    await team.handleTeamSelect(mkInteraction({ user: 'u2', customId: `team:tier_pick:overwatch.tank:${id}`, values: ['diamond'], message: owBtn._reply }));
+    await team.handleTeamSelect(mkInteraction({ user: 'u2', customId: `team:tier_div:overwatch.tank:diamond:${id}`, values: ['2'], message: owBtn._reply }));
+    assert(tierMod.getTier('u2', 'overwatch.tank')?.tier === 'diamond', '오버워치 탱커 티어가 저장되지 않음');
+    assert(!tierMod.getTier('u2', 'overwatch.support'), '저장 안 한 롤(힐러)에 티어가 생김');
+    assert(tierMod.getTier('u2', 'overwatch')?.tier === 'diamond', '오버워치 대표 티어(가장 높은 롤)가 안 나옴');
+    await team.handleTeamButton(mkInteraction({ user: 'u2', customId: `team:tier_roles:${id}`, message: owBtn._reply }));
+    assert(JSON.stringify(owBtn._reply.components).includes('돌격'), '↩️ 뒤로가 롤 고르기로 안 돌아감');
+
+    // 롤 포지션: 🧭 포지션 설정 → 주(미드) → 부(정글) → 주를 지우면 부도 지워짐
+    await team.handleTeamButton(mkInteraction({ user: 'u3', customId: `team:tier_posset:lol:${id}`, message: tierBtn._reply }));
+    await team.handleTeamSelect(mkInteraction({ user: 'u3', customId: `team:tier_pos:main:lol:${id}`, values: ['mid'], message: tierBtn._reply }));
+    await team.handleTeamSelect(mkInteraction({ user: 'u3', customId: `team:tier_pos:sub:lol:${id}`, values: ['jungle'], message: tierBtn._reply }));
+    assert(tierMod.getPositions('u3', 'lol').join() === 'mid,jungle', `포지션 저장이 안 됨(${tierMod.getPositions('u3', 'lol')})`);
+    assert(tierMod.getTier('u3', 'lol')?.tier === 'master', '포지션을 저장했더니 티어가 사라짐');
+    await team.handleTeamSelect(mkInteraction({ user: 'u3', customId: `team:tier_pos:main:lol:${id}`, values: ['jungle'], message: tierBtn._reply }));
+    assert(tierMod.getPositions('u3', 'lol').join() === 'jungle', '주를 부와 같게 바꾸면 하나만 남아야 함');
+    await team.handleTeamSelect(mkInteraction({ user: 'u3', customId: `team:tier_pos:main:lol:${id}`, values: ['none'], message: tierBtn._reply }));
+    assert(tierMod.getPositions('u3', 'lol').length === 0, '포지션 지우기가 안 됨');
+
+    // 🔄 초기화: 티어와 포지션을 한 번에 지운다(오버워치는 그 롤만)
+    await team.handleTeamSelect(mkInteraction({ user: 'u3', customId: `team:tier_pos:main:lol:${id}`, values: ['mid'], message: tierBtn._reply }));
+    await team.handleTeamButton(mkInteraction({ user: 'u3', customId: `team:tier_back:lol:${id}`, message: tierBtn._reply }));
+    assert(JSON.stringify(tierBtn._reply.components).includes('team:tier_reset:lol'), '저장된 티어가 있는데 초기화 버튼이 없음');
+    await team.handleTeamButton(mkInteraction({ user: 'u3', customId: `team:tier_reset:lol:${id}`, message: tierBtn._reply }));
+    assert(!tierMod.getTier('u3', 'lol') && tierMod.getPositions('u3', 'lol').length === 0, '초기화했는데 티어·포지션이 남음');
+    assert(!JSON.stringify(tierBtn._reply.components).includes('team:tier_reset:lol'), '초기화 후에도 초기화 버튼이 보임');
+    tierMod.setTier('u2', 'overwatch.support', { tier: 'gold', div: 1 });
+    await team.handleTeamButton(mkInteraction({ user: 'u2', customId: `team:tier_reset:overwatch.tank:${id}`, message: owBtn._reply }));
+    assert(!tierMod.getTier('u2', 'overwatch.tank') && tierMod.getTier('u2', 'overwatch.support'), '오버워치 초기화가 그 롤만 지우지 않음');
+
+    // 🗑️ 전체 초기화: 확인 화면 → 모두 지우기 → 모든 게임 티어·포지션이 사라짐
+    tierMod.setPositions('u2', 'lol', ['mid']);
+    const allMsg = new FakeMsg(team.buildTierGamePayload('u2'), channel);
+    await team.handleTeamButton(mkInteraction({ user: 'u2', customId: 'team:tier_resetall:panel', message: allMsg }));
+    assert(JSON.stringify(allMsg.components).includes('team:tier_resetall_ok:panel'), '전체 초기화 확인 화면이 안 뜸');
+    await team.handleTeamButton(mkInteraction({ user: 'u2', customId: 'team:tier_resetall_ok:panel', message: allMsg }));
+    assert(!tierMod.getTier('u2', 'overwatch') && !tierMod.getTier('u2', 'lol') && tierMod.getPositions('u2', 'lol').length === 0, '전체 초기화했는데 티어·포지션이 남음');
 
     match.closed = false; // 마감 해제 후 다시 마감돼도 카드를 또 올리지 않는다
     const before = channel.sent.length;
@@ -514,6 +578,37 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     lv.applyXp('g1', 'u2', 500, 'test');
     await roulette.startRouletteCommand(s2);
     await roulette.handleRouletteButton(mkInteraction({ user: 'u2', customId: `roulette:cancel:${s2.id}`, message: s2._reply }));
+  });
+
+  await flow('룰렛: 블랙월 게이트웨이를 사용하고 돌리면 100% 잭팟 · 아이템 1개 소모 · 취소하면 소모 안 함', async () => {
+    const gw = require(path.join(root, 'handlers/게임/블랙월게이트웨이.js'));
+    lv.applyXp('g1', 'gwuser', 800, 'test');
+    gw.grantGateway('g1', 'gwuser'); gw.grantGateway('g1', 'gwuser');
+    channel.sent.length = 0;
+    // 사용 버튼이 로비에 떠야 하고, 켜고 끌 수 있다
+    const s = mkInteraction({ user: 'gwuser', command: '룰렛' });
+    await roulette.startRouletteCommand(s);
+    const lobbyId = s.id;
+    const lobbyJson = () => JSON.stringify(s._reply?.edit ?? s._lastPayload ?? {});
+    await roulette.handleRouletteButton(mkInteraction({ user: 'gwuser', customId: `roulette:bet:${lobbyId}:10`, message: s._reply }));
+    const gate = mkInteraction({ user: 'gwuser', customId: `roulette:gate:${lobbyId}`, message: s._reply });
+    await roulette.handleRouletteButton(gate);
+    await roulette.handleRouletteButton(mkInteraction({ user: 'gwuser', customId: `roulette:spin:${lobbyId}`, message: s._reply }));
+    const shown = channel.sent.map(m => JSON.stringify(m.components || [])).join(' ');
+    assert(shown.includes('JACKPOT') && shown.includes('블랙월 게이트웨이 사용'), '게이트웨이를 사용하고 돌리면 결과가 JACKPOT + 발동 표시');
+    const left = gw.getGateways('g1', 'gwuser');
+    assert(left === 1 || left === Infinity, '아이템은 돌릴 때 1개만 소모됨(남은 ' + left + '개)');
+    // 사용 버튼을 누르면 걸 수 있는 최댓값으로 자동 베팅 — 베팅을 따로 고르지 않아도 바로 돌릴 수 있다
+    // (룰렛은 하루 1회라 위에서 돌린 gwuser 와 다른 유저로)
+    lv.applyXp('g1', 'gwuser2', 800, 'test'); gw.grantGateway('g1', 'gwuser2');
+    const s2 = mkInteraction({ user: 'gwuser2', command: '룰렛' });
+    await roulette.startRouletteCommand(s2);
+    channel.sent.length = 0;
+    await roulette.handleRouletteButton(mkInteraction({ user: 'gwuser2', customId: `roulette:gate:${s2.id}`, message: s2._reply }));
+    const spin2 = mkInteraction({ user: 'gwuser2', customId: `roulette:spin:${s2.id}`, message: s2._reply });
+    await roulette.handleRouletteButton(spin2);
+    const shown2 = channel.sent.map(m => JSON.stringify(m.components || [])).join(' ');
+    assert(shown2.includes('JACKPOT') && !JSON.stringify(spin2._replied ?? '').includes('먼저 베팅'), '게이트웨이 사용 버튼만 눌러도 최대 베팅으로 자동 베팅 → 바로 돌려 JACKPOT');
   });
 
   // ── 룰렛 동시 사용 부하: 여러 명이 한꺼번에 돌려도 모두 결과를 받고 서버가 버텨야 한다 ──

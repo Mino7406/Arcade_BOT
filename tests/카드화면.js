@@ -77,6 +77,8 @@ async function buildScreens() {
   const rl = req('handlers/게임/룰렛.js');
   // 해킹 툴 앱 이모지는 봇이 켜져야 ID가 생기므로, 화면 모음에선 자리표시 ID를 넣고 그림은 로컬 파일로 보여 준다(LOCAL_EMOJI).
   req('handlers/게임/해킹툴.js').setHackToolEmojiId('0');
+  req('handlers/게임/블랙월게이트웨이.js').setGatewayEmojiId('0');
+  req('handlers/매치/티어.js').usePreviewPositionEmojis(); // 포지션 아이콘도 같은 방식(LOCAL_EMOJI 의 pos_… 그림)
   const xp = req('handlers/관리/XP.js').views;
   const panel = req('handlers/관리/패널.js');
   const rank = req('handlers/레벨/랭킹.js');
@@ -120,6 +122,55 @@ async function buildScreens() {
   add('내전 · 모집', '팀 배정 완료 알림', '팀을 나누면 채널에 올라오는 카드', card.payload(common.buildTeamResultCard(base('lol'), { team1: users(10).slice(0, 5), team2: users(10).slice(5) })));
   add('내전 · 모집', '팀 짜기 카드(처음)', '내전이 마감되면 내전채팅에 자동으로 올라가는 카드', team.buildBoardPayload({ data: base('lol'), participants: users(10), closed: true }, '1'));
   add('내전 · 모집', '팀 짜기 카드(팀 정한 뒤)', '지금 팀은 크게, 이전 팀표는 작게', team.buildBoardPayload({ data: base('lol'), participants: users(10), closed: true, board: { current: { how: 'balance', at: Date.now(), teams: [{ name: null, members: users(10).slice(0, 5).map(u => u.displayName) }, { name: '맵', members: users(10).slice(5).map(u => u.displayName) }] }, history: [1, 2].map(n => ({ at: Date.now() - n * 3600e3, how: 'input', teams: [{ name: null, members: users(10).slice(0, 5).map(u => u.displayName) }, { name: null, members: users(10).slice(5).map(u => u.displayName) }] })) } }, '1'));
+  // 포지션: 저장 파일을 건드리지 않게 티어 조회 함수만 잠깐 바꿔 끼워 그린다.
+  {
+    const tm = req('handlers/매치/티어.js');
+    const orig = { getTier: tm.getTier, getPositions: tm.getPositions, getRoleTiers: tm.getRoleTiers, openTier: tm.openTier, hasRoleQueueTier: tm.hasRoleQueueTier };
+    const LOL = ['top', 'jungle', 'mid', 'adc', 'support'];
+    const lolTiers = [['diamond', 2], ['emerald', 1], ['platinum', 3], ['diamond', 4], ['gold', 1], ['emerald', 3], ['diamond', 1], ['platinum', 1], ['emerald', 4], ['gold', 2]];
+    const owTiers = { 100: { tank: ['diamond', 2] }, 101: { damage: ['master', 4], support: ['diamond', 1] }, 102: { damage: ['platinum', 2] }, 103: { support: ['emerald', 3] }, 104: { support: ['gold', 1], tank: ['platinum', 5] }, 105: { tank: ['emerald', 2] }, 106: { damage: ['diamond', 3] }, 107: { damage: ['emerald', 1] }, 108: { support: ['diamond', 5] }, 109: { support: ['platinum', 1] } };
+    const fake = (uid, gk) => {
+      const i = Number(uid) - 100;
+      const [game, role] = String(gk).split('.');
+      if (game === 'lol' && lolTiers[i]) return { tier: lolTiers[i][0], div: lolTiers[i][1] };
+      if (game === 'overwatch') {
+        const rt = owTiers[uid] || {};
+        if (role) return rt[role] ? { tier: rt[role][0], div: rt[role][1] } : null;
+        const best = Object.values(rt).map(([tier, div]) => ({ tier, div })).sort((a, b) => tm.tierScore('overwatch', b) - tm.tierScore('overwatch', a))[0];
+        return best || null;
+      }
+      if (uid === 'me') return orig.getTier(uid, gk);
+      return null;
+    };
+    tm.getTier = fake;
+    tm.getRoleTiers = uid => Object.fromEntries(tm.OW_ROLES.map(r => [r.key, fake(uid, `overwatch.${r.key}`)]));
+    tm.openTier = uid => tm.getTier(uid, 'overwatch.open') ?? tm.getTier(uid, 'overwatch');
+    tm.hasRoleQueueTier = uid => tm.OW_ROLES.some(r => !r.open && tm.getTier(uid, `overwatch.${r.key}`));
+    tm.getPositions = (uid, game) => {
+      const i = Number(uid) - 100;
+      if (uid === 'me') return game === 'lol' ? ['mid', 'jungle'] : [];
+      if (game === 'lol' && i >= 0 && i !== 4 && i !== 9) return [LOL[(i * 2) % 5], LOL[(i * 2 + 1) % 5]]; // 두 명은 포지션 없음
+      return [];
+    };
+    const owInfo = { name: '오버워치', emoji: '🎮', color: 0xF99E1A };
+    const halves = us => [{ name: null, members: us.slice(0, 5).map(u => u.displayName) }, { name: null, members: us.slice(5).map(u => u.displayName) }];
+    const named = users(10);
+    add('내전 · 모집', '팀 짜기 카드(롤 포지션)', '포지션을 저장한 사람이 있으면 5명 팀마다 탑~서포터를 맡기고 그 순서로 줄을 세움', team.buildBoardPayload({ data: base('lol'), participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 2, teams: halves(named) }, history: [] } }, '1'));
+    add('내전 · 모집', '팀 짜기 카드(오버워치 역할별 티어)', '돌격1·공격2·지원2로 맡기고, 맡은 역할의 티어를 보여 줌', team.buildBoardPayload({ data: { ...base('lol'), game: 'overwatch', gameInfo: owInfo, title: '오버워치 내전' }, participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: halves(named) }, history: [] } }, '1'));
+    const twelve = users(12).map((u, i) => (i >= 10 ? { ...u, displayName: u.displayName + '2' } : u));
+    owTiers[110] = { tank: ['master', 3] }; owTiers[111] = { tank: ['gold', 2], damage: ['platinum', 4] };
+    owTiers[100].open = ['master', 2]; owTiers[103].open = ['diamond', 4]; owTiers[107].open = ['grandmaster', 5];
+    add('내전 · 모집', '팀 짜기 카드(오버워치 6vs6)', '6vs6은 자유(오픈 큐): 역할 없이 자유 티어(없으면 가장 높은 역할 티어)로 계산', team.buildBoardPayload({ data: { ...base('lol'), game: 'overwatch', gameInfo: owInfo, title: '오버워치 6vs6 내전', players: '12' }, participants: twelve, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: [{ name: null, members: twelve.slice(0, 6).map(u => u.displayName) }, { name: null, members: twelve.slice(6).map(u => u.displayName) }] }, history: [] } }, '1'));
+    tm.getTier = (uid, gk) => (uid === 'me' ? fake('100', gk) ?? fake('101', gk) : fake(uid, gk));
+    tm.getRoleTiers = uid => Object.fromEntries(tm.OW_ROLES.map(r => [r.key, fake(uid === 'me' ? '104' : uid, `overwatch.${r.key}`)]));
+    add('나만 보이는 메시지', '🏅 내 티어 설정 — 롤(포지션 버튼)', '티어 고르기 아래 🧭 포지션 설정', team.buildTierPickPayload('lol', '1', 'me'));
+    add('나만 보이는 메시지', '🧭 포지션 설정', '주/부 포지션을 고르면 바로 저장', team.buildPositionPayload('lol', '1', 'me'));
+    add('나만 보이는 메시지', '🏅 내 티어 설정 — 오버워치 역할 고르기', '돌격·공격·지원 티어를 따로 저장(저장한 역할은 초록)', team.buildOwRolesPayload('1', 'me'));
+    add('나만 보이는 메시지', '🏅 내 티어 설정 — 오버워치 돌격 티어', '', team.buildTierPickPayload('overwatch.tank', '1', 'me'));
+    add('나만 보이는 메시지', '🏅 내 티어 설정 — 내 티어 정보(패널)', '게임마다 이름 줄 + 인용 줄, 오른쪽에 🗑️ 전체 초기화', team.buildTierGamePayload('me'));
+    add('나만 보이는 메시지', '🗑️ 전체 초기화 확인', '', team.buildResetAllConfirmPayload());
+    Object.assign(tm, orig);
+  }
   add('내전 · 모집', '안내 한 줄 — 만료', '모든 짧은 안내가 같은 카드 모양', card.notice('⚠️ **만료된 내전입니다.**', { ephemeral: true }));
   add('내전 · 모집', '안내 한 줄 — 완료', '', card.notice('✅ **채널에 공개 게시되었습니다!**', { ephemeral: true }));
 
@@ -177,6 +228,20 @@ async function buildScreens() {
   });
   const rlHackSpin = rl.buildSpinningPayload(rlb, 300, ['🍋', null, null], 1, 1);
   add('룰렛', '해킹 툴로 다시 돌리는 중', '해킹된 기계 — 보라·시안 + 해골 + 글리치', rlHackSpin, rlWith(rlHackSpin));
+  // 블랙월 게이트웨이 룰렛(사전 해킹): 로비의 사용 버튼 → 돌리기 전 잠식 4단계 → 블랙월 룰렛(7️⃣만 돎) → 100% 잭팟
+  const gwLobby = { ...rlb, gateways: 2, gatewayArmed: false };
+  const gwL0 = rl.buildLobbyPayload(gwLobby, { ephemeral: true, withImage: true });
+  add('룰렛', '게이트웨이 — 로비(사용 전)', '게이트웨이가 있으면 로비에 보유 수와 🌐 사용 버튼이 보임', gwL0, rlWith(gwL0));
+  const gwL1 = rl.buildLobbyPayload({ ...gwLobby, gatewayArmed: true }, { ephemeral: true, withImage: true });
+  add('룰렛', '게이트웨이 — 로비(사용됨)', '사용하면 버튼이 초록 "사용됨"으로 바뀜(다시 누르면 취소)', gwL1, rlWith(gwL1));
+  for (let step = 0; step < rl.WALL_EROSION.length; step++) {
+    const er = rl.buildWallErosionPayload(rlb, 300, step);
+    add('룰렛', `게이트웨이 — 돌리기 전 잠식 ${step}/${rl.WALL_EROSION.length - 1}`, ['사용 직후 — 아직 멀쩡한 평범한 룰렛', '평범한 룰렛이 가장자리부터 붉은 선·막대·테두리 사각형으로 잠식당함', '잠식이 번져 나감', '대부분 블랙월로 덮임', '거의 다 덮임 — 곧 블랙월 룰렛이 돌아감'][step], er, rlWith(er));
+  }
+  const gwSpin = rl.buildSpinningPayload(rlb, 300, ['7️⃣', null, null], 1, 0, true);
+  add('룰렛', '게이트웨이 — 잠식이 끝난 뒤 도는 중', '완전히 블랙월이 된 룰렛 · 릴엔 7️⃣만 돎', gwSpin, rlWith(gwSpin));
+  const gwWin = rl.buildResultPayload(rlb, { bet: 300, resultLine: '🎉 **JACKPOT!** (x10)', netLine: '📈 **+2700 XP**', net: 2700, reels: ['7️⃣', '7️⃣', '7️⃣'], multiplier: 10, gateway: true });
+  add('룰렛', '게이트웨이 — 결과(100% 잭팟)', '블랙월 테마 결과 카드 · 부제에 블랙월 게이트웨이 사용', gwWin, rlWith(gwWin));
   add('룰렛', '결과 — 해킹 툴로 번복', '해킹된 기계 그림 · 보라 띠 · 부제에 사용 횟수', rlHack, rlWith(rlHack));
 
   // ── 레벨 · 랭킹 · 퀴즈 ────────────────────────
@@ -245,7 +310,7 @@ async function buildScreens() {
   // ── 레이드 (기존 디자인 유지 — 그림 + 글자 + 버튼) ───────────────────────
   const raidMod = req('handlers/레이드/index.js');
   const raidBattle = req('handlers/레이드/전투.js');
-  const { MONSTERS: raidMonsters, ROLE_ORDER: raidRoles, createBattle, resolveTurn } = raidBattle;
+  const { MONSTERS: raidMonsters, ROLE_ORDER: raidRoles, createBattle, resolveTurn, choose } = raidBattle;
   const raidParty = n => raidRoles.slice(0, n).map((role, i) => ({ userId: String(100 + i), name: ['민호', '지수', '하늘', '도윤'][i], role }));
   const rf = p => ({ files: png(p.files) });
   const raidState = (monster, partyN, extra = {}) => ({
@@ -279,6 +344,102 @@ async function buildScreens() {
   rb.showingResult = false; rb.battle.hp = Math.floor(rb.battle.maxHp * 0.3); rb.battle.rage = true;
   const pb4 = await raidMod.battleView(rb);
   add('레이드', '전투 — 분노 상태', '', pb4, rf(pb4));
+  // 원숭이 대장: 부하 부르기 경고 → 부하 등장 → 부하가 맞고 바나나 투척 → 합동 필살기 경고 → 부하 전멸(우울 상태)
+  const monkey = raidMonsters.find(m => m.id === 'monkey');
+  if (monkey) {
+    const rk = startBattle(monkey); const bk = rk.battle;
+    const shot = async (title, sub) => { const v = await raidMod.battleView(rk); add('레이드', `원숭이 대장 — ${title}`, sub, v, rf(v)); };
+    bk.intent = 'smash';
+    await shot('부하 부르기 경고', '필살기 1 · 빨간 경고 상자');
+    bk.members.forEach(m => choose(bk, m.userId, 'attack'));
+    resolveTurn(bk); rk.showingResult = true;
+    await shot('부하 등장', '양옆에 원숭이 부하 두 마리 + HP 막대 · 흙먼지');
+    rk.showingResult = false; bk.intent = 'attack';
+    bk.members.forEach(m => choose(bk, m.userId, 'attack'));
+    resolveTurn(bk); rk.showingResult = true;
+    await shot('부하가 대신 맞음', '공격은 부하에게 먼저 · 부하 머리 위 피해 숫자 · 바나나 맞은 카드');
+    rk.showingResult = false; bk.intent = 'combo'; bk.minions.forEach(x => { x.hp = Math.max(x.hp, 40); });
+    await shot('합동 필살기 경고', '필살기 2 · 부하가 살아 있을 때만');
+    bk.intent = 'attack'; bk.minions.forEach(x => { x.hp = Math.min(x.hp, 60); });
+    bk.members.forEach(m => choose(bk, m.userId, 'attack'));
+    resolveTurn(bk); rk.showingResult = true;
+    await shot('부하 전멸 → 우울 상태', '우는 얼굴 · 회색으로 쓰러진 부하');
+    rk.showingResult = false;
+    await shot('우울 상태', '오른쪽 위 배지 · 받는 피해 증가 · 남은 턴');
+  }
+  // ??? (블랙월 느낌): 모집 시간 제한 없음 · 대기 XP 실시간 차감 · 패배해도 도주 안 함 · 승리 시 MVP 아이템
+  const voidM = raidBattle.loadMonsters().find(m => m.id === 'void'); // 꺼진(enabled false) 몬스터라 MONSTERS가 아닌 loadMonsters
+  if (voidM) {
+    const H = 3600e3;
+    const wait = async (title, sub, extra, partyN = 2) => {
+      const rv = { ...raidState(voidM, partyN), waitSince: Date.now(), ...extra };
+      const v = await raidMod.recruitView(rv);
+      add('레이드', `??? — ${title}`, sub, v, rf(v));
+    };
+    await wait('대기창 (막 출현)', '전용 디자인: 깨진 시계 · 잃은 XP · 패배 횟수 · 보상(MVP 아이템)', { waitedMs: 0, lostPerUser: 0, defeatStacks: 0 });
+    await wait('대기창 (3시간 경과)', '분당 -12~18 XP 차감(숫자가 계속 움직임) · 1인당 잃은 XP가 계속 늘어남', { waitedMs: 3 * H, lostPerUser: 2700, defeatStacks: 0 });
+    await wait('대기창 (패배 2회 후)', '졌어도 도주하지 않고 다시 모집 · 패배 1회마다 모든 유저 -200 XP', { waitedMs: 5 * H, lostPerUser: 1500, defeatStacks: 2 }, 0);
+    // 전투 장면들
+    const vb = (intent, choice = 'attack', n = 4) => {
+      const rr = raidState(voidM, n);
+      rr.phase = 'battle'; rr.battle = createBattle(voidM, rr.party, Math.random, { minParty: 1 });
+      rr.battleStartedAt = Date.now() - 5 * 60e3; rr.battleEndsAt = Date.now() + 15 * 60e3; rr.turnEndsAt = Date.now() + 25e3;
+      rr.battle.intent = intent;
+      raidBattle.assignMarks(rr.battle);
+      return rr;
+    };
+    const vshot = async (rr, title, sub) => {
+      const v = await raidMod.battleView(rr); add('레이드', `??? — ${title}`, sub, v, rf(v));
+      if (process.env.DUMP_VOID) { const f = (v.files || [])[0]; if (f) require('fs').writeFileSync(require('path').join(process.env.DUMP_VOID, `${String(dumpN++).padStart(2, '0')}.png`), f.attachment); }
+    };
+    let dumpN = 1;
+    let rr = vb('smash');
+    await vshot(rr, '전투 — 필살기 경고', '블랙월 게이트웨이(필살기) 예고 · 빨간 경고 상자');
+    rr = vb('deadeye');
+    await vshot(rr, '전투 — 데드아이 예고', '표식 저격: 대상 이름이 예고에 · 카드에 빛나는 눈');
+    rr = vb('attack');
+    rr.battle.members.forEach(mm => choose(rr.battle, mm.userId, 'attack'));
+    resolveTurn(rr.battle, () => 0.99); rr.showingResult = true;
+    await vshot(rr, '전투 — 데이터 크래시 결과', '터미널 명령줄 띠(말풍선 대신) · 방어 안 한 사람은 ⚠️오류 배지');
+    rr.showingResult = false;
+    await vshot(rr, '전투 — 오류 상태 선택 화면', '⚠️ 오류: 고른 행동이 무작위로 바뀐다는 안내(아래 글자)');
+    rr = vb('analyze');
+    rr.battle.members.forEach(mm => choose(rr.battle, mm.userId, 'guard'));
+    resolveTurn(rr.battle, () => 0.5); rr.showingResult = true;
+    await vshot(rr, '전투 — 취약점 분석 결과', '전원 🔓취약(받는 피해 +30%) 2턴');
+    rr = vb('killnine');
+    rr.battle.members.forEach(mm => choose(rr.battle, mm.userId, 'attack'));
+    resolveTurn(rr.battle, () => 0.01); rr.showingResult = false;
+    await vshot(rr, '전투 — kill -9 다음 턴(즉사 판정)', '☠️ 판정 배지 · 이번 턴 끝에 확률로 쓰러짐(치유사 스킬·방어로 대처)');
+    // 분노(체력 40% 이하): 붉은 핏줄 분노 마크는 그리지 않음
+    rr = vb('attack'); rr.battle.hp = Math.round(rr.battle.maxHp * 0.3); rr.battle.rage = true;
+    await vshot(rr, '전투 — 분노', '체력이 줄어 분노: 바닥 불빛·몸 테두리만, 오른쪽 위 붉은 핏줄 마크는 없음');
+    // 기술별 결과 화면(글리치 연출) · 상태이상 중첩 표시
+    const result = (intent, pick, rng2, extra) => { const r2 = vb(intent); r2.battle.members.forEach((mm, i) => choose(r2.battle, mm.userId, typeof pick === 'function' ? pick(i) : pick)); if (extra) extra(r2); resolveTurn(r2.battle, rng2); r2.showingResult = true; return r2; };
+    await vshot(result('overclock', 'attack', () => 0.5), '전투 — 오버클록 결과', '몬스터가 잔상을 끌며 번지고 줄마다 박자가 어긋남 · CLK ▲▲ 150%');
+    await vshot(result('deadeye', 'attack', () => 0.5), '전투 — 데드아이 결과', '표적 카드가 모자이크로 초점이 잠기고 계단식 레이저 · 끊긴 조준 고리');
+    await vshot(result('killnine', 'attack', () => 0.5), '전투 — kill -9 결과', '표적 카드가 꺼지는 화면처럼 접힘 + > kill -9 PID · Killed');
+    await vshot(result('smash', i => (i === 0 ? 'guard' : 'attack'), () => 0.5), '전투 — 블랙월 게이트웨이 결과(첫 번째만 방어)', '화면 전체가 세로로 갈라짐 · 방어 안 한 사람은 ⚠️오류+🔓취약+☠️즉사가 1턴씩 한꺼번에');
+    // 서로 다른 상태이상이 한 카드에 겹친 모습(독·냉기·점액·악취 같은 기존 상태까지)
+    const st = vb('attack');
+    const m0s = st.battle.members[0], m1s = st.battle.members[1];
+    for (const mm of [m0s, m1s]) { mm.errorUntil = st.battle.turn + 2; mm.errorStatus = { name: '오류', emoji: '⚠️' }; mm.vulnUntil = st.battle.turn + 2; mm.vulnRate = 1.3; mm.vulnStatus = { name: '취약', emoji: '🔓' }; mm.doomTurn = st.battle.turn; mm.doomRate = 0.5; mm.doomStacks = 2; mm.doomStatus = { name: '즉사', emoji: '☠️' }; }
+    m1s.poisonStacks = 2; m1s.poisonUntil = st.battle.turn + 3; m1s.poisonStatus = { name: '독', emoji: '☠️' };
+    m1s.chillStacks = 2; m1s.stenchUntil = st.battle.turn + 2; m1s.stenchRate = 0.5; m1s.stenchStatus = { name: '악취', emoji: '💨' };
+    await vshot(st, '전투 — 상태이상 중첩 표시', '첫째: 오류·취약·즉사 / 둘째: 거기에 독·냉기·악취까지 — 왼쪽에 세로로 쌓임');
+    // 결과와 안내
+    const pn = await raidMod.battleView({ ...vb('attack'), showingResult: false });
+    const defeatNote = raidMod.buildEndNoticePayload({ kind: 'defeat', xp: 200, stacks: 2, lost: 1500, details: ['128명 · 합계 : -192,000 XP'] });
+    add('레이드', '??? — 패배 채널 안내', '도주하지 않음 · 모든 유저 -200 XP · 지금까지 1인당 잃은 XP', defeatNote);
+    const er = vb('attack'); er.phase = 'ended'; er.endedAt = Date.now(); er.frozenAt = Date.now() - 5 * H; er.battle.hp = 0;
+    const ev = await raidMod.endView(er, 'clear', [
+      { userId: '100', xp: 1000, mvp: true, hackTool: false, gateway: true },
+      { userId: '101', xp: 1000, mvp: false, hackTool: true, gateway: false },
+      { userId: '102', xp: 1000, mvp: false, hackTool: true, gateway: false },
+    ]);
+    add('레이드', '??? — 토벌 성공 결과', '파티원 +1000 XP + 해킹 툴 1개 · MVP는 +1000 XP + 🌐 블랙월 게이트웨이(MVP는 해킹 툴 대신)', ev, rf(ev));
+    void pn;
+  }
   const endR = (outcome, rewards) => { const rr = startBattle(m0); rr.phase = 'ended'; rr.endedAt = Date.now(); rr.frozenAt = Date.now() - 20 * 60e3; if (outcome === 'clear') rr.battle.hp = 0; return raidMod.endView(rr, outcome, rewards); };
   const ec = await endR('clear', [{ userId: '100', xp: 150, mvp: true, hackTool: true }, { userId: '101', xp: 100, mvp: false, hackTool: false }]);
   add('레이드', '종료 — 토벌 성공', 'MVP · 보상 · 해킹 툴(한 명은 보유 한도)', ec, rf(ec));
@@ -300,9 +461,15 @@ module.exports = { buildScreens };
 function localEmojiScript() {
   const hack = require(path.join(ROOT, 'handlers/게임/해킹툴.js'));
   const map = Object.fromEntries(Object.values(hack.EMOJIS).map(e => [e.name, 'data:image/png;base64,' + fs.readFileSync(path.join(hack.EMOJI_DIR, e.file)).toString('base64')]));
+  const gw = require(path.join(ROOT, 'handlers/게임/블랙월게이트웨이.js'));
+  map[gw.GATEWAY_EMOJI.name] = 'data:image/png;base64,' + fs.readFileSync(path.join(gw.EMOJI_DIR, gw.GATEWAY_EMOJI.file)).toString('base64');
   // 게임 썸네일도 봇이 켜져야 여백 넣은 앱 이모지 ID가 생기므로, 원래 이모지 ID → 여백 그림(LOCAL_THUMB)
   const th = require(path.join(ROOT, 'handlers/공통/썸네일.js'));
   const thumbs = Object.fromEntries(Object.entries(th.SOURCES).map(([id, name]) => [id, 'data:image/png;base64,' + fs.readFileSync(path.join(ROOT, 'assets/썸네일', `${name}.png`)).toString('base64')]));
+  const tier = require(path.join(ROOT, 'handlers/매치/티어.js'));
+  for (const f of fs.readdirSync(tier.EMOJI_DIR).filter(f => f.startsWith('pos_') && f.endsWith('.png'))) {
+    map[f.slice(0, -4)] = 'data:image/png;base64,' + fs.readFileSync(path.join(tier.EMOJI_DIR, f)).toString('base64');
+  }
   return 'window.LOCAL_EMOJI = ' + JSON.stringify(map) + ';window.LOCAL_THUMB = ' + JSON.stringify(thumbs) + ';';
 }
 

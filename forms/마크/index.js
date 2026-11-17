@@ -31,8 +31,15 @@ const {
   REALM_RULES_MESSAGE_ID,
   REALM_PANEL_CHANNEL_ID,
   REALM_PANEL_MESSAGE_ID,
+  REALM_OPEN,
   GUILD_ID,
 } = require('../../config');
+
+// 렐름이 닫혀 있을 때(config REALM_OPEN: false) 남아 있는 렐름 버튼·모달을 눌렀을 때의 안내.
+const CLOSED_NOTICE = '<:Barrier:1544331503448625233> **마인크래프트 렐름 운영이 종료되었습니다.** 참여해주셔서 감사합니다!';
+async function replyRealmClosed(interaction) {
+  await interaction.reply(quick(CLOSED_NOTICE, { ephemeral: true })).catch(() => {});
+}
 
 // "신청하기"를 누르려면 이 이모지로 규칙 메시지에 반응을 남겨둔 상태여야 한다. 안내 문구엔
 // ✅ 하나만 보여주지만, 생김새가 비슷한 다른 체크 이모지(✔️ 등)로 반응해도 인정한다.
@@ -114,6 +121,7 @@ const rulesAgreedUserIds = new Set();
 
 // 봇 시작(onReady) 시 한 번 호출 — 규정집 메시지의 현재 반응자 목록으로 캐시를 채운다.
 async function initRulesAgreementCache(client) {
+  if (!REALM_OPEN) return; // 닫힌 동안엔 규정집 반응을 읽지 않는다
   if (!REALM_RULES_CHANNEL_ID || !REALM_RULES_MESSAGE_ID) return;
 
   const channel = await client.channels.fetch(REALM_RULES_CHANNEL_ID).catch(err => {
@@ -145,7 +153,7 @@ function isRulesReaction(reaction) {
 }
 
 async function handleRealmRulesReactionAdd(reaction, user) {
-  if (user.bot) return;
+  if (!REALM_OPEN || user.bot) return;
   if (reaction.partial) {
     reaction = await reaction.fetch().catch(() => null);
     if (!reaction) return;
@@ -155,7 +163,7 @@ async function handleRealmRulesReactionAdd(reaction, user) {
 }
 
 async function handleRealmRulesReactionRemove(reaction, user) {
-  if (user.bot) return;
+  if (!REALM_OPEN || user.bot) return;
   if (reaction.partial) {
     reaction = await reaction.fetch().catch(() => null);
     if (!reaction) return;
@@ -432,6 +440,29 @@ async function updateRealmRosterInPlace(client) {
   return 1;
 }
 
+// 렐름이 닫혔을 때 봇 시작 시 한 번 — 검토 채널의 명단 메시지와 본서버의 신청서 패널 메시지를 지운다.
+// 명단 메시지 ID는 지운 뒤 비워서 다음 시작 때 다시 시도하지 않는다. 승인 명단 데이터 자체는 남긴다.
+// 이미 지워진 메시지는 조용히 넘어간다. 지운 개수를 돌려준다.
+async function removeClosedRealmPosts(client) {
+  let removed = 0;
+  if (REALM_REVIEW_CHANNEL_ID) {
+    const channel = await client.channels.fetch(REALM_REVIEW_CHANNEL_ID).catch(() => null);
+    const oldId = channel && getRosterMessageId(channel.guildId);
+    if (oldId) {
+      const ok = await channel.messages.delete(oldId).then(() => true).catch(err => err?.code === 10008); // 10008: 이미 없음
+      if (ok) {
+        setRosterMessageId(channel.guildId, null);
+        removed++;
+      }
+    }
+  }
+  if (REALM_PANEL_CHANNEL_ID && REALM_PANEL_MESSAGE_ID) {
+    const channel = await client.channels.fetch(REALM_PANEL_CHANNEL_ID).catch(() => null);
+    if (channel && await channel.messages.delete(REALM_PANEL_MESSAGE_ID).then(() => true).catch(() => false)) removed++;
+  }
+  return removed;
+}
+
 // 승인/거절 결과 DM. 다른 알림 카드와 같은 모양(색 띠 → 제목 → 본문 → 안내 문구).
 function buildRealmResultDm(status, nickname, processedByName) {
   const approved = status === 'approved';
@@ -458,12 +489,14 @@ module.exports = {
   refreshRealmRosterMessage,
   refreshRealmPanelMessage,
   updateRealmRosterInPlace,
+  removeClosedRealmPosts,
   buildRealmResultDm, // 화면 모음·테스트용
   readRealmReview,
 };
 
 // ── "🏰 신청하기" 버튼 → 신청서 모달 / "<:Emerald:1544331499976007810> 승인"·"❌ 거절" 처리 ('realm:' 프리픽스) ──
 async function handleRealmButton(interaction) {
+  if (!REALM_OPEN) return replyRealmClosed(interaction);
   if (interaction.customId === 'realm:apply') {
     if (APPLY_DISABLED) {
       await interaction.reply(quick('<:Barrier:1544331503448625233> **아직 신청을 받고 있지 않습니다.** 신청 시작일에 다시 시도해주세요.', { ephemeral: true }));
@@ -548,6 +581,7 @@ async function handleRealmButton(interaction) {
 
 // ── 신청서 모달 제출 → 관리자 검토 채널에 임베드 전송 ────────────────────
 async function handleRealmModal(interaction) {
+  if (!REALM_OPEN) return replyRealmClosed(interaction);
   const nickname = interaction.fields.getTextInputValue('mc_nickname').trim();
 
   if (!REALM_REVIEW_CHANNEL_ID) {
@@ -633,6 +667,7 @@ async function resolveRosterTarget(interaction, { requireInRoster }) {
 // 넷 다 유저/멤버 조회 + refreshRealmRosterMessage(채널·메시지 조회/삭제/재전송)까지
 // API 호출이 여러 번 이어져 3초 응답 제한을 넘기기 쉬우므로, 맨 앞에서 먼저 deferReply로 확정해둔다.
 async function handleRealmRosterModal(interaction) {
+  if (!REALM_OPEN) return replyRealmClosed(interaction);
   if (!ADMIN_IDS.includes(interaction.user.id)) {
     await interaction.reply(quick('<:Barrier:1544331503448625233> **권한이 없습니다.**', { ephemeral: true }));
     return;

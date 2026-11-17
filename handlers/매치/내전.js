@@ -682,6 +682,7 @@ async function handleNaejeonButton(interaction) {
       const id = `test_${name}`;
       if (match.participants.some(u => u.id === id || u.displayName === name)) continue;
       match.participants.push({ id, displayName: name });
+      tiers.setName(id, name);
       for (const game of Object.keys(tiers.LADDERS)) {
         // 롤·발로는 위 표 그대로, 오버워치·배그는 표에 없으니 이름 순서로 적당히 골라 넣는다(티어 없는 두 명은 그대로 없음)
         let tier = saved?.[game] ?? null;
@@ -690,7 +691,22 @@ async function handleNaejeonButton(interaction) {
           const t = list[(match.participants.length * 3) % (list.length - 1)];
           tier = t.divs ? { tier: t.key, div: (match.participants.length % t.divs) + 1 } : { tier: t.key, score: 250 };
         }
+        if (game === 'overwatch') { // 오버워치는 역할별 티어로: 사람마다 1~2개 역할 + 자유(6vs6) 티어
+          tiers.setTier(id, game, null);
+          const k = match.participants.length;
+          const roles = tiers.OW_ROLES.filter(r => !r.open).map(r => r.key);
+          const mine = tier ? [roles[k % 3], ...(k % 2 ? [roles[(k + 1) % 3]] : [])] : [];
+          for (const r of roles) tiers.setTier(id, `overwatch.${r}`, mine.includes(r) ? tier : null);
+          tiers.setTier(id, 'overwatch.open', tier);
+          continue;
+        }
         tiers.setTier(id, game, tier);
+      }
+      // 포지션(롤)·역할(발로): 이름 순서로 주/부를 돌려 가며 넣는다(티어 없는 사람은 포지션도 없음)
+      const k = match.participants.length;
+      for (const game of Object.keys(tiers.POSITIONS)) {
+        const keys = tiers.POSITIONS[game].map(p => p.key);
+        tiers.setPositions(id, game, saved ? [keys[k % keys.length], keys[(k + 2) % keys.length]] : []);
       }
     }
     for (let n = 1; match.participants.length < max; n++) { // 준비한 이름보다 정원이 크면 번호로

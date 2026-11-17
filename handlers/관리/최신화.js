@@ -171,7 +171,11 @@ async function refreshPostedMessages(client, { includeCobblemon = false, include
 
   counts.recruit = await refreshRecruitPanels(client).catch(err => { notes.push(`안내 패널 오류: ${err?.message ?? err}`); return 0; });
 
-  try {
+  // 렐름이 닫혀 있으면(config REALM_OPEN: false) 패널·명단을 다시 그리지 않고, 남아 있는 패널·명단 메시지를 지운다.
+  if (!require('../../config').REALM_OPEN) {
+    counts.realmRemoved = await require('../../forms/마크').removeClosedRealmPosts(client)
+      .catch(err => { notes.push(`렐름 정리 오류: ${err?.message ?? err}`); return 0; });
+  } else try {
     const { refreshRealmPanelMessage, updateRealmRosterInPlace } = require('../../forms/마크');
     const realmErr = await refreshRealmPanelMessage(client);
     counts.realmPanel = realmErr ? 0 : 1;
@@ -200,6 +204,7 @@ async function refreshPostedMessages(client, { includeCobblemon = false, include
     counts.recruit != null && `안내 패널 ${counts.recruit}개`,
     counts.realmPanel != null && `렐름 패널 ${counts.realmPanel}개`,
     counts.roster != null && `명단 ${counts.roster}개`,
+    counts.realmRemoved && `닫힌 렐름 글 ${counts.realmRemoved}개 삭제`,
     counts.cobblemon != null && `코블몬 패널 ${counts.cobblemon}개`,
     counts.matches != null && `내전/모집 ${counts.matches}건`,
     counts.recent != null && `최근 카드 ${counts.recentScanned}개 중 ${counts.recent}개 수정`,
