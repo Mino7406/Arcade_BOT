@@ -510,6 +510,13 @@ async function ensureTierEmojis(client) {
   return emojiIds.size;
 }
 
+// 티어 이모지 글자: <:lol_diamond:ID>. 마우스를 올리면 :lol_diamond: 처럼 이름이 보인다(이모지가 없으면 빈 글자).
+function tierEmojiTag(game, tier) {
+  const file = tier && emojiFileName(game, tier);
+  const id = file && emojiIds.get(file);
+  return id ? `<:${file}:${id}>` : '';
+}
+
 function tierEmojiId(game, tier) {
   const file = tier && emojiFileName(game, tier);
   return file ? emojiIds.get(file) ?? null : null;
@@ -551,7 +558,7 @@ function tierBadge(gk, tier) {
   if (!id) return `\`${tierLabel(game, tier, { short: true })}\``;
   const t = findTier(game, tier.tier);
   const tail = (game === 'lol' || game === 'overwatch') && t.divs && tier.div ? `${tier.div}` : ''; // 티어마다 그림 하나인 게임은 단계 숫자를 뒤에
-  return `<:t:${id}>${tail}`;
+  return `<:${emojiFileName(game, tier)}:${id}>${tail}`; // 마우스를 올렸을 때 :lol_diamond: 처럼 티어 이름이 보이게(예전엔 :t:)
 }
 
 module.exports = {
@@ -586,6 +593,7 @@ module.exports = {
   refreshFileNames,
   ensureTierEmojis,
   tierEmojiId,
+  tierEmojiTag,
   positionEmojiId,
   positionEmoji,
   positionIcon,

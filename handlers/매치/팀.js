@@ -493,8 +493,8 @@ function teamBlocks(teams, match) {
     });
     const scores = memberTiers.map(tr => tiers.tierScore(game, tr)).filter(x => x !== null && x !== undefined);
     const avgTier = scores.length ? tiers.tierFromScore(game, scores.reduce((a, b) => a + b, 0) / scores.length) : null;
-    const avgEmoji = avgTier && tiers.tierEmojiId(game, avgTier);
-    const avg = avgTier ? `${avgEmoji ? `<:t:${avgEmoji}> ` : ''}${tiers.tierLabel(game, avgTier)}` : ''; // 팀 평균 티어: <이모지> 다이아몬드4
+    const avgEmoji = avgTier && tiers.tierEmojiTag(game, avgTier);
+    const avg = avgTier ? `${avgEmoji ? `${avgEmoji} ` : ''}${tiers.tierLabel(game, avgTier)}` : ''; // 팀 평균 티어: <이모지> 다이아몬드4
     const title = `${TEAM_ICONS[i] ?? '▫️'} ${t.name ? escapeMarkdown(t.name) : `${i + 1} 팀`}`;
     if (compact) {
       const names = t.members.map((n, k) => `${memberTiers[k] ? `${tiers.tierBadge(game, memberTiers[k])} ` : ''}${escapeMarkdown(n)}`);
@@ -516,8 +516,8 @@ function teamBlocks(teams, match) {
       const tail = slot && !iconCol ? ` · ${slot}` : '';
       if (!withTiers) return `▸ **${escapeMarkdown(n)}**`;
       if (!tr) return `${lead}❓ **${escapeMarkdown(n)}**${tail}`;
-      const id = tiers.tierEmojiId(game, tr);
-      return `${lead}${id ? `<:t:${id}>` : '▸'} **${escapeMarkdown(n)}** · *${tiers.tierLabel(game, tr)}*${tail}`; // [자리] [티어] 이름 · 기울임 티어
+      const emoji = tiers.tierEmojiTag(game, tr);
+      return `${lead}${emoji || '▸'} **${escapeMarkdown(n)}** · *${tiers.tierLabel(game, tr)}*${tail}`; // [자리] [티어] 이름 · 기울임 티어
     });
     return `### ${title}${avg ? `　·　${avg}` : ''}\n${lines.length ? `>>> ${lines.join('\n')}` : '-# 없음'}`; // 팀원은 인용 블록(왼쪽 세로 막대)으로 묶는다, 빈 팀은 "없음"
   });
@@ -868,8 +868,8 @@ function tierIconUrl(game, tier) {
 // 저장된 티어 한 줄: "<이모지> **에메랄드4**" / 없으면 "아직 저장 안 함"
 function tierLine(game, tier) {
   if (!tier) return '*아직 저장 안 함*'; // 줄 중간에도 들어가서 -# (줄 맨 앞에서만 작동) 대신 기울임
-  const id = tiers.tierEmojiId(game, tier);
-  return `${id ? `<:t:${id}> ` : ''}**${tiers.tierLabel(game, tier)}**`;
+  const emoji = tiers.tierEmojiTag(game, tier);
+  return `${emoji ? `${emoji} ` : ''}**${tiers.tierLabel(game, tier)}**`;
 }
 
 // 버튼 줄: 기능 버튼들은 첫 줄, ↩️ 뒤로는 늘 따로 둘째 줄(내 티어 설정 모든 화면 공통)
