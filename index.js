@@ -364,7 +364,7 @@ async function onReady(c) {
   await reconcileTempChannels(c); // 재시작 전 만들어둔 임시 음성채널 중 빈 방 정리
   await reconcileMatchBonusMessages(c); // 봇이 꺼져있던 동안 인증 채널에 올라와 예약이 빠진 메시지 복구
   startQuizScheduler(c); // 놀이터 채널에 하루 한 번 무작위 시각으로 상식퀴즈를 출제
-  startRaidScheduler(c); // 하루~사흘마다(무작위) 놀이터에 레이드 몬스터 출현
+  startRaidScheduler(c); // 하루~이틀마다(무작위) 놀이터에 레이드 몬스터 출현
   // 이미 올라가 있는 안내 패널·렐름 패널·명단을 지금 코드의 디자인으로 자동 갱신(내전/모집은 복원 때, 코블몬은 위에서 이미 함)
   refreshPostedMessages(c, { includeMatches: false })
     .then(r => logSystem({ 유형: '봇 상태', 내용: `게시물 최신화 — ${r.summary}` }))

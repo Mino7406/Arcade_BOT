@@ -1,4 +1,4 @@
-// 레이드.js — 레이드: 하루~사흘마다(무작위) 놀이터에 몬스터가 출현해 XP 시스템을 멈춰 세우고,
+// 레이드.js — 레이드: 하루~이틀마다(무작위) 놀이터에 몬스터가 출현해 XP 시스템을 멈춰 세우고,
 // 4인 선착순 파티가 턴제로 토벌하면 다시 풀린다. 전투 규칙·몬스터 데이터는 레이드전투.js, 패널 그림은
 // 레이드그림.js에 있고, 이 파일은 출현 스케줄·화면 조립·버튼·타이머·XP 정지/보상을 맡는다.
 //
@@ -40,9 +40,10 @@ const {
 const { renderRecruit, renderBattle, renderEnd, warmUp } = require('./그림');
 
 // ── 설정 ────────────────────────────────────────────────────────
-const SPAWN_INTERVAL_DAYS = [1, 3]; // 출현 간격(일) 최소~최대. 매번 이 안에서 무작위로 뽑은 날 뒤, 아래 시간대 중 무작위 시각
-const SPAWN_WINDOW_START_HOUR = 12; // KST. 사람이 없는 새벽에 떠서 아무도 못 잡는 일이 없게 시간대를 둔다
-const SPAWN_WINDOW_END_HOUR = 23;
+const SPAWN_INTERVAL_DAYS = [1, 2]; // 출현 간격(일) 최소~최대. 매번 이 안에서 무작위로 뽑은 날 뒤, 아래 시간대 중 무작위 시각
+// 출현 시간대(KST, [시작 시, 끝 시]). 끝이 24 넘으면 다음 날 새벽까지. 시작한 날의 요일로 평일/주말을 정한다.
+const SPAWN_WINDOW_WEEKDAY = [18, 27]; // 평일(월~금) 18:00 ~ 다음 날 03:00
+const SPAWN_WINDOW_WEEKEND = [12, 29]; // 주말(토·일) 12:00 ~ 다음 날 05:00
 const MAX_MANUAL_SPAWN_AHEAD_DAYS = 30; // 관리자가 출현 시각을 직접 정할 때 최대 며칠 뒤까지(오타로 몇 년 뒤가 되는 것만 막음)
 const RECRUIT_MS = 60 * 60 * 1000;  // 출현 후 모집 대기 시간 — 그동안 아무도 참가하지 않으면 몬스터 자동 도주
 const TURN_MS = 60 * 1000;          // 턴당 행동 선택 시간(못 고르면 자동 공격)
@@ -111,9 +112,14 @@ function kstDayStartUtc(epochMs, addDays = 0) {
   const kst = new Date(epochMs + KST_OFFSET_MS);
   return Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate() + addDays) - KST_OFFSET_MS;
 }
+// 그 날(KST 0시 기준 epoch)에 시작하는 출현 시간대 [시작, 끝) epoch ms
+function spawnWindowOfDay(dayStartUtc) {
+  const dow = new Date(dayStartUtc + KST_OFFSET_MS).getUTCDay(); // 0=일 … 6=토
+  const [startH, endH] = dow === 0 || dow === 6 ? SPAWN_WINDOW_WEEKEND : SPAWN_WINDOW_WEEKDAY;
+  return [dayStartUtc + startH * 3600_000, dayStartUtc + endH * 3600_000];
+}
 function randomTimeInWindow(dayStartUtc) {
-  const start = dayStartUtc + SPAWN_WINDOW_START_HOUR * 3600_000;
-  const end = dayStartUtc + SPAWN_WINDOW_END_HOUR * 3600_000;
+  const [start, end] = spawnWindowOfDay(dayStartUtc);
   return start + Math.floor(Math.random() * (end - start));
 }
 // 다음 자동 출현 몬스터는 일정을 잡을 때 등록된 몬스터 중 무작위로 미리 정한다(/xp에 '다음 몬스터'로 보이고 바꿀 수 있게).
@@ -129,15 +135,16 @@ function scheduleNextSpawn(fromMs = Date.now()) {
 // 봇이 꺼져 있던 사이 출현 시각을 한참 넘겼으면(새벽에 켜지는 등) 그 자리에서 바로 띄우지 않고
 // 오늘 남은 시간대(없으면 내일 시간대)의 무작위 시각으로 다시 잡는다.
 function rescheduleOverdue(now = Date.now()) {
-  const todayEnd = kstDayStartUtc(now) + SPAWN_WINDOW_END_HOUR * 3600_000;
-  const todayStart = kstDayStartUtc(now) + SPAWN_WINDOW_START_HOUR * 3600_000;
-  if (now < todayEnd - 30 * 60_000) {
-    const from = Math.max(now, todayStart);
-    state.nextSpawnAt = from + Math.floor(Math.random() * (todayEnd - from));
-  } else {
-    state.nextSpawnAt = randomTimeInWindow(kstDayStartUtc(now, 1));
+  // 어제 시작해 새벽까지 이어지는 시간대, 오늘, 내일 순으로 아직 30분 넘게 남은 첫 시간대를 쓴다
+  for (const add of [-1, 0, 1]) {
+    const [start, end] = spawnWindowOfDay(kstDayStartUtc(now, add));
+    if (now < end - 30 * 60_000) {
+      const from = Math.max(now, start);
+      state.nextSpawnAt = from + Math.floor(Math.random() * (end - from));
+      saveState(state);
+      return;
+    }
   }
-  saveState(state);
 }
 
 // ── 화면 ────────────────────────────────────────────────────────

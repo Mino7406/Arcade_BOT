@@ -135,7 +135,7 @@ function buildManageView(notice, guildId) {
           .setStyle(st.newbieBoostEnabled ? ButtonStyle.Secondary : ButtonStyle.Primary),
       },
       {
-        text: `**레이드 자동 출현**　${raid.autoSpawn ? '🟢 가동 중' : '🔴 중지됨'}\n-# 하루~사흘마다(무작위) 놀이터에 출현 · 진행 중엔 채팅·통화방·미니게임 XP 정지`,
+        text: `**레이드 자동 출현**　${raid.autoSpawn ? '🟢 가동 중' : '🔴 중지됨'}\n-# 하루~이틀마다(무작위) 놀이터에 출현 · 진행 중엔 채팅·통화방·미니게임 XP 정지`,
         button: toggle('xp:mng:raidauto', !raid.autoSpawn, '중지', '가동'),
       },
       { text: raidStatusText(raid), button: raidButton(raid) },
