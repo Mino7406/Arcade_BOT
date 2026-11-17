@@ -113,6 +113,7 @@ function clearAutoEndTimer(match) {
 // "📣 참가자 멘션" 버튼으로 보낸 멘션 메시지를 삭제한다. 멘션을 보낸 적 없으면 아무것도 안 함.
 // 이미 지워졌거나 채널 접근이 불가한 경우도 조용히 무시한다(본 임베드 삭제를 막으면 안 되므로).
 async function deleteMentionMessage(client, match) {
+  await deleteBoardShortcut(client, match);
   if (!match.mentionMessageId) return;
   try {
     const channel = client.channels.cache.get(match.message.channelId)
@@ -122,6 +123,23 @@ async function deleteMentionMessage(client, match) {
   } catch (err) {
     console.error('멘션 메시지 자동 삭제 중 오류:', err);
     logError('자동 삭제 실패', `${matchTag(match)} 참가자 멘션 메시지 삭제 실패`, err, { 채널: matchChannelName(match) });
+  }
+}
+
+// 내전채팅에 팀 짜기 카드가 올라갈 때 게임모집 채널의 내전 게시글에 답장으로 단 바로가기 카드를 지운다.
+// 참가자 멘션 메시지와 같은 시점(내전 삭제·취소·자동 종료)에 같이 지워진다.
+async function deleteBoardShortcut(client, match) {
+  if (!match.boardShortcutId) return;
+  const id = match.boardShortcutId;
+  match.boardShortcutId = null;
+  try {
+    const channel = client.channels.cache.get(match.message.channelId)
+      || await client.channels.fetch(match.message.channelId).catch(() => null);
+    const msg = channel && await channel.messages.fetch(id).catch(() => null);
+    if (msg) await msg.delete();
+  } catch (err) {
+    console.error('팀 짜기 바로가기 삭제 중 오류:', err);
+    logError('자동 삭제 실패', `${matchTag(match)} 팀 짜기 바로가기 삭제 실패`, err, { 채널: matchChannelName(match) });
   }
 }
 
@@ -1238,6 +1256,7 @@ module.exports = {
   recoverCancelledEmbeds,
   scheduleMessageDelete,
   deleteMentionMessage,
+  deleteBoardShortcut,
   shuffleIntoTeams,
   buildMatchCard,
   isNotifyPending,

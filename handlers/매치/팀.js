@@ -27,10 +27,11 @@ const {
   ADMIN_IDS,
   getNaejeonMatches: getMatches,
   gameThumb,
+  deleteBoardShortcut,
   setCloseHook,
   saveNow,
 } = require('./공용');
-const { card, notice, payload, emojiUrl } = require('../공통/카드');
+const { card, notice, payload, emojiUrl, COLORS } = require('../공통/카드');
 const { logError } = require('../공통/로그');
 const { displayNameFromInteraction } = require('../공통/이름');
 const { NAEJEON_CHAT_CHANNEL_IDS = {}, GAME_EMOJIS = {} } = require('../../config');
@@ -620,7 +621,22 @@ async function postBoardNow(client, matchMsgId, match) {
   board.channelId = msg.channelId;
   board.messageId = msg.id;
   saveNow(client);
+  await postBoardShortcut(client, match, msg);
   return msg;
+}
+
+// 게임모집 채널의 내전 게시글에 "팀 짜기 카드가 올라왔어요" 바로가기를 답장으로 단다(내전채팅이 다른 채널일 때만).
+// 다시 올라가면 옛 바로가기는 지우고 새로 단다. 실패해도 팀 짜기 카드에는 영향이 없다.
+async function postBoardShortcut(client, match, boardMsg) {
+  try {
+    await deleteBoardShortcut(client, match);
+    if (!match.message || match.message.channelId === boardMsg.channelId) return;
+    const reply = await match.message.reply({ ...buildBoardShortcutPayload(match, boardMsg, { style: 'plain' }), failIfNotExists: false });
+    match.boardShortcutId = reply.id;
+    saveNow(client);
+  } catch (err) {
+    console.error('팀 짜기 바로가기 게시 실패:', err);
+  }
 }
 
 // 티어만 바뀌었을 때: 자리는 그대로 두고 카드 내용만 고친다.
@@ -658,6 +674,29 @@ async function getEditableMatch(interaction, matchMsgId) {
     return null;
   }
   return match;
+}
+
+// 내전채팅에 팀 짜기 카드가 올라가면 게임모집 채널의 내전 게시글에 답장으로 다는 바로가기 카드(시안).
+// style 'game': 게임 색 띠 + 게임 아이콘 / 'plain': 아이콘 없이 한 줄짜리 작은 카드
+function buildBoardShortcutPayload(match, boardMessage, { style = 'game' } = {}) {
+  const { gameInfo, title } = match.data;
+  const link = new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(boardMessage.url).setLabel('바로가기').setEmoji('🔗');
+  const where = `<#${boardMessage.channelId}>`;
+  if (style === 'plain') {
+    return payload(card({
+      color: COLORS.info,
+      blocks: [{ text: `📌 **팀 설정**이 ${where} 에 올라왔어요.`, button: link }],
+    }), { allowedMentions: { parse: [] } });
+  }
+  return payload(card({
+    color: gameInfo.color,
+    header: '📌 팀 짜기 카드가 올라왔어요',
+    sub: ['내전', title],
+    thumb: gameThumb(gameInfo),
+    thumbAlt: gameInfo.name,
+    blocks: [{ text: `### 🔗 ${where}
+누르면 팀 짜기 카드로 이동해요. 팀 확인·변경은 거기서 해요.`, button: link }],
+  }), { allowedMentions: { parse: [] } });
 }
 
 function linkRow(url) {
@@ -1262,6 +1301,7 @@ module.exports = {
   balanceTeams,
   resolveMember,
   buildBoardPayload, // 화면 모음·테스트용
+  buildBoardShortcutPayload, // 화면 모음용(시안)
   buildTierGamePayload,
   buildTierPickPayload, // 화면 모음용
   buildPositionPayload,

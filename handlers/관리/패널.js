@@ -422,6 +422,7 @@ async function convertMatchType(interaction, fromType, msgId) {
   } else {
     delete match.teams;
     delete match.board;
+    await require('../매치/공용').deleteBoardShortcut(client, match); // 팀 짜기 카드가 사라지므로 바로가기도 지운다
   }
   toMap.set(msgId, match);
 
