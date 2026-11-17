@@ -175,7 +175,7 @@ function buildLobbyCard(lobby) {
     header: '🎰 룰렛머신',
     sub: ['하루 1회', lobby.hackTools > 0 ? `${hackToolEmoji()} ${HACK_TOOL_NAME} ${hackHaveText(lobby.hackTools)}` : null, lobby.gateways > 0 ? `${gatewayEmoji()} ${GATEWAY_NAME} ${gatewayHaveText(lobby.gateways)}` : null].filter(Boolean),
     blocks: [
-      `<@${lobby.userId}>님, 베팅 XP를 고른 뒤 **🎰 돌리기**를 누르세요.${lobby.gateways > 0 ? `\n-# ${gatewayEmoji()} ${GATEWAY_NAME}를 사용하면 이번 판은 **100% 잭팟**이에요(돌리면 1개 소모)` : ''}`,
+      `<@${lobby.userId}>님, 베팅 XP를 고른 뒤 **🎰 돌리기**를 누르세요.`,
       { image: SLOT_URL },
       { text: betText, ...(withoutCancel.button ? { button: withoutCancel.button } : {}) },
       payoutTable(),
