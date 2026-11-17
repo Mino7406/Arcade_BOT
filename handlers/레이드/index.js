@@ -203,6 +203,15 @@ function rememberImageUrl(r, message) {
   }
 }
 
+// 깨진 글자: 한글·영문·숫자 중 일부(rate)를 ▒░▓#? 로 바꾼다. 5초마다 모양이 바뀌어 대기창이 계속 깨져 보인다(salt 로 줄마다 다르게).
+function glitchStr(str, rate = 0.08, salt = 1) {
+  let seed = ((Math.floor(Date.now() / 5000) * 2654435761 + salt * 40503) >>> 0) || 1;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296);
+  const bad = ['▒', '░', '▓', '#', '?'];
+  return [...str].map(ch => (/[가-힣A-Za-z0-9]/.test(ch) && rnd() < rate ? bad[Math.floor(rnd() * bad.length)] : ch)).join('');
+}
+const glitchCode = () => { let seed = (Math.floor(Date.now() / 5000) >>> 0) || 1; const h = '0123456789ABCDEF'; seed = (seed * 1103515245 + 12345) >>> 0; return 'ERR_0x' + h[seed % 16] + h[(seed >>> 8) % 16]; };
+
 // 깨진 시계: 시간이 흐르지 않는 것처럼 00:00:00 에서 숫자 몇 개가 ▒░▓#로 깜빡인다(10초마다 모양이 바뀜).
 function glitchClock() {
   let seed = Math.floor(Date.now() / 10000) >>> 0 || 1;
@@ -237,12 +246,13 @@ async function recruitView(r, { redraw = true } = {}) {
   if (isPersistent(r)) {
     const rules = raidRules(r);
     sections.push({
-      text: '>>> ## ⚠️ ░ERR_0x7F░ XP 시스템 오류\n' +
-        `${m.name}${subjectJosa(m.name)} XP 시스템을 ▓▓하고 있습니다.\n**채팅 · 통화방 · 미니게임 XP 지급이 정지**되었습니다.\n` +
-        '-# 토벌하지 않으면 사라지지 않아요 · 기다리는 동안 모두의 XP가 계속 줄어요',
+      text: `>>> ## ⚠️ ░${glitchCode()}░ ${glitchStr('XP 시스템 오류', 0.15, 1)}\n` +
+        glitchStr(`${m.name}${subjectJosa(m.name)} XP 시스템을 ▓▓하고 있습니다.`, 0.08, 2) + '\n' +
+        glitchStr('**채팅 · 통화방 · 미니게임 XP 지급이 정지**되었습니다.', 0.07, 3) + '\n' +
+        glitchStr('-# 토벌하지 않으면 사라지지 않아요 · 기다리는 동안 모두의 XP가 계속 줄어요', 0.07, 4),
     });
     sections.push({
-      text: `## ⏳ \`${glitchClock()}\` ░TIME_ERR\n` +
+      text: `## ⏳ \`${glitchClock()}\` ░${glitchStr('TIME_ERR', 0.3, 5)}\n` +
         `📉 **지금까지 잃은 XP :** \`-${lostShown(r)} XP\` *(1인당)*\n` +
         `💀 **패배 ${r.defeatStacks || 0}회** · 패배 1회마다 모든 유저 **-${rules.defeatPenaltyXp ?? 0} XP**\n` +
         `**파티 ${r.party.length} / ${PARTY_MAX}** · 역할 버튼을 눌러 참가하세요`,
@@ -282,9 +292,7 @@ async function recruitView(r, { redraw = true } = {}) {
   });
   sections.push({
     // 이름표를 붙인 인용 블록 두 줄 — 보상과 시작 규칙을 한눈에
-    text: (isPersistent(r)
-      ? `> 🎁 **보상** : +${clearXpOf(r)} XP\n` // ???: 다른 몬스터처럼 XP만 적는다(MVP 게이트웨이는 안내하지 않음)
-      : `> 🎁 **보상** : +${CLEAR_XP} XP · ${hackToolEmoji()} ${HACK_TOOL_NAME} 1개\n`) +
+    text: `> 🎁 **보상** : +${isPersistent(r) ? clearXpOf(r) : CLEAR_XP} XP · ${hackToolEmoji()} ${HACK_TOOL_NAME} 1개\n` + // ???도 일반 몬스터처럼 일반 파티원은 해킹 툴 1개(MVP 게이트웨이는 안내하지 않음)
       '> ▶️ **바로 시작** : 첫 참가자가 방장이 되며 시작 여부를 결정할 수 있어요.',
   });
   return assemble(accentOf(r, ACCENT.recruit), image, sections);
