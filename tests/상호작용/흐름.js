@@ -583,7 +583,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
   await flow('룰렛: 블랙월 게이트웨이를 사용하고 돌리면 100% 잭팟 · 아이템 1개 소모 · 취소하면 소모 안 함', async () => {
     const gw = require(path.join(root, 'handlers/게임/블랙월게이트웨이.js'));
     lv.applyXp('g1', 'gwuser', 800, 'test');
-    gw.grantGateway('g1', 'gwuser'); gw.grantGateway('g1', 'gwuser');
+    assert(gw.grantGateway('g1', 'gwuser') && !gw.grantGateway('g1', 'gwuser'), '게이트웨이는 최대 1개');
     channel.sent.length = 0;
     // 사용 버튼이 로비에 떠야 하고, 켜고 끌 수 있다
     const s = mkInteraction({ user: 'gwuser', command: '룰렛' });
@@ -597,7 +597,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     const shown = channel.sent.map(m => JSON.stringify(m.components || [])).join(' ');
     assert(shown.includes('JACKPOT') && shown.includes('블랙월 게이트웨이 사용'), '게이트웨이를 사용하고 돌리면 결과가 JACKPOT + 발동 표시');
     const left = gw.getGateways('g1', 'gwuser');
-    assert(left === 1 || left === Infinity, '아이템은 돌릴 때 1개만 소모됨(남은 ' + left + '개)');
+    assert(left === 0 || left === Infinity, '아이템은 돌릴 때 1개만 소모됨(남은 ' + left + '개)');
     // 사용 버튼을 누르면 걸 수 있는 최댓값으로 자동 베팅 — 베팅을 따로 고르지 않아도 바로 돌릴 수 있다
     // (룰렛은 하루 1회라 위에서 돌린 gwuser 와 다른 유저로)
     lv.applyXp('g1', 'gwuser2', 800, 'test'); gw.grantGateway('g1', 'gwuser2');
@@ -753,12 +753,19 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     }
     // XP 조정 유저 패널: 해킹 툴 지급(최대 3개에서 멈춤) · 회수
     const hackMod = require(path.join(root, 'handlers/게임/해킹툴.js'));
-    for (let i = 0; i < 4; i++) await xp.handleXpButton(mkInteraction({ user: ADMIN, customId: 'xp:hackadd:hx1', message: msg }));
+    for (let i = 0; i < 4; i++) await xp.handleXpButton(mkInteraction({ user: ADMIN, customId: 'xp:itemadd:hx1:hack', message: msg }));
     assert(hackMod.getHackTools('g1', 'hx1') === 3, `관리자 지급이 최대 3개에서 멈추지 않음(${hackMod.getHackTools('g1', 'hx1')})`);
-    assert(JSON.stringify(msg.components).includes('3 / 3개'), 'XP 조정 패널에 해킹 툴 보유 개수가 안 보임');
-    await xp.handleXpButton(mkInteraction({ user: ADMIN, customId: 'xp:hacksub:hx1', message: msg }));
+    assert(JSON.stringify(msg.components).includes('3 / 3개'), '인벤토리에 해킹 툴 보유 개수가 안 보임');
+    const gwMod = require(path.join(root, 'handlers/게임/블랙월게이트웨이.js'));
+    await xp.handleXpButton(mkInteraction({ user: ADMIN, customId: 'xp:inv:hx1', message: msg }));
+    for (let i = 0; i < 2; i++) await xp.handleXpButton(mkInteraction({ user: ADMIN, customId: 'xp:itemadd:hx1:gateway', message: msg }));
+    assert(gwMod.getGateways('g1', 'hx1') === 1, '인벤토리 게이트웨이 지급이 최대 1개에서 멈추지 않음');
+    await xp.handleXpButton(mkInteraction({ user: ADMIN, customId: 'xp:itemsub:hx1:gateway', message: msg }));
+    assert(gwMod.getGateways('g1', 'hx1') === 0, '인벤토리 게이트웨이 회수가 안 됨');
+    await xp.handleXpButton(mkInteraction({ user: ADMIN, customId: 'xp:invback:hx1', message: msg }));
+    await xp.handleXpButton(mkInteraction({ user: ADMIN, customId: 'xp:itemsub:hx1:hack', message: msg }));
     assert(hackMod.getHackTools('g1', 'hx1') === 2, '관리자 회수가 안 됨');
-    await xp.handleXpButton(mkInteraction({ user: 'u9', customId: 'xp:hackadd:hx1', message: msg }));
+    await xp.handleXpButton(mkInteraction({ user: 'u9', customId: 'xp:itemadd:hx1:hack', message: msg }));
     assert(hackMod.getHackTools('g1', 'hx1') === 2, '관리자가 아닌데 해킹 툴이 지급됨');
     for (const cid of ['quiz:refresh', 'quiz:pause', 'quiz:resume']) {
       await quizAdmin.handleQuizAdminButton(mkInteraction({ user: ADMIN, customId: cid, message: msg }));

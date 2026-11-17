@@ -62,7 +62,7 @@ function setCount(guildId, userId, n) {
   if (!items[guildId]) items[guildId] = {};
   if (n > 0) items[guildId][userId] = n; else delete items[guildId][userId];
 }
-const GATEWAY_MAX = 3; // 해킹 툴과 같은 최대 보유량
+const GATEWAY_MAX = 1; // 최대 보유량(해킹 툴은 3개, 게이트웨이는 1개)
 function grantGateway(guildId, userId) {
   const have = getGateways(guildId, userId);
   if (have >= GATEWAY_MAX) return false; // 최대 보유면 못 받음

@@ -27,6 +27,7 @@ const {
 } = require('../레벨/레벨링');
 const { logAction } = require('../공통/로그');
 const { HACK_TOOL_NAME, HACK_TOOL_MAX, getHackTools, grantHackTool, useHackTool, hackToolEmoji, hackToolButtonEmoji } = require('../게임/해킹툴');
+const { GATEWAY_NAME, GATEWAY_MAX, getGateways, grantGateway, useGateway, gatewayEmoji, gatewayButtonEmoji } = require('../게임/블랙월게이트웨이');
 const { getRaidStatus, setAutoSpawn, setNextSpawnAt, setNextMonster, forceSpawnRaid, forceEndRaid } = require('../레이드');
 const { MONSTERS, ALL_MONSTERS } = require('../레이드/전투');
 const { kstDateTimeString, parseKstDateTime } = require('../공통/시간');
@@ -64,6 +65,15 @@ function persist() {
   }
 }
 
+// ── 인벤토리 아이템 목록 ─────────────────────────────────────────
+// 아이템을 늘릴 땐 여기에 한 줄만 더하면 인벤토리 화면(보유량·지급·회수 버튼)에 자동으로 붙는다.
+// (customId: xp:itemadd:<유저>:<key> / xp:itemsub:<유저>:<key> — 버튼 줄이 아이템마다 하나라 최대 4개까지)
+const INVENTORY_ITEMS = [
+  { key: 'hack', name: HACK_TOOL_NAME, max: HACK_TOOL_MAX, get: getHackTools, grant: grantHackTool, use: useHackTool, emoji: hackToolEmoji, buttonEmoji: hackToolButtonEmoji },
+  { key: 'gateway', name: GATEWAY_NAME, max: GATEWAY_MAX, get: getGateways, grant: grantGateway, use: useGateway, emoji: gatewayEmoji, buttonEmoji: gatewayButtonEmoji },
+];
+const findItem = (key) => INVENTORY_ITEMS.find(it => it.key === key);
+
 // ── 화면 구성 ─────────────────────────────────────────────────
 
 function buildPickRow(selectedId) {
@@ -88,12 +98,9 @@ function buildActionRows(guildId, targetId) {
         .setLabel(frozen ? '지급 재개' : '지급 정지')
         .setStyle(ButtonStyle.Secondary),
     ),
-    // 해킹 툴(레이드 보상, 룰렛 꽝 번복권) 수동 지급·회수 — 최대 보유면 지급, 0개면 회수 버튼이 꺼진다
+    // 아이템(해킹 툴·블랙월 게이트웨이 …) 보유량 확인·지급·회수는 인벤토리 화면 한 곳에 묶는다
     new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`xp:hackadd:${targetId}`).setEmoji(hackToolButtonEmoji()).setLabel(`${HACK_TOOL_NAME} 지급`)
-        .setStyle(ButtonStyle.Primary).setDisabled(getHackTools(guildId, targetId) >= HACK_TOOL_MAX),
-      new ButtonBuilder().setCustomId(`xp:hacksub:${targetId}`).setLabel(`${HACK_TOOL_NAME} 회수`)
-        .setStyle(ButtonStyle.Secondary).setDisabled(getHackTools(guildId, targetId) <= 0),
+      new ButtonBuilder().setCustomId(`xp:inv:${targetId}`).setEmoji('🎒').setLabel('인벤토리').setStyle(ButtonStyle.Primary),
     ),
   ];
 }
@@ -278,11 +285,35 @@ function buildPanelCard(guildId, targetId, targetUser, displayName, notice, rows
       `대상 : <@${targetId}> (\`${displayName}\`)` +
         (frozen ? '\n🚫 **지급 정지 중** — 자동 지급 경로(채팅·통화방·미니게임 등)에서 더 이상 XP를 받지 않습니다.' : ''),
       `### LEVEL ${level}\n${bar}\n**${currentLevelXp} / ${neededXp}** XP　(누적 \`${xp}\` XP)`,
-      `${hackToolEmoji()} **${HACK_TOOL_NAME}** ${getHackTools(guildId, targetId)} / ${HACK_TOOL_MAX}개`,
     ],
     footer: '아래 버튼으로 XP를 조정할 수 있습니다.',
     rows,
   });
+}
+
+// 🎒 인벤토리: 아이템별 보유량 + 지급·회수 버튼(최대면 지급, 0개면 회수가 꺼진다), 돌아가기.
+function buildInventoryView(guildId, targetId, displayName, notice) {
+  const rows = INVENTORY_ITEMS.map(it => new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`xp:itemadd:${targetId}:${it.key}`).setEmoji(it.buttonEmoji()).setLabel(`${it.name} 지급`)
+      .setStyle(ButtonStyle.Primary).setDisabled(it.get(guildId, targetId) >= it.max),
+    new ButtonBuilder().setCustomId(`xp:itemsub:${targetId}:${it.key}`).setLabel(`${it.name} 회수`)
+      .setStyle(ButtonStyle.Secondary).setDisabled(it.get(guildId, targetId) <= 0),
+  ));
+  rows.push(new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`xp:invback:${targetId}`).setEmoji('↩️').setLabel('돌아가기').setStyle(ButtonStyle.Secondary),
+  ));
+  return payload(card({
+    color: COLORS.info,
+    header: '🎒 인벤토리',
+    sub: `대상 : ${displayName}`,
+    blocks: [
+      notice || null,
+      `대상 : <@${targetId}> (\`${displayName}\`)`,
+      INVENTORY_ITEMS.map(it => `${it.emoji()} **${it.name}** ${it.get(guildId, targetId)} / ${it.max}개`).join('\n'),
+    ],
+    footer: '아이템을 지급하거나 회수할 수 있습니다.',
+    rows,
+  }));
 }
 
 async function resolveTarget(interaction, targetId) {
@@ -455,16 +486,26 @@ async function handleXpButton(interaction) {
     return;
   }
 
-  if (action === 'hackadd' || action === 'hacksub') {
-    const add = action === 'hackadd';
-    const ok = add ? grantHackTool(interaction.guildId, targetId) : useHackTool(interaction.guildId, targetId);
+  if (action === 'inv' || action === 'invback') {
     const target = await resolveTarget(interaction, targetId);
-    const have = getHackTools(interaction.guildId, targetId);
-    if (ok) logAction(interaction, 'XP 조정', `${target.displayName}(${targetId}) ${HACK_TOOL_NAME} ${add ? '지급' : '회수'} → ${have}개`);
+    await interaction.update(action === 'inv'
+      ? buildInventoryView(interaction.guildId, targetId, target.displayName)
+      : buildPanelView(interaction, targetId, target));
+    return;
+  }
+
+  if (action === 'itemadd' || action === 'itemsub') {
+    const item = findItem(interaction.customId.split(':')[3]);
+    if (!item) return;
+    const add = action === 'itemadd';
+    const ok = add ? item.grant(interaction.guildId, targetId) : item.use(interaction.guildId, targetId);
+    const target = await resolveTarget(interaction, targetId);
+    const have = item.get(interaction.guildId, targetId);
+    if (ok) logAction(interaction, 'XP 조정', `${target.displayName}(${targetId}) ${item.name} ${add ? '지급' : '회수'} → ${have}개`);
     const msg = ok
-      ? `${hackToolEmoji()} **${HACK_TOOL_NAME} 1개를 ${add ? '지급' : '회수'}**했습니다. (보유 ${have} / ${HACK_TOOL_MAX}개)`
-      : add ? `⚠️ 이미 최대(${HACK_TOOL_MAX}개)로 갖고 있어요.` : '⚠️ 회수할 해킹 툴이 없어요.';
-    await interaction.update(buildPanelView(interaction, targetId, target, msg));
+      ? `${item.emoji()} **${item.name} 1개를 ${add ? '지급' : '회수'}**했습니다. (보유 ${have} / ${item.max}개)`
+      : add ? `⚠️ 이미 최대(${item.max}개)로 갖고 있어요.` : `⚠️ 회수할 ${item.name}이(가) 없어요.`;
+    await interaction.update(buildInventoryView(interaction.guildId, targetId, target.displayName, msg));
     return;
   }
 
@@ -562,7 +603,7 @@ async function handleXpModal(interaction) {
 }
 
 // 화면 모음·테스트에서 직접 그려 보려고 화면 빌더도 함께 내보낸다.
-module.exports.views = { buildManageView, buildRaidPickView, buildNextMonsterView, buildRaidTestView, buildConfirmView, buildPanelView };
+module.exports.views = { buildManageView, buildRaidPickView, buildNextMonsterView, buildRaidTestView, buildConfirmView, buildPanelView, buildInventoryView };
 module.exports.handleXpUserSelect = handleXpUserSelect;
 module.exports.handleXpButton = handleXpButton;
 module.exports.handleXpModal = handleXpModal;
