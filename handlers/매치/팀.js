@@ -291,6 +291,7 @@ const slotsFor = (game, size) => LINEUP_SLOTS[game]?.[size] ?? null;
 const POS_SUB_COST = 1;   // 롤: 부 포지션을 맡음(포지션을 더 중요하게 보려고 티어 한 단계만큼)
 const POS_OFF_COST = 2.5; // 롤: 주·부 둘 다 아닌 자리 / 오버워치: 티어를 저장 안 한 롤
 const POS_DUP_COST = 2;   // 자리 배정이 없는 경우(롤 5명이 아닌 팀·발로란트): 한 팀에 같은 주 포지션이 겹칠 때 겹친 사람마다
+const POS_CAP_COST = 20;  // 발로란트: 한 팀에 같은 역할이 2명을 넘으면 넘친 사람마다(밸런스보다 훨씬 중요하게 — 피할 방법이 없을 때만 생김)
 const OW_OFF_ROLE = 2;    // 오버워치: 저장 안 한 롤을 맡으면 가장 높은 롤 티어에서 이만큼 낮춰 계산
 
 function uniquePerms(list) {
@@ -371,8 +372,8 @@ function balanceTeams(participants, game) {
       if (main) seen.set(main, (seen.get(main) || 0) + 1);
     }
     let dup = 0;
-    for (const [key, c] of seen) if (c > slotCap(game, key)) dup += c - slotCap(game, key); // 발로란트 타격대는 2명까지 겹쳐도 됨
-    return { sum, cost: dup * POS_DUP_COST };
+    for (const c of seen.values()) if (c > slotCap(game)) dup += c - slotCap(game); // 발로란트는 같은 역할 2명까지는 겹쳐도 됨, 3명째부터가 넘침
+    return { sum, cost: dup * (game === 'valorant' ? POS_CAP_COST : POS_DUP_COST) };
   };
 
   let best = [];
@@ -483,12 +484,12 @@ function memberSlots(t, resolved, game, lu) {
   return autoFillSlots(slots, game);
 }
 
-// 한 팀에 같은 자리를 맡을 수 있는 최대 인원: 발로란트는 타격대만 2명, 나머지는 1명(롤은 자리마다 1명)
-const slotCap = (game, key) => (game === 'valorant' && key === 'duelist' ? 2 : 1);
+// 한 팀에 같은 자리를 맡을 수 있는 최대 인원: 발로란트는 역할마다 2명까지, 롤은 자리마다 1명
+const slotCap = (game) => (game === 'valorant' ? 2 : 1);
 
 // 비어 있는 사람에게 줄 자리: 자리가 남은 것 중 맡은 사람이 가장 적은 것(동률이면 포지션 목록 순서). 다 찼으면(6명 이상 등) 가장 적은 것.
 function pickSlot(list, count, game) {
-  const open = list.filter(p => count.get(p.key) < slotCap(game, p.key));
+  const open = list.filter(p => count.get(p.key) < slotCap(game));
   const pool = open.length ? open : list;
   return pool.reduce((best, p) => (count.get(p.key) < count.get(best.key) ? p : best), pool[0]).key;
 }
