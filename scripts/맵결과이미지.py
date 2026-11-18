@@ -1,6 +1,6 @@
 """맵 뽑기 결과 이미지 만들기 (개발용 일회성): python -I scripts/맵결과이미지.py
 
-assets/맵/<게임>/<키>.jpg 원본 위에 한국어 맵 이름을 중앙 하단에 박아
+assets/맵/<게임>/<키>.jpg 원본 위에 한국어 맵 이름을(알약 모양 박스 위 흰 글씨) 중앙 하단에 박아
 assets/맵/결과/<게임>/<키>.jpg (1200x675) 로 저장한다. 봇은 이 파일을 그대로 첨부만 한다.
 맵 이름은 handlers/매치/맵.js 의 MAP_POOLS 에서 노드로 읽어 온다(한 곳에서만 관리).
 필요: Python + Pillow, Node.
@@ -37,18 +37,26 @@ def render(src, dst, name):
         gd.line([(0, y), (W, y)], fill=(0, 0, 0, a))
     im = Image.alpha_composite(im, grad)
 
-    # 이름: 흰 글씨 + 어두운 외곽선 2px, 폭이 이미지의 85% 를 넘으면 글자 크기를 줄인다
+    # 이름: 알약 모양 반투명 검정 박스 위에 흰 글씨. 박스까지 포함한 폭이 이미지의 85% 를 넘으면 글자 크기를 줄인다
     size = 56
+    padx, pady = 44, 16
     draw = ImageDraw.Draw(im)
     while size > 24:
         font = ImageFont.truetype(FONT, size)
-        box = draw.textbbox((0, 0), name, font=font, stroke_width=2)
-        if box[2] - box[0] <= W * 0.85:
+        box = draw.textbbox((0, 0), name, font=font)
+        if box[2] - box[0] + padx * 2 <= W * 0.85:
             break
         size -= 2
-    x = (W - (box[2] - box[0])) / 2 - box[0]
-    y = H - 70 - (box[3] - box[1]) - box[1]
-    draw.text((x, y), name, font=font, fill=(255, 255, 255, 255), stroke_width=2, stroke_fill=(10, 10, 14, 255))
+    tw, th = box[2] - box[0], box[3] - box[1]
+    pill_w, pill_h = tw + padx * 2, th + pady * 2
+    px = (W - pill_w) / 2
+    py = H - 48 - pill_h  # 이미지 하단에서 48px 위
+    pill = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    pd = ImageDraw.Draw(pill)
+    pd.rounded_rectangle([px, py, px + pill_w, py + pill_h], radius=pill_h / 2, fill=(8, 8, 12, 205), outline=(255, 255, 255, 70), width=2)
+    im = Image.alpha_composite(im, pill)
+    draw = ImageDraw.Draw(im)
+    draw.text((px + padx - box[0], py + pady - box[1]), name, font=font, fill=(255, 255, 255, 255))
 
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     im.convert('RGB').save(dst, 'JPEG', quality=85, optimize=True, progressive=True)
