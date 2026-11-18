@@ -161,6 +161,19 @@ async function buildScreens() {
     const named = users(10);
     const histBoard = { data: base('lol'), participants: users(10), closed: true, board: { current: { how: 'balance', at: Date.now(), no: 3, teams: halves(users(10)) }, history: [2, 1].map(n => ({ at: Date.now() - n * 3600e3, no: n, how: n === 2 ? 'input' : 'balance', teams: halves(users(10)) })) } };
     add('내전 · 모집', '팀 짜기 내전 내역(📜 버튼)', '카드는 짧게 두고 이전 팀표는 두 번째 줄의 📜 내전 내역 버튼으로 나만 보이는 창에 열어요', team.buildHistoryPayload(histBoard, '1'));
+    // 🗺️ 맵 뽑기: 발로란트·오버워치 카드(결과·연출 중). 첨부는 jpg 라서 jpg 데이터 주소로 넣는다.
+    const jpg = p => ({ files: Object.fromEntries((p.files || []).map(f => [f.name, 'data:image/jpeg;base64,' + require('fs').readFileSync(f.attachment).toString('base64')])) });
+    const mapBoard = (game, info, title, map) => ({ data: { ...base('lol'), game, gameInfo: info, title }, participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: halves(named) }, history: [], ...(map ? { map } : {}) } });
+    const valBoard = mapBoard('valorant', GAMES.val, '발로란트 내전', { game: 'valorant', key: 'ascent', at: Date.now() });
+    const owBoard = mapBoard('overwatch', owInfo, '오버워치 내전', { game: 'overwatch', key: 'grimsvotn', at: Date.now() });
+    const valP = team.buildBoardPayload(valBoard, '1');
+    add('내전 · 모집', '팀 짜기 카드(맵 뽑기 결과 · 발로란트)', '🗺️ 맵 뽑기 결과: 팀 아래에 이름이 알약 박스 위에 박힌 맵 이미지가 보여요 · 버튼은 두 번째 줄에서 🗺️ 다시 뽑기', valP, jpg(valP));
+    const owP = team.buildBoardPayload(owBoard, '1');
+    add('내전 · 모집', '팀 짜기 카드(맵 뽑기 결과 · 오버워치)', '오버워치는 호위·혼합·밀기·쟁탈·플래시포인트 전체 맵에서 같은 확률', owP, jpg(owP));
+    team.__mapSpin.set('1', { key: 'busan', n: 3 });
+    const spinP = team.buildBoardPayload(mapBoard('overwatch', owInfo, '오버워치 내전', null), '1');
+    team.__mapSpin.delete('1');
+    add('내전 · 모집', '팀 짜기 카드(맵 뽑는 중)', '연출 중에는 이름 없는 맵 이미지가 5번 바뀌고 점점 느려져요(총 약 5초) · 글은 🎲 맵을 뽑는 중…', spinP, jpg(spinP));
     add('내전 · 모집', '팀 짜기 카드(내역 버튼이 켜진 모습)', '내전 내역이 있으면 📜 내전 내역 (개수) 버튼이 두 번째 줄에 눌리게 보여요', team.buildBoardPayload(histBoard, '1'));
     add('내전 · 모집', '팀 짜기 카드(롤 포지션)', '포지션을 저장한 사람이 있으면 5명 팀마다 탑~서포터를 맡기고 그 순서로 줄을 세움', team.buildBoardPayload({ data: base('lol'), participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 2, teams: halves(named) }, history: [] } }, '1'));
     add('내전 · 모집', '팀 짜기 카드(발로란트 역할)', '발로란트는 역할이 고정이 아니라 가능한 역할 2개(주·부)를 티어 앞에 나란히 보여 줌 · 안 정한 사람은 투명 아이콘으로 칸만 맞춤', team.buildBoardPayload({ data: { ...base('lol'), game: 'valorant', gameInfo: owInfo, title: '발로란트 내전' }, participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: halves(named) }, history: [] } }, '1'));

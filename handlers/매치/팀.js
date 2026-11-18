@@ -12,8 +12,10 @@
 // 기록: match.board = { channelId, messageId, current: { teams, at, by, how } | null, history: [같은 모양 …] }
 // 팀원은 사람이 적은 이름 글자 그대로 두고, 그릴 때 참가자 이름과 맞춰 보며 티어를 붙인다.
 
+const fs = require('fs');
 const {
   ActionRowBuilder,
+  AttachmentBuilder,
   ButtonBuilder,
   ButtonStyle,
   MessageFlags,
@@ -36,6 +38,7 @@ const { logError } = require('../공통/로그');
 const { displayNameFromInteraction } = require('../공통/이름');
 const { NAEJEON_CHAT_CHANNEL_IDS = {}, GAME_EMOJIS = {} } = require('../../config');
 const tiers = require('./티어');
+const maps = require('./맵');
 
 const MAX_TEAMS = 10;
 const MAX_MEMBERS = 15;
@@ -578,7 +581,23 @@ function buildBoardRows(match, matchMsgId) {
   // 두 번째 줄: 내전 내역(나만 보이는 창으로 열림). 내역이 없으면 눌러지지 않는다.
   const n = normalizeBoard(match).history.length;
   const history = new ButtonBuilder().setCustomId(`team:hist:${matchMsgId}`).setLabel(n ? `📜 내전 내역 (${n})` : '📜 내전 내역').setStyle(ButtonStyle.Secondary).setDisabled(!n);
-  return [new ActionRowBuilder().addComponents(...buttons), new ActionRowBuilder().addComponents(history)];
+  const second = [history];
+  // 🗺️ 맵 뽑기(발로란트·오버워치): 이미 뽑은 맵이 있으면 다시 뽑기. 누르면 카드의 맵 구역에서 연출이 돈다(runMapSpin).
+  if (maps.hasMapPool(game)) second.push(new ButtonBuilder().setCustomId(`team:map:${matchMsgId}`).setLabel(normalizeBoard(match).map ? '🗺️ 다시 뽑기' : '🗺️ 맵 뽑기').setStyle(ButtonStyle.Secondary));
+  return [new ActionRowBuilder().addComponents(...buttons), new ActionRowBuilder().addComponents(...second)];
+}
+
+// 🗺️ 맵 뽑기 연출 중인 매치: matchMsgId → { key, n }(지금 보이는 프레임). 카드가 연출 도중 다시 그려져도(티어 변경 등) 같은 프레임을 그린다.
+const mapSpin = new Map();
+
+// 카드의 맵 구역이 지금 보여 줄 것: 연출 중이면 그 프레임, 아니면 저장된 결과(final), 없으면 null.
+function mapFrameOf(matchMsgId, match) {
+  const game = match.data.game;
+  if (!maps.hasMapPool(game)) return null;
+  const spin = mapSpin.get(matchMsgId);
+  if (spin) return { key: spin.key, n: spin.n, final: false };
+  const saved = match.board?.map;
+  return saved && saved.game === game ? { key: saved.key, n: 0, final: true } : null;
 }
 
 function buildBoardPayload(match, matchMsgId) {
@@ -602,6 +621,21 @@ function buildBoardPayload(match, matchMsgId) {
 
   // 내전 내역은 카드가 길어지지 않게 두 번째 줄의 📜 버튼으로 따로 본다(buildHistoryPayload).
 
+  // 🗺️ 맵 구역: 이미지(연출 중엔 이름 없는 원본, 확정되면 이름이 박힌 결과) + 한 줄 글. 이미지 파일이 없으면 글만 보인다.
+  // 이미지는 카드를 고칠 때마다 다시 보내야 하고(안 보내면 사라짐), 파일명이 같으면 디스코드가 옛 그림을 재사용해서 프레임마다 다르게 한다.
+  const files = [];
+  const frame = mapFrameOf(matchMsgId, match);
+  if (frame) {
+    const file = frame.final ? maps.mapResultFile(game, frame.key) : maps.mapImageFile(game, frame.key);
+    const attName = frame.final ? 'map-final.jpg' : `map-${frame.n}.jpg`;
+    const hasImage = fs.existsSync(file);
+    if (hasImage) {
+      blocks.push({ image: `attachment://${attName}`, divider: true });
+      files.push(new AttachmentBuilder(file, { name: attName }));
+    }
+    blocks.push({ text: frame.final ? `🗺️ **${maps.mapName(game, frame.key)}**` : '🎲 맵을 뽑는 중…', noDivider: hasImage });
+  }
+
   return payload(card({
     color: gameInfo.color,
     header: title,
@@ -611,7 +645,7 @@ function buildBoardPayload(match, matchMsgId) {
     blocks,
     footer: '✏️ 직접 입력에 지금 팀과 역할이 채워져 있어요 · 바꿀 사람만 고치면 돼요',
     rows: buildBoardRows(match, matchMsgId),
-  }));
+  }), files.length ? { files } : {});
 }
 
 // 📜 내전 내역(나만 보이는 메시지): 순번(#3)·직전 표시·시각(몇 분 전)·방식 한 줄 + 팀별 인용 줄. 내역마다 칸을 띄워 구분한다.
@@ -1425,6 +1459,7 @@ module.exports = {
   resolveMember,
   buildBoardPayload, // 화면 모음·테스트용
   buildHistoryPayload, // 화면 모음·테스트용
+  __mapSpin: mapSpin, // 화면 모음·테스트용(연출 중 프레임)
   buildBoardShortcutPayload, // 화면 모음용(시안)
   buildTierGamePayload,
   buildTierPickPayload, // 화면 모음용

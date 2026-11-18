@@ -441,6 +441,34 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     }
   });
 
+  await flow('맵 뽑기: 발로란트·오버워치 카드에만 🗺️ 버튼 · 결과가 있으면 이미지와 이름이 보인다', async () => {
+    const mapMod = require(path.join(root, 'handlers/매치/맵.js'));
+    const made = {};
+    for (const game of ['valorant', 'overwatch', 'lol']) {
+      await naejeon.handleNaejeonModal(mkInteraction({ user: ADMIN, customId: `naejeon:modal:${game}`, fields: { title: `${game} 내전`, datetime: '내일 8시', players: '4', description: '' } }));
+      await naejeon.handleNaejeonButton(mkInteraction({ user: ADMIN, customId: 'naejeon:publish', message: new FakeMsg(require(path.join(root, 'handlers/공통/카드.js')).notice('p'), channel) }));
+      const m = [...client.naejeonMatches.values()].at(-1);
+      for (const u of ['u1', 'u2', 'u3', 'u4']) await naejeon.handleNaejeonButton(mkInteraction({ user: u, customId: 'naejeon:join', message: m.message }));
+      await new Promise(r => setTimeout(r, 20));
+      made[game] = m;
+    }
+    const boardJson = (m) => JSON.stringify(channel.sent.find(x => x.id === m.board.messageId).components);
+    assert(boardJson(made.valorant).includes('team:map:') && boardJson(made.overwatch).includes('team:map:'), '발로란트·오버워치 카드에 🗺️ 맵 뽑기 버튼이 있어야 함');
+    assert(!boardJson(made.lol).includes('team:map:'), '롤 카드에는 맵 뽑기 버튼이 없어야 함');
+    const v = made.valorant;
+    const vid = v.message.id;
+    assert(!JSON.stringify(team.buildBoardPayload(v, vid).components).includes('attachment://map-'), '맵을 안 뽑았으면 맵 구역이 없어야 함');
+    v.board.map = { game: 'valorant', key: 'ascent', at: Date.now() };
+    const withMap = team.buildBoardPayload(v, vid);
+    const wj = JSON.stringify(withMap.components);
+    assert(wj.includes('어센트') && wj.includes('attachment://map-final.jpg') && withMap.files?.length === 1, '뽑은 맵의 이름과 결과 이미지가 카드에 있어야 함');
+    assert(wj.includes('다시 뽑기'), '결과가 있으면 버튼이 다시 뽑기로 바뀌어야 함');
+    v.board.map = { game: 'valorant', key: 'nope', at: Date.now() };
+    const broken = team.buildBoardPayload(v, vid);
+    assert(!(broken.files?.length), '이미지 파일이 없으면 첨부 없이 카드가 만들어져야 함');
+    v.board.map = undefined;
+  });
+
   await flow('내전: 권한 없음·만료·잘못된 입력 안내', async () => {
     await naejeon.handleNaejeonModal(mkInteraction({ customId: 'naejeon:modal:lol', fields: { title: '', datetime: 'x', players: 'abc', description: '' } }));
     await naejeon.handleNaejeonButton(mkInteraction({ customId: 'naejeon:join', message: new FakeMsg(require(path.join(root, 'handlers/공통/카드.js')).notice('x'), channel) }));
