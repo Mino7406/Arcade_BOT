@@ -415,7 +415,7 @@ async function buildScreens() {
     await vshot(rr, '전투 — kill -9 다음 턴(즉사 판정)', '☠️ 판정 배지 · 이번 턴 끝에 확률로 쓰러짐(치유사 스킬·방어로 대처)');
     // 분노(체력 40% 이하): 붉은 핏줄 분노 마크는 그리지 않음
     rr = vb('attack'); rr.battle.hp = Math.round(rr.battle.maxHp * 0.3); rr.battle.rage = true;
-    await vshot(rr, '전투 — 분노', '체력이 줄어 분노: 바닥 불빛·몸 테두리만, 오른쪽 위 붉은 핏줄 마크는 없음');
+    await vshot(rr, '전투 — 분노', '체력이 줄어 분노: 바닥 불빛·몸 테두리 + 화면이 훨씬 심하게 깨짐(큰 모서리 오염·가로 띠 밀림·붉은 채널 분리·블록 어긋남·주사선, 턴마다 모양이 바뀜), 오른쪽 위 붉은 핏줄 마크는 없음');
     // 기술별 결과 화면(글리치 연출) · 상태이상 중첩 표시
     const result = (intent, pick, rng2, extra) => { const r2 = vb(intent); r2.battle.members.forEach((mm, i) => choose(r2.battle, mm.userId, typeof pick === 'function' ? pick(i) : pick)); if (extra) extra(r2); resolveTurn(r2.battle, rng2); r2.showingResult = true; return r2; };
     await vshot(result('overclock', 'attack', () => 0.5), '전투 — 오버클록 결과', '몬스터가 잔상을 끌며 번지고 줄마다 박자가 어긋남 · CLK ▲▲ 150%');
@@ -435,11 +435,11 @@ async function buildScreens() {
     add('레이드', '??? — 패배 채널 안내', '도주하지 않음 · 모든 유저 -200 XP · 지금까지 1인당 잃은 XP', defeatNote);
     const er = vb('attack'); er.phase = 'ended'; er.endedAt = Date.now(); er.frozenAt = Date.now() - 5 * H; er.battle.hp = 0;
     const ev = await raidMod.endView(er, 'clear', [
-      { userId: '100', xp: 1000, mvp: true, hackTool: false, gateway: true },
+      { userId: '100', xp: 0, mvp: true, hackTool: false, gateway: true },
       { userId: '101', xp: 1000, mvp: false, hackTool: true, gateway: false },
       { userId: '102', xp: 1000, mvp: false, hackTool: true, gateway: false },
     ]);
-    add('레이드', '??? — 토벌 성공 결과', '파티원 +500 XP + 해킹 툴 1개 · MVP는 +500 XP + 🌐 블랙월 게이트웨이(MVP는 해킹 툴 대신)', ev, rf(ev));
+    add('레이드', '??? — 토벌 성공 결과', '파티원 +1000 XP + 해킹 툴 1개 · MVP는 XP 없이 🌐 블랙월 게이트웨이만', ev, rf(ev));
     void pn;
   }
   const endR = (outcome, rewards) => { const rr = startBattle(m0); rr.phase = 'ended'; rr.endedAt = Date.now(); rr.frozenAt = Date.now() - 20 * 60e3; if (outcome === 'clear') rr.battle.hp = 0; return raidMod.endView(rr, outcome, rewards); };

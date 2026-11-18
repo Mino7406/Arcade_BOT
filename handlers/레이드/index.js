@@ -493,7 +493,7 @@ function subjectJosa(name) {
   return code % 28 ? '이' : '가';
 }
 // 보상 괄호 안 글자: XP와 (받았으면) 해킹 툴을 한 줄에. 해킹 툴은 최대 보유면 못 받으므로 사람마다 다를 수 있다.
-const rewardText = (xp, hackTool, gateway, gatewayFull) => `(+${xp} XP${hackTool ? ` · ${hackToolEmoji()} ${HACK_TOOL_NAME} 1개` : ''}${gateway ? ` · ${gatewayEmoji()} ${GATEWAY_NAME} 1개` : ''}${gatewayFull ? ` · ${GATEWAY_NAME} 보유 한도` : ''})`;
+const rewardText = (xp, hackTool, gateway, gatewayFull) => `(${[xp > 0 ? `+${xp} XP` : null, hackTool ? `${hackToolEmoji()} ${HACK_TOOL_NAME} 1개` : null, gateway ? `${gatewayEmoji()} ${GATEWAY_NAME} 1개` : null, gatewayFull ? `${GATEWAY_NAME} 보유 한도` : null].filter(Boolean).join(' · ')})`;
 
 // 해킹 툴을 최대로 갖고 있어 못 받은 사람 안내(작은 글씨). 없으면 null.
 function hackToolFullLine(r, rewards) {
@@ -542,7 +542,7 @@ async function endView(r, outcome, rewards = []) {
       body += `남은 HP **${b.hp.toLocaleString()}** / ${b.maxHp.toLocaleString()} · ${b.turn}턴\n\n` +
         b.members.map(mem => {
           const reward = rewards.find(x => x.userId === mem.userId);
-          const xp = reward ? ` · **+${reward.xp} XP**${reward.mvp ? ' 👑MVP' : ''}${reward.hackTool ? ` · ${hackToolEmoji()}+1` : ''}` : '';
+          const xp = reward ? ` ${reward.xp > 0 ? `· **+${reward.xp} XP**` : ''}${reward.mvp ? ' 👑MVP' : ''}${reward.hackTool ? ` · ${hackToolEmoji()}+1` : ''}${reward.gateway ? ` · ${gatewayEmoji()}+1` : ''}` : '';
           const idle = outcome === 'clear' && !reward ? ' · *(직접 행동하지 않아 보상 없음)*' : '';
           return `${ROLES[mem.role].emoji} **${mem.name}** — 피해 ${mem.damage.toLocaleString()} · 회복 ${mem.healing} · 방어 ${mem.blocked ?? 0}${xp}${idle}`;
         }).join('\n');
@@ -997,14 +997,16 @@ function finishRaid(r, outcome) {
     const eligible = r.battle.members.filter(mem => mem.manualActions > 0);
     const mvp = eligible.reduce((best, mem) => (!best || contribution(r.battle, mem) > contribution(r.battle, best) ? mem : best), null);
     for (const mem of eligible) {
-      const xp = clearXpOf(r) + (mem === mvp ? mvpBonusOf(r) : 0);
+      // 남아 있는 몬스터(???)의 MVP는 XP 없이 자기 아이템(블랙월 게이트웨이)만 받는다.
+      const itemOnly = isPersistent(r) && mem === mvp && raidRules(r).mvpItem === 'gateway';
+      const xp = itemOnly ? 0 : clearXpOf(r) + (mem === mvp ? mvpBonusOf(r) : 0);
       // 해킹 툴(룰렛 꽝 번복권)도 1개씩 — 레벨 시스템이 없는 테스트 서버에도 줘서 룰렛에서 시험해 볼 수 있게 한다.
       // 남아 있는 몬스터(???)는 MVP에게 해킹 툴 대신 자기 아이템(블랙월 게이트웨이)을 주고, 일반 파티원은 해킹 툴 1개씩.
       const wantsGateway = isPersistent(r) && mem === mvp && raidRules(r).mvpItem === 'gateway';
       const hackTool = wantsGateway ? false : grantHackTool(r.guildId, mem.userId); // 최대 보유면 false(못 받음)
       const gateway = wantsGateway ? grantGateway(r.guildId, mem.userId) : false; // 최대 보유면 false(못 받음)
       rewards.push({ userId: mem.userId, xp, mvp: mem === mvp, hackTool, gateway, gatewayFull: wantsGateway && !gateway });
-      if (isExcludedGuild(r.guildId)) continue;
+      if (isExcludedGuild(r.guildId) || xp <= 0) continue;
       const result = applyXp(r.guildId, mem.userId, xp, `레이드 토벌 '${r.monster.name}'${mem === mvp ? ' (MVP)' : ''}`);
       if (result.leveledUp) announceLevelUp(r.client, r.guildId, mem.userId, result.newLevel);
     }

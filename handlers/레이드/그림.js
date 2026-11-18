@@ -9,6 +9,7 @@
 // 폰트·그림을 못 쓰면 render*는 null을 돌려주고, 레이드.js가 글자 화면으로 대신 보여준다.
 
 const path = require('path');
+const { drawEmojiFile } = require('../공통/이모지그림');
 const { Painter, loadFont } = require('./그림판');
 const { ROLES, ROLE_ORDER, PLAYER_MAX_HP, ACTIONS, createBattle, choose, resolveTurn, isStunned, slowTurnsLeft, isShielded, isPowered, poisonStacks, isConfused, chillStacks, isFeared, isPhased, isIntentHidden, isWarnIntent, telegraphText, moveFx, isWeak, weakTurnsLeft, isStenched, stenchTurnsLeft, isErrored, errorTurnsLeft, isVulnerable, vulnTurnsLeft, isDoomed } = require('./전투');
 
@@ -1051,7 +1052,7 @@ const ICON_KEEP = [0, 1, 2, 3].map(i => [Math.round((20 + i * (CARD_W + CARD_GAP
 // 띠를 밀면 안 되는 줄(실제 픽셀) — 시안과 같게
 // 모집은 카드 아이콘 줄(약 280~330)도 피한다(아이콘은 건드리지 않음 — 사용자 요청)
 const BAND_SAFE = { 모집: [[15, 60], [145, 240], [270, 480]], 전투: [[10, 80], [150, 240], [260, 480]], 결과: [[10, 140], [150, 480]] };
-function corruptPost(scene, seed) {
+function corruptPost(scene, seed, heavy = false) { // heavy: 분노 — 모서리 오염이 더 크게 번지고, 가로 띠가 많이·크게 밀리고, 색 분리·블록 어긋남·주사선이 더해진다
   const rnd = seeded(seed);
   const w = p.w, h = p.h, buf = p.buf;
   const inIcon = (x, y, bw, bh) => scene !== '모집' && scene !== '전투' ? false : ICON_KEEP.some(([kx, ky, kw, kh]) => x < kx + kw && x + bw > kx && y < ky + kh && y + bh > ky);
@@ -1069,7 +1070,7 @@ function corruptPost(scene, seed) {
   const src = Buffer.from(buf);
   const B6 = 6;
   for (const [cx, cy, sx, sy] of [[0, 0, 1, 1], [w, 0, -1, 1], [0, h, 1, -1], [w, h, -1, -1]]) {
-    const R = 90 + Math.floor(rnd() * 31);
+    const R = (90 + Math.floor(rnd() * 31)) * (heavy ? 1.7 : 1);
     for (let by = 0; by < R; by += B6) for (let bx = 0; bx < R; bx += B6) {
       const d = Math.hypot(bx, by) / R;
       if (d > 1 || rnd() > (1 - d) ** 1.3) continue;
@@ -1086,32 +1087,59 @@ function corruptPost(scene, seed) {
       else if (r < 0.75) { for (let yy = 0; yy < B6; yy++) for (let xx = 0; xx < B6; xx++) setPx(x + xx, y + yy, [6, 2, 4]); }
       else if (r < 0.9) { const len = B6 * (1 + Math.floor(rnd() * 3)); for (let yy = B6 / 2 - 1; yy <= B6 / 2; yy++) for (let xx = 0; xx < len; xx++) setPx(x + xx, y + yy, [255, 60, 76]); }
     }
-    for (let i = 0; i < 4; i++) { // 테두리를 따라 흐르는 세로 줄기
+    for (let i = 0; i < (heavy ? 9 : 4); i++) { // 테두리를 따라 흐르는 세로 줄기
       const x = cx + sx * (4 + Math.floor(rnd() * (R / 2 - 4))), L = Math.floor(R / 2 + rnd() * (R / 2 + 40));
       for (let tt = 0; tt < L; tt += 2) if (rnd() < 0.85) setPx(x, cy + sy * tt - (sy < 0 ? 1 : 0), rnd() < 0.85 ? [255, 46, 64] : [255, 200, 205]);
     }
   }
   // ③ 붉은 잡음 점
-  for (let i = 0; i < 35; i++) {
+  for (let i = 0, nn = heavy ? 170 : 35; i < nn; i++) {
     const x = Math.floor(rnd() * (w - 2)), y = Math.floor(rnd() * (h - 2)), c = rnd() < 0.5 ? [200, 30, 45] : [120, 14, 24];
     for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) setPx(x + dx, y + dy, c);
   }
   // ④ 약한 가로 띠 밀림 5줄(글자 줄은 피함)
   const safe = BAND_SAFE[scene] ?? [];
   let n = 0;
-  for (let tries = 0; n < 5 && tries < 500; tries++) {
-    const y0 = Math.floor(rnd() * (h - 8)), hh = 2 + Math.floor(rnd() * 3);
+  for (let tries = 0, want = heavy ? 15 : 5; n < want && tries < 900; tries++) {
+    const y0 = Math.floor(rnd() * (h - 12)), hh = heavy ? 2 + Math.floor(rnd() * 7) : 2 + Math.floor(rnd() * 3);
     if (safe.some(([a, b]) => (a <= y0 && y0 <= b) || (a <= y0 + hh && y0 + hh <= b))) continue;
-    const dx = (rnd() < 0.5 ? -1 : 1) * (4 + Math.floor(rnd() * 7)), rowBytes = w * 3;
+    const dx = (rnd() < 0.5 ? -1 : 1) * (heavy ? 10 + Math.floor(rnd() * 31) : 4 + Math.floor(rnd() * 7)), rowBytes = w * 3;
     for (let yy = y0; yy < y0 + hh; yy++) {
       const start = yy * rowBytes, row = Buffer.from(buf.subarray(start, start + rowBytes));
       row.copy(buf, start + Math.max(0, dx) * 3, Math.max(0, -dx) * 3, rowBytes - Math.max(0, dx) * 3);
     }
     n++;
   }
+  if (!heavy) return;
+  // ⑤ 분노 전용: 띠마다 붉은 채널만 따로 밀어 색이 갈라지게 · 블록이 통째로 어긋나 겹치게 · 주사선
+  const rowBytes = w * 3;
+  for (let i = 0, k = 0, tries = 0; k < 8 && tries < 400; tries++) {
+    const y0 = Math.floor(rnd() * (h - 16)), hh = 3 + Math.floor(rnd() * 9);
+    if (safe.some(([a, b]) => (a <= y0 && y0 <= b) || (a <= y0 + hh && y0 + hh <= b))) continue;
+    k++;
+    const d = (rnd() < 0.5 ? -1 : 1) * (6 + Math.floor(rnd() * 14));
+    for (let yy = y0; yy < y0 + hh; yy++) {
+      const start = yy * rowBytes, row = Buffer.from(buf.subarray(start, start + rowBytes));
+      for (let x = 0; x < w; x++) { const sx = Math.max(0, Math.min(w - 1, x - d)); buf[start + x * 3] = row[sx * 3]; }
+    }
+  }
+  for (let i = 0, k = 0, tries = 0; k < 6 && tries < 300; tries++) { // 직사각 블록을 옆으로 옮겨 붙이고 붉게 물들인다
+    const bw = 40 + Math.floor(rnd() * 90), bh = 10 + Math.floor(rnd() * 30);
+    const x0 = Math.floor(rnd() * (w - bw - 60)) + 30, y0 = Math.floor(rnd() * (h - bh - 10)) + 5;
+    if (inIcon(x0, y0, bw + 60, bh) || safe.some(([a, b]) => (a <= y0 && y0 <= b) || (a <= y0 + bh && y0 + bh <= b))) continue;
+    k++;
+    const mv = (rnd() < 0.5 ? -1 : 1) * (14 + Math.floor(rnd() * 40)), blk = [];
+    for (let yy = 0; yy < bh; yy++) blk.push(Buffer.from(buf.subarray(((y0 + yy) * w + x0) * 3, ((y0 + yy) * w + x0 + bw) * 3)));
+    blk.forEach((row, yy) => { for (let xx = 0; xx < bw; xx++) { const x = x0 + mv + xx; if (x < 0 || x >= w) continue; const j = ((y0 + yy) * w + x) * 3; buf[j] = Math.min(255, row[xx * 3] + 70); buf[j + 1] = Math.round(row[xx * 3 + 1] * 0.5); buf[j + 2] = Math.round(row[xx * 3 + 2] * 0.5); } });
+  }
+  for (let y = 0; y < h; y += 4) { // 주사선: 4줄마다 한 줄을 어둡게(아이콘 칸 제외)
+    if (safe.some(([a, b]) => a <= y && y <= b)) continue;
+    for (let x = 0; x < w; x++) { if (inIcon(x, y, 1, 1)) continue; const j = (y * w + x) * 3; buf[j] = Math.round(buf[j] * 0.78); buf[j + 1] = Math.round(buf[j + 1] * 0.78); buf[j + 2] = Math.round(buf[j + 2] * 0.78); }
+  }
 }
 // ── ??? 기술 연출: 그려 넣는 대신 '화면 자체가 깨지는' 글리치 후처리 ──
 // 이미 그려진 장면(buf) 위에서 가로 띠 찢김·RGB 어긋남·블록 뒤섞임·픽셀화·잔상을 만든다. 플레이어 아이콘 칸은 끝에 원본으로 되돌린다(아이콘은 건드리지 않음).
+let rageGlitch = 0; // 분노 중인 오염 몬스터 전투 장면이면 턴 번호(>0) — corruptPost 를 heavy 로 부른다
 let skillCtx = null; // 이번 장면의 기술 연출 정보 { fx, mx, my, targets: [{x,y,w,h}] } (설계 좌표)
 const SKILL_FX = ['crash', 'overclock', 'deadeye', 'vuln', 'killnine', 'gateway'];
 function skillGlitch(ctx, seed) {
@@ -1251,10 +1279,10 @@ async function render(scene, draw, monster = null) {
   if (corrupt) { Object.assign(C, CORRUPT_C); RIBBON.pending.fill = '#b81c2a'; themeKey = ':corrupt'; }
   try {
     const t0 = process.hrtime.bigint();
-    skillCtx = null;
+    skillCtx = null; rageGlitch = false;
     draw();
     if (corrupt && skillCtx && SKILL_FX.includes(skillCtx.fx)) skillGlitch(skillCtx, (skillCtx.fx.length * 977 + 13) >>> 0);
-    if (corrupt) corruptPost(scene, scene.length * 31 + 7);
+    if (corrupt) corruptPost(scene, scene.length * 31 + 7 + (rageGlitch ? rageGlitch * 53 : 0), !!rageGlitch); // 분노는 턴마다 깨진 모양이 달라진다
     const t1 = process.hrtime.bigint();
     const png = painter.png();
     logRender(scene, Number(t1 - t0) / 1e6, Number(process.hrtime.bigint() - t1) / 1e6, png.length);
@@ -1364,6 +1392,7 @@ function renderBattle(r) {
     const m = b.monster;
     const last = b.lastTurn;
     background('battle', 120, 224);
+    if (b.rage && isCorrupt(m)) rageGlitch = Math.max(1, b.turn | 0);
     if (b.rage) rageFx(m, W / 2, 196, 112, null, 'box'); // 분노: 바닥 불빛·불씨
 
     // 상단: TURN 배지 · 몬스터 이름(분노) · HP 바
@@ -1737,8 +1766,18 @@ function renderEnd(r, outcome, rewards = []) {
       const y = RP.y + 64 + i * 98;
       const reward = rewards.find(q => q.userId === mem.userId);
       const mvp = !!reward?.mvp;
-      p.roundRect(RP.x + 14, y, RP.w - 28, 86, 12, mvp ? '#2c2210' : '#1d1711');
-      if (mvp) p.strokeRoundRect(RP.x + 14, y, RP.w - 28, 86, 12, 2, C.gold);
+      const wall = mvp && !!reward.gateway; // 블랙월 게이트웨이를 받은 MVP: 줄이 블랙월에 잠식된 모습(붉은 바탕·어긋난 테두리·찢긴 띠)
+      p.roundRect(RP.x + 14, y, RP.w - 28, 86, 12, wall ? '#3e0c16' : mvp ? '#2c2210' : '#1d1711');
+      if (wall) {
+        const rnd = seeded(y * 31 + 7), rx = RP.x + 14, rw2 = RP.w - 28;
+        p.strokeRoundRect(rx - 4, y + 3, rw2, 86, 12, 3, '#b81c2a'); p.strokeRoundRect(rx + 3, y - 2, rw2, 86, 12, 2, '#5a0f1a'); // 어긋난 뒷 테두리
+        for (let k = 0; k < 12; k++) { // 가로로 찢긴 붉은 띠
+          const gy = y + 5 + Math.floor(rnd() * 70), gw = 30 + Math.floor(rnd() * 130), gx = rx + 6 + Math.floor(rnd() * (rw2 - gw - 12));
+          p.rect(gx, gy, gw, 3 + Math.floor(rnd() * 4), rnd() < 0.4 ? '#6a1020' : rnd() < 0.7 ? '#b81c2a' : '#ff3a4a');
+        }
+        p.strokeRoundRect(rx, y, rw2, 86, 12, 2, '#ff3a4a');
+        text('▓ BLACKWALL GATEWAY — ACCESS GRANTED ▓', rx + rw2 / 2, y + 79, 11, '#ff6a78');
+      } else if (mvp) p.strokeRoundRect(RP.x + 14, y, RP.w - 28, 86, 12, 2, C.gold);
       drawPixels(ROLE_SPRITES[mem.role], RP.x + 52, y + 43, 2.7, { dim: mem.hp <= 0 && !clear });
       const nameX = RP.x + 86;
       text(mem.name, nameX, y + 32, 26, C.text, { align: 'left', maxWidth: 132 });
@@ -1747,13 +1786,28 @@ function renderEnd(r, outcome, rewards = []) {
       text(roleName, nameX, y + 62, 18, C.orange, { align: 'left' });
       if (mvp) {
         const rw = p.textWidth(B(), roleName, 18);
-        p.roundRect(nameX + rw + 8, y + 51, 46, 22, 6, '#e2b14a');
-        text('MVP', nameX + rw + 31, y + 62, 14, '#2a1a04');
+        p.roundRect(nameX + rw + 8, y + 51, 46, 22, 6, wall ? '#ff3a4a' : '#e2b14a');
+        text('MVP', nameX + rw + 31, y + 62, 14, wall ? '#2a0408' : '#2a1a04');
       }
       text(mem.damage.toLocaleString(), COL.dmg, y + 43, 22, C.text);
       text(mem.healing ? mem.healing.toLocaleString() : '-', COL.heal, y + 43, 22, mem.healing ? '#8fe0a8' : C.dim);
       text(mem.blocked ? mem.blocked.toLocaleString() : '-', COL.block, y + 43, 22, mem.blocked ? '#9cc8ff' : C.dim);
-      if (reward) pill(COL.reward - 34, y + 27, 68, 32, `+${reward.xp}`, 20, mvp ? '#6b4e12' : '#1f4a2c', mvp ? '#ffe39a' : '#bff0cf');
+      if (wall) { // 블랙월 게이트웨이 이모지: 가둔 상자 없이, 이모지에서 회로 배선이 직각으로 꺾여 줄 안쪽으로 뻗어 나간다(끝마다 접점)
+        const gx = COL.reward, gy = y + 43, X0 = COL.block + 26;
+        const trace = (pts, lw = 2) => { for (let k = 0; k + 1 < pts.length; k++) { const [ax, ay] = pts[k], [bx2, by2] = pts[k + 1]; p.rect(Math.min(ax, bx2) - lw / 2, Math.min(ay, by2) - lw / 2, Math.abs(bx2 - ax) + lw, Math.abs(by2 - ay) + lw, '#ff3a4a'); } };
+        const node = (nx, ny) => { p.rect(nx - 4, ny - 4, 8, 8, '#7a0c18'); p.rect(nx - 2.5, ny - 2.5, 5, 5, '#ff3a4a'); p.rect(nx - 1, ny - 1, 2, 2, '#ffd2d6'); };
+        const paths = [
+          [[gx - 26, gy - 9], [gx - 46, gy - 9], [gx - 46, y + 17], [X0, y + 17]],     // 왼쪽 위로 꺾여 나가는 배선
+          [[gx - 26, gy + 9], [gx - 40, gy + 9], [gx - 40, y + 68], [X0 + 10, y + 68]], // 왼쪽 아래로 꺾여 나가는 배선
+          [[gx, gy - 27], [gx, y + 9]],                                                   // 위로 짧게
+          [[gx + 24, gy - 8], [gx + 36, gy - 8], [gx + 36, y + 20]],                      // 오른쪽 위 가지
+        ];
+        for (const pts of paths) { trace(pts); node(...pts[pts.length - 1]); }
+        node(gx - 46, gy - 9); node(gx - 40, gy + 9); // 꺾이는 곳의 접점
+        drawEmojiFile(p, 'blackwall.png', gx + 2, gy, 58); // 어긋난 붉은 잔상
+        drawEmojiFile(p, 'blackwall.png', gx, gy, 58);
+      }
+      else if (reward) pill(COL.reward - 34, y + 27, 68, 32, reward.xp > 0 ? `+${reward.xp}` : (reward.gateway ? '아이템' : '+0'), reward.xp > 0 ? 20 : 17, mvp ? '#6b4e12' : '#1f4a2c', mvp ? '#ffe39a' : '#bff0cf');
       else text('-', COL.reward, y + 43, 22, C.dim);
     });
   }, r.monster);
