@@ -371,7 +371,7 @@ function balanceTeams(participants, game) {
       if (main) seen.set(main, (seen.get(main) || 0) + 1);
     }
     let dup = 0;
-    for (const c of seen.values()) if (c > 1) dup += c - 1;
+    for (const [key, c] of seen) if (c > slotCap(game, key)) dup += c - slotCap(game, key); // 발로란트 타격대는 2명까지 겹쳐도 됨
     return { sum, cost: dup * POS_DUP_COST };
   };
 
@@ -469,29 +469,42 @@ function teamLineup(resolved, game, match, pins = []) {
 
 // 팀원마다 맡은 자리 키(자리 배정 → 직접 고정 → 롤·발로는 저장한 주 포지션 순서로). 없으면 null.
 // 롤도 팀 인원이 5명이 아니면 자리 배정이 없어서, 저장한 주 포지션을 보여 준다.
+// 발로란트는 역할이 고정이 아니라(들어가서 겹치면 누군가 맞춰 줌) 자리 배정을 하지 않는다: 직접 입력으로 고정한 것만 자리로 치고,
+// 카드에는 저장한 주·부 역할(가능한 역할 2개)을 티어 앞에 보여 준다(teamBlocks).
 function memberSlots(t, resolved, game, lu) {
   if (lu) return t.members.map((n, k) => lu.slots[k]);
   const pins = t.pos || [];
+  if (game === 'valorant') return t.members.map((n, k) => pins[k] || null);
   const slots = t.members.map((n, k) => {
     if (pins[k]) return pins[k];
-    if ((game === 'valorant' || game === 'lol') && resolved[k]) return tiers.getPositions(resolved[k].id, game)[0] ?? null;
+    if (game === 'lol' && resolved[k]) return tiers.getPositions(resolved[k].id, game)[0] ?? null;
     return null;
   });
   return autoFillSlots(slots, game);
 }
 
-// 포지션(역할)을 안 정한 사람은 자동으로 정해 준다: 팀에서 아직 맡은 사람이 가장 적은 자리부터 채워 한 팀에 같은 자리가 몰리지 않게 한다
-// (동률이면 포지션 목록 순서). 포지션을 비워 둔 건 "아무거나 좋다"는 뜻이라, 팀에 아무도 안 정했어도 전부 정해 준다. 롤·발로란트만.
+// 한 팀에 같은 자리를 맡을 수 있는 최대 인원: 발로란트는 타격대만 2명, 나머지는 1명(롤은 자리마다 1명)
+const slotCap = (game, key) => (game === 'valorant' && key === 'duelist' ? 2 : 1);
+
+// 비어 있는 사람에게 줄 자리: 자리가 남은 것 중 맡은 사람이 가장 적은 것(동률이면 포지션 목록 순서). 다 찼으면(6명 이상 등) 가장 적은 것.
+function pickSlot(list, count, game) {
+  const open = list.filter(p => count.get(p.key) < slotCap(game, p.key));
+  const pool = open.length ? open : list;
+  return pool.reduce((best, p) => (count.get(p.key) < count.get(best.key) ? p : best), pool[0]).key;
+}
+
+// 포지션(역할)을 안 정한 사람은 자동으로 정해 준다: 팀에서 아직 맡은 사람이 적은 자리부터 채워 한 팀에 같은 자리가 몰리지 않게 한다.
+// 포지션을 비워 둔 건 "아무거나 좋다"는 뜻이라, 팀에 아무도 안 정했어도 전부 정해 준다. 롤만.
 function autoFillSlots(slots, game) {
-  const list = (game === 'valorant' || game === 'lol') ? tiers.POSITIONS?.[game] : null;
+  const list = game === 'lol' ? tiers.POSITIONS?.[game] : null;
   if (!list?.length || slots.every(Boolean)) return slots;
   const count = new Map(list.map(p => [p.key, 0]));
   for (const s of slots) if (s && count.has(s)) count.set(s, count.get(s) + 1);
   return slots.map(s => {
     if (s) return s;
-    const pick = list.reduce((best, p) => (count.get(p.key) < count.get(best.key) ? p : best), list[0]);
-    count.set(pick.key, count.get(pick.key) + 1);
-    return pick.key;
+    const key = pickSlot(list, count, game);
+    count.set(key, count.get(key) + 1);
+    return key;
   });
 }
 
@@ -535,13 +548,16 @@ function teamBlocks(teams, match) {
     // 역할이 없는 사람(발로 미저장 등)은 투명 아이콘으로 칸을 채워 줄이 들쭉날쭉하지 않게 한다.
     // 아이콘 이모지가 아직 없으면(봇 등록 전) 예전처럼 이름 뒤에 글자로 붙인다.
     const blank = tiers.blankIcon();
-    const iconCol = slots.some(Boolean)
-      && slots.every(s => (s ? tiers.positionEmojiId(game, s) : blank));
+    // 발로란트: 역할이 고정이 아니라 가능한 역할 2개(주·부)를 티어 앞에 나란히 보여 준다(직접 입력으로 고정한 건 그 하나). 한 칸이 모자라면 투명 아이콘으로 맞춘다.
+    const valRoles = game === 'valorant' ? t.members.map((n, k) => (slots[k] ? [slots[k]] : resolved[k] ? tiers.getPositions(resolved[k].id, game).slice(0, 2) : [])) : null;
+    const iconCol = valRoles
+      ? valRoles.some(r => r.length) && valRoles.every(r => r.every(x => tiers.positionEmojiId(game, x)))
+      : slots.some(Boolean) && slots.every(s => (s ? tiers.positionEmojiId(game, s) : blank));
     const lines = order.map(k => {
       const n = t.members[k];
       const tr = memberTiers[k];
-      const slot = slotLabel(game, slots[k]);
-      const lead = iconCol ? `${slots[k] ? slot : blank} ` : '';
+      const slot = valRoles ? valRoles[k].map(x => slotLabel(game, x)).filter(Boolean).join(' ') : slotLabel(game, slots[k]);
+      const lead = !iconCol ? '' : valRoles ? `${[0, 1].map(r => (valRoles[k][r] ? slotLabel(game, valRoles[k][r]) : blank)).join('')} ` : `${slots[k] ? slot : blank} `;
       const tail = slot && !iconCol ? ` · ${slot}` : '';
       if (!withTiers) return `▸ **${escapeMarkdown(n)}**`;
       if (!tr) return `${lead}❓ **${escapeMarkdown(n)}**${tail}`;

@@ -129,6 +129,7 @@ async function buildScreens() {
     const tm = req('handlers/매치/티어.js');
     const orig = { getTier: tm.getTier, getPositions: tm.getPositions, getRoleTiers: tm.getRoleTiers, openTier: tm.openTier, hasRoleQueueTier: tm.hasRoleQueueTier };
     const LOL = ['top', 'jungle', 'mid', 'adc', 'support'];
+    const VAL = ['duelist', 'initiator', 'controller', 'sentinel'];
     const lolTiers = [['diamond', 2], ['emerald', 1], ['platinum', 3], ['diamond', 4], ['gold', 1], ['emerald', 3], ['diamond', 1], ['platinum', 1], ['emerald', 4], ['gold', 2]];
     const owTiers = { 100: { tank: ['diamond', 2] }, 101: { damage: ['master', 4], support: ['diamond', 1] }, 102: { damage: ['platinum', 2] }, 103: { support: ['emerald', 3] }, 104: { support: ['gold', 1], tank: ['platinum', 5] }, 105: { tank: ['emerald', 2] }, 106: { damage: ['diamond', 3] }, 107: { damage: ['emerald', 1] }, 108: { support: ['diamond', 5] }, 109: { support: ['platinum', 1] } };
     const fake = (uid, gk) => {
@@ -152,12 +153,14 @@ async function buildScreens() {
       const i = Number(uid) - 100;
       if (uid === 'me') return game === 'lol' ? ['mid', 'jungle'] : [];
       if (game === 'lol' && i >= 0 && i !== 4 && i !== 9) return [LOL[(i * 2) % 5], LOL[(i * 2 + 1) % 5]]; // 두 명은 포지션 없음
+      if (game === 'valorant' && i >= 0 && i !== 4 && i !== 9) return i % 3 === 2 ? [VAL[i % 4]] : [VAL[i % 4], VAL[(i + 1) % 4]]; // 역할이 고정이 아니라 가능한 역할 2개(하나만 적은 사람·안 적은 사람도 섞음)
       return [];
     };
     const owInfo = { name: '오버워치', emoji: '🎮', color: 0xF99E1A };
     const halves = us => [{ name: null, members: us.slice(0, 5).map(u => u.displayName) }, { name: null, members: us.slice(5).map(u => u.displayName) }];
     const named = users(10);
     add('내전 · 모집', '팀 짜기 카드(롤 포지션)', '포지션을 저장한 사람이 있으면 5명 팀마다 탑~서포터를 맡기고 그 순서로 줄을 세움', team.buildBoardPayload({ data: base('lol'), participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 2, teams: halves(named) }, history: [] } }, '1'));
+    add('내전 · 모집', '팀 짜기 카드(발로란트 역할)', '발로란트는 역할이 고정이 아니라 가능한 역할 2개(주·부)를 티어 앞에 나란히 보여 줌 · 안 정한 사람은 투명 아이콘으로 칸만 맞춤', team.buildBoardPayload({ data: { ...base('lol'), game: 'valorant', gameInfo: owInfo, title: '발로란트 내전' }, participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: halves(named) }, history: [] } }, '1'));
     add('내전 · 모집', '팀 짜기 카드(오버워치 역할별 티어)', '돌격1·공격2·지원2로 맡기고, 맡은 역할의 티어를 보여 줌', team.buildBoardPayload({ data: { ...base('lol'), game: 'overwatch', gameInfo: owInfo, title: '오버워치 내전' }, participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: halves(named) }, history: [] } }, '1'));
     const twelve = users(12).map((u, i) => (i >= 10 ? { ...u, displayName: u.displayName + '2' } : u));
     owTiers[110] = { tank: ['master', 3] }; owTiers[111] = { tank: ['gold', 2], damage: ['platinum', 4] };
