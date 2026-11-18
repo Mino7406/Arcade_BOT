@@ -204,7 +204,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await team.handleTeamModal(mkInteraction({ user: ADMIN, customId: `team:modal:${id}`, fields: { teams: ['이름u1 다2-이름u2 골1', '이름u3-이름u4 마스터'].join(String.fromCharCode(10)) } }));
     assert(match.board.current?.teams?.length === 2, '입력한 팀이 저장되지 않음');
     assert(first.deleted && boardMsg() !== first, '카드가 맨 아래로 다시 올라오지 않음');
-    assert(JSON.stringify(boardMsg().components).includes('#1'), '카드 부제에 순번(#1) 표시가 없음');
+    assert(JSON.stringify(boardMsg().components).includes('#2') && JSON.stringify(boardMsg().components).includes('team:hist:'), '카드 부제에 지금 순번(#2)과 📜 내전 내역 버튼이 없음(자동 초안 #1 은 내역으로 넘어감)');
     const tierMod = require(path.join(root, 'handlers/매치/티어.js'));
     assert(tierMod.getTier('u1', 'lol')?.tier === 'diamond' && tierMod.getTier('u1', 'lol')?.div === 2, '팀 입력의 티어(다2)가 저장되지 않음');
     assert(tierMod.getTier('u4', 'lol')?.tier === 'master', '팀 입력의 티어(마스터)가 저장되지 않음');
@@ -348,6 +348,13 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await team.handleTeamButton(mkInteraction({ user: ADMIN, guildId: G, customId: `team:balance:${id}` }));
     assert(match.board.current?.how === 'balance', '밸런스가 안 됨');
     assert(match.board.history.length === 1 && match.board.history[0].no === 1 && match.board.current.no === 2, `자동으로 나눈 #1 이 내역에 남고 다음은 #2 여야 함(내역 ${match.board.history.length}, 지금 #${match.board.current.no})`);
+    // 📜 내전 내역: 누구나 나만 보이는 창으로 열고(삭제 버튼은 없음), 쌓인 #1 내역이 보인다
+    {
+      const view = mkInteraction({ user: 'u2', guildId: G, customId: `team:hist:${id}` });
+      await team.handleTeamButton(view);
+      const vj = view._reply ? JSON.stringify(view._reply.components) : '';
+      assert(vj.includes('#1') && !vj.includes('hist_clear'), '내전 내역 창이 안 뜸(#1 내역이 있어야 하고 삭제 버튼은 없어야 함)');
+    }
     const normal = mkInteraction({ user: ADMIN, customId: 'naejeon:manage', message: match.message });
     common.clearNotifyTimer?.(match);
     client.naejeonMatches.delete(id);

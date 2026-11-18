@@ -159,6 +159,9 @@ async function buildScreens() {
     const owInfo = { name: '오버워치', emoji: '🎮', color: 0xF99E1A };
     const halves = us => [{ name: null, members: us.slice(0, 5).map(u => u.displayName) }, { name: null, members: us.slice(5).map(u => u.displayName) }];
     const named = users(10);
+    const histBoard = { data: base('lol'), participants: users(10), closed: true, board: { current: { how: 'balance', at: Date.now(), no: 3, teams: halves(users(10)) }, history: [2, 1].map(n => ({ at: Date.now() - n * 3600e3, no: n, how: n === 2 ? 'input' : 'balance', teams: halves(users(10)) })) } };
+    add('내전 · 모집', '팀 짜기 내전 내역(📜 버튼)', '카드는 짧게 두고 이전 팀표는 두 번째 줄의 📜 내전 내역 버튼으로 나만 보이는 창에 열어요', team.buildHistoryPayload(histBoard, '1'));
+    add('내전 · 모집', '팀 짜기 카드(내역 버튼이 켜진 모습)', '내전 내역이 있으면 📜 내전 내역 (개수) 버튼이 두 번째 줄에 눌리게 보여요', team.buildBoardPayload(histBoard, '1'));
     add('내전 · 모집', '팀 짜기 카드(롤 포지션)', '포지션을 저장한 사람이 있으면 5명 팀마다 탑~서포터를 맡기고 그 순서로 줄을 세움', team.buildBoardPayload({ data: base('lol'), participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 2, teams: halves(named) }, history: [] } }, '1'));
     add('내전 · 모집', '팀 짜기 카드(발로란트 역할)', '발로란트는 역할이 고정이 아니라 가능한 역할 2개(주·부)를 티어 앞에 나란히 보여 줌 · 안 정한 사람은 투명 아이콘으로 칸만 맞춤', team.buildBoardPayload({ data: { ...base('lol'), game: 'valorant', gameInfo: owInfo, title: '발로란트 내전' }, participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: halves(named) }, history: [] } }, '1'));
     add('내전 · 모집', '팀 짜기 카드(오버워치 역할별 티어)', '돌격1·공격2·지원2로 맡기고, 맡은 역할의 티어를 보여 줌', team.buildBoardPayload({ data: { ...base('lol'), game: 'overwatch', gameInfo: owInfo, title: '오버워치 내전' }, participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: halves(named) }, history: [] } }, '1'));

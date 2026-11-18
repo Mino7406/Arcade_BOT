@@ -40,7 +40,6 @@ const tiers = require('./티어');
 const MAX_TEAMS = 10;
 const MAX_MEMBERS = 15;
 const HISTORY_KEPT = 10;
-const HISTORY_SHOWN = 3;
 const TEAM_ICONS = ['🔵', '🔴', '🟢', '🟡', '🟣', '🟠', '⚪', '🟤', '⚫', '🩷'];
 const OLD_UI_NOTE = '⚠️ **팀 짜기 방식이 바뀌었어요.** 내전이 마감되면 내전채팅에 팀 짜기 카드가 자동으로 올라가요.';
 const HOW_TEXT = { input: '✏️ 직접 입력', balance: '⚖️ 밸런스', random: '🎲 랜덤' };
@@ -576,7 +575,10 @@ function buildBoardRows(match, matchMsgId) {
   if (tiers.hasTiers(game)) buttons.push(new ButtonBuilder().setCustomId(`team:balance:${matchMsgId}`).setLabel('⚖️ 밸런스').setStyle(ButtonStyle.Secondary));
   buttons.push(new ButtonBuilder().setCustomId(`team:random:${matchMsgId}`).setLabel('🎲 랜덤').setStyle(ButtonStyle.Secondary));
   if (tiers.hasTiers(game)) buttons.push(new ButtonBuilder().setCustomId(`team:tier:${game}:${matchMsgId}`).setLabel('🏅 내 티어 설정').setStyle(ButtonStyle.Success));
-  return [new ActionRowBuilder().addComponents(...buttons)];
+  // 두 번째 줄: 내전 내역(나만 보이는 창으로 열림). 내역이 없으면 눌러지지 않는다.
+  const n = normalizeBoard(match).history.length;
+  const history = new ButtonBuilder().setCustomId(`team:hist:${matchMsgId}`).setLabel(n ? `📜 내전 내역 (${n})` : '📜 내전 내역').setStyle(ButtonStyle.Secondary).setDisabled(!n);
+  return [new ActionRowBuilder().addComponents(...buttons), new ActionRowBuilder().addComponents(history)];
 }
 
 function buildBoardPayload(match, matchMsgId) {
@@ -598,20 +600,7 @@ function buildBoardPayload(match, matchMsgId) {
     if (unknown.length) blocks.push({ text: `❓ 티어 미지정 : ${unknown.map(n => `**${n}**`).join(' · ')}\n-# (⚖️ 티어를 저장하면 밸런스가 정확해져요)`, noDivider: true });
   }
 
-  // 내전 내역: 순번(#3)·직전 표시·시각(몇 분 전)·방식 한 줄 + 팀별 인용 줄. 내역마다 칸을 띄워 구분한다.
-  const shown = board.history.slice(0, HISTORY_SHOWN);
-  if (shown.length) {
-    blocks.push({ text: '### 📜 내전 내역', button: new ButtonBuilder().setCustomId(`team:hist_clear:${matchMsgId}`).setLabel('🗑️ 내역 삭제').setStyle(ButtonStyle.Danger) });
-    shown.forEach((h, k) => {
-      const no = h.no ? `#${h.no}` : '이전';
-      const tag = k === 0 ? ' · 직전 팀' : '';
-      const sec = h.at ? Math.floor(h.at / 1000) : null;
-      const when = sec ? ` · <t:${sec}:t> (<t:${sec}:R>)` : '';
-      const how = HOW_TEXT[h.how] ? ` · ${HOW_TEXT[h.how]}` : '';
-      const teams = h.teams.map((t, i) => `> ${TEAM_ICONS[i] ?? '▫️'} : ${t.members.length ? t.members.map(n => `**${escapeMarkdown(n)}**`).join(' · ') : '없음'}`).join('\n'); // 🔵 : **이름** · **이름**
-      blocks.push({ text: `**${no}${tag}**${when}${how}\n${teams}`, noDivider: true });
-    });
-  }
+  // 내전 내역은 카드가 길어지지 않게 두 번째 줄의 📜 버튼으로 따로 본다(buildHistoryPayload).
 
   return payload(card({
     color: gameInfo.color,
@@ -623,6 +612,34 @@ function buildBoardPayload(match, matchMsgId) {
     footer: '✏️ 직접 입력에 지금 팀과 역할이 채워져 있어요 · 바꿀 사람만 고치면 돼요',
     rows: buildBoardRows(match, matchMsgId),
   }));
+}
+
+// 📜 내전 내역(나만 보이는 메시지): 순번(#3)·직전 표시·시각(몇 분 전)·방식 한 줄 + 팀별 인용 줄. 내역마다 칸을 띄워 구분한다.
+// 나만 보이는 창이라 내역은 지우는 버튼 없이, 새로 나눌 때마다 쌓이다가 가장 오래된 것부터 밀려난다(HISTORY_KEPT).
+function buildHistoryPayload(match, matchMsgId) {
+  const { gameInfo, title } = match.data;
+  const board = normalizeBoard(match);
+  const blocks = [];
+  if (!board.history.length) {
+    blocks.push('-# 아직 내전 내역이 없어요. 팀을 다시 나누면 이전 팀이 여기에 쌓여요.');
+  } else {
+    blocks.push({ text: `### 📜 내전 내역 (${board.history.length})` });
+    board.history.forEach((h, k) => {
+      const no = h.no ? `#${h.no}` : '이전';
+      const tag = k === 0 ? ' · 직전 팀' : '';
+      const sec = h.at ? Math.floor(h.at / 1000) : null;
+      const when = sec ? ` · <t:${sec}:t> (<t:${sec}:R>)` : '';
+      const how = HOW_TEXT[h.how] ? ` · ${HOW_TEXT[h.how]}` : '';
+      const teams = h.teams.map((t, i) => `> ${TEAM_ICONS[i] ?? '▫️'} : ${t.members.length ? t.members.map(n => `**${escapeMarkdown(n)}**`).join(' · ') : '없음'}`).join('\n'); // 🔵 : **이름** · **이름**
+      blocks.push({ text: `**${no}${tag}**${when}${how}\n${teams}`, noDivider: true });
+    });
+  }
+  return payload(card({
+    color: gameInfo.color,
+    header: '📜 내전 내역',
+    sub: [title],
+    blocks,
+  }), { ephemeral: true });
 }
 
 // ── 카드 올리기 ─────────────────────────────────────────────
@@ -1263,17 +1280,12 @@ async function handleTeamButton(interaction) {
     return;
   }
 
-  // 🗑️ 내전 내역 삭제: 지금 팀은 그대로 두고 아래 내역(이전 팀표)만 비운다.
-  if (customId.startsWith('team:hist_clear:')) {
-    const matchMsgId = customId.slice('team:hist_clear:'.length);
-    const match = await getEditableMatch(interaction, matchMsgId);
-    if (!match) return;
-    const board = normalizeBoard(match);
-    board.history = [];
-    board.count = 1; // 순번도 #1 부터 다시 시작
-    if (board.current) board.current.no = 1;
-    await interaction.update(buildBoardPayload(match, matchMsgId));
-    saveNow(interaction.client);
+  // 📜 내전 내역 보기: 누구나 볼 수 있고 나만 보이는 메시지로 연다.
+  if (customId.startsWith('team:hist:')) {
+    const matchMsgId = customId.slice('team:hist:'.length);
+    const match = getMatches(interaction.client).get(matchMsgId);
+    if (!match) { await interaction.reply(notice('⚠️ **끝났거나 취소된 내전이에요.**', { ephemeral: true })); return; }
+    await interaction.reply(buildHistoryPayload(match, matchMsgId));
     return;
   }
 
@@ -1412,6 +1424,7 @@ module.exports = {
   balanceTeams,
   resolveMember,
   buildBoardPayload, // 화면 모음·테스트용
+  buildHistoryPayload, // 화면 모음·테스트용
   buildBoardShortcutPayload, // 화면 모음용(시안)
   buildTierGamePayload,
   buildTierPickPayload, // 화면 모음용
