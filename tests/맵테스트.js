@@ -3,7 +3,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const maps = require(path.join(__dirname, '..', 'handlers', '매치', '맵.js'));
-const { MAP_POOLS, hasMapPool, pickMap, mapName, mapImageFile, SPIN_DELAYS_MS, spinFrames } = maps;
+const { MAP_POOLS, hasMapPool, pickMap, mapName, mapImageFile, mapResultFile, SPIN_DELAYS_MS, spinFrames } = maps;
 
 // 풀 크기·이름·이미지 파일
 assert.strictEqual(MAP_POOLS.valorant.length, 13, '발로란트는 13개');
@@ -52,6 +52,14 @@ for (let t = 0; t < 20; t++) {
     assert.ok(frames.every(k => MAP_POOLS[game].some(m => m.key === k)), '프레임 key 가 풀 안에 있어야 함');
     for (let i = 1; i < frames.length; i++) assert.notStrictEqual(frames[i], frames[i - 1], '이웃 프레임은 달라야 함');
     assert.notStrictEqual(frames.at(-1), final, '마지막 돌아가는 프레임은 당첨 맵이 아니어야 함');
+  }
+}
+// 이름이 박힌 결과 이미지(scripts/맵결과이미지.py 로 만든다): 모든 맵에 있고 400KB 이하
+for (const game of ['valorant', 'overwatch']) {
+  for (const x of MAP_POOLS[game]) {
+    const f = mapResultFile(game, x.key);
+    assert.ok(fs.existsSync(f), `${game}/${x.key} 결과 이미지가 없음`);
+    assert.ok(fs.statSync(f).size < 400 * 1024, `${game}/${x.key} 결과 이미지가 400KB 를 넘음`);
   }
 }
 console.log('맵 테스트 통과');
