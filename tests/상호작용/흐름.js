@@ -441,6 +441,14 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     }
   });
 
+  // 카드(컴포넌트 JSON)에서 🗺️ 맵 뽑기 버튼 하나를 찾는다
+  const findMapBtn = (comps) => {
+    const all = JSON.parse(JSON.stringify(comps));
+    let found = null;
+    const walk = (n) => { if (!n || typeof n !== 'object' || found) return; if (typeof n.custom_id === 'string' && n.custom_id.startsWith('team:map:')) { found = n; return; } Object.values(n).forEach(walk); };
+    walk(all);
+    return found;
+  };
   await flow('맵 뽑기: 발로란트·오버워치 카드에만 🗺️ 버튼 · 결과가 있으면 이미지와 이름이 보인다', async () => {
     const mapMod = require(path.join(root, 'handlers/매치/맵.js'));
     const made = {};
@@ -462,11 +470,104 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     const withMap = team.buildBoardPayload(v, vid);
     const wj = JSON.stringify(withMap.components);
     assert(wj.includes('어센트') && wj.includes('attachment://map-final.jpg') && withMap.files?.length === 1, '뽑은 맵의 이름과 결과 이미지가 카드에 있어야 함');
-    assert(wj.includes('다시 뽑기'), '결과가 있으면 버튼이 다시 뽑기로 바뀌어야 함');
-    v.board.map = { game: 'valorant', key: 'nope', at: Date.now() };
+    assert(wj.includes('## 맵 뽑기 완료') && !wj.includes('맵 뽑는 중'), '확정되면 헤더가 맵 뽑기 완료여야 함');
+    const lockedBtn = findMapBtn(withMap.components);
+    assert(lockedBtn.disabled === true && lockedBtn.label.includes('5분'), '뽑은 직후 5분간은 버튼이 잠겨야 함');
+    v.board.map = { game: 'valorant', key: 'ascent', at: Date.now() - team.MAP_LOCK_MS - 1000 };
+    const openBtn = findMapBtn(team.buildBoardPayload(v, vid).components);
+    assert(!openBtn.disabled && openBtn.label.includes('다시 뽑기'), '5분이 지나면 다시 뽑기가 눌려야 함');
+    v.board.map = { game: 'valorant', key: 'nope', at: Date.now() - team.MAP_LOCK_MS - 1000 };
     const broken = team.buildBoardPayload(v, vid);
     assert(!(broken.files?.length), '이미지 파일이 없으면 첨부 없이 카드가 만들어져야 함');
     v.board.map = undefined;
+  });
+
+  await flow('맵 뽑기: 버튼 → 5프레임+확정 연출 · 권한 · 동시 클릭 · 연출 중 갱신 · 수정 실패 · 팀을 다시 나눠도 유지', async () => {
+    const mapMod = require(path.join(root, 'handlers/매치/맵.js'));
+    await naejeon.handleNaejeonModal(mkInteraction({ user: ADMIN, customId: 'naejeon:modal:valorant', fields: { title: '맵 내전', datetime: '내일 8시', players: '4', description: '' } }));
+    await naejeon.handleNaejeonButton(mkInteraction({ user: ADMIN, customId: 'naejeon:publish', message: new FakeMsg(require(path.join(root, 'handlers/공통/카드.js')).notice('p'), channel) }));
+    const m = [...client.naejeonMatches.values()].at(-1);
+    for (const u of ['u1', 'u2', 'u3', 'u4']) await naejeon.handleNaejeonButton(mkInteraction({ user: u, customId: 'naejeon:join', message: m.message }));
+    await new Promise(r => setTimeout(r, 20));
+    const id = m.message.id;
+    const boardMsg = () => channel.sent.find(x => x.id === m.board.messageId);
+    const press = (user, extra = {}) => mkInteraction({ user, customId: `team:map:${id}`, message: boardMsg(), ...extra });
+    team.__setMapSleep(() => Promise.resolve());
+    let clock = 1_700_000_000_000;
+    team.__setMapClock(() => clock);
+    const unlock = () => { clock += team.MAP_LOCK_MS + 1000; };
+
+    // 주최자(관리자)가 누르면: 결과 저장 + 첫 수정은 뽑는 중, 마지막은 확정 이미지와 이름
+    const calls = [];
+    const it = press(ADMIN);
+    const origEdit = it.editReply.bind(it);
+    it.editReply = async (p) => { calls.push(JSON.stringify(p.components) + '|' + (p.files || []).map(x => x.name).join()); return origEdit(p); };
+    await team.handleTeamButton(it);
+    const picked = m.board.map;
+    assert(picked && mapMod.MAP_POOLS.valorant.some(x => x.key === picked.key) && picked.game === 'valorant', '뽑은 결과가 board.map 에 저장돼야 함');
+    assert(calls.length === mapMod.SPIN_DELAYS_MS.length + 1, `카드는 ${mapMod.SPIN_DELAYS_MS.length + 1}번 고쳐져야 함(${calls.length})`);
+    assert(calls[0].includes('## 맵 뽑는 중...') && calls[0].includes('map-1.jpg') && calls[4].includes('map-5.jpg'), '돌아가는 프레임은 map-1..5.jpg 이고 헤더가 맵 뽑는 중이어야 함');
+    assert(calls.at(-1).includes('map-final.jpg') && calls.at(-1).includes('## 맵 뽑기 완료') && calls.at(-1).includes(mapMod.mapName('valorant', picked.key)), '마지막은 확정 이미지·이름·헤더(맵 뽑기 완료)');
+    const lockedNow = findMapBtn(boardMsg().components);
+    assert(lockedNow.disabled === true && lockedNow.label.includes('5분'), '뽑은 직후 버튼은 5분간 잠겨야 함');
+    assert(!team.__mapSpin.has(id), '연출이 끝나면 프레임 상태가 비워져야 함');
+
+    // 일반 참가자는 못 뽑는다(결과가 그대로)
+    const before = { ...m.board.map };
+    const stranger = press('u2');
+    await team.handleTeamButton(stranger);
+    assert(stranger.replied && m.board.map.at === before.at && m.board.map.key === before.key, '주최자·관리자가 아니면 뽑히지 않아야 함');
+
+    // 잠금 중(5분 안)에 누르면 안내만, 결과 그대로
+    const lockedPress = press(ADMIN);
+    await team.handleTeamButton(lockedPress);
+    assert(lockedPress._reply && JSON.stringify(lockedPress._reply.components).includes('다시 할 수 있어요') && m.board.map.at === before.at, '5분 안에 누르면 잠금 안내만 받고 결과는 그대로여야 함');
+    unlock();
+
+    // 연출 중에 또 누르면 안내만(두 번째 클릭은 결과를 바꾸지 않음) + 연출 도중 카드가 다시 그려져도 현재 프레임 이미지가 유지됨
+    let hold = true; const waiters = [];
+    team.__setMapSleep(() => (hold ? new Promise(r => waiters.push(r)) : Promise.resolve()));
+    const first = team.handleTeamButton(press(ADMIN));
+    await new Promise(r => setTimeout(r, 20));
+    const at1 = m.board.map.at;
+    const second = press(ADMIN);
+    await team.handleTeamButton(second);
+    assert(second._reply && JSON.stringify(second._reply.components).includes('뽑는 중'), '연출 중 두 번째 클릭은 "뽑는 중" 안내를 받아야 함');
+    assert(m.board.map.at === at1, '연출 중 두 번째 클릭이 결과를 바꾸면 안 됨');
+    const mid = JSON.stringify(team.buildBoardPayload(m, id).components);
+    assert(mid.includes('attachment://map-1.jpg') && !mid.includes('map-final.jpg'), '연출 도중 카드를 다시 그려도 현재 프레임이 유지돼야 함');
+    const spinBtn = findMapBtn(team.buildBoardPayload(m, id).components);
+    assert(spinBtn.disabled === true && spinBtn.label.includes('뽑는 중'), '연출 중에는 버튼이 잠기고 뽑는 중 라벨이어야 함');
+    assert(mid.includes('## 맵 뽑는 중...'), '연출 중 헤더는 맵 뽑는 중...');
+    hold = false; waiters.forEach(r => r()); await first;
+    assert(!team.__mapSpin.has(id), '연출이 끝나면 프레임 상태가 비워져야 함(동시 클릭 뒤에도)');
+    team.__setMapSleep(() => Promise.resolve());
+
+    unlock();
+    // 수정이 실패해도(메시지가 지워짐 등) 예외 없이 멈추고, 결과는 저장돼 있고, 다시 누를 수 있다
+    const broken = press(ADMIN);
+    broken.editReply = async () => { throw new Error('Unknown Message'); };
+    await team.handleTeamButton(broken);
+    assert(m.board.map && !team.__mapSpin.has(id), '수정이 실패해도 결과는 저장되고 프레임 상태는 비워져야 함');
+    unlock();
+    const again = [];
+    const retry = press(ADMIN);
+    const retryEdit = retry.editReply.bind(retry);
+    retry.editReply = async (p) => { again.push(1); return retryEdit(p); };
+    await team.handleTeamButton(retry);
+    assert(again.length === mapMod.SPIN_DELAYS_MS.length + 1, '실패 뒤에 다시 누르면 처음부터 연출돼야 함');
+
+    // 팀을 다시 나눠도 맵은 그대로
+    const keep = { ...m.board.map };
+    await team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:random:${id}` }));
+    assert(m.board.map && m.board.map.key === keep.key, '팀을 다시 나눠도 뽑은 맵은 그대로여야 함');
+    assert(JSON.stringify(boardMsg().components).includes('map-final.jpg'), '다시 올라온 카드에도 맵 이미지가 있어야 함');
+
+    // 끝났거나 없는 내전
+    const gone = mkInteraction({ user: ADMIN, customId: 'team:map:999999' });
+    await team.handleTeamButton(gone);
+    assert(gone._reply && JSON.stringify(gone._reply.components).includes('끝났거나'), '없는 내전이면 안내만');
+    team.__setMapClock(() => Date.now());
   });
 
   await flow('내전: 권한 없음·만료·잘못된 입력 안내', async () => {
