@@ -470,12 +470,28 @@ function teamLineup(resolved, game, match, pins = []) {
 // 팀원마다 맡은 자리 키(자리 배정 → 직접 고정 → 롤·발로는 저장한 주 포지션 순서로). 없으면 null.
 // 롤도 팀 인원이 5명이 아니면 자리 배정이 없어서, 저장한 주 포지션을 보여 준다.
 function memberSlots(t, resolved, game, lu) {
+  if (lu) return t.members.map((n, k) => lu.slots[k]);
   const pins = t.pos || [];
-  return t.members.map((n, k) => {
-    if (lu) return lu.slots[k];
+  const slots = t.members.map((n, k) => {
     if (pins[k]) return pins[k];
     if ((game === 'valorant' || game === 'lol') && resolved[k]) return tiers.getPositions(resolved[k].id, game)[0] ?? null;
     return null;
+  });
+  return autoFillSlots(slots, game);
+}
+
+// 포지션(역할)을 안 정한 사람은 자동으로 정해 준다: 팀에서 아직 맡은 사람이 가장 적은 자리부터 채워 한 팀에 같은 자리가 몰리지 않게 한다
+// (동률이면 포지션 목록 순서). 포지션을 비워 둔 건 "아무거나 좋다"는 뜻이라, 팀에 아무도 안 정했어도 전부 정해 준다. 롤·발로란트만.
+function autoFillSlots(slots, game) {
+  const list = (game === 'valorant' || game === 'lol') ? tiers.POSITIONS?.[game] : null;
+  if (!list?.length || slots.every(Boolean)) return slots;
+  const count = new Map(list.map(p => [p.key, 0]));
+  for (const s of slots) if (s && count.has(s)) count.set(s, count.get(s) + 1);
+  return slots.map(s => {
+    if (s) return s;
+    const pick = list.reduce((best, p) => (count.get(p.key) < count.get(best.key) ? p : best), list[0]);
+    count.set(pick.key, count.get(pick.key) + 1);
+    return pick.key;
   });
 }
 
@@ -1371,6 +1387,7 @@ async function handleTeamAssignSelect(interaction) {
 
 module.exports = {
   parseTeamsText, // 테스트용
+  autoFillSlots, // 테스트용
   parseTeamBoxes,
   buildInputModal,
   teamsToText,

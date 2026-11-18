@@ -307,6 +307,18 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await team.handleTeamButton(mkInteraction({ user: 'u2', customId: 'team:tier_resetall_ok:panel', message: allMsg }));
     assert(!tierMod.getTier('u2', 'overwatch') && !tierMod.getTier('u2', 'lol') && tierMod.getPositions('u2', 'lol').length === 0, '전체 초기화했는데 티어·포지션이 남음');
 
+    // 포지션을 안 정한 사람은 자동으로: 안 맡은 자리부터 채워 같은 자리가 몰리지 않게
+    {
+      const f1 = team.autoFillSlots([null, 'duelist', 'initiator', 'controller', 'sentinel'], 'valorant');
+      assert(f1.every(Boolean) && f1[0] === 'duelist', `발로 자동 배정: 빠진 역할(타격대)을 맡겨야 함(${f1})`);
+      const f2 = team.autoFillSlots(['duelist', 'duelist', null, null, null], 'valorant');
+      assert(f2.slice(2).join() === 'initiator,controller,sentinel', `발로 자동 배정: 비어 있는 역할부터(${f2})`);
+      const f3 = team.autoFillSlots([null, null, null], 'valorant');
+      assert(f3.join() === 'duelist,initiator,controller', `아무도 안 정했어도(아무거나 좋다는 뜻) 겹치지 않게 전부 정해 줌(${f3})`);
+      const f4 = team.autoFillSlots(['top', 'jungle', null, null], 'lol');
+      assert(f4.slice(2).join() === 'mid,adc', `롤 자동 배정(${f4})`);
+    }
+
     match.closed = false; // 마감 해제 후 다시 마감돼도 카드를 또 올리지 않는다
     const before = channel.sent.length;
     common.markClosed(client.naejeonMatches, id, match, '내전', false);
