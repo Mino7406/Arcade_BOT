@@ -532,7 +532,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     const picked = m.board.map;
     assert(picked && mapMod.MAP_POOLS.valorant.some(x => x.key === picked.key) && picked.game === 'valorant', '뽑은 결과가 board.map 에 저장돼야 함');
     assert(w1.log.length === mapMod.SPIN_DELAYS_MS.length + 1, `카드는 ${mapMod.SPIN_DELAYS_MS.length + 1}번 고쳐져야 함(${w1.log.length})`);
-    assert(w1.log[0].includes('## 맵 뽑는 중...') && w1.log[0].includes('map-1.jpg') && w1.log[4].includes('map-5.jpg'), '돌아가는 프레임은 map-1..5.jpg 이고 헤더가 맵 뽑는 중이어야 함');
+    assert(w1.log[0].includes('## 맵 뽑는 중...') && w1.log[0].includes('map-1.jpg') && w1.log[7].includes('map-8.jpg'), '돌아가는 프레임은 map-1..8.jpg 이고 헤더가 맵 뽑는 중이어야 함');
     assert(w1.log.at(-1).includes('map-final.jpg') && w1.log.at(-1).includes('## 맵 뽑기 완료') && w1.log.at(-1).includes(mapMod.mapName('valorant', picked.key)), '마지막은 확정 이미지·이름·헤더(맵 뽑기 완료)');
     assert(replyJson(ok).includes('돌리는 중'), '확인 창은 "돌리는 중" 안내로 바뀌어야 함');
     const lockedNow = findMapBtn(boardMsg().components);

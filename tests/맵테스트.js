@@ -40,8 +40,8 @@ assert.strictEqual(mapName('overwatch', 'neon-junction'), '네온 교차로');
 assert.strictEqual(mapName('overwatch', 'nope'), '');
 
 // 연출 프레임
-assert.deepStrictEqual(SPIN_DELAYS_MS, [600, 700, 900, 1200, 1600]);
-assert.strictEqual(SPIN_DELAYS_MS.reduce((a, b) => a + b, 0), 5000);
+assert.deepStrictEqual(SPIN_DELAYS_MS, [450, 500, 550, 650, 800, 1000, 1300, 1750]);
+assert.strictEqual(SPIN_DELAYS_MS.reduce((a, b) => a + b, 0), 7000);
 for (let t = 0; t < 20; t++) {
   let s = t + 1;
   const rnd = () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648);

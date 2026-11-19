@@ -646,7 +646,11 @@ function buildBoardPayload(match, matchMsgId) {
       blocks.push({ image: `attachment://${attName}`, noDivider: true });
       files.push(new AttachmentBuilder(file, { name: attName }));
     }
-    blocks.push({ text: frame.final ? `🗺️ **${maps.mapName(game, frame.key)}**` : null, noDivider: hasImage });
+    // 연출 중엔 지금 보이는 후보 맵 이름과 진행 막대(점점 느려지다 멈춘다)를 보여 줘서 긴장감을 준다.
+    const total = maps.SPIN_DELAYS_MS.length;
+    const bar = `${'▰'.repeat(frame.n)}${'▱'.repeat(Math.max(0, total - frame.n))}`;
+    blocks.push({ text: frame.final ? `🗺️ **${maps.mapName(game, frame.key)}**` : `🎲 ${bar}
+-# 후보: ${maps.mapName(game, frame.key)} ...`, noDivider: hasImage });
   }
 
   return payload(card({
