@@ -962,13 +962,13 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     tierM.setTier('test_가짜', 'lol', { tier: 'gold', div: 2 });
     tierM.setTier('real1', 'valorant', { tier: 'imm', div: 1 });
     await home.handleAdminButton(mkInteraction({ user: ADMIN, customId: 'admin:tier:reset', message: msg }));
-    assert(JSON.stringify(msg.components).includes('티어 정보 초기화'), '티어 초기화 확인 화면이 안 뜸');
+    assert(JSON.stringify(msg.components).includes('티어 정보 정리'), '티어 정리 확인 화면이 안 뜸');
     await home.handleAdminButton(mkInteraction({ user: ADMIN, customId: 'admin:tier:reset:test', message: msg }));
     assert(!tierM.getTier('test_가짜', 'lol') && tierM.getTier('real1', 'valorant'), '가짜 인원만 지우기가 진짜 사람 티어까지 지움');
-    await home.handleAdminButton(mkInteraction({ user: ADMIN, customId: 'admin:tier:reset', message: msg }));
+    // 전부 초기화는 없앴다: 옛 버튼 id가 와도 진짜 유저 티어는 그대로여야 한다
     await home.handleAdminButton(mkInteraction({ user: ADMIN, customId: 'admin:tier:reset:all', message: msg }));
-    assert(tierM.tierStats().users === 0, '전부 초기화했는데 티어가 남음');
-    const denied = mkInteraction({ user: 'u1', customId: 'admin:tier:reset:all', message: msg });
+    assert(tierM.getTier('real1', 'valorant'), '전부 초기화 버튼은 없앴는데 진짜 유저 티어가 지워짐');
+    const denied = mkInteraction({ user: 'u1', customId: 'admin:tier:reset:test', message: msg });
     await home.handleAdminButton(denied);
     assert(denied.replied, '관리자가 아닌데 초기화 버튼이 막히지 않음');
     for (const cid of ['xp:menu:manage', 'xp:mng:boost', 'xp:mng:raidauto', 'xp:mng:farm', 'xp:mngno', 'xp:menu:home', 'xp:menu:adjust', 'xp:menu:home']) {
