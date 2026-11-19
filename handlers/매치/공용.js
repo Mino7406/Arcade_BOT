@@ -347,12 +347,9 @@ function buildNotifyModeRows(prefix, msgId, data) {
 }
 
 function notifyModeMenuText(data) {
-  const cur = data?.notifyAt ? `**${notifyWhenText(data)}**` : '**꺼짐**';
-  return `🔔 **알림 방식을 골라주세요.** (지금: ${cur})
-⏹️ 마감 시 발송 — 모집이 마감되는 순간
-🤖 자동 — 일시를 읽어 시작 10분 전(못 읽으면 마감 시 발송)
-✏️ 시각 지정 — 직접 입력한 시각에
-🔕 끄기 — 알림 안 보냄`;
+  const cur = data?.notifyAt ? notifyWhenText(data) : '꺼짐';
+  return `🔔 **알림 · ${cur}**
+보낼 방식을 골라주세요.`;
 }
 
 // close / auto / off 를 data 에 적용하고 안내 문구를 돌려준다(manual 은 모달에서 처리). 타이머·카드 갱신은 호출 쪽에서.
@@ -364,17 +361,15 @@ function applyNotifyMode(match, mode) {
   }
   if (mode === 'close') {
     Object.assign(d, { notifyAt: Math.max(d.createdAt || 0, Date.now()), notify12h: false, notifyAuto: false, notifyAutoSrc: null, notifyOnClose: true, notifyPinClose: true, notifyDisabled: false });
-    return '🔔 **마감 시 발송으로 설정했어요.** 마감되는 순간 참가자에게 DM 알림을 보내요. (일시를 고쳐도 그대로예요)';
+    return '🔔 **마감 시 발송으로 설정했어요.**';
   }
   const auto = deriveNotifyFromDatetime(d.datetime, { base: d.createdAt });
   Object.assign(d, auto, { notifyAuto: true, notifyAutoSrc: d.datetime, notifyPinClose: false, notifyDisabled: false });
+  if (!auto.notifyOnClose) return `🔔 **자동: ${formatNotifyTimeSmart(auto.notifyAt, auto.notify12h)}에 보낼게요.** (일시 10분 전)`;
   const readable = !!parseDatetimeText(d.datetime, d.createdAt || Date.now());
-  return auto.notifyOnClose
-    ? (readable
-      ? '🔔 **자동으로 설정했어요.** 일시 10분 전이 이미 지나서, 마감되는 순간 참가자에게 DM 알림을 보내요.'
-      : '🔔 **자동으로 설정했어요.** 일시를 시각으로 읽지 못해 마감되는 순간 참가자에게 DM 알림을 보내요.\n💡 `오후 7시`·`19:00`·`11/19 19:00`처럼 적으면 읽어요. 또는 ✏️ 시각 지정을 써 보세요.')
-    : `🔔 **자동으로 설정했어요.** 일시 10분 전인 ${formatNotifyTimeSmart(auto.notifyAt, auto.notify12h)}에 참가자에게 DM 알림을 보낼게요.
-일시를 고치면 알림도 따라 옮겨져요.`;
+  return readable
+    ? '🔔 **자동: 마감 시 발송으로 설정했어요.** (10분 전이 이미 지났어요)'
+    : '🔔 **자동: 마감 시 발송으로 설정했어요.** (일시를 못 읽었어요 — `오후 7시`·`19:00`처럼 적어 보세요)';
 }
 
 // 공개된 매치의 일시를 고쳤을 때 알림 처리. 아직 안 보낸 알림은 syncAutoNotify 그대로.
