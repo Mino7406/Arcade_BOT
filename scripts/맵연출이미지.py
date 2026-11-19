@@ -1,7 +1,7 @@
 """맵 뽑기 연출(슬롯처럼 흘러가는 맵 카드) 재료 이미지 만들기 (개발용 일회성): python -I scripts/맵연출이미지.py
 
 봇이 뽑기마다 카드 여러 장을 옆으로 흘려 보내며 프레임을 직접 그린다(handlers/매치/맵연출.js). 그 재료를 만든다:
- - assets/맵/카드/<게임>/<키>.png : 맵 카드(270x336, 아래에 한국어 이름판이 박힘)
+ - assets/맵/카드/<게임>/<키>.png : 맵 카드(300x372, 아래에 한국어 이름판이 박힘)
  - assets/맵/연출/배경_<게임>.png : 960x540 배경(제목 MAP DRAW · 맵 뽑기 · 추첨 중...)
 필요: Python + Pillow, Node.  글꼴: assets/fonts/BlackHanSans-Regular.ttf(OFL), BebasNeue-Regular.ttf(OFL)
 """
@@ -13,7 +13,7 @@ import sys
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-CW, CH = 270, 336
+CW, CH = 300, 372
 W, H = 960, 540
 ACCENT = {'valorant': (253, 69, 86), 'overwatch': (250, 156, 30)}
 FONT_KO = os.path.join(ROOT, 'assets', 'fonts', 'BlackHanSans-Regular.ttf')
@@ -32,10 +32,10 @@ def card(game, key, name):
     im = ImageOps.fit(im, (CW, CH), Image.LANCZOS, centering=(0.5, 0.5)).convert('RGBA')
     ov = Image.new('RGBA', (CW, CH), (0, 0, 0, 0))
     d = ImageDraw.Draw(ov)
-    for i in range(130):  # 아래쪽 이름판 그라데이션
-        d.line([(0, CH - 130 + i), (CW, CH - 130 + i)], fill=(8, 10, 16, int(220 * (i / 130) ** 1.4)))
-    f = ImageFont.truetype(FONT_KO, 30 if len(name) <= 9 else 24)
-    d.text(((CW - d.textlength(name, font=f)) / 2, CH - 58), name, font=f, fill=(255, 255, 255, 255))
+    for i in range(140):  # 아래쪽 이름판 그라데이션
+        d.line([(0, CH - 140 + i), (CW, CH - 140 + i)], fill=(8, 10, 16, int(220 * (i / 140) ** 1.4)))
+    f = ImageFont.truetype(FONT_KO, 34 if len(name) <= 9 else 27)
+    d.text(((CW - d.textlength(name, font=f)) / 2, CH - 62), name, font=f, fill=(255, 255, 255, 255))
     out = Image.alpha_composite(im, ov).convert('RGB')
     dst = os.path.join(ROOT, 'assets', '맵', '카드', game, key + '.png')
     os.makedirs(os.path.dirname(dst), exist_ok=True)

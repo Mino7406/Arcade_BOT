@@ -28,8 +28,8 @@ const MAP_POOLS = {
   ],
 };
 
-// 연출: 돌아가는 프레임 사이의 간격(ms). 합 7초, 뒤로 갈수록 느려진다. 이 뒤에 이름이 박힌 확정 프레임이 한 번 더 나온다.
-const SPIN_DELAYS_MS = [450, 500, 550, 650, 800, 1000, 1300, 1750];
+// 연출: 돌아가는 프레임 사이의 간격(ms). 합 7.6초, 뒤로 갈수록 느려진다. 이 뒤에 이름이 박힌 확정 프레임이 한 번 더 나온다.
+const SPIN_DELAYS_MS = [450, 450, 470, 500, 560, 650, 780, 950, 1200, 1600];
 
 const ASSET_DIR = path.join(__dirname, '..', '..', 'assets', '맵');
 
@@ -48,7 +48,7 @@ const mapResultFile = (game, key) => path.join(ASSET_DIR, '결과', game, `${key
 
 // 연출: 맵 카드가 슬롯처럼 옆으로 흘러가다 당첨 맵에서 멈춘다(handlers/매치/맵연출.js 가 프레임을 그림).
 // reelPlan: 카드 줄(strip: 맵 key 들, 이웃은 서로 다르고 당첨 맵은 stop 번째)과 프레임별 위치(offsets: 카드 몇 장째가 가운데인지 — 점점 느려져 마지막은 stop).
-const REEL_STOP = 16;
+const REEL_STOP = 20;
 function reelPlan(game, finalKey, rnd = Math.random) {
   const pool = MAP_POOLS[game] ?? [];
   const strip = [];

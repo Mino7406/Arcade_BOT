@@ -589,7 +589,7 @@ function buildBoardRows(match, matchMsgId) {
     // 맵 뽑기는 누르는 순간부터 5분간 잠긴다(연출 중 포함). 풀리는 시각에 카드가 스스로 고쳐진다(scheduleMapUnlock).
     const spinning = mapSpin.has(matchMsgId);
     const locked = spinning || mapLocked(match);
-    const label = spinning ? '🗺️ 맵 뽑는 중...' : locked ? '🔒 맵 뽑기 (5분 잠금)' : board.map ? '🗺️ 다시 뽑기' : '🗺️ 맵 뽑기';
+    const label = spinning ? '🗺️ 맵 뽑는 중...' : board.map ? '🗺️ 다시 뽑기' : '🗺️ 맵 뽑기';
     second.push(new ButtonBuilder().setCustomId(`team:map:${matchMsgId}`).setLabel(label).setStyle(ButtonStyle.Secondary).setDisabled(locked));
   }
   return [new ActionRowBuilder().addComponents(...buttons), ...(second.length ? [new ActionRowBuilder().addComponents(...second)] : [])];
@@ -647,7 +647,8 @@ function buildBoardPayload(match, matchMsgId) {
       blocks.push({ image: `attachment://${attName}`, noDivider: true });
       files.push(new AttachmentBuilder(frame.final ? file : frame.png, { name: attName }));
     }
-    if (frame.final) blocks.push({ text: `🗺️ **${maps.mapName(game, frame.key)}**`, noDivider: hasImage });
+    // 맵 이름은 결과 이미지에 박혀 있어서 따로 글을 붙이지 않는다. 이미지가 없을 때만 이름 한 줄.
+    if (frame.final && !hasImage) blocks.push({ text: `🗺️ **${maps.mapName(game, frame.key)}**` });
   }
 
   return payload(card({
@@ -840,15 +841,42 @@ async function editBoardNow(client, matchMsgId, match) {
 
 // 🗺️ 맵 뽑기 연출: 결과를 먼저 저장(연출 중 봇이 꺼져도 다음 카드에 보임)하고, 돌아가는 프레임을 점점 느리게 보여 준 뒤 이름이 박힌 확정 이미지로 끝낸다.
 // 카드 수정이 실패하면(메시지가 지워짐 등) 연출만 멈추고 결과는 그대로 둔다. 끝나면 잠금이 풀리는 시각에 카드를 한 번 고친다.
+// 맵 뽑기 미리 데우기: "돌리겠습니까?" 확인 창이 떠 있는 동안 당첨 맵을 정하고 연출 프레임을 미리 그려 둬서, "돌리기"를 누르면 바로 돈다.
+// 확인 창을 닫거나 3분이 지나면 버린다(프레임 8~10장 ≈ 5MB + 카드 그림 캐시).
+const mapPrep = new Map(); // matchMsgId → { picked, strip, offsets, frames, ready }
+function dropMapPrep(matchMsgId) {
+  const prep = mapPrep.get(matchMsgId);
+  if (!prep) return null;
+  clearTimeout(prep.timer);
+  mapPrep.delete(matchMsgId);
+  return prep;
+}
+function prepareMapSpin(matchMsgId, game) {
+  dropMapPrep(matchMsgId);
+  const picked = maps.pickMap(game);
+  const { strip, offsets } = maps.reelPlan(game, picked.key);
+  const prep = { game, picked, strip, offsets, frames: [] };
+  prep.ready = (async () => {
+    for (const off of offsets) { await new Promise(r => setImmediate(r)); prep.frames.push(mapReel.frame(game, strip, off)); } // 프레임 사이에 숨을 돌려 다른 요청을 막지 않는다
+  })().catch(() => {});
+  prep.timer = setTimeout(() => { if (mapPrep.get(matchMsgId) === prep) { mapPrep.delete(matchMsgId); if (!mapSpin.has(matchMsgId)) mapReel.clearReelCache(); } }, 3 * 60 * 1000);
+  prep.timer.unref?.();
+  mapPrep.set(matchMsgId, prep);
+}
+
 async function runMapSpin(client, matchMsgId, match, ack = null) {
   const game = match.data.game;
   try {
-    const picked = maps.pickMap(game);
+    let prep = dropMapPrep(matchMsgId);
+    if (prep && prep.game !== game) prep = null;
+    const picked = prep?.picked ?? maps.pickMap(game);
     normalizeBoard(match).map = { game, key: picked.key, at: mapNow() };
     saveNow(client);
-    const { strip, offsets } = maps.reelPlan(game, picked.key);
-    for (let i = 0; i < offsets.length; i++) {
-      mapSpin.set(matchMsgId, { key: picked.key, n: i + 1, png: mapReel.frame(game, strip, offsets[i]) }); // 카드 줄이 흘러가는 프레임을 그린다(카드가 다시 그려져도 같은 그림)
+    const plan = prep ?? { ...maps.reelPlan(game, picked.key), frames: [] };
+    await prep?.ready;
+    for (let i = 0; i < plan.offsets.length; i++) {
+      const png = plan.frames[i] ?? mapReel.frame(game, plan.strip, plan.offsets[i]); // 카드가 다시 그려져도 같은 그림이 나오게 프레임을 들고 있는다
+      mapSpin.set(matchMsgId, { key: picked.key, n: i + 1, png });
       await editBoardNow(client, matchMsgId, match);
       await mapSleep(maps.SPIN_DELAYS_MS[i]);
     }
@@ -1384,7 +1412,7 @@ async function handleTeamButton(interaction) {
   if (customId.startsWith('team:map:') || customId.startsWith('team:map_ok:') || customId.startsWith('team:map_no:')) {
     const kind = customId.startsWith('team:map_ok:') ? 'ok' : customId.startsWith('team:map_no:') ? 'no' : 'ask';
     const matchMsgId = customId.slice(customId.indexOf(':', 'team:map'.length) + 1);
-    if (kind === 'no') { await interaction.deferUpdate(); await interaction.deleteReply().catch(() => {}); return; }
+    if (kind === 'no') { if (dropMapPrep(matchMsgId)) mapReel.clearReelCache(); await interaction.deferUpdate(); await interaction.deleteReply().catch(() => {}); return; }
     const match = getMatches(interaction.client).get(matchMsgId);
     const say = (text) => (kind === 'ok' ? interaction.update(notice(text, { ephemeral: true })) : interaction.reply(notice(text, { ephemeral: true })));
     if (!match) { await say('⚠️ **끝났거나 취소된 내전이에요.**'); return; }
@@ -1397,6 +1425,7 @@ async function handleTeamButton(interaction) {
       return;
     }
     if (kind === 'ask') {
+      prepareMapSpin(matchMsgId, match.data.game); // 확인 창이 떠 있는 동안 연출 프레임을 미리 그린다
       await interaction.reply(notice('🗺️ **맵을 돌리겠습니까?**\n-# 한 번 돌리면 5분간 다시 돌릴 수 없어요.', {
         ephemeral: true,
         rows: [new ActionRowBuilder().addComponents(

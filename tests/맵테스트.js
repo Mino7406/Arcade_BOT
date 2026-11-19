@@ -40,8 +40,8 @@ assert.strictEqual(mapName('overwatch', 'neon-junction'), '네온 교차로');
 assert.strictEqual(mapName('overwatch', 'nope'), '');
 
 // 연출 프레임
-assert.deepStrictEqual(SPIN_DELAYS_MS, [450, 500, 550, 650, 800, 1000, 1300, 1750]);
-assert.strictEqual(SPIN_DELAYS_MS.reduce((a, b) => a + b, 0), 7000);
+assert.deepStrictEqual(SPIN_DELAYS_MS, [450, 450, 470, 500, 560, 650, 780, 950, 1200, 1600]);
+assert.strictEqual(SPIN_DELAYS_MS.reduce((a, b) => a + b, 0), 7610);
 for (const game of ['valorant', 'overwatch']) {
   MAP_POOLS[game].forEach((x, idx) => {
     for (let t = 0; t < 3; t++) {

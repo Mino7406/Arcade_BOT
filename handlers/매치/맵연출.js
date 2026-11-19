@@ -7,8 +7,8 @@ const { Painter } = require('../레이드/그림판');
 const { decodePng } = require('../공통/이모지그림');
 
 const ASSET = path.join(__dirname, '..', '..', 'assets', '맵');
-const W = 960, H = 540, CW = 270, CH = 336, PITCH = 300; // 카드 폭 270 + 간격 30
-const CX = (W - CW) / 2, CY = 150;
+const W = 960, H = 540, CW = 300, CH = 372, PITCH = 330; // 카드 폭 300 + 간격 30
+const CX = (W - CW) / 2, CY = 124;
 const ACCENT = { valorant: [253, 69, 86], overwatch: [250, 156, 30] };
 
 const cache = new Map(); // 파일 → { w, h, data }
@@ -49,7 +49,7 @@ function frame(game, strip, offset) {
     const x = Math.round(CX + (k - offset) * PITCH);
     if (x >= W || x + CW <= 0) continue;
     const lit = Math.max(0, 1 - Math.abs(k - offset)); // 가운데에 가까울수록 1
-    blit(p, load(path.join(ASSET, '카드', game, `${key}.png`)), x, CY, 0.4 + 0.6 * lit);
+    blit(p, load(path.join(ASSET, '카드', game, `${key}.png`)), x, CY, 0.55 + 0.45 * lit);
   }
   // 고정 테두리(굵은 선 + 바깥 빛 번짐)
   const acc = ACCENT[game] ?? ACCENT.overwatch, bx = Math.round(CX) - 4, by = CY - 4, bw = CW + 8, bh = CH + 8;
