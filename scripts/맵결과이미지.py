@@ -21,6 +21,7 @@ W, H = 1200, 675
 WIN = 'C:/Windows/Fonts/'
 FONT_KO_BOLD = WIN + 'malgunbd.ttf'          # 한국어(굵게) — 발로란트 작은 글줄
 FONT_OW = os.path.join(ROOT, 'assets', 'fonts', 'BlackHanSans-Regular.ttf')   # 오버워치 이름(굵은 한국어)
+LOGO_OW = os.path.join(ROOT, 'assets', '맵', '로고', 'overwatch.png')  # 오버워치 로고(투명 배경 PNG)
 FONT_VAL_BIG = os.path.join(ROOT, 'assets', 'fonts', 'BebasNeue-Regular.ttf')  # 발로란트 큰 영문 이름
 FONT_KO_REG = WIN + 'malgun.ttf'
 FONT_DIN = WIN + 'bahnschrift.ttf'           # DIN 계열(발로란트 영문)
@@ -90,8 +91,16 @@ def overwatch(im, name):
     # x' = x + shear*(h - y): 아래쪽을 기준으로 윗부분이 오른쪽으로 기운다
     lh = layer.size[1]
     layer = layer.transform(layer.size, Image.AFFINE, (1, shear, -shear * lh, 0, 1, 0), Image.BICUBIC)
-    x = W - 64 - layer.size[0] + pad
-    y = H - 56 - layer.size[1] + pad
+    # 로고: 이름 오른쪽(로딩 화면처럼). 글자 높이에 맞춰 키우고 세로 가운데를 이름과 맞춘다.
+    right = W - 64
+    cy = H - 56 - th / 2
+    if os.path.exists(LOGO_OW):
+        L = int(min(150, max(96, th * 1.5)))
+        logo = Image.open(LOGO_OW).convert('RGBA').resize((L, L), Image.LANCZOS)
+        im.alpha_composite(logo, (right - L, int(cy - L / 2)))
+        right -= L + 18
+    x = right - layer.size[0] + pad
+    y = cy - layer.size[1] / 2
     im.alpha_composite(layer, (max(0, int(x)), max(0, int(y))))
     return im
 
