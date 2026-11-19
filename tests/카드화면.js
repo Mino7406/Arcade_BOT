@@ -190,6 +190,16 @@ async function buildScreens() {
     add('나만 보이는 메시지', '🏅 내 티어 설정 — 오버워치 돌격 티어', '', team.buildTierPickPayload('overwatch.tank', '1', 'me'));
     add('나만 보이는 메시지', '🏅 내 티어 설정 — 내 티어 정보(패널)', '게임마다 이름 줄 + 인용 줄, 오른쪽에 🗑️ 전체 초기화', team.buildTierGamePayload('me'));
     add('나만 보이는 메시지', '🗑️ 전체 초기화 확인', '', team.buildResetAllConfirmPayload());
+    {
+      const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+      add('나만 보이는 메시지', '⚠️ 팀 다시 만들기 경고(✏️·⚖️·🎲)', '이미 정한 팀이 있을 때만 · 만들면 이 창은 자동 삭제', card.notice('⚠️ **이미 짜 둔 팀이 있어요.**\n⚖️ 밸런스(으)로 다시 만들면 지금 팀은 📜 내전 내역으로 넘어가요.', {
+        ephemeral: true,
+        rows: [new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('team:regen:balance:1').setLabel('다시 만들기').setStyle(ButtonStyle.Danger),
+          new ButtonBuilder().setCustomId('team:regen_no:1').setLabel('취소').setStyle(ButtonStyle.Secondary),
+        )],
+      }));
+    }
     Object.assign(tm, orig);
   }
   add('내전 · 모집', '안내 한 줄 — 만료', '모든 짧은 안내가 같은 카드 모양', card.notice('⚠️ **만료된 내전입니다.**', { ephemeral: true }));
