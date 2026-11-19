@@ -120,10 +120,10 @@ async function buildScreens() {
   add('내전 · 모집', '게시 전 미리보기', '작성자에게만 보이는 임시 메시지', common.buildPreviewPayload('naejeon', base('lol', { data: { description: '메모 예시', notifyAt: nowPlus(3) } }), { ephemeral: true }));
   add('내전 · 모집', '취소된 내전', '', card.payload(common.buildCancelledCard({ label: '내전', data: base('lol'), byOrganizer: true })));
   add('내전 · 모집', '팀 배정 완료 알림', '팀을 나누면 채널에 올라오는 카드', card.payload(common.buildTeamResultCard(base('lol'), { team1: users(10).slice(0, 5), team2: users(10).slice(5) })));
-  add('내전 · 모집', '팀 짜기 카드(처음)', '내전이 마감되면 내전채팅에 자동으로 올라가는 카드', team.buildBoardPayload({ data: base('lol'), participants: users(10), closed: true }, '1'));
+  add('내전 · 모집', '팀 설정 카드(처음)', '내전이 마감되면 내전채팅에 자동으로 올라가는 카드', team.buildBoardPayload({ data: base('lol'), participants: users(10), closed: true }, '1'));
   const boardMsg = { url: 'https://discord.com/channels/1/2/3', channelId: '2' };
-  add('내전 · 모집', '팀 짜기 바로가기', '내전채팅에 팀 짜기 카드가 올라오면 내전 게시글에 답장으로 달려요 · 참가자 멘션처럼 내전이 지워질 때 같이 지워져요', team.buildBoardShortcutPayload({ data: base('lol') }, boardMsg, { style: 'plain' }));
-  add('내전 · 모집', '팀 짜기 카드(팀 정한 뒤)', '지금 팀은 크게, 이전 팀표는 작게', team.buildBoardPayload({ data: base('lol'), participants: users(10), closed: true, board: { current: { how: 'balance', at: Date.now(), teams: [{ name: null, members: users(10).slice(0, 5).map(u => u.displayName) }, { name: '맵', members: users(10).slice(5).map(u => u.displayName) }] }, history: [1, 2].map(n => ({ at: Date.now() - n * 3600e3, how: 'input', teams: [{ name: null, members: users(10).slice(0, 5).map(u => u.displayName) }, { name: null, members: users(10).slice(5).map(u => u.displayName) }] })) } }, '1'));
+  add('내전 · 모집', '팀 설정 바로가기', '내전채팅에 팀 설정 카드가 올라오면 내전 게시글에 답장으로 달려요 · 참가자 멘션처럼 내전이 지워질 때 같이 지워져요', team.buildBoardShortcutPayload({ data: base('lol') }, boardMsg, { style: 'plain' }));
+  add('내전 · 모집', '팀 설정 카드(팀 정한 뒤)', '지금 팀은 크게, 이전 팀표는 작게', team.buildBoardPayload({ data: base('lol'), participants: users(10), closed: true, board: { current: { how: 'balance', at: Date.now(), teams: [{ name: null, members: users(10).slice(0, 5).map(u => u.displayName) }, { name: '맵', members: users(10).slice(5).map(u => u.displayName) }] }, history: [1, 2].map(n => ({ at: Date.now() - n * 3600e3, how: 'input', teams: [{ name: null, members: users(10).slice(0, 5).map(u => u.displayName) }, { name: null, members: users(10).slice(5).map(u => u.displayName) }] })) } }, '1'));
   // 포지션: 저장 파일을 건드리지 않게 티어 조회 함수만 잠깐 바꿔 끼워 그린다.
   {
     const tm = req('handlers/매치/티어.js');
@@ -160,28 +160,28 @@ async function buildScreens() {
     const halves = us => [{ name: null, members: us.slice(0, 5).map(u => u.displayName) }, { name: null, members: us.slice(5).map(u => u.displayName) }];
     const named = users(10);
     const histBoard = { data: base('lol'), participants: users(10), closed: true, board: { current: { how: 'balance', at: Date.now(), no: 3, teams: halves(users(10)) }, history: [2, 1].map(n => ({ at: Date.now() - n * 3600e3, no: n, how: n === 2 ? 'input' : 'balance', teams: halves(users(10)) })) } };
-    add('내전 · 모집', '팀 짜기 내전 내역(📜 버튼)', '카드는 짧게 두고 이전 팀표는 두 번째 줄의 📜 내전 내역 버튼으로 나만 보이는 창에 열어요', team.buildHistoryPayload(histBoard, '1'));
+    add('내전 · 모집', '팀 설정 내전 내역(📜 버튼)', '카드는 짧게 두고 이전 팀표는 두 번째 줄의 📜 내전 내역 버튼으로 나만 보이는 창에 열어요', team.buildHistoryPayload(histBoard, '1'));
     // 🗺️ 맵 추첨: 발로란트·오버워치 카드(결과·연출 중). 첨부는 jpg 라서 jpg 데이터 주소로 넣는다.
     const jpg = p => ({ files: Object.fromEntries((p.files || []).map(f => [f.name, 'data:image/jpeg;base64,' + require('fs').readFileSync(f.attachment).toString('base64')])) });
     const mapBoard = (game, info, title, map) => ({ data: { ...base('lol'), game, gameInfo: info, title }, participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: halves(named) }, history: [], ...(map ? { map } : {}) } });
     const valBoard = mapBoard('valorant', GAMES.val, '발로란트 내전', { game: 'valorant', key: 'ascent', at: Date.now() - team.MAP_LOCK_MS - 60e3 });
     const owBoard = mapBoard('overwatch', owInfo, '오버워치 내전', { game: 'overwatch', key: 'grimsvotn', at: Date.now() });
     const valP = team.buildBoardPayload(valBoard, '1');
-    add('내전 · 모집', '팀 짜기 카드(맵 추첨 결과 · 발로란트)', '윗줄 ✔️ 맵 추첨 완료 - **[맵 이름]** 아래에 이름이 알약 박스 위에 박힌 맵 이미지 · 뽑은 지 5분이 지나서 두 번째 줄의 🔍 맵 추첨가 눌려요', valP, jpg(valP));
+    add('내전 · 모집', '팀 설정 카드(맵 추첨 결과 · 발로란트)', '윗줄 ✔️ 맵 추첨 완료 - **[맵 이름]** 아래에 이름이 알약 박스 위에 박힌 맵 이미지 · 뽑은 지 5분이 지나서 두 번째 줄의 🔍 맵 추첨가 눌려요', valP, jpg(valP));
     const owP = team.buildBoardPayload(owBoard, '1');
-    add('내전 · 모집', '팀 짜기 카드(맵 추첨 결과 · 오버워치)', '오버워치는 호위·혼합·밀기·쟁탈·플래시포인트 전체 맵에서 같은 확률 · 방금 뽑아서 🔒 맵 추첨 버튼이 5분간 비활성화(회색)돼요', owP, jpg(owP));
+    add('내전 · 모집', '팀 설정 카드(맵 추첨 결과 · 오버워치)', '오버워치는 호위·혼합·밀기·쟁탈·플래시포인트 전체 맵에서 같은 확률 · 방금 뽑아서 🔒 맵 추첨 버튼이 5분간 비활성화(회색)돼요', owP, jpg(owP));
     team.__mapSpin.set('1', { key: 'busan', n: 3 });
     const spinP = team.buildBoardPayload(mapBoard('overwatch', owInfo, '오버워치 내전', null), '1');
     team.__mapSpin.delete('1');
-    add('내전 · 모집', '팀 짜기 카드(맵 뽑는 중)', '누르는 순간 헤더가 ### 🔍 맵 추첨 중... 이 되고 버튼이 잠겨요 · 이름 없는 맵 이미지가 5번 바뀌고 점점 느려져요(총 약 5초)', spinP, jpg(spinP));
-    add('내전 · 모집', '팀 짜기 카드(내역 버튼이 켜진 모습)', '내전 내역이 있으면 📜 내전 내역 (개수) 버튼이 두 번째 줄에 눌리게 보여요', team.buildBoardPayload(histBoard, '1'));
-    add('내전 · 모집', '팀 짜기 카드(롤 포지션)', '포지션을 저장한 사람이 있으면 5명 팀마다 탑~서포터를 맡기고 그 순서로 줄을 세움', team.buildBoardPayload({ data: base('lol'), participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 2, teams: halves(named) }, history: [] } }, '1'));
-    add('내전 · 모집', '팀 짜기 카드(발로란트 역할)', '발로란트는 역할이 고정이 아니라 가능한 역할 2개(주·부)를 티어 앞에 나란히 보여 줌 · 안 정한 사람은 투명 아이콘으로 칸만 맞춤', team.buildBoardPayload({ data: { ...base('lol'), game: 'valorant', gameInfo: owInfo, title: '발로란트 내전' }, participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: halves(named) }, history: [] } }, '1'));
-    add('내전 · 모집', '팀 짜기 카드(오버워치 역할별 티어)', '돌격1·공격2·지원2로 맡기고, 맡은 역할의 티어를 보여 줌', team.buildBoardPayload({ data: { ...base('lol'), game: 'overwatch', gameInfo: owInfo, title: '오버워치 내전' }, participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: halves(named) }, history: [] } }, '1'));
+    add('내전 · 모집', '팀 설정 카드(맵 뽑는 중)', '누르는 순간 헤더가 ### 🔍 맵 추첨 중... 이 되고 버튼이 잠겨요 · 이름 없는 맵 이미지가 5번 바뀌고 점점 느려져요(총 약 5초)', spinP, jpg(spinP));
+    add('내전 · 모집', '팀 설정 카드(내역 버튼이 켜진 모습)', '내전 내역이 있으면 📜 내전 내역 (개수) 버튼이 두 번째 줄에 눌리게 보여요', team.buildBoardPayload(histBoard, '1'));
+    add('내전 · 모집', '팀 설정 카드(롤 포지션)', '포지션을 저장한 사람이 있으면 5명 팀마다 탑~서포터를 맡기고 그 순서로 줄을 세움', team.buildBoardPayload({ data: base('lol'), participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 2, teams: halves(named) }, history: [] } }, '1'));
+    add('내전 · 모집', '팀 설정 카드(발로란트 역할)', '발로란트는 역할이 고정이 아니라 가능한 역할 2개(주·부)를 티어 앞에 나란히 보여 줌 · 안 정한 사람은 투명 아이콘으로 칸만 맞춤', team.buildBoardPayload({ data: { ...base('lol'), game: 'valorant', gameInfo: owInfo, title: '발로란트 내전' }, participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: halves(named) }, history: [] } }, '1'));
+    add('내전 · 모집', '팀 설정 카드(오버워치 역할별 티어)', '돌격1·공격2·지원2로 맡기고, 맡은 역할의 티어를 보여 줌', team.buildBoardPayload({ data: { ...base('lol'), game: 'overwatch', gameInfo: owInfo, title: '오버워치 내전' }, participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: halves(named) }, history: [] } }, '1'));
     const twelve = users(12).map((u, i) => (i >= 10 ? { ...u, displayName: u.displayName + '2' } : u));
     owTiers[110] = { tank: ['master', 3] }; owTiers[111] = { tank: ['gold', 2], damage: ['platinum', 4] };
     owTiers[100].open = ['master', 2]; owTiers[103].open = ['diamond', 4]; owTiers[107].open = ['grandmaster', 5];
-    add('내전 · 모집', '팀 짜기 카드(오버워치 6vs6)', '6vs6은 자유(오픈 큐): 역할 없이 자유 티어(없으면 가장 높은 역할 티어)로 계산', team.buildBoardPayload({ data: { ...base('lol'), game: 'overwatch', gameInfo: owInfo, title: '오버워치 6vs6 내전', players: '12' }, participants: twelve, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: [{ name: null, members: twelve.slice(0, 6).map(u => u.displayName) }, { name: null, members: twelve.slice(6).map(u => u.displayName) }] }, history: [] } }, '1'));
+    add('내전 · 모집', '팀 설정 카드(오버워치 6vs6)', '6vs6은 자유(오픈 큐): 역할 없이 자유 티어(없으면 가장 높은 역할 티어)로 계산', team.buildBoardPayload({ data: { ...base('lol'), game: 'overwatch', gameInfo: owInfo, title: '오버워치 6vs6 내전', players: '12' }, participants: twelve, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: [{ name: null, members: twelve.slice(0, 6).map(u => u.displayName) }, { name: null, members: twelve.slice(6).map(u => u.displayName) }] }, history: [] } }, '1'));
     tm.getTier = (uid, gk) => (uid === 'me' ? fake('100', gk) ?? fake('101', gk) : fake(uid, gk));
     tm.getRoleTiers = uid => Object.fromEntries(tm.OW_ROLES.map(r => [r.key, fake(uid === 'me' ? '104' : uid, `overwatch.${r.key}`)]));
     add('나만 보이는 메시지', '🏅 내 티어 설정 — 롤(포지션 버튼)', '티어 고르기 아래 🧭 포지션 설정', team.buildTierPickPayload('lol', '1', 'me'));
@@ -192,7 +192,7 @@ async function buildScreens() {
     add('나만 보이는 메시지', '🗑️ 전체 초기화 확인', '', team.buildResetAllConfirmPayload());
     {
       const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-      add('나만 보이는 메시지', '⚠️ 팀 다시 만들기 경고(✏️·⚖️·🎲)', '이미 정한 팀이 있을 때만 · 만들면 이 창은 자동 삭제', card.notice('⚠️ **이미 짜 둔 팀이 있어요.**\n⚖️ 밸런스(으)로 다시 만들면 지금 팀은 📜 내전 내역으로 넘어가요.', {
+      add('나만 보이는 메시지', '⚠️ 팀 다시 만들기 경고(✏️·⚖️·🎲)', '이미 정한 팀이 있을 때만 · 만들면 이 창은 자동 삭제', card.notice('⚠️ **이미 설정한 팀이 있어요.**\n⚖️ 밸런스(으)로 다시 만들면 지금 팀은 📜 내전 내역으로 넘어가요.', {
         ephemeral: true,
         rows: [new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId('team:regen:balance:1').setLabel('다시 만들기').setStyle(ButtonStyle.Danger),

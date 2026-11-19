@@ -351,7 +351,7 @@ async function onReady(c) {
   await require('./handlers/매치/티어').ensureTierEmojis(c).catch(err => console.error('티어 이모지 준비 실패(글자로 표시):', err));
   require('./handlers/매치/티어').refreshFileNames(c).catch(err => console.error('티어 파일 이름 채우기 실패:', err)); // 기다리지 않음: tier.json 을 이름·보기가 붙은 모양으로 다시 씀
   await restoreMatches(c); // ⬅️ 추가: 저장된 내전/모집 복원
-  require('./handlers/매치/팀').refreshAllBoards(c).catch(err => console.error('팀 짜기 카드 최신화 실패:', err)); // 기다리지 않음: 올라가 있는 팀 짜기 카드를 지금 티어 DB·디자인으로 다시 그림
+  require('./handlers/매치/팀').refreshAllBoards(c).catch(err => console.error('팀 설정 카드 최신화 실패:', err)); // 기다리지 않음: 올라가 있는 팀 설정 카드를 지금 티어 DB·디자인으로 다시 그림
   enableSaveNow(); // 복원이 끝났으므로 이제부터는 게시/취소 직후 바로 저장해도 안전하다
   await recoverCancelledEmbeds(c, new Set([...allowedChannels, MATCH_BONUS_CHANNEL_ID])); // 저장 파일에서 빠진 취소 임베드 삭제 예약 복구
   loadLevels(); // ⬅️ 추가: 저장된 레벨/XP 복원
@@ -463,7 +463,7 @@ client.on('interactionCreate', async (interaction) => {
 
     const isChannelExempt =
       (interaction.isChatInputCommand() && ['관리', '티어'].includes(interaction.commandName)) || // /티어는 나만 보이는 화면이라 어느 채널에서든
-      interaction.customId?.startsWith('team:') || // 팀 짜기 카드는 내전채팅에 올라간다(참가자·주최자만 누를 수 있음)
+      interaction.customId?.startsWith('team:') || // 팀 설정 카드는 내전채팅에 올라간다(참가자·주최자만 누를 수 있음)
       isWordchainOrRanking ||
       isReload ||
       interaction.customId?.startsWith('quiz:') ||
@@ -589,8 +589,8 @@ client.on('interactionCreate', async (interaction) => {
       } else if (interaction.customId === 'recruit:불러오기') {
         await interaction.reply(buildReloadListPayload(interaction));
       } else if (interaction.customId === 'recruit:팀') {
-        // 새로고침 전 예전 패널의 ⚔️ 팀 짜기 버튼
-        await interaction.reply(notice('⚔️ **팀 짜기 카드는 내전이 마감되면 내전채팅에 자동으로 올라가요.**\n-# 카드가 묻혔으면 주최자 관리 메뉴의 📌 팀 불러오기를 눌러 주세요.', { ephemeral: true }));
+        // 새로고침 전 예전 패널의 ⚔️ 팀 설정 버튼
+        await interaction.reply(notice('⚔️ **팀 설정 카드는 내전이 마감되면 내전채팅에 자동으로 올라가요.**\n-# 카드가 묻혔으면 주최자 관리 메뉴의 📌 팀 불러오기를 눌러 주세요.', { ephemeral: true }));
       } else if (interaction.customId === 'recruit:티어') {
         await interaction.reply(require('./handlers/매치/팀').buildTierGamePayload(interaction.user.id));
       } else if (interaction.customId === 'recruit:명령어') {

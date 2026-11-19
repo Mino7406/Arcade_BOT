@@ -1,4 +1,4 @@
-// 팀.js — 내전 "팀 짜기" 카드(팀표).
+// 팀.js — 내전 "팀 설정" 카드(팀표).
 //
 // 사람들은 내전이 마감되면 내전채팅으로 넘어가 메모장에 팀을 짜서 붙여넣는다(윤진-승훈-시형-연우-강현 / ...).
 // 승패나 판 번호는 귀찮아서 안 쓰니, 카드는 "지금 팀" 하나와 작게 보이는 "이전 팀표"만 둔다.
@@ -45,7 +45,7 @@ const MAX_TEAMS = 10;
 const MAX_MEMBERS = 15;
 const HISTORY_KEPT = 10;
 const TEAM_ICONS = ['🔵', '🔴', '🟢', '🟡', '🟣', '🟠', '⚪', '🟤', '⚫', '🩷'];
-const OLD_UI_NOTE = '⚠️ **팀 짜기 방식이 바뀌었어요.** 내전이 마감되면 내전채팅에 팀 짜기 카드가 자동으로 올라가요.';
+const OLD_UI_NOTE = '⚠️ **팀 설정 방식이 바뀌었어요.** 내전이 마감되면 내전채팅에 팀 설정 카드가 자동으로 올라가요.';
 const HOW_TEXT = { input: '✏️ 직접 입력', balance: '⚖️ 밸런스', random: '🎲 랜덤' };
 
 // ── 이름 ────────────────────────────────────────────────────
@@ -735,7 +735,7 @@ async function postBoardNow(client, matchMsgId, match) {
     if (old) await old.delete().catch(() => {});
   }
   const channel = await resolveBoardChannel(client, match);
-  if (!channel) throw new Error('팀 짜기 카드를 올릴 채널을 찾지 못함');
+  if (!channel) throw new Error('팀 설정 카드를 올릴 채널을 찾지 못함');
   const msg = await channel.send(buildBoardPayload(match, matchMsgId));
   board.channelId = msg.channelId;
   board.messageId = msg.id;
@@ -746,7 +746,7 @@ async function postBoardNow(client, matchMsgId, match) {
 
 // 게임모집 채널의 내전 게시글에 "팀 설정이 올라왔어요" 바로가기를 답장으로 단다(내전채팅이 다른 채널일 때만).
 // 처음 한 번만 새로 달고, 팀 카드가 다시 올라갈 때(밸런스·랜덤·직접 입력)는 이미 단 바로가기의 링크만 새 카드로 고쳐 둔다
-// (새 메시지로 또 달면 게임모집 채널에 같은 안내가 계속 쌓인다). 실패해도 팀 짜기 카드에는 영향이 없다.
+// (새 메시지로 또 달면 게임모집 채널에 같은 안내가 계속 쌓인다). 실패해도 팀 설정 카드에는 영향이 없다.
 async function postBoardShortcut(client, match, boardMsg) {
   try {
     if (!match.message || match.message.channelId === boardMsg.channelId) return;
@@ -763,11 +763,11 @@ async function postBoardShortcut(client, match, boardMsg) {
     match.boardShortcutId = reply.id;
     saveNow(client);
   } catch (err) {
-    console.error('팀 짜기 바로가기 게시 실패:', err);
+    console.error('팀 설정 바로가기 게시 실패:', err);
   }
 }
 
-// 누가 티어·포지션을 바꾸면(내 티어 설정·/티어·초기화 어디서든) 그 사람이 들어 있는 팀 짜기 카드를 바로 고친다.
+// 누가 티어·포지션을 바꾸면(내 티어 설정·/티어·초기화 어디서든) 그 사람이 들어 있는 팀 설정 카드를 바로 고친다.
 // 한 번 설정에 저장이 여러 번 일어나도(오버워치 역할 등) 카드는 한 번만 고치도록 사람마다 잠깐 모았다가 처리한다.
 // 클라이언트는 팀·티어 화면을 처음 누른 순간 기억해 둔다(그 화면을 통해서만 티어가 바뀌므로 빠질 일이 없다).
 let boardClient = null;
@@ -828,7 +828,7 @@ async function endBoard(client, matchMsgId, match) {
   if (msg) await msg.edit(buildBoardPayload(match, matchMsgId));
 }
 
-// 봇이 켜질 때: 이미 올라가 있는 팀 짜기 카드를 지금 티어 DB·지금 디자인으로 다시 그린다(꺼져 있던 동안 바뀐 티어도 반영).
+// 봇이 켜질 때: 이미 올라가 있는 팀 설정 카드를 지금 티어 DB·지금 디자인으로 다시 그린다(꺼져 있던 동안 바뀐 티어도 반영).
 // 한꺼번에 고치면 디스코드 제한에 걸리므로 하나씩 천천히 처리하고, 실패한 카드는 건너뛴다.
 async function refreshAllBoards(client) {
   boardClient = client;
@@ -967,7 +967,7 @@ async function getEditableMatch(interaction, matchMsgId) {
   return match;
 }
 
-// 내전채팅에 팀 짜기 카드가 올라가면 게임모집 채널의 내전 게시글에 답장으로 다는 바로가기 카드(시안).
+// 내전채팅에 팀 설정 카드가 올라가면 게임모집 채널의 내전 게시글에 답장으로 다는 바로가기 카드(시안).
 // style 'game': 게임 색 띠 + 게임 아이콘 / 'plain': 아이콘 없이 한 줄짜리 작은 카드
 function buildBoardShortcutPayload(match, boardMessage, { style = 'game' } = {}) {
   const { gameInfo, title } = match.data;
@@ -981,12 +981,12 @@ function buildBoardShortcutPayload(match, boardMessage, { style = 'game' } = {})
   }
   return payload(card({
     color: gameInfo.color,
-    header: '📌 팀 짜기 카드가 올라왔어요',
+    header: '📌 팀 설정 카드가 올라왔어요',
     sub: ['내전', title],
     thumb: gameThumb(gameInfo),
     thumbAlt: gameInfo.name,
     blocks: [{ text: `### 🔗 ${where}
-누르면 팀 짜기 카드로 이동해요. 팀 확인·변경은 거기서 해요.`, button: link }],
+누르면 팀 설정 카드로 이동해요. 팀 확인·변경은 거기서 해요.`, button: link }],
   }), { allowedMentions: { parse: [] } });
 }
 
@@ -1005,7 +1005,7 @@ const hasSetTeams = match => !!(match.board?.current && !match.board.current.dra
 
 async function askRegen(interaction, how, matchMsgId) {
   const word = { input: '직접 입력', balance: '⚖️ 밸런스', random: '🎲 랜덤' }[how];
-  await interaction.reply(notice(`⚠️ **이미 짜 둔 팀이 있어요.**
+  await interaction.reply(notice(`⚠️ **이미 설정한 팀이 있어요.**
 ${word}(으)로 다시 만들면 지금 팀은 📜 내전 내역으로 넘어가요.`, {
     ephemeral: true,
     rows: [new ActionRowBuilder().addComponents(
@@ -1023,7 +1023,7 @@ async function commitTeams(interaction, matchMsgId, match, teams, how, extraNote
   try {
     await postBoard(interaction.client, matchMsgId, match);
   } catch (err) {
-    logError('처리 오류', `팀 짜기 카드 다시 올리기 실패 (${matchMsgId})`, err);
+    logError('처리 오류', `팀 설정 카드 다시 올리기 실패 (${matchMsgId})`, err);
     await interaction.editReply(notice('⚠️ **팀은 저장했지만 카드를 다시 올리지 못했어요.** 주최자 관리 메뉴의 📌 팀 불러오기를 눌러 주세요.'));
     return;
   }
@@ -1629,7 +1629,7 @@ async function handleTeamButton(interaction) {
     return;
   }
 
-  // 주최자 관리 메뉴의 ⚔️ 팀 짜기: 카드를 (다시) 맨 아래에 올린다
+  // 주최자 관리 메뉴의 ⚔️ 팀 설정: 카드를 (다시) 맨 아래에 올린다
   if (customId.startsWith('team:open:')) {
     const matchMsgId = customId.slice('team:open:'.length);
     const match = await getEditableMatch(interaction, matchMsgId);
@@ -1637,10 +1637,10 @@ async function handleTeamButton(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
       const msg = await postBoard(interaction.client, matchMsgId, match);
-      await interaction.editReply(notice('✅ **팀 짜기 카드를 올렸어요.**', { rows: [linkRow(msg.url)] }));
+      await interaction.editReply(notice('✅ **팀 설정 카드를 올렸어요.**', { rows: [linkRow(msg.url)] }));
     } catch (err) {
-      logError('처리 오류', `팀 짜기 카드 게시 실패 (${matchMsgId})`, err);
-      await interaction.editReply(notice('⚠️ **팀 짜기 카드를 올리지 못했어요.** 잠시 뒤 다시 시도해 주세요.'));
+      logError('처리 오류', `팀 설정 카드 게시 실패 (${matchMsgId})`, err);
+      await interaction.editReply(notice('⚠️ **팀 설정 카드를 올리지 못했어요.** 잠시 뒤 다시 시도해 주세요.'));
     }
     return;
   }

@@ -144,7 +144,7 @@ function buildManageMenu(match, matchMsgId) {
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(!hasParticipants),
   );
-  // 테스트 서버 전용: 혼자서도 마감·팀 짜기 카드를 볼 수 있게 가짜 참가자로 정원을 채운다.
+  // 테스트 서버 전용: 혼자서도 마감·팀 설정 카드를 볼 수 있게 가짜 참가자로 정원을 채운다.
   if (isTestGuild(match.guildId)) {
     const max = parseInt(match.data.players) || 0;
     addRemoveRow.addComponents(
@@ -717,7 +717,7 @@ async function handleNaejeonButton(interaction) {
     const justClosed = !match.closed && match.participants.length >= max;
     if (justClosed) markClosed(getMatches(interaction.client), matchMsgId, match, '내전', false);
     await match.message.edit(buildPublicMessagePayload(match));
-    await interaction.update(buildManagePayload({ label: '내전', match, note: `🧪 **가짜 인원으로 ${max}명을 채웠어요.**${justClosed ? '\n마감됐으니 팀 짜기 카드가 올라가요.' : ''}`, rows: buildManageMenu(match, matchMsgId) }));
+    await interaction.update(buildManagePayload({ label: '내전', match, note: `🧪 **가짜 인원으로 ${max}명을 채웠어요.**${justClosed ? '\n마감됐으니 팀 설정 카드가 올라가요.' : ''}`, rows: buildManageMenu(match, matchMsgId) }));
     return;
   }
 

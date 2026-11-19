@@ -166,14 +166,14 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     assert(match.message.isV2, '게시글이 v2가 아님');
   });
 
-  await flow('내전: 마감되면 팀 짜기 카드 → 팀 입력(티어 저장) → 밸런스 → 랜덤 → 내 티어', async () => {
+  await flow('내전: 마감되면 팀 설정 카드 → 팀 입력(티어 저장) → 밸런스 → 랜덤 → 내 티어', async () => {
     await naejeon.handleNaejeonModal(mkInteraction({ user: ADMIN, customId: 'naejeon:modal:lol', fields: { title: '팀 내전', datetime: '내일 8시', players: '4', description: '' } }));
     await naejeon.handleNaejeonButton(mkInteraction({ user: ADMIN, customId: 'naejeon:publish', message: new FakeMsg(require(path.join(root, 'handlers/공통/카드.js')).notice('p'), channel) }));
     const match = [...client.naejeonMatches.values()].at(-1);
     const id = match.message.id;
     for (const u of ['u1', 'u2', 'u3', 'u4']) await naejeon.handleNaejeonButton(mkInteraction({ user: u, customId: 'naejeon:join', message: match.message }));
     await new Promise(r => setTimeout(r, 20)); // 마감 훅은 비동기로 돈다
-    assert(match.board?.messageId, '마감했는데 팀 짜기 카드가 안 올라감');
+    assert(match.board?.messageId, '마감했는데 팀 설정 카드가 안 올라감');
     const boardMsg = () => channel.sent.find(m => m.id === match.board.messageId);
     assert(boardMsg() && !boardMsg().deleted, '카드 메시지를 못 찾음');
     assert(match.board.current?.draft && match.board.current.how === 'random', '티어가 없으면 초안이 랜덤이어야 함');
@@ -352,7 +352,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     client.naejeonMatches.delete(id);
   });
 
-  await flow('내전(테스트 서버): 🧪 가짜 인원 채우기 → 마감 → 팀 짜기 카드', async () => {
+  await flow('내전(테스트 서버): 🧪 가짜 인원 채우기 → 마감 → 팀 설정 카드', async () => {
     const G = '1282694117255548960';
     await naejeon.handleNaejeonModal(mkInteraction({ user: ADMIN, guildId: G, customId: 'naejeon:modal:valorant', fields: { title: '발로 테스트', datetime: '내일 8시', players: '10', description: '' } }));
     await naejeon.handleNaejeonButton(mkInteraction({ user: ADMIN, guildId: G, customId: 'naejeon:publish', message: new FakeMsg(require(path.join(root, 'handlers/공통/카드.js')).notice('p'), channel) }));
@@ -365,7 +365,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await naejeon.handleNaejeonButton(mkInteraction({ user: ADMIN, guildId: G, customId: `naejeon:test_fill:${id}`, message: manage._reply }));
     assert(match.participants.length === 10 && match.closed, `가짜 인원으로 정원이 안 참(${match.participants.length})`);
     await new Promise(r => setTimeout(r, 20));
-    assert(match.board?.messageId, '가짜 인원으로 마감됐는데 팀 짜기 카드가 안 올라감');
+    assert(match.board?.messageId, '가짜 인원으로 마감됐는데 팀 설정 카드가 안 올라감');
     assert(match.board.current?.draft && match.board.current.how === 'balance', `티어 8/10명이면 초안이 밸런스여야 함(${match.board.current?.how})`);
     await team.handleTeamButton(mkInteraction({ user: ADMIN, guildId: G, customId: `team:balance:${id}` }));
     assert(match.board.current?.how === 'balance', '밸런스가 안 됨');
@@ -393,7 +393,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     client.naejeonMatches.delete(id);
   });
 
-  await flow('팀 짜기: 예외 상황(같은 이름·마크다운 이름·빈 팀·동시 클릭·끝난 내전·팀 6개·많은 인원)', async () => {
+  await flow('팀 설정: 예외 상황(같은 이름·마크다운 이름·빈 팀·동시 클릭·끝난 내전·팀 6개·많은 인원)', async () => {
     const card = require(path.join(root, 'handlers/공통/카드.js'));
     const tierMod = require(path.join(root, 'handlers/매치/티어.js'));
     const mkMatch = async (players, title) => {

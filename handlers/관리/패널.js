@@ -372,7 +372,7 @@ function buildMatchConvertListPayload(entries, panelMessageId) {
 function buildMatchConvertConfirmPayload(panelMessageId, type, msgId, entry) {
   const to = type === 'naejeon' ? 'mojip' : 'naejeon';
   const extra = to === 'naejeon'
-    ? '\n-# 이미 마감된 모집이면 내전채팅에 팀 짜기 카드도 바로 올라가요.'
+    ? '\n-# 이미 마감된 모집이면 내전채팅에 팀 설정 카드도 바로 올라가요.'
     : '\n-# 팀 정보는 사라지고 참가자 명단만 남아요.';
   return menu({
     color: 'warn',
@@ -421,7 +421,7 @@ async function convertMatchType(interaction, fromType, msgId) {
   } else {
     delete match.teams;
     delete match.board;
-    await require('../매치/공용').deleteBoardShortcut(client, match); // 팀 짜기 카드가 사라지므로 바로가기도 지운다
+    await require('../매치/공용').deleteBoardShortcut(client, match); // 팀 설정 카드가 사라지므로 바로가기도 지운다
   }
   toMap.set(msgId, match);
 
@@ -439,7 +439,7 @@ async function convertMatchType(interaction, fromType, msgId) {
   saveNow(client);
   logAction(interaction, '매치 변환', `${fromLabel} '${match.data.title}'(${msgId})을(를) ${toLabel}(으)로 변환`);
 
-  // 이미 마감된 모집을 내전으로 바꾼 경우: 마감 때 했어야 할 내전채팅 팀 짜기 카드를 지금 올린다.
+  // 이미 마감된 모집을 내전으로 바꾼 경우: 마감 때 했어야 할 내전채팅 팀 설정 카드를 지금 올린다.
   if (toType === 'naejeon' && match.closed) await runCloseHook('내전', msgId, match);
   return { to: toLabel };
 }
