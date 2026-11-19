@@ -647,7 +647,7 @@ function buildBoardPayload(match, matchMsgId) {
     const file = frame.final ? maps.mapResultFile(game, frame.key) : null;
     const attName = frame.final ? 'map-final.jpg' : `map-${frame.n}.png`;
     const hasImage = frame.final ? fs.existsSync(file) : !!frame.png;
-    blocks.push(frame.final ? `✔️ 맵 추첨 완료 - **${maps.mapName(game, frame.key)}**` : '### 🔍 맵 추첨 중...'); // 구역 맨 위 줄(이미지 위). 완료는 굵은 제목 없이 "맵 추첨 완료 - **맵 이름**"
+    blocks.push(frame.final ? `✔️ 맵 추첨 완료 - **[${maps.mapName(game, frame.key)}]**` : '### 🔍 맵 추첨 중...'); // 구역 맨 위 줄(이미지 위). 완료는 굵은 제목 없이 "맵 추첨 완료 - **맵 이름**"
     if (hasImage) {
       blocks.push({ image: `attachment://${attName}`, noDivider: true });
       files.push(new AttachmentBuilder(frame.final ? file : frame.png, { name: attName }));
