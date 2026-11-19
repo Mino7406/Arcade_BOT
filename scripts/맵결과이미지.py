@@ -274,12 +274,12 @@ def valorant(im, key, name):
     sd = ImageDraw.Draw(shade)
     # 왼쪽→오른쪽으로 옅어지는 어두운 번짐에, 위→아래로 옅어지는 마스크를 곱한다
     for x in range(0, 760):
-        a = int(130 * (1 - x / 760) ** 1.5)
-        sd.line([(x, 0), (x, 330)], fill=(8, 10, 16, a))
+        a = int(165 * (1 - x / 760) ** 1.3)
+        sd.line([(x, 0), (x, 440)], fill=(8, 10, 16, a))
     fade = Image.new('L', (W, H), 0)
     fd = ImageDraw.Draw(fade)
-    for y in range(0, 330):
-        fd.line([(0, y), (W, y)], fill=int(255 * (1 - y / 330) ** 0.9))
+    for y in range(0, 440):
+        fd.line([(0, y), (W, y)], fill=int(255 * (1 - y / 440) ** 0.7))
     alpha = shade.getchannel('A')
     from PIL import ImageChops
     shade.putalpha(ImageChops.multiply(alpha, fade))
