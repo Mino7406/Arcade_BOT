@@ -303,8 +303,9 @@ def valorant(im, key, name):
     spaced(draw, (x0 + 4, base), name, kofont, (236, 244, 244, 235), 6)               # 한국어 이름(자간 넓게)
     y = base + 44
     if key in COORDS:                                                                          # 로딩 화면의 좌표 줄(맵의 실제 위치)
-        spaced(draw, (x0 + 4, y), COORDS[key], sub, (214, 232, 232, 215), 8)
-        y += 38
+        w = spaced(draw, (x0 + 4, y), COORDS[key], sub, (214, 232, 232, 215), 8)
+        draw.rectangle([x0 + 4, y + 36, x0 + 4 + w, y + 37], fill=(214, 232, 232, 120))  # 좌표 밑 구분선(좌표 글줄 너비만큼)
+        y += 52
     spaced(draw, (x0 + 4, y), 'ARCADE MATCH — CUSTOM', sub, (214, 232, 232, 200), 8)  # 인게임의 "STANDARD — CUSTOM" 자리
     spaced(draw, (x0 + 4, y + 34), '5 VS 5', sub, (214, 232, 232, 150), 8)                 # 인게임의 서버 이름(FRANKFURT) 자리, 윗줄보다 살짝 흐리게
     y += 80
