@@ -5,8 +5,8 @@ assets/맵/결과/<게임>/<키>.jpg (1200x675) 로 저장한다. 봇은 이 파
  - 오버워치: 오른쪽 아래에 크게 기울어진(이탤릭) 흰 이름(로딩 화면의 맵 이름 자리)
  - 발로란트: 왼쪽 위에 굵은 대문자 영문 이름 + 아래에 자간 넓은 작은 글줄(한국어 이름·STANDARD) + 작은 청록 점
 맵 이름은 handlers/매치/맵.js 의 MAP_POOLS 에서 노드로 읽어 온다(한 곳에서만 관리).
-글꼴: 두 게임의 공식 글꼴(Big Noodle Titling·Tungsten)은 상용이라 쓰지 않고, 비슷한 모양으로 Windows 에 있는 Bahnschrift(DIN 계열)
-와 맑은 고딕 굵게를 쓴다(assets/fonts/ 의 무료 글꼴을 추가하면 FONT_* 경로만 바꾸면 된다).
+글꼴: 두 게임의 공식 글꼴(Big Noodle Titling·Tungsten)은 상용이라 쓰지 않고, 비슷한 무료(OFL) 글꼴을 assets/fonts/ 에 두고 쓴다.
+ - 오버워치 이름: Black Han Sans(굵은 한국어, 기울여서)  - 발로란트 큰 영문 이름: Bebas Neue  - 작은 글줄: Windows 의 Bahnschrift(DIN 계열)·맑은 고딕
 필요: Python + Pillow, Node.
 """
 import json
@@ -19,7 +19,9 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 W, H = 1200, 675
 WIN = 'C:/Windows/Fonts/'
-FONT_KO_BOLD = WIN + 'malgunbd.ttf'          # 한국어(굵게)
+FONT_KO_BOLD = WIN + 'malgunbd.ttf'          # 한국어(굵게) — 발로란트 작은 글줄
+FONT_OW = os.path.join(ROOT, 'assets', 'fonts', 'BlackHanSans-Regular.ttf')   # 오버워치 이름(굵은 한국어)
+FONT_VAL_BIG = os.path.join(ROOT, 'assets', 'fonts', 'BebasNeue-Regular.ttf')  # 발로란트 큰 영문 이름
 FONT_KO_REG = WIN + 'malgun.ttf'
 FONT_DIN = WIN + 'bahnschrift.ttf'           # DIN 계열(발로란트 영문)
 FALLBACK_KO = os.path.join(ROOT, 'assets', 'fonts', 'NanumGothic-Bold.ttf')
@@ -74,7 +76,7 @@ def overwatch(im, name):
     size = 112
     shear = 0.22  # 기울기(이탤릭)
     while size > 40:
-        font = ko_font(FONT_KO_BOLD, size)
+        font = ko_font(FONT_OW, size)
         probe = ImageDraw.Draw(im).textbbox((0, 0), name, font=font)
         if (probe[2] - probe[0]) * 1.0 + size * shear <= W * 0.62:
             break
@@ -84,7 +86,7 @@ def overwatch(im, name):
     layer = Image.new('RGBA', (tw + pad * 2 + int(size * shear), th + pad * 2), (0, 0, 0, 0))
     ld = ImageDraw.Draw(layer)
     ld.text((pad - probe[0] + 5, pad - probe[1] + 5), name, font=font, fill=(0, 0, 0, 150), stroke_width=3, stroke_fill=(0, 0, 0, 150))   # 그림자
-    ld.text((pad - probe[0], pad - probe[1]), name, font=font, fill=(255, 255, 255, 255), stroke_width=2, stroke_fill=(255, 255, 255, 255))  # 굵게
+    ld.text((pad - probe[0], pad - probe[1]), name, font=font, fill=(255, 255, 255, 255))
     # x' = x + shear*(h - y): 아래쪽을 기준으로 윗부분이 오른쪽으로 기운다
     lh = layer.size[1]
     layer = layer.transform(layer.size, Image.AFFINE, (1, shear, -shear * lh, 0, 1, 0), Image.BICUBIC)
@@ -113,16 +115,16 @@ def valorant(im, key, name):
 
     draw = ImageDraw.Draw(im)
     en = key.replace('-', ' ').upper()
-    size = 150
+    size = 190
     while size > 60:
-        font = din_font(size)
-        w = spaced_width(draw, en, font, 2)
+        font = ko_font(FONT_VAL_BIG, size)
+        w = spaced_width(draw, en, font, 3)
         if w <= 620:
             break
         size -= 6
     bb = draw.textbbox((0, 0), en, font=font)
     x0, y0 = 64, 54
-    spaced(draw, (x0, y0 - bb[1]), en, font, (255, 255, 255, 255), 2)
+    spaced(draw, (x0, y0 - bb[1]), en, font, (255, 255, 255, 255), 3)
     base = y0 + (bb[3] - bb[1]) + 34
     sub = din_font(22, 'Regular')
     kofont = ko_font(FONT_KO_BOLD, 26)
