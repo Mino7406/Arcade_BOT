@@ -14,7 +14,7 @@ import os
 import subprocess
 import sys
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 W, H = 1200, 675
@@ -73,7 +73,7 @@ def overwatch(im, name):
     gd = ImageDraw.Draw(grad)
     top = int(H * 0.62)
     for y in range(top, H):
-        gd.line([(0, y), (W, y)], fill=(8, 12, 24, int(185 * (y - top) / (H - top))))
+        gd.line([(0, y), (W, y)], fill=(8, 12, 24, int(110 * (y - top) / (H - top))))  # 게임은 그림을 거의 안 어둡게 한다 — 옅게만
     im = Image.alpha_composite(im, grad)
 
     size = 140
@@ -88,14 +88,17 @@ def overwatch(im, name):
     pad = 40
     layer = Image.new('RGBA', (tw + pad * 2 + int(size * shear), th + pad * 2), (0, 0, 0, 0))
     ld = ImageDraw.Draw(layer)
-    ld.text((pad - probe[0] + 5, pad - probe[1] + 5), name, font=font, fill=(0, 0, 0, 150), stroke_width=3, stroke_fill=(0, 0, 0, 150))   # 그림자
-    ld.text((pad - probe[0], pad - probe[1]), name, font=font, fill=(255, 255, 255, 255))
+    # 은은하게 번진 그림자(딱딱한 검은 외곽 대신) → 흰 글씨는 살짝 굵게
+    sh = Image.new('RGBA', layer.size, (0, 0, 0, 0))
+    ImageDraw.Draw(sh).text((pad - probe[0], pad - probe[1] + 5), name, font=font, fill=(0, 0, 0, 200), stroke_width=2, stroke_fill=(0, 0, 0, 200))
+    layer.alpha_composite(sh.filter(ImageFilter.GaussianBlur(7)))
+    ld.text((pad - probe[0], pad - probe[1]), name, font=font, fill=(255, 255, 255, 255), stroke_width=1, stroke_fill=(255, 255, 255, 255))
     # x' = x + shear*(h - y): 아래쪽을 기준으로 윗부분이 오른쪽으로 기운다
     lh = layer.size[1]
     layer = layer.transform(layer.size, Image.AFFINE, (1, shear, -shear * lh, 0, 1, 0), Image.BICUBIC)
     # 로고: 이름 오른쪽(로딩 화면처럼). 글자 높이에 맞춰 키우고 세로 가운데를 이름과 맞춘다.
-    right = W - 64
-    cy = H - 56 - th / 2
+    right = W - 46
+    cy = H - 52 - th / 2
     if os.path.exists(LOGO_OW):
         L = int(min(150, max(96, th * 1.5)))
         logo = Image.open(LOGO_OW).convert('RGBA').resize((L, L), Image.LANCZOS)
