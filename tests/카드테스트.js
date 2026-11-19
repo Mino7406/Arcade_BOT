@@ -183,7 +183,7 @@ function rowsIn(list, acc = []) {
     const data = { datetime: text, notifyAuto: true, notifyAutoSrc: text, notifyAt: now };
     data.datetime = ko; c.syncAutoNotify(data);
     assert.ok(data.notifyAt && data.notifyAuto, '일시가 바뀌면 알림 시각도 따라감');
-    data.datetime = '내일 8시'; c.syncAutoNotify(data);
+    data.datetime = '모이면'; c.syncAutoNotify(data);
     assert.strictEqual(data.notifyOnClose, true); assert.strictEqual(data.notifyAuto, true);
     // 일시가 그대로면(메모·인원만 수정) 알림은 건드리지 않는다 — 지난 일시라도 꺼지지 않음
     const kept = { datetime: '1/1 20:00', notifyAuto: true, notifyAutoSrc: '1/1 20:00', notifyAt: 123 };
@@ -209,7 +209,7 @@ function rowsIn(list, acc = []) {
     assert.strictEqual(c.datetimeDisplay({ datetime: '아무 글자', createdAt: created }), '아무 글자');
   });
 
-  check('일시 글자 해석: 저녁·밤·내일은 읽고, 아침/저녁이 애매한 "8시"는 안 읽는다', () => {
+  check('일시 글자 해석: 저녁·밤·내일은 읽고, 오전/오후 없는 "8시"는 오후로 읽는다', () => {
     const c = require('../handlers/매치/공용');
     const hm = t => { const e = c.parseDatetimeText(t); return e && c.formatNotifyTime(e).split(' ')[1]; };
     assert.strictEqual(hm('내일 저녁 8시'), '20:00');
@@ -217,7 +217,16 @@ function rowsIn(list, acc = []) {
     assert.strictEqual(hm('저녁 8시 반'), '20:30');
     assert.strictEqual(hm('내일 오전 9시 30분'), '09:30');
     assert.strictEqual(hm('11/13 20시'), '20:00');
-    for (const t of ['내일 8시', '오늘 8시', '모이면', '11월 13일 8시', '2/30 20:00', '8시', '12시', '20:']) assert.strictEqual(c.parseDatetimeText(t), null, t);
+    for (const t of ['모이면', '2/30 20:00', '0시', '20:']) assert.strictEqual(c.parseDatetimeText(t), null, t);
+    // 오전/오후 없는 "8시": 아침에 적어도 저녁(오후)으로 읽는다
+    const morning = Date.UTC(2026, 10, 13, 7, 0) - 9 * 3600e3; // KST 11/13 07:00
+    const noon0 = Date.UTC(2026, 10, 13, 12, 0) - 9 * 3600e3;
+    const hmAt = (t, now) => c.formatNotifyTime(c.parseDatetimeText(t, now));
+    assert.strictEqual(hmAt('8시', morning), '11/13 20:00');
+    assert.strictEqual(hmAt('8시', noon0), '11/13 20:00');
+    assert.strictEqual(hmAt('내일 8시', noon0), '11/14 20:00');
+    assert.strictEqual(hmAt('11월 13일 7시', noon0), '11/13 19:00');
+    assert.strictEqual(hmAt('12시', noon0), '11/13 12:00');
     // 날짜 없이 24시간제 시각만: 오늘 그 시각, 3시간 넘게 지났으면 내일
     const noon = Date.UTC(2026, 10, 13, 12, 0) - 9 * 3600e3; // KST 11/13 12:00
     const at = t => c.formatNotifyTime(c.parseDatetimeText(t, noon));

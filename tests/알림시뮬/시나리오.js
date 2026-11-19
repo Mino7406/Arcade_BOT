@@ -174,7 +174,7 @@ const oneLine = (s) => s.replace(/\*\*/g, '').replace(/\n+/g, ' / ').replace(/-#
 
   await scenario('2. 일시를 안 고치고(지금 시각) 게시 → 마감 시 발송', async () => {
     const m = await create({ datetime: common.defaultDatetimeText(NOW), players: '3' });
-    check(common.notifyWhenText(m.data) === '마감 시 발송', '"마감 시 발송"으로 표시');
+    check(common.notifyWhenText(m.data) === '마감 시 발송 (자동)', '"마감 시 발송"으로 표시');
     await join(m, 'u2');
     await advanceTo(at('19:00')); dmsSince(0); check(dms.length === 0, '마감 전에는 1시간이 지나도 안 감');
     showCard(m); check(status(m) === '🟢 모집 중 · 🔔', '기다리는 동안 🔔 유지');
@@ -281,7 +281,7 @@ const oneLine = (s) => s.replace(/\*\*/g, '').replace(/\n+/g, ' / ').replace(/-#
     await join(m, 'u2');
     await advanceTo(at('19:30'));
     const said = await edit(m, '19:35');
-    check(/마감되는 순간 바로 보내요/.test(said) && common.notifyWhenText(m.data) === '마감 시 발송', '"마감 시 발송"으로 바뀌고 안내');
+    check(/마감되는 순간 바로 보내요/.test(said) && common.notifyWhenText(m.data) === '마감 시 발송 (자동)', '"마감 시 발송"으로 바뀌고 안내');
     await advanceTo(at('19:40')); dmsSince(0); check(dms.length === 0, '바로 보내지 않음(마감 대기)');
     await manage(m, 'match_close'); await manage(m, 'match_close_confirm'); await flush(); const got = dmsSince(0);
     check(got.length === 1 && /마감됐어요! 곧 시작해요/.test(got[0].text), '정원 전 마감(확정)하자 "마감됐어요, 곧 시작" 발송');

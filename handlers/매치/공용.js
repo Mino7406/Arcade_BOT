@@ -236,7 +236,8 @@ function parseDatetimeText(input, now = Date.now()) {
   const word = m[4];
   let hour = Number(m[5]);
   // 날짜도 시간대 말도 없으면 24시간제로 확실히 읽히는 것(20:00 · 08:30 · 13시 이상)만 받는다. "8시"는 아침/저녁이 애매해 안 읽는다.
-  if (!hasDate && !word && m[6] !== ':' && hour <= 12) return null;
+  let amb = false; // "7시"처럼 오전/오후가 없는 12시간제 → 오후로 읽는다
+  if (!hasDate && !word && m[6] !== ':' && hour <= 12) { if (hour < 1) return null; amb = hour <= 11; }
   if (m[6] === ':' && m[7] === undefined) return null;
   const minute = m[8] ? 30 : Number(m[7] || 0);
   if (minute > 59) return null;
@@ -251,8 +252,10 @@ function parseDatetimeText(input, now = Date.now()) {
   } else if (hour > 23) {
     return null;
   } else if (!word && m[6] === '시' && hour <= 12) {
-    return null;
+    if (hour < 1) return null;
+    amb = hour <= 11;
   }
+  if (amb) hour += 12; // 오전/오후를 안 쓰면 보통 저녁 모임이므로 오후로 읽는다(오전은 "오전 7시"·"07:00"으로 적어야 함)
 
   const kstNow = new Date(now + KST_OFFSET_MS);
   const fromUtc = (y, mo, d) => Date.UTC(y, mo, d, hour, minute) - KST_OFFSET_MS;
@@ -365,8 +368,11 @@ function applyNotifyMode(match, mode) {
   }
   const auto = deriveNotifyFromDatetime(d.datetime, { base: d.createdAt });
   Object.assign(d, auto, { notifyAuto: true, notifyAutoSrc: d.datetime, notifyPinClose: false, notifyDisabled: false });
+  const readable = !!parseDatetimeText(d.datetime, d.createdAt || Date.now());
   return auto.notifyOnClose
-    ? '🔔 **자동으로 설정했어요.** 일시를 읽지 못했거나 10분 전이 이미 지나서, 마감되는 순간 참가자에게 DM 알림을 보내요.'
+    ? (readable
+      ? '🔔 **자동으로 설정했어요.** 일시 10분 전이 이미 지나서, 마감되는 순간 참가자에게 DM 알림을 보내요.'
+      : '🔔 **자동으로 설정했어요.** 일시를 시각으로 읽지 못해 마감되는 순간 참가자에게 DM 알림을 보내요.\n💡 `오후 7시`·`19:00`·`11/19 19:00`처럼 적으면 읽어요. 또는 ✏️ 시각 지정을 써 보세요.')
     : `🔔 **자동으로 설정했어요.** 일시 10분 전인 ${formatNotifyTimeSmart(auto.notifyAt, auto.notify12h)}에 참가자에게 DM 알림을 보낼게요.
 일시를 고치면 알림도 따라 옮겨져요.`;
 }
@@ -407,7 +413,7 @@ function buildNotifyModal(type, matchMsgId, notifyAt, is12h, onClose = false) {
 // 카드·버튼에 보여 줄 알림 시점: 알림 시각이 이미 지나 마감 때 바로 보내는 알림은 시각 대신 "마감 시 발송",
 // 일시를 보고 봇이 잡은 알림(일시 10분 전)은 시각 뒤에 "(자동)", 주최자가 직접 적은 시각은 그대로.
 function notifyWhenText(data) {
-  if (data?.notifyOnClose) return '마감 시 발송';
+  if (data?.notifyOnClose) return data.notifyAuto ? '마감 시 발송 (자동)' : '마감 시 발송';
   const when = formatNotifyTimeSmart(data.notifyAt, data.notify12h);
   return data?.notifyAuto ? `${when} (자동)` : when;
 }
