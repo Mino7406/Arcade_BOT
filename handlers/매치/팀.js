@@ -589,7 +589,7 @@ function buildBoardRows(match, matchMsgId) {
     // 맵 뽑기는 누르는 순간부터 5분간 잠긴다(연출 중 포함). 풀리는 시각에 카드가 스스로 고쳐진다(scheduleMapUnlock).
     const spinning = mapSpin.has(matchMsgId);
     const locked = spinning || mapLocked(match);
-    const label = spinning ? '🗺️ 맵 뽑는 중...' : board.map ? '🗺️ 다시 뽑기' : '🗺️ 맵 뽑기';
+    const label = `${locked ? '🔒' : '🎰'} 맵 뽑기`; // 글자는 그대로, 앞 이모지만 바뀐다(평소 🎰, 뽑는 중·5분 잠금 🔒)
     second.push(new ButtonBuilder().setCustomId(`team:map:${matchMsgId}`).setLabel(label).setStyle(ButtonStyle.Secondary).setDisabled(locked));
   }
   return [new ActionRowBuilder().addComponents(...buttons), ...(second.length ? [new ActionRowBuilder().addComponents(...second)] : [])];
