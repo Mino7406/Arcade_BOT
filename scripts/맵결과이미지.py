@@ -114,7 +114,7 @@ def whiten(logo):
 
 
 def ring_overlay(size, cx, cy, ring, arc_r, arc_w, line_w):
-    """로고 둘레: 오른쪽 아래로 갈수록 흐려지는 얇은 원 + 끝이 가늘고 둥근 주황 호. 4배로 그려 줄여 매끈하게."""
+    """로고 둘레: 오른쪽 아래로 갈수록 흐려지는 얇은 원 + 굵기가 일정하고 끝이 평평한 주황 호. 4배로 그려 줄여 매끈하게."""
     K = 4
     pad = int(ring) + 8
     box = (int(cx - pad), int(cy - pad), int(cx + pad), int(cy + pad))
@@ -130,7 +130,7 @@ def ring_overlay(size, cx, cy, ring, arc_r, arc_w, line_w):
             continue
         d.arc([ox - R, oy - R, ox + R, oy + R], deg, deg + 3.5, fill=(255, 255, 255, int(95 * min(1.0, a))), width=max(1, int(line_w * K)))
 
-    # 주황 호: 시작은 평평하게, 끝(시계 방향)은 가늘어지며 둥글게
+    # 주황 호: 굵기 일정, 시작·끝은 평평하게 잘림(인게임 그대로)
     ar = arc_r * K
     end = ARC_START + 98
     pts_out, pts_in = [], []
@@ -138,15 +138,10 @@ def ring_overlay(size, cx, cy, ring, arc_r, arc_w, line_w):
     for k in range(n + 1):
         t = k / n
         ang = math.radians(ARC_START + (end - ARC_START) * t)
-        w = arc_w * K * (1.0 if t < 0.85 else 1.0 - 0.12 * (t - 0.85) / 0.15)  # 거의 같은 굵기(끝에서 12%만 가늘어짐)
+        w = arc_w * K  # 인게임 호는 굵기가 일정하고 시작·끝이 평평하게 잘려 있다
         pts_out.append((ox + (ar + w / 2) * math.cos(ang), oy + (ar + w / 2) * math.sin(ang)))
         pts_in.append((ox + (ar - w / 2) * math.cos(ang), oy + (ar - w / 2) * math.sin(ang)))
     d.polygon(pts_out + pts_in[::-1], fill=(242, 106, 36, 255))
-    wend = arc_w * K * 0.88   # 둥근 끝의 지름 = 호 끝 굵기
-    ea = math.radians(end)
-    ex, ey = ox + ar * math.cos(ea), oy + ar * math.sin(ea)
-    d.ellipse([ex - wend / 2, ey - wend / 2, ex + wend / 2, ey + wend / 2], fill=(242, 106, 36, 255))  # 둥근 끝
-
     small = big.resize((box[2] - box[0], box[3] - box[1]), Image.LANCZOS)
     layer = Image.new('RGBA', size, (0, 0, 0, 0))
     layer.alpha_composite(small, (box[0], box[1]))
