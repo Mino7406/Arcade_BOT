@@ -413,6 +413,16 @@ function notifyWhenText(data) {
   return data?.notifyAuto ? `${when} (자동)` : when;
 }
 
+// 알림 버튼 글자: 꺼짐 / 마감 시 알림 / 시각 알림(오늘이면 날짜 생략). 자동·직접 구분은 눌러서 나오는 방식 선택 창에 표시한다.
+function notifyButtonLabel(data) {
+  if (!data?.notifyAt) return '🔔 알림 꺼짐';
+  if (data.notifyOnClose) return '🔔 마감 시 알림';
+  let when = formatNotifyTimeSmart(data.notifyAt, data.notify12h);
+  const day = t => Math.floor((t + KST_OFFSET_MS) / DAY_MS);
+  if (day(data.notifyAt) === day(Date.now())) when = when.replace(/^\d+\/\d+ /, '');
+  return `🔔 ${when} 알림`;
+}
+
 // 일시를 고친 뒤 주최자에게 덧붙일 알림 안내(syncAutoNotify 결과별).
 function notifySyncNote(result, data) {
   if (result === 'changed') return data.notifyOnClose
@@ -1119,7 +1129,7 @@ function buildPreviewComponents(type, data = null) {
   const notifyAt = data?.notifyAt;
   const notifyButton = new ButtonBuilder()
     .setCustomId(`${type}:notify_set_preview`)
-    .setLabel(notifyAt ? `🔔 알림 예약: ${notifyWhenText(data)}` : '🔔 알림 예약')
+    .setLabel(notifyButtonLabel(data))
     .setStyle(notifyAt ? ButtonStyle.Success : ButtonStyle.Secondary);
 
   if (data && data.game === 'custom') {
@@ -1365,6 +1375,7 @@ module.exports = {
   parseDatetimeText,
   deriveNotifyFromDatetime,
   notifyWhenText,
+  notifyButtonLabel,
   notifySyncNote,
   notifySentMessage,
   notifyTooFarMessage,

@@ -11,7 +11,7 @@ const {
   ROLE_NAMES, scheduleCancelledDelete, deleteMentionMessage, autoEndAt, armAutoEnd, saveNow,
   getClientMap, getMojipMatches: getMojips,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
-  buildNotifyModal: buildNotifyModalBase, parseNotifyTime, deriveNotifyFromDatetime, syncAutoNotify, buildNotifyModeRows, notifyModeMenuText, applyNotifyMode, syncNotifyOnEdit, notifySyncNote, notifySentMessage, notifyTooFarMessage, lateJoinNote, notifyWhenText, formatNotifyTimeSmart, isNotify12HourInput, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
+  buildNotifyModal: buildNotifyModalBase, parseNotifyTime, deriveNotifyFromDatetime, syncAutoNotify, buildNotifyModeRows, notifyModeMenuText, applyNotifyMode, syncNotifyOnEdit, notifySyncNote, notifySentMessage, notifyTooFarMessage, lateJoinNote, notifyWhenText, notifyButtonLabel, formatNotifyTimeSmart, isNotify12HourInput, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
   setPublicPayloadBuilder,
 } = require('./공용');
 const { notice, payload, text } = require('../공통/카드');
@@ -105,7 +105,7 @@ function buildNotifyButton(match, msgId) {
   const notifyAt = match.data?.notifyAt;
   return new ButtonBuilder()
     .setCustomId(`mojip:notify_set:${msgId}`)
-    .setLabel(notifyAt ? `🔔 알림 예약: ${notifyWhenText(match.data)}` : '🔔 알림 예약')
+    .setLabel(notifyButtonLabel(match.data))
     .setStyle(notifyAt ? ButtonStyle.Success : ButtonStyle.Secondary)
     .setDisabled(!!match.notifySent);
 }
