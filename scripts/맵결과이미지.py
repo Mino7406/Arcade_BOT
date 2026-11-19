@@ -3,7 +3,7 @@
 assets/맵/<게임>/<키>.jpg 원본 위에 맵 이름을 게임 로딩 화면 느낌으로 박아
 assets/맵/결과/<게임>/<키>.jpg (1200x675) 로 저장한다. 봇은 이 파일을 그대로 첨부만 한다.
  - 오버워치: 오른쪽 아래에 크게 기울어진(이탤릭) 흰 이름(로딩 화면의 맵 이름 자리)
- - 발로란트: 왼쪽 위에 굵은 대문자 영문 이름 + 아래에 자간 넓은 작은 글줄(한국어 이름·STANDARD) + 작은 청록 점
+ - 발로란트: 왼쪽 위에 굵은 대문자 영문 이름 + 아래에 자간 넓은 작은 글줄(한국어 이름·STANDARD) + 작은 흰 점
 맵 이름은 handlers/매치/맵.js 의 MAP_POOLS 에서 노드로 읽어 온다(한 곳에서만 관리).
 글꼴: 두 게임의 공식 글꼴(Big Noodle Titling·Tungsten)은 상용이라 쓰지 않고, 비슷한 무료(OFL) 글꼴을 assets/fonts/ 에 두고 쓴다.
  - 오버워치 이름: Black Han Sans(굵은 한국어, 기울여서)  - 발로란트 큰 영문 이름: Bebas Neue  - 작은 글줄: Windows 의 Bahnschrift(DIN 계열)·맑은 고딕
@@ -251,7 +251,7 @@ def overwatch(im, name, mode='내전', flag=None):
 
 
 def valorant(im, key, name):
-    """왼쪽 위, 굵은 대문자 영문 이름 + 자간 넓은 작은 글줄 + 청록 점. 왼쪽 위에 부드러운 어두운 번짐."""
+    """왼쪽 위, 굵은 대문자 영문 이름 + 자간 넓은 작은 글줄 + 흰 점. 왼쪽 위에 부드러운 어두운 번짐."""
     shade = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     sd = ImageDraw.Draw(shade)
     # 왼쪽→오른쪽으로 옅어지는 어두운 번짐에, 위→아래로 옅어지는 마스크를 곱한다
@@ -284,7 +284,7 @@ def valorant(im, key, name):
     kofont = ko_font(FONT_KO_BOLD, 26)
     spaced(draw, (x0 + 4, base), name, kofont, (236, 244, 244, 235), 6)               # 한국어 이름(자간 넓게)
     spaced(draw, (x0 + 4, base + 44), 'STANDARD', sub, (214, 232, 232, 200), 8)
-    draw.rectangle([x0 + 4, base + 90, x0 + 16, base + 102], fill=(150, 232, 232, 235))  # 작은 청록 점(참고 화면의 표식)
+    draw.rectangle([x0 + 4, base + 90, x0 + 16, base + 102], fill=(255, 255, 255, 240))  # 작은 흰 점(인게임 화면의 표식)
     return im
 
 

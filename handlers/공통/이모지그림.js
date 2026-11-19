@@ -85,4 +85,4 @@ function drawEmojiFile(p, file, cx, cy, size) {
   }
 }
 
-module.exports = { drawEmojiFile };
+module.exports = { drawEmojiFile, decodePng };

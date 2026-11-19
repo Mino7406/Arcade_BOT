@@ -44,17 +44,33 @@ assert.deepStrictEqual(SPIN_DELAYS_MS, [450, 500, 550, 650, 800, 1000, 1300, 175
 assert.strictEqual(SPIN_DELAYS_MS.reduce((a, b) => a + b, 0), 7000);
 for (const game of ['valorant', 'overwatch']) {
   MAP_POOLS[game].forEach((x, idx) => {
-    const frames = spinFrames(game, x.key);
-    assert.strictEqual(frames.length, SPIN_DELAYS_MS.length, '프레임 수');
-    assert.ok(frames.every(s => s >= 0 && s < 3), '칸은 0~2');
-    for (let i = 1; i < frames.length; i++) assert.notStrictEqual(frames[i], frames[i - 1], '이웃 프레임은 하이라이트 칸이 달라야 함');
-    assert.strictEqual(frames.at(-1), idx % 3, '마지막 하이라이트는 당첨 맵의 칸');
-    const cards = maps.voteCards(game, x.key);
-    assert.strictEqual(cards.length, 3, '카드는 3장');
-    assert.strictEqual(new Set(cards).size, 3, '카드 3장은 서로 다른 맵');
-    assert.strictEqual(cards[frames.at(-1)], x.key, '마지막 하이라이트 칸의 카드가 당첨 맵');
-    for (let s = 0; s < 3; s++) assert.ok(fs.existsSync(maps.mapSpinFile(game, x.key, s)), `${game}/${x.key} 맵 투표 프레임(칸 ${s}) 이미지가 없음`);
+    for (let t = 0; t < 3; t++) {
+      let sd = idx * 7 + t + 1;
+      const rnd = () => ((sd = (sd * 1103515245 + 12345) % 2147483648) / 2147483648);
+      const { strip, offsets } = maps.reelPlan(game, x.key, rnd);
+      assert.strictEqual(offsets.length, SPIN_DELAYS_MS.length, '프레임 수');
+      assert.strictEqual(strip[maps.REEL_STOP], x.key, '당첨 맵이 멈추는 자리에 있어야 함');
+      assert.strictEqual(offsets.at(-1), maps.REEL_STOP, '마지막 프레임은 당첨 맵이 가운데');
+      for (let i = 1; i < offsets.length; i++) assert.ok(offsets[i] > offsets[i - 1], '위치는 계속 앞으로');
+      const steps = offsets.map((o, i) => o - (offsets[i - 1] ?? 0));
+      for (let i = 1; i < steps.length; i++) assert.ok(steps[i] <= steps[i - 1] + 1e-9, '점점 느려져야 함');
+      for (let k = 1; k < strip.length; k++) assert.notStrictEqual(strip[k], strip[k - 1], '이웃 카드는 달라야 함');
+      assert.ok(strip.every(k => MAP_POOLS[game].some(m => m.key === k)), '카드 key 가 풀 안에 있어야 함');
+      assert.ok(strip.filter(k => k === x.key).length === 1, '당첨 맵은 줄에 한 번만');
+    }
+    assert.ok(fs.existsSync(path.join(__dirname, '..', 'assets', '맵', '카드', game, `${x.key}.png`)), `${game}/${x.key} 맵 카드 이미지가 없음`);
   });
+}
+// 프레임 그리기: 유효한 PNG(960x540)이고 위치마다 그림이 다르며 카드는 매번 다르게 섞인다
+{
+  const reel = require('../handlers/매치/맵연출');
+  const a = maps.reelPlan('overwatch', 'busan'), b = maps.reelPlan('overwatch', 'busan');
+  const png = reel.frame('overwatch', a.strip, a.offsets[0]);
+  assert.deepStrictEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [960, 540], '프레임 크기');
+  assert.ok(!png.equals(reel.frame('overwatch', a.strip, a.offsets[3])), '위치가 다르면 그림도 달라야 함');
+  assert.ok(png.length < 2 * 1024 * 1024, '프레임이 2MB 를 넘음');
+  reel.clearReelCache();
+  assert.ok(a.strip.join() !== b.strip.join(), '뽑을 때마다 카드 순서가 달라야 함(랜덤)');
 }
 // 이름이 박힌 결과 이미지(scripts/맵결과이미지.py 로 만든다): 모든 맵에 있고 400KB 이하
 for (const game of ['valorant', 'overwatch']) {

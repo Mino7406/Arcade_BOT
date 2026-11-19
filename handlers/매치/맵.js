@@ -46,26 +46,20 @@ const mapName = (game, key) => MAP_POOLS[game]?.find(x => x.key === key)?.name ?
 const mapImageFile = (game, key) => path.join(ASSET_DIR, game, `${key}.jpg`);
 const mapResultFile = (game, key) => path.join(ASSET_DIR, '결과', game, `${key}.jpg`);
 
-// 맵 투표 화면 연출: 카드 3장이 나란히 놓이고 하이라이트가 칸 사이를 옮겨 다니다 당첨 맵의 칸에서 멈춘다.
-// 프레임 그림은 assets/맵/연출/<게임>/<당첨키>_<칸>.jpg (scripts/맵연출이미지.py). 카드 구성 규칙은 그 스크립트와 같아야 한다:
-// 당첨 맵은 (풀 순번 % 3) 번째 칸, 나머지 두 칸은 풀의 순번+1·순번+5 번째 맵.
-const VOTE_SLOTS = 3;
-const mapSpinFile = (game, key, slot) => path.join(ASSET_DIR, '연출', game, `${key}_${slot}.jpg`);
-function voteCards(game, key) {
+// 연출: 맵 카드가 슬롯처럼 옆으로 흘러가다 당첨 맵에서 멈춘다(handlers/매치/맵연출.js 가 프레임을 그림).
+// reelPlan: 카드 줄(strip: 맵 key 들, 이웃은 서로 다르고 당첨 맵은 stop 번째)과 프레임별 위치(offsets: 카드 몇 장째가 가운데인지 — 점점 느려져 마지막은 stop).
+const REEL_STOP = 16;
+function reelPlan(game, finalKey, rnd = Math.random) {
   const pool = MAP_POOLS[game] ?? [];
-  const idx = pool.findIndex(x => x.key === key);
-  if (idx < 0) return [];
-  const others = [(idx + 1) % pool.length, (idx + 5) % pool.length];
-  const p = idx % VOTE_SLOTS;
-  let o = 0;
-  return Array.from({ length: VOTE_SLOTS }, (_, s) => pool[s === p ? idx : others[o++]].key);
-}
-// 하이라이트가 켜질 칸(SPIN_DELAYS_MS 와 같은 길이). 이웃한 칸은 항상 다르고, 마지막은 당첨 맵의 칸이다.
-function spinFrames(game, finalKey) {
-  const pool = MAP_POOLS[game] ?? [];
-  const p = Math.max(0, pool.findIndex(x => x.key === finalKey)) % VOTE_SLOTS;
-  const last = SPIN_DELAYS_MS.length - 1;
-  return SPIN_DELAYS_MS.map((_, i) => (((p - (last - i)) % VOTE_SLOTS) + VOTE_SLOTS) % VOTE_SLOTS);
+  const strip = [];
+  for (let k = 0; k < REEL_STOP + 4; k++) {
+    if (k === REEL_STOP) { strip.push(finalKey); continue; }
+    const choices = pool.filter(x => x.key !== strip[k - 1] && x.key !== finalKey);
+    strip.push(choices[Math.min(choices.length - 1, Math.floor(rnd() * choices.length))].key);
+  }
+  const n = SPIN_DELAYS_MS.length;
+  const offsets = SPIN_DELAYS_MS.map((_, i) => (i === n - 1 ? REEL_STOP : REEL_STOP * (1 - (1 - (i + 1) / n) ** 2.2)));
+  return { strip, offsets };
 }
 
-module.exports = { MAP_POOLS, SPIN_DELAYS_MS, hasMapPool, pickMap, mapName, mapImageFile, mapSpinFile, mapResultFile, voteCards, spinFrames };
+module.exports = { MAP_POOLS, SPIN_DELAYS_MS, hasMapPool, pickMap, mapName, mapImageFile, mapResultFile, reelPlan, REEL_STOP };
