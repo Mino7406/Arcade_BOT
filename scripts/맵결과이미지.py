@@ -250,6 +250,24 @@ def overwatch(im, name, mode='ARCADE 내전', flag=None):
     return im
 
 
+# 발로란트 로딩 화면 좌표(맵의 실제 위치). 도·분은 나무위키 값, 인게임에서 글자가 섞여 읽히지 않는 초 단위는 임의 숫자로 채웠다(스플릿·펄·로터스·어비스는 위키의 완전한 값).
+COORDS = {
+    'bind': '''34°02'11"N, 6°51'27"W''',
+    'haven': '''27°28'41"N, 89°38'27"E''',
+    'split': '''35°41'23"N, 139°41'32"E''',
+    'ascent': '''45°26'18"N, 12°20'09"E''',
+    'icebox': '''76°44'32"N, 149°30'06"E''',
+    'breeze': '''26°11'47"N, 71°10'38"W''',
+    'fracture': '''35°48'52"N, 106°08'14"W''',
+    'pearl': '''38°42'43"N, 9°08'27"W''',
+    'lotus': '''14°07'03"N, 74°53'21"E''',
+    'sunset': '''34°02'51"N, 118°12'36"W''',
+    'abyss': '''70°50'09"N, 9°00'42"W''',
+    'corrode': '''48°38'12"N, 1°33'05"W''',
+    'summit': '''29°18'42"N, 110°25'19"E''',
+}
+
+
 def valorant(im, key, name):
     """왼쪽 위, 굵은 대문자 영문 이름 + 자간 넓은 작은 글줄 + 흰 점. 왼쪽 위에 부드러운 어두운 번짐."""
     shade = Image.new('RGBA', (W, H), (0, 0, 0, 0))
@@ -283,9 +301,14 @@ def valorant(im, key, name):
     sub = din_font(22, 'Regular')
     kofont = ko_font(FONT_KO_BOLD, 26)
     spaced(draw, (x0 + 4, base), name, kofont, (236, 244, 244, 235), 6)               # 한국어 이름(자간 넓게)
-    spaced(draw, (x0 + 4, base + 44), 'ARCADE MATCH — CUSTOM', sub, (214, 232, 232, 200), 8)  # 인게임의 "STANDARD — CUSTOM" 자리
-    spaced(draw, (x0 + 4, base + 44 + 34), '5 VS 5', sub, (214, 232, 232, 150), 8)                 # 인게임의 서버 이름(FRANKFURT) 자리, 윗줄보다 살짝 흐리게
-    draw.rectangle([x0 + 4, base + 124, x0 + 16, base + 136], fill=(255, 255, 255, 240))  # 작은 흰 점(인게임 화면의 표식)
+    y = base + 44
+    if key in COORDS:                                                                          # 로딩 화면의 좌표 줄(맵의 실제 위치)
+        spaced(draw, (x0 + 4, y), COORDS[key], sub, (214, 232, 232, 215), 8)
+        y += 38
+    spaced(draw, (x0 + 4, y), 'ARCADE MATCH — CUSTOM', sub, (214, 232, 232, 200), 8)  # 인게임의 "STANDARD — CUSTOM" 자리
+    spaced(draw, (x0 + 4, y + 34), '5 VS 5', sub, (214, 232, 232, 150), 8)                 # 인게임의 서버 이름(FRANKFURT) 자리, 윗줄보다 살짝 흐리게
+    y += 80
+    draw.rectangle([x0 + 4, y, x0 + 16, y + 12], fill=(255, 255, 255, 240))  # 작은 흰 점(인게임 화면의 표식)
     return im
 
 
