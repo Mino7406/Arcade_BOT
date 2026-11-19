@@ -482,80 +482,106 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     v.board.map = undefined;
   });
 
-  await flow('맵 뽑기: 버튼 → 5프레임+확정 연출 · 권한 · 동시 클릭 · 연출 중 갱신 · 수정 실패 · 팀을 다시 나눠도 유지', async () => {
+  await flow('맵 뽑기: 주최자만 · 돌리겠습니까 확인 → 5프레임+확정 연출 · 5분 잠금 · 동시 클릭 · 수정 실패 · 팀을 다시 나눠도 유지', async () => {
     const mapMod = require(path.join(root, 'handlers/매치/맵.js'));
+    const cardMod = require(path.join(root, 'handlers/공통/카드.js'));
     await naejeon.handleNaejeonModal(mkInteraction({ user: ADMIN, customId: 'naejeon:modal:valorant', fields: { title: '맵 내전', datetime: '내일 8시', players: '4', description: '' } }));
-    await naejeon.handleNaejeonButton(mkInteraction({ user: ADMIN, customId: 'naejeon:publish', message: new FakeMsg(require(path.join(root, 'handlers/공통/카드.js')).notice('p'), channel) }));
+    await naejeon.handleNaejeonButton(mkInteraction({ user: ADMIN, customId: 'naejeon:publish', message: new FakeMsg(cardMod.notice('p'), channel) }));
     const m = [...client.naejeonMatches.values()].at(-1);
     for (const u of ['u1', 'u2', 'u3', 'u4']) await naejeon.handleNaejeonButton(mkInteraction({ user: u, customId: 'naejeon:join', message: m.message }));
     await new Promise(r => setTimeout(r, 20));
     const id = m.message.id;
     const boardMsg = () => channel.sent.find(x => x.id === m.board.messageId);
-    const press = (user, extra = {}) => mkInteraction({ user, customId: `team:map:${id}`, message: boardMsg(), ...extra });
+    const ask = (user) => mkInteraction({ user, customId: `team:map:${id}`, message: boardMsg() });
+    const okBtn = (user = ADMIN) => mkInteraction({ user, customId: `team:map_ok:${id}`, message: new FakeMsg(cardMod.notice('확인'), channel) });
+    const replyJson = (it) => JSON.stringify((it._reply ?? it.message).components);
     team.__setMapSleep(() => Promise.resolve());
     let clock = 1_700_000_000_000;
     team.__setMapClock(() => clock);
     const unlock = () => { clock += team.MAP_LOCK_MS + 1000; };
+    // 카드 수정(연출)을 기록한다 — 연출은 카드 메시지를 직접 고친다
+    const watch = () => { const bm = boardMsg(); const log = []; const orig = bm.edit.bind(bm); bm.edit = async (p) => { log.push(JSON.stringify(p.components) + '|' + (p.files || []).map(x => x.name).join()); return orig(p); }; return { log, restore: () => { bm.edit = orig; } }; };
 
-    // 주최자(관리자)가 누르면: 결과 저장 + 첫 수정은 뽑는 중, 마지막은 확정 이미지와 이름
-    const calls = [];
-    const it = press(ADMIN);
-    const origEdit = it.editReply.bind(it);
-    it.editReply = async (p) => { calls.push(JSON.stringify(p.components) + '|' + (p.files || []).map(x => x.name).join()); return origEdit(p); };
-    await team.handleTeamButton(it);
+    // 일반 참가자(관리자 아님)는 못 누른다: 안내만, 확인 창도 없음
+    const stranger = ask('u2');
+    await team.handleTeamButton(stranger);
+    assert(replyJson(stranger).includes('일반 참가자는 주최자만 가능합니다') && !replyJson(stranger).includes('team:map_ok:') && !m.board.map, '일반 참가자는 "주최자만 가능합니다" 안내만 받아야 함');
+
+    // 주최자가 누르면 나만 보이는 확인 창(돌리겠습니까?) — 아직 돌지 않는다
+    const asked = ask(ADMIN);
+    let askedFlags = 0; const askedReply = asked.reply.bind(asked); asked.reply = async (p) => { askedFlags = p.flags ?? 0; return askedReply(p); };
+    await team.handleTeamButton(asked);
+    const aj = replyJson(asked);
+    assert(aj.includes('맵을 돌리겠습니까') && aj.includes(`team:map_ok:${id}`) && aj.includes(`team:map_no:${id}`) && !m.board.map && (askedFlags & 64), '주최자에게 나만 보이는 "맵을 돌리겠습니까?" 확인 창이 떠야 함(아직 안 돎)');
+
+    // 취소하면 확인 창이 지워지고 아무 일도 없다
+    const no = mkInteraction({ user: ADMIN, customId: `team:map_no:${id}`, message: asked._reply });
+    await team.handleTeamButton(no);
+    assert(no.replyDeleted && !m.board.map, '취소하면 확인 창이 지워지고 맵은 그대로여야 함');
+
+    // 일반 참가자가 확인 버튼을 눌러도(남의 창·옛 창) 연출되지 않는다
+    const sneaky = okBtn('u2');
+    await team.handleTeamButton(sneaky);
+    assert(!m.board.map && replyJson(sneaky).includes('주최자만'), '주최자가 아니면 확인 버튼도 소용없어야 함');
+
+    // 확인하면 카드에서 연출: 첫 수정은 헤더 맵 뽑는 중, 마지막은 확정 이미지·이름·헤더(맵 뽑기 완료)
+    const w1 = watch();
+    const ok = okBtn();
+    await team.handleTeamButton(ok);
     const picked = m.board.map;
     assert(picked && mapMod.MAP_POOLS.valorant.some(x => x.key === picked.key) && picked.game === 'valorant', '뽑은 결과가 board.map 에 저장돼야 함');
-    assert(calls.length === mapMod.SPIN_DELAYS_MS.length + 1, `카드는 ${mapMod.SPIN_DELAYS_MS.length + 1}번 고쳐져야 함(${calls.length})`);
-    assert(calls[0].includes('## 맵 뽑는 중...') && calls[0].includes('map-1.jpg') && calls[4].includes('map-5.jpg'), '돌아가는 프레임은 map-1..5.jpg 이고 헤더가 맵 뽑는 중이어야 함');
-    assert(calls.at(-1).includes('map-final.jpg') && calls.at(-1).includes('## 맵 뽑기 완료') && calls.at(-1).includes(mapMod.mapName('valorant', picked.key)), '마지막은 확정 이미지·이름·헤더(맵 뽑기 완료)');
+    assert(w1.log.length === mapMod.SPIN_DELAYS_MS.length + 1, `카드는 ${mapMod.SPIN_DELAYS_MS.length + 1}번 고쳐져야 함(${w1.log.length})`);
+    assert(w1.log[0].includes('## 맵 뽑는 중...') && w1.log[0].includes('map-1.jpg') && w1.log[4].includes('map-5.jpg'), '돌아가는 프레임은 map-1..5.jpg 이고 헤더가 맵 뽑는 중이어야 함');
+    assert(w1.log.at(-1).includes('map-final.jpg') && w1.log.at(-1).includes('## 맵 뽑기 완료') && w1.log.at(-1).includes(mapMod.mapName('valorant', picked.key)), '마지막은 확정 이미지·이름·헤더(맵 뽑기 완료)');
+    assert(replyJson(ok).includes('돌리는 중'), '확인 창은 "돌리는 중" 안내로 바뀌어야 함');
     const lockedNow = findMapBtn(boardMsg().components);
     assert(lockedNow.disabled === true && lockedNow.label.includes('5분'), '뽑은 직후 버튼은 5분간 잠겨야 함');
     assert(!team.__mapSpin.has(id), '연출이 끝나면 프레임 상태가 비워져야 함');
+    w1.restore();
 
-    // 일반 참가자는 못 뽑는다(결과가 그대로)
-    const before = { ...m.board.map };
-    const stranger = press('u2');
-    await team.handleTeamButton(stranger);
-    assert(stranger.replied && m.board.map.at === before.at && m.board.map.key === before.key, '주최자·관리자가 아니면 뽑히지 않아야 함');
-
-    // 잠금 중(5분 안)에 누르면 안내만, 결과 그대로
-    const lockedPress = press(ADMIN);
-    await team.handleTeamButton(lockedPress);
-    assert(lockedPress._reply && JSON.stringify(lockedPress._reply.components).includes('다시 할 수 있어요') && m.board.map.at === before.at, '5분 안에 누르면 잠금 안내만 받고 결과는 그대로여야 함');
+    // 잠금 중(5분 안)에는 누르면 안내만(확인 창 없음), 옛 확인 버튼을 눌러도 안 돈다
+    const at0 = m.board.map.at;
+    const lockedAsk = ask(ADMIN);
+    await team.handleTeamButton(lockedAsk);
+    assert(replyJson(lockedAsk).includes('다시 할 수 있어요') && !replyJson(lockedAsk).includes('team:map_ok:') && m.board.map.at === at0, '5분 안에 누르면 잠금 안내만 받아야 함');
+    const staleOk = okBtn();
+    await team.handleTeamButton(staleOk);
+    assert(m.board.map.at === at0 && replyJson(staleOk).includes('다시 할 수 있어요'), '잠금 중 옛 확인 버튼은 연출하지 않고 잠금 안내여야 함');
     unlock();
 
-    // 연출 중에 또 누르면 안내만(두 번째 클릭은 결과를 바꾸지 않음) + 연출 도중 카드가 다시 그려져도 현재 프레임 이미지가 유지됨
+    // 연출 중에 또 누르면 안내만 + 연출 도중 카드가 다시 그려져도 현재 프레임이 유지됨
     let hold = true; const waiters = [];
     team.__setMapSleep(() => (hold ? new Promise(r => waiters.push(r)) : Promise.resolve()));
-    const first = team.handleTeamButton(press(ADMIN));
+    const first = team.handleTeamButton(okBtn());
     await new Promise(r => setTimeout(r, 20));
     const at1 = m.board.map.at;
-    const second = press(ADMIN);
+    const second = okBtn();
     await team.handleTeamButton(second);
-    assert(second._reply && JSON.stringify(second._reply.components).includes('뽑는 중'), '연출 중 두 번째 클릭은 "뽑는 중" 안내를 받아야 함');
-    assert(m.board.map.at === at1, '연출 중 두 번째 클릭이 결과를 바꾸면 안 됨');
-    const mid = JSON.stringify(team.buildBoardPayload(m, id).components);
-    assert(mid.includes('attachment://map-1.jpg') && !mid.includes('map-final.jpg'), '연출 도중 카드를 다시 그려도 현재 프레임이 유지돼야 함');
-    const spinBtn = findMapBtn(team.buildBoardPayload(m, id).components);
+    assert(replyJson(second).includes('뽑는 중') && m.board.map.at === at1, '연출 중 두 번째 확인은 "뽑는 중" 안내만 받고 결과를 바꾸지 않아야 함');
+    const askDuring = ask(ADMIN);
+    await team.handleTeamButton(askDuring);
+    assert(replyJson(askDuring).includes('뽑는 중') && !replyJson(askDuring).includes('team:map_ok:'), '연출 중 맵 뽑기 버튼은 확인 창 없이 안내만');
+    const midP = team.buildBoardPayload(m, id);
+    const mid = JSON.stringify(midP.components);
+    assert(mid.includes('attachment://map-1.jpg') && !mid.includes('map-final.jpg') && mid.includes('## 맵 뽑는 중...'), '연출 도중 카드를 다시 그려도 현재 프레임이 유지되고 헤더는 맵 뽑는 중...');
+    const spinBtn = findMapBtn(midP.components);
     assert(spinBtn.disabled === true && spinBtn.label.includes('뽑는 중'), '연출 중에는 버튼이 잠기고 뽑는 중 라벨이어야 함');
-    assert(mid.includes('## 맵 뽑는 중...'), '연출 중 헤더는 맵 뽑는 중...');
     hold = false; waiters.forEach(r => r()); await first;
     assert(!team.__mapSpin.has(id), '연출이 끝나면 프레임 상태가 비워져야 함(동시 클릭 뒤에도)');
     team.__setMapSleep(() => Promise.resolve());
-
     unlock();
-    // 수정이 실패해도(메시지가 지워짐 등) 예외 없이 멈추고, 결과는 저장돼 있고, 다시 누를 수 있다
-    const broken = press(ADMIN);
-    broken.editReply = async () => { throw new Error('Unknown Message'); };
-    await team.handleTeamButton(broken);
+
+    // 카드 수정이 실패해도(메시지가 지워짐 등) 예외 없이 멈추고, 결과는 저장돼 있고, 다시 돌릴 수 있다
+    const bm2 = boardMsg(); const orig2 = bm2.edit.bind(bm2);
+    bm2.edit = async () => { throw new Error('Unknown Message'); };
+    await team.handleTeamButton(okBtn());
+    bm2.edit = orig2;
     assert(m.board.map && !team.__mapSpin.has(id), '수정이 실패해도 결과는 저장되고 프레임 상태는 비워져야 함');
     unlock();
-    const again = [];
-    const retry = press(ADMIN);
-    const retryEdit = retry.editReply.bind(retry);
-    retry.editReply = async (p) => { again.push(1); return retryEdit(p); };
-    await team.handleTeamButton(retry);
-    assert(again.length === mapMod.SPIN_DELAYS_MS.length + 1, '실패 뒤에 다시 누르면 처음부터 연출돼야 함');
+    const w2 = watch();
+    await team.handleTeamButton(okBtn());
+    assert(w2.log.length === mapMod.SPIN_DELAYS_MS.length + 1, '실패 뒤에 다시 돌리면 처음부터 연출돼야 함');
+    w2.restore();
 
     // 팀을 다시 나눠도 맵은 그대로
     const keep = { ...m.board.map };
@@ -566,7 +592,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     // 끝났거나 없는 내전
     const gone = mkInteraction({ user: ADMIN, customId: 'team:map:999999' });
     await team.handleTeamButton(gone);
-    assert(gone._reply && JSON.stringify(gone._reply.components).includes('끝났거나'), '없는 내전이면 안내만');
+    assert(replyJson(gone).includes('끝났거나'), '없는 내전이면 안내만');
     team.__setMapClock(() => Date.now());
   });
 

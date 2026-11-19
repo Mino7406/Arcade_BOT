@@ -826,28 +826,37 @@ setCloseHook('내전', async (matchMsgId, match) => {
 
 // ── 권한 ────────────────────────────────────────────────────
 
+// 카드 메시지를 지금 상태로 한 번 고친다(연출 한 프레임). 메시지를 못 찾으면 던진다 — 연출을 멈추게.
+async function editBoardNow(client, matchMsgId, match) {
+  const board = match.board;
+  if (!board?.channelId || !board?.messageId) throw new Error('카드 메시지를 모름');
+  const ch = await fetchChannel(client, board.channelId);
+  const msg = ch && await ch.messages.fetch(board.messageId).catch(() => null);
+  if (!msg) throw new Error('카드 메시지를 못 찾음');
+  await msg.edit(buildBoardPayload(match, matchMsgId));
+}
+
 // 🗺️ 맵 뽑기 연출: 결과를 먼저 저장(연출 중 봇이 꺼져도 다음 카드에 보임)하고, 돌아가는 프레임을 점점 느리게 보여 준 뒤 이름이 박힌 확정 이미지로 끝낸다.
 // 카드 수정이 실패하면(메시지가 지워짐 등) 연출만 멈추고 결과는 그대로 둔다. 끝나면 잠금이 풀리는 시각에 카드를 한 번 고친다.
-async function runMapSpin(interaction, matchMsgId, match) {
+async function runMapSpin(client, matchMsgId, match) {
   const game = match.data.game;
   try {
-    await interaction.deferUpdate();
     const picked = maps.pickMap(game);
     normalizeBoard(match).map = { game, key: picked.key, at: mapNow() };
-    saveNow(interaction.client);
+    saveNow(client);
     const frames = maps.spinFrames(game, picked.key);
     for (let i = 0; i < frames.length; i++) {
       mapSpin.set(matchMsgId, { key: frames[i], n: i + 1 });
-      await interaction.editReply(buildBoardPayload(match, matchMsgId));
+      await editBoardNow(client, matchMsgId, match);
       await mapSleep(maps.SPIN_DELAYS_MS[i]);
     }
     mapSpin.delete(matchMsgId);
-    await interaction.editReply(buildBoardPayload(match, matchMsgId));
+    await editBoardNow(client, matchMsgId, match);
   } catch (err) {
     logError('팀 카드', `맵 뽑기 연출 중 카드 수정 실패 — ${err?.message ?? err}`, err);
   } finally {
     mapSpin.delete(matchMsgId);
-    scheduleMapUnlock(interaction.client, matchMsgId, match);
+    scheduleMapUnlock(client, matchMsgId, match);
   }
 }
 
@@ -1364,21 +1373,41 @@ async function handleTeamButton(interaction) {
     return;
   }
 
-  // 🗺️ 맵 뽑기: 맵 구역에서 연출이 돌고, 누른 때부터 5분간 잠긴다. 연출 중·잠금 중에 누르면 안내만.
-  if (customId.startsWith('team:map:')) {
-    const matchMsgId = customId.slice('team:map:'.length);
-    const match = await getEditableMatch(interaction, matchMsgId);
-    if (!match) return;
-    if (!maps.hasMapPool(match.data.game)) { await interaction.reply(notice('⚠️ **이 게임은 맵 뽑기를 지원하지 않아요.**', { ephemeral: true })); return; }
-    if (mapSpin.has(matchMsgId)) { await interaction.reply(notice('🎲 **지금 맵을 뽑는 중이에요.**', { ephemeral: true })); return; }
+  // 🗺️ 맵 뽑기: 주최자만. 버튼을 누르면 나만 보이는 "맵을 돌리겠습니까?" 확인 창이 뜨고, 확인하면 카드의 맵 구역에서 연출이 돈다.
+  // 한 번 돌리면 누른 때부터 5분간 잠긴다. 연출 중·잠금 중에 누르면 안내만.
+  if (customId.startsWith('team:map:') || customId.startsWith('team:map_ok:') || customId.startsWith('team:map_no:')) {
+    const kind = customId.startsWith('team:map_ok:') ? 'ok' : customId.startsWith('team:map_no:') ? 'no' : 'ask';
+    const matchMsgId = customId.slice(customId.indexOf(':', 'team:map'.length) + 1);
+    if (kind === 'no') { await interaction.deferUpdate(); await interaction.deleteReply().catch(() => {}); return; }
+    const match = getMatches(interaction.client).get(matchMsgId);
+    const say = (text) => (kind === 'ok' ? interaction.update(notice(text, { ephemeral: true })) : interaction.reply(notice(text, { ephemeral: true })));
+    if (!match) { await say('⚠️ **끝났거나 취소된 내전이에요.**'); return; }
+    if (!maps.hasMapPool(match.data.game)) { await say('⚠️ **이 게임은 맵 뽑기를 지원하지 않아요.**'); return; }
+    if (match.data.organizer.id !== interaction.user.id) { await say('⚠️ **일반 참가자는 주최자만 가능합니다.**'); return; }
+    if (mapSpin.has(matchMsgId)) { await say('🎲 **지금 맵을 뽑는 중이에요.**'); return; }
     if (mapLocked(match)) {
       const at = Math.floor((match.board.map.at + MAP_LOCK_MS) / 1000);
-      await interaction.reply(notice(`🔒 **맵 뽑기는 <t:${at}:R> 다시 할 수 있어요.**
--# 한 번 뽑으면 5분간 잠겨요.`, { ephemeral: true }));
+      await say(`🔒 **맵 뽑기는 <t:${at}:R> 다시 할 수 있어요.**\n-# 한 번 뽑으면 5분간 잠겨요.`);
+      return;
+    }
+    if (kind === 'ask') {
+      await interaction.reply(notice('🗺️ **맵을 돌리겠습니까?**\n-# 한 번 돌리면 5분간 다시 돌릴 수 없어요.', {
+        ephemeral: true,
+        rows: [new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`team:map_ok:${matchMsgId}`).setLabel('돌리기').setEmoji('🎲').setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId(`team:map_no:${matchMsgId}`).setLabel('취소').setStyle(ButtonStyle.Secondary),
+        )],
+      }));
       return;
     }
     mapSpin.set(matchMsgId, { key: null, n: 0 }); // 동시에 두 번 눌려도 한 번만 돌도록 바로 잠근다
-    await runMapSpin(interaction, matchMsgId, match);
+    try {
+      await interaction.update(notice('🎲 **맵을 돌리는 중이에요.**\n-# 카드에서 확인하세요.', { ephemeral: true }));
+    } catch (err) {
+      mapSpin.delete(matchMsgId);
+      throw err;
+    }
+    await runMapSpin(interaction.client, matchMsgId, match);
     return;
   }
 
