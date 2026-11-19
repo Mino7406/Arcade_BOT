@@ -179,12 +179,12 @@ function rowsIn(list, acc = []) {
     const ko = `${new Date(tomorrow.getTime() + 9 * 3600e3).getUTCMonth() + 1}월 ${new Date(tomorrow.getTime() + 9 * 3600e3).getUTCDate()}일 오후 8시`;
     const k = c.deriveNotifyFromDatetime(ko);
     assert.ok(k && k.notify12h === true && kst(k.notifyAt).endsWith('19:50'), `${ko} → 자동 알림은 10분 전`);
-    assert.strictEqual(c.deriveNotifyFromDatetime('내일 8시'), null, '못 읽는 글자는 null');
+    assert.strictEqual(c.deriveNotifyFromDatetime('모이면').notifyOnClose, true, '못 읽는 글자는 마감 시 발송');
     const data = { datetime: text, notifyAuto: true, notifyAutoSrc: text, notifyAt: now };
     data.datetime = ko; c.syncAutoNotify(data);
     assert.ok(data.notifyAt && data.notifyAuto, '일시가 바뀌면 알림 시각도 따라감');
     data.datetime = '내일 8시'; c.syncAutoNotify(data);
-    assert.strictEqual(data.notifyAt, null); assert.strictEqual(data.notifyAuto, false);
+    assert.strictEqual(data.notifyOnClose, true); assert.strictEqual(data.notifyAuto, true);
     // 일시가 그대로면(메모·인원만 수정) 알림은 건드리지 않는다 — 지난 일시라도 꺼지지 않음
     const kept = { datetime: '1/1 20:00', notifyAuto: true, notifyAutoSrc: '1/1 20:00', notifyAt: 123 };
     assert.strictEqual(c.syncAutoNotify(kept), null);
@@ -194,7 +194,7 @@ function rowsIn(list, acc = []) {
     const stamp = c.defaultDatetimeText(created);
     const past = c.deriveNotifyFromDatetime(stamp, { base: created });
     assert.ok(past && Math.abs(past.notifyAt - (created - 10 * 60 * 1000)) < 60 * 1000 && past.notifyAt < Date.now(), '지난 일시도 알림 시각(10분 전)으로 유지');
-    assert.strictEqual(c.deriveNotifyFromDatetime(stamp), null, 'base 없이는 5시간 지난 일시를 내년으로 봄(기존 동작)');
+    assert.strictEqual(c.deriveNotifyFromDatetime(stamp).notifyOnClose, true, 'base 없이는 5시간 지난 일시를 내년으로 봐서 너무 멀어 마감 시 발송');
     // 안 고친 지금 시각 = "자동 발송"(마감 때 바로), 미래 시각을 직접 적으면 그 시각에 발송
     assert.strictEqual(past.notifyOnClose, true);
     assert.strictEqual(c.notifyWhenText({ notifyAt: past.notifyAt, notifyOnClose: true }), '마감 시 발송');
@@ -251,9 +251,9 @@ function rowsIn(list, acc = []) {
     // 3) 못 읽는 일시: 직접 적은 알림은 그대로, 자동 알림은 꺼짐
     const keep = { datetime: `${md} 20:00`, createdAt: created, notifyAt: 777, notifyAuto: false };
     prev = keep.datetime; keep.datetime = '모이면';
-    assert.strictEqual(c.syncAutoNotify(keep, prev), 'kept'); assert.strictEqual(keep.notifyAt, 777);
+    assert.strictEqual(c.syncAutoNotify(keep, prev), 'changed'); assert.strictEqual(keep.notifyOnClose, true, '못 읽으면 마감 시 발송');
     prev = a.datetime; a.datetime = '모이면';
-    assert.strictEqual(c.syncAutoNotify(a, prev), 'off'); assert.strictEqual(a.notifyAt, null);
+    assert.strictEqual(c.syncAutoNotify(a, prev), 'changed'); assert.strictEqual(a.notifyOnClose, true);
     // 4) 알림이 꺼져 있거나 일시가 그대로면 건드리지 않음
     const off = { datetime: `${md} 20:00`, createdAt: created };
     prev = off.datetime; off.datetime = `${md} 21:00`;

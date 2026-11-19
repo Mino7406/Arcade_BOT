@@ -280,10 +280,12 @@ const AUTO_NOTIFY_LEAD_MS = 10 * 60 * 1000;
 // 지금 시각이 몇 시간 뒤 알림을 켜는 때에도 내년으로 넘어가지 않는다.
 // 알림 시각(10분 전)이 이미 지났거나 2분 안이면(미리 채운 지금 시각을 그대로 둔 경우 등) 마감되는 순간 바로 보낸다.
 function deriveNotifyFromDatetime(datetime, { base } = {}) {
+  // 일시를 못 읽거나 너무 먼 미래면 "마감 시 발송"으로 잡는다(알림 시각은 이미 지난 때로 두어 마감되는 순간 보낸다).
+  const closeFallback = { notifyAt: Math.max(base || 0, Date.now()), notify12h: false, notifyOnClose: true };
   const startAt = parseDatetimeText(datetime, base || Date.now());
-  if (!startAt) return null;
+  if (!startAt) return closeFallback;
   const notifyAt = startAt - AUTO_NOTIFY_LEAD_MS;
-  if (isNotifyTooFar(notifyAt)) return null;
+  if (isNotifyTooFar(notifyAt)) return closeFallback;
   const notifyOnClose = notifyAt <= Math.max(base || 0, Date.now()) + 2 * 60 * 1000;
   return { notifyAt, notify12h: isNotify12HourInput(datetime), notifyOnClose };
 }
@@ -347,7 +349,7 @@ function notifyWhenText(data) {
 // 일시를 고친 뒤 주최자에게 덧붙일 알림 안내(syncAutoNotify 결과별).
 function notifySyncNote(result, data) {
   if (result === 'changed') return data.notifyOnClose
-    ? '\n🔔 새 일시 10분 전이 이미 지나서, 알림은 마감되는 순간 바로 보내요.'
+    ? '\n🔔 새 일시를 읽지 못했거나 10분 전이 이미 지나서, 알림은 마감되는 순간 바로 보내요.'
     : `\n🔔 알림도 새 일시 10분 전인 ${formatNotifyTimeSmart(data.notifyAt, data.notify12h)}로 옮겼어요.`;
   if (result === 'rearmed') return `\n🔔 일시가 미뤄져서, 새 일시 10분 전인 ${formatNotifyTimeSmart(data.notifyAt, data.notify12h)}에 알림을 한 번 더 보낼게요.`;
   if (result === 'kept') return `\n🔔 새 일시는 알림 시각으로 읽을 수 없어서, 직접 정한 알림 ${formatNotifyTimeSmart(data.notifyAt, data.notify12h)}은 그대로예요.`;

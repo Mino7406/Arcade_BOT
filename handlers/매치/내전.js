@@ -582,7 +582,7 @@ async function handleNaejeonButton(interaction) {
       match.notifySent = false;
       armNotifyReminder(getMatches(interaction.client), matchMsgId, match, '내전');
       await match.message.edit(buildPublicMessagePayload(match)).catch(err => { logError('매치 알림', `${match.data?.title ?? '?'}(${match.message?.id}) 알림 예약 아이콘 갱신 실패`, err); });
-      await interaction.update(buildManagePayload({ label: '내전', match, note: auto.notifyOnClose ? '🔔 **마감 시 발송으로 설정했어요.** 일시 10분 전이 이미 지나서, 마감되는 순간 참가자에게 DM 알림을 보내요.' : `🔔 **일시 10분 전인 ${formatNotifyTimeSmart(auto.notifyAt, auto.notify12h)}에 참가자에게 DM 알림을 보낼게요.**\n일시를 고치면 알림도 따라 옮겨져요.`, rows: buildManageMenu(match, matchMsgId) }));
+      await interaction.update(buildManagePayload({ label: '내전', match, note: auto.notifyOnClose ? '🔔 **마감 시 발송으로 설정했어요.** 일시를 읽지 못했거나 10분 전이 이미 지나서, 마감되는 순간 참가자에게 DM 알림을 보내요.' : `🔔 **일시 10분 전인 ${formatNotifyTimeSmart(auto.notifyAt, auto.notify12h)}에 참가자에게 DM 알림을 보낼게요.**\n일시를 고치면 알림도 따라 옮겨져요.`, rows: buildManageMenu(match, matchMsgId) }));
       return;
     }
     await interaction.showModal(buildNotifyModal(matchMsgId, match.data.notifyAt, match.data.notify12h, match.data.notifyOnClose));
