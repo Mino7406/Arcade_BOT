@@ -3,7 +3,7 @@
 assets/맵/<게임>/<키>.jpg 원본 위에 맵 이름을 게임 로딩 화면 느낌으로 박아
 assets/맵/결과/<게임>/<키>.jpg (1200x675) 로 저장한다. 봇은 이 파일을 그대로 첨부만 한다.
  - 오버워치: 오른쪽 아래에 크게 기울어진(이탤릭) 흰 이름(로딩 화면의 맵 이름 자리)
- - 발로란트: 왼쪽 위에 굵은 대문자 영문 이름 + 아래에 자간 넓은 작은 글줄(한국어 이름·STANDARD — CUSTOM / 5 VS 5) + 작은 흰 점
+ - 발로란트: 왼쪽 위에 굵은 대문자 영문 이름 + 아래에 자간 넓은 작은 글줄(한국어 이름·STANDARD — CUSTOM / ARCADE · 5 VS 5) + 작은 흰 점
 맵 이름은 handlers/매치/맵.js 의 MAP_POOLS 에서 노드로 읽어 온다(한 곳에서만 관리).
 글꼴: 두 게임의 공식 글꼴(Big Noodle Titling·Tungsten)은 상용이라 쓰지 않고, 비슷한 무료(OFL) 글꼴을 assets/fonts/ 에 두고 쓴다.
  - 오버워치 이름: Black Han Sans(굵은 한국어, 기울여서)  - 발로란트 큰 영문 이름: Bebas Neue  - 작은 글줄: Windows 의 Bahnschrift(DIN 계열)·맑은 고딕
@@ -307,7 +307,7 @@ def valorant(im, key, name):
         draw.rectangle([x0 + 4, y + 36, x0 + 4 + 96, y + 37], fill=(214, 232, 232, 120))  # 좌표 밑 짧은 구분선(좌표 글줄 너비의 1/4쯤)
         y += 52
     spaced(draw, (x0 + 4, y), 'STANDARD — CUSTOM', sub, (214, 232, 232, 200), 8)  # 인게임의 "STANDARD — CUSTOM" 자리
-    spaced(draw, (x0 + 4, y + 34), '5 VS 5', sub, (214, 232, 232, 150), 8)                 # 인게임의 서버 이름(FRANKFURT) 자리, 윗줄보다 살짝 흐리게
+    spaced(draw, (x0 + 4, y + 34), 'ARCADE · 5 VS 5', sub, (214, 232, 232, 150), 8)                 # 인게임의 서버 이름(FRANKFURT) 자리, 윗줄보다 살짝 흐리게
     y += 80
     draw.rectangle([x0 + 4, y, x0 + 16, y + 12], fill=(255, 255, 255, 240))  # 작은 흰 점(인게임 화면의 표식)
     return im
