@@ -2,7 +2,7 @@
 
 봇이 뽑기마다 카드 여러 장을 옆으로 흘려 보내며 프레임을 직접 그린다(handlers/매치/맵연출.js). 그 재료를 만든다:
  - assets/맵/카드/<게임>/<키>.png : 맵 카드(225x279, 아래에 한국어 이름판이 박힘)
- - assets/맵/연출/배경_<게임>.png : 720x405 배경(제목 MAP DRAW · 맵 뽑기 · 추첨 중...)
+ - assets/맵/연출/배경_<게임>.png : 720x405 배경(제목 MAP DRAW · 맵 추첨 · 추첨 중...)
 필요: Python + Pillow, Node.  글꼴: assets/fonts/BlackHanSans-Regular.ttf(OFL), BebasNeue-Regular.ttf(OFL)
 """
 import json
@@ -53,7 +53,7 @@ def background(game):
     d.text((30, 27), 'MAP DRAW', font=big, fill=(255, 255, 255))
     d.rectangle([30, 78, 105, 81], fill=acc)
     ko = ImageFont.truetype(FONT_KO, 17)
-    d.text((30 + d.textlength('MAP DRAW', font=big) + 14, 46), '맵 뽑기', font=ko, fill=acc)
+    d.text((30 + d.textlength('MAP DRAW', font=big) + 14, 46), '맵 추첨', font=ko, fill=acc)
     sm = ImageFont.truetype(FONT_KO, 17)
     msg = '추첨 중...'
     d.text((W - 30 - d.textlength(msg, font=sm), 50), msg, font=sm, fill=(190, 198, 212))
