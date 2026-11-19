@@ -40,8 +40,8 @@ assert.strictEqual(mapName('overwatch', 'neon-junction'), '네온 교차로');
 assert.strictEqual(mapName('overwatch', 'nope'), '');
 
 // 연출 프레임
-assert.deepStrictEqual(SPIN_DELAYS_MS, [450, 450, 470, 500, 560, 650, 780, 950, 1200, 1600]);
-assert.strictEqual(SPIN_DELAYS_MS.reduce((a, b) => a + b, 0), 7610);
+assert.deepStrictEqual(SPIN_DELAYS_MS, [500, 600, 750, 950, 2000]);
+assert.strictEqual(SPIN_DELAYS_MS.reduce((a, b) => a + b, 0), 4800);
 for (const game of ['valorant', 'overwatch']) {
   MAP_POOLS[game].forEach((x, idx) => {
     for (let t = 0; t < 3; t++) {
@@ -61,12 +61,12 @@ for (const game of ['valorant', 'overwatch']) {
     assert.ok(fs.existsSync(path.join(__dirname, '..', 'assets', '맵', '카드', game, `${x.key}.png`)), `${game}/${x.key} 맵 카드 이미지가 없음`);
   });
 }
-// 프레임 그리기: 유효한 PNG(960x540)이고 위치마다 그림이 다르며 카드는 매번 다르게 섞인다
+// 프레임 그리기: 유효한 PNG(720x405)이고 위치마다 그림이 다르며 카드는 매번 다르게 섞인다
 {
   const reel = require('../handlers/매치/맵연출');
   const a = maps.reelPlan('overwatch', 'busan'), b = maps.reelPlan('overwatch', 'busan');
   const png = reel.frame('overwatch', a.strip, a.offsets[0]);
-  assert.deepStrictEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [960, 540], '프레임 크기');
+  assert.deepStrictEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [720, 405], '프레임 크기');
   assert.ok(!png.equals(reel.frame('overwatch', a.strip, a.offsets[3])), '위치가 다르면 그림도 달라야 함');
   assert.ok(png.length < 2 * 1024 * 1024, '프레임이 2MB 를 넘음');
   reel.clearReelCache();

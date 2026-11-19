@@ -589,7 +589,7 @@ function buildBoardRows(match, matchMsgId) {
     // 맵 뽑기는 누르는 순간부터 5분간 잠긴다(연출 중 포함). 풀리는 시각에 카드가 스스로 고쳐진다(scheduleMapUnlock).
     const spinning = mapSpin.has(matchMsgId);
     const locked = spinning || mapLocked(match);
-    const label = `${locked ? '🔒' : '🎰'} 맵 뽑기`; // 글자는 그대로, 앞 이모지만 바뀐다(평소 🎰, 뽑는 중·5분 잠금 🔒)
+    const label = `${locked ? '🔒' : '🎲'} 맵 뽑기`; // 글자는 그대로, 앞 이모지만 바뀐다(평소 🎲, 뽑는 중·5분 잠금 🔒)
     second.push(new ButtonBuilder().setCustomId(`team:map:${matchMsgId}`).setLabel(label).setStyle(ButtonStyle.Secondary).setDisabled(locked));
   }
   return [new ActionRowBuilder().addComponents(...buttons), ...(second.length ? [new ActionRowBuilder().addComponents(...second)] : [])];
@@ -857,8 +857,8 @@ function prepareMapSpin(matchMsgId, game) {
   const { strip, offsets } = maps.reelPlan(game, picked.key);
   const prep = { game, picked, strip, offsets, frames: [] };
   prep.ready = (async () => {
-    for (const off of offsets) { await new Promise(r => setImmediate(r)); prep.frames.push(mapReel.frame(game, strip, off)); } // 프레임 사이에 숨을 돌려 다른 요청을 막지 않는다
-  })().catch(() => {});
+    for (let i = 0; i < offsets.length; i++) { await new Promise(r => setImmediate(r)); prep.frames.push(mapReel.frame(game, strip, offsets[i], offsets[i] - (offsets[i - 1] ?? 0))); } // 프레임 사이에 숨을 돌려 다른 요청을 막지 않는다
+  })().catch(() => {}).finally(() => { prep.done = true; });
   prep.timer = setTimeout(() => { if (mapPrep.get(matchMsgId) === prep) { mapPrep.delete(matchMsgId); if (!mapSpin.has(matchMsgId)) mapReel.clearReelCache(); } }, 3 * 60 * 1000);
   prep.timer.unref?.();
   mapPrep.set(matchMsgId, prep);
@@ -873,13 +873,32 @@ async function runMapSpin(client, matchMsgId, match, ack = null) {
     normalizeBoard(match).map = { game, key: picked.key, at: mapNow() };
     saveNow(client);
     const plan = prep ?? { ...maps.reelPlan(game, picked.key), frames: [] };
-    await prep?.ready;
+    // 카드 메시지는 한 번만 찾아 두고 계속 고친다(프레임마다 다시 조회하면 요청이 두 배가 된다).
+    const board = match.board;
+    if (!board?.channelId || !board?.messageId) throw new Error('카드 메시지를 모름');
+    const ch = await fetchChannel(client, board.channelId);
+    const msg = ch && await ch.messages.fetch(board.messageId).catch(() => null);
+    if (!msg) throw new Error('카드 메시지를 못 찾음');
+    // 디스코드는 메시지 수정을 5초에 5번까지만 받는다. 프레임 수정이 아직 안 끝났으면 쌓아 두지 않고 그 프레임은 건너뛴다(대기에 막혀 멈추지 않게).
+    let inflight = null, failure = null;
+    const send = () => {
+      const t0 = Date.now();
+      inflight = msg.edit(buildBoardPayload(match, matchMsgId))
+        .catch(err => { failure = err; })
+        .finally(() => { inflight = null; const ms = Date.now() - t0; if (ms > 4000) logError('팀 카드', `맵 뽑기 프레임 수정이 느려요(${ms}ms)`); });
+    };
     for (let i = 0; i < plan.offsets.length; i++) {
-      const png = plan.frames[i] ?? mapReel.frame(game, plan.strip, plan.offsets[i]); // 카드가 다시 그려져도 같은 그림이 나오게 프레임을 들고 있는다
+      if (failure) throw failure;
+      let png = plan.frames[i];
+      while (!png && prep && !prep.done) { await new Promise(r => setTimeout(r, 15)); png = plan.frames[i]; } // 미리 그리는 중이면 그 프레임이 나올 때까지만 기다린다(전부 기다리지 않는다)
+      png ??= mapReel.frame(game, plan.strip, plan.offsets[i], plan.offsets[i] - (plan.offsets[i - 1] ?? 0)); // 카드가 다시 그려져도 같은 그림이 나오게 프레임을 들고 있는다
       mapSpin.set(matchMsgId, { key: picked.key, n: i + 1, png });
-      await editBoardNow(client, matchMsgId, match);
+      if (!inflight) send();
       await mapSleep(maps.SPIN_DELAYS_MS[i]);
+      if (inflight) await Promise.race([inflight, new Promise(r => setTimeout(r, 400))]); // 곧 끝날 수정은 조금 기다려 준다
     }
+    if (inflight) await inflight; // 마지막 확정 수정 전에 앞선 수정이 끝나게
+    if (failure) throw failure;
     mapSpin.delete(matchMsgId);
     await editBoardNow(client, matchMsgId, match);
   } catch (err) {

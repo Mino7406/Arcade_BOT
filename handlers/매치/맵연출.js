@@ -7,8 +7,8 @@ const { Painter } = require('../레이드/그림판');
 const { decodePng } = require('../공통/이모지그림');
 
 const ASSET = path.join(__dirname, '..', '..', 'assets', '맵');
-const W = 960, H = 540, CW = 300, CH = 372, PITCH = 330; // 카드 폭 300 + 간격 30
-const CX = (W - CW) / 2, CY = 124;
+const W = 720, H = 405, CW = 225, CH = 279, PITCH = 248; // 카드 폭 225 + 간격 23 (그리고 올리는 비용을 줄이려고 작게)
+const CX = (W - CW) / 2, CY = 93;
 const ACCENT = { valorant: [253, 69, 86], overwatch: [250, 156, 30] };
 
 const cache = new Map(); // 파일 → { w, h, data }
@@ -38,7 +38,26 @@ function blit(p, img, x0, y0, bright) {
   }
 }
 
-function frame(game, strip, offset) {
+// 가로 모션 블러(상자 평균, 카드 줄 구간만). 빠르게 지나가는 프레임을 부드럽게 보이게 한다.
+function motionBlur(p, y0, y1, r) {
+  if (r < 1) return;
+  const w = p.w, buf = p.buf, win = 2 * r + 1, row = Buffer.alloc(w * 3);
+  for (let y = y0; y < y1; y++) {
+    const base = y * w * 3;
+    buf.copy(row, 0, base, base + w * 3);
+    for (let c = 0; c < 3; c++) {
+      let sum = 0;
+      for (let x = -r; x <= r; x++) sum += row[Math.min(w - 1, Math.max(0, x)) * 3 + c];
+      for (let x = 0; x < w; x++) {
+        buf[base + x * 3 + c] = sum / win;
+        sum += row[Math.min(w - 1, x + r + 1) * 3 + c] - row[Math.max(0, x - r) * 3 + c];
+      }
+    }
+  }
+}
+
+// speed: 이 프레임에서 직전 프레임보다 카드 몇 장을 건너뛰었는지(클수록 더 번진다)
+function frame(game, strip, offset, speed = 0) {
   const p = new Painter(W, H, 1);
   const bg = load(path.join(ASSET, '연출', `배경_${game}.png`));
   if (bg) blit(p, bg, 0, 0, 1); else p.clear('#0c0f16');
@@ -51,15 +70,16 @@ function frame(game, strip, offset) {
     const lit = Math.max(0, 1 - Math.abs(k - offset)); // 가운데에 가까울수록 1
     blit(p, load(path.join(ASSET, '카드', game, `${key}.png`)), x, CY, 0.55 + 0.45 * lit);
   }
+  motionBlur(p, CY, CY + CH, Math.min(34, Math.round(speed * 9)));
   // 고정 테두리(굵은 선 + 바깥 빛 번짐)
-  const acc = ACCENT[game] ?? ACCENT.overwatch, bx = Math.round(CX) - 4, by = CY - 4, bw = CW + 8, bh = CH + 8;
+  const acc = ACCENT[game] ?? ACCENT.overwatch, bx = Math.round(CX) - 3, by = CY - 3, bw = CW + 6, bh = CH + 6;
   const px = (x, y, a) => { if (x >= 0 && x < W && y >= 0 && y < H) p.blend((y * W + x) * 3, acc, a); };
-  for (let d = 1; d <= 14; d++) {
-    const a = 0.4 * (1 - d / 15) ** 2;
+  for (let d = 1; d <= 11; d++) {
+    const a = 0.4 * (1 - d / 12) ** 2;
     for (let x = bx - d; x < bx + bw + d; x++) { px(x, by - d, a); px(x, by + bh + d - 1, a); }
     for (let y = by - d; y < by + bh + d; y++) { px(bx - d, y, a); px(bx + bw + d - 1, y, a); }
   }
-  for (let t = 0; t < 5; t++) {
+  for (let t = 0; t < 4; t++) {
     for (let x = bx; x < bx + bw; x++) { px(x, by + t, 1); px(x, by + bh - 1 - t, 1); }
     for (let y = by; y < by + bh; y++) { px(bx + t, y, 1); px(bx + bw - 1 - t, y, 1); }
   }
