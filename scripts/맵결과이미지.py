@@ -24,6 +24,17 @@ FONT_KOVER = os.path.join(ROOT, 'assets', 'fonts', 'koverwatch', 'Koverwatch.ttf
 FONT_OW_FALLBACK = os.path.join(ROOT, 'assets', 'fonts', 'BlackHanSans-Regular.ttf')  # Koverwatch 가 없으면 쓰는 굵은 한국어
 FONT_OW = FONT_KOVER if os.path.exists(FONT_KOVER) else FONT_OW_FALLBACK
 LOGO_OW = os.path.join(ROOT, 'assets', '맵', '로고', 'overwatch.png')  # 오버워치 로고(투명 배경 PNG)
+# 오버워치 맵이 있는 나라(맵 정보의 위치 기준) → assets/맵/국기/<코드>.png (flagcdn.com). 나라가 없는 맵(남극 반도·눔바니)은 국기 대신 로고 태그.
+FLAG_OF = {
+    'circuit-royal': 'mc', 'dorado': 'mx', 'grimsvotn': 'is', 'havana': 'cu', 'junkertown': 'au', 'rialto': 'it',
+    'route-66': 'us', 'shambali-monastery': 'np', 'watchpoint-gibraltar': 'gi',
+    'blizzard-world': 'us', 'eichenwalde': 'de', 'hollywood': 'us', 'kings-row': 'gb', 'midtown': 'us',
+    'neon-junction': 'jp', 'paraiso': 'br',
+    'colosseo': 'it', 'esperanca': 'pt', 'new-queen-street': 'ca', 'runasapi': 'pe',
+    'busan': 'kr', 'ilios': 'gr', 'lijiang-tower': 'cn', 'nepal': 'np', 'oasis': 'iq', 'samoa': 'ws',
+    'aatlis': 'ma', 'new-junk-city': 'au', 'suravasa': 'in',
+}
+FLAG_DIR = os.path.join(ROOT, 'assets', '맵', '국기')
 ARC_START = -70  # 주황 4분의 1 원의 시작 각도
 FONT_VAL_BIG = os.path.join(ROOT, 'assets', 'fonts', 'BebasNeue-Regular.ttf')  # 발로란트 큰 영문 이름
 FONT_KO_REG = WIN + 'malgun.ttf'
@@ -81,6 +92,8 @@ REF = {
     'tag_w': 54, 'tag_h': 32,
     'tag_gap': 2,       # 태그 오른쪽 ~ 이름 왼쪽
     'tag_drop': 30,     # 이름 위에서 태그 가운데까지
+    'flag_h': 40, 'flag_w_max': 62,   # 국기 크기(높이·최대 폭)
+    'flag_drop': 46,    # 이름 위에서 국기 가운데까지
     'name_gap': 30,     # 이름 오른쪽 ~ 둘레 원 왼쪽
     'right': 52,        # 둘레 원 오른쪽 ~ 화면 오른쪽
     'bottom': 24,       # 둘레 원 아래 ~ 화면 아래
@@ -128,7 +141,7 @@ def fit_font(path, sample, target_h):
     return best
 
 
-def overwatch(im, name, mode='내전'):
+def overwatch(im, name, mode='내전', flag=None):
     """오버워치 한국어 인게임 화면과 같은 비율(오른쪽 아래): [로고 태그] 이름(바로 선 흰 글씨) [로고+얇은 원+주황 4분의 1 원], 이름 위 주황 모드 글씨."""
     r = {k: v * SC for k, v in REF.items()}
     size = fit_font(FONT_OW, '남극 반도', r['name_h'])
@@ -187,7 +200,24 @@ def overwatch(im, name, mode='내전'):
     my = name_top - r['mode_gap'] - (mb[3] - mb[1]) - mb[1]
     ImageDraw.Draw(im).text((mx, my), mode, font=mf, fill=(247, 130, 62, 255))
 
-    # 이름 왼쪽 위쪽의 작은 태그: 남색 사각형 안에 작은 로고(모서리는 각짐)
+    flag_file = os.path.join(FLAG_DIR, f'{flag}.png') if flag else None
+    if flag_file and os.path.exists(flag_file):
+        # 이름 왼쪽의 나라 국기(얇은 흰 테두리). 비율은 그대로, 높이 flag_h 에 맞추되 너무 넓으면 폭에 맞춘다.
+        fl = Image.open(flag_file).convert('RGBA')
+        fh = r['flag_h']
+        fw = fh * fl.size[0] / fl.size[1]
+        if fw > r['flag_w_max']:
+            fw, fh = r['flag_w_max'], r['flag_w_max'] * fl.size[1] / fl.size[0]
+        fl = fl.resize((int(fw), int(fh)), Image.LANCZOS)
+        fx = int(name_left - r['tag_gap'] - 6 * SC - fw)
+        fy = int(name_top + r['flag_drop'] - fh / 2)
+        edge = Image.new('RGBA', im.size, (0, 0, 0, 0))
+        ImageDraw.Draw(edge).rectangle([fx - 1, fy - 1, fx + fw, fy + fh], outline=(255, 255, 255, 190), width=max(1, round(1.4 * SC)))
+        im = Image.alpha_composite(im, edge)
+        im.alpha_composite(fl, (fx, fy))
+        return im
+
+    # 국기가 없는 맵(남극 반도·눔바니): 이름 왼쪽 위쪽의 작은 태그: 남색 사각형 안에 작은 로고(모서리는 각짐)
     bw, bh = r['tag_w'], r['tag_h']
     bx = name_left - r['tag_gap'] - bw
     by = name_top + r['tag_drop'] - bh / 2
@@ -240,7 +270,7 @@ def valorant(im, key, name):
 
 def render(game, key, src, dst, name):
     im = Image.open(src).convert('RGB').resize((W, H), Image.LANCZOS).convert('RGBA')
-    im = overwatch(im, name) if game == 'overwatch' else valorant(im, key, name)
+    im = overwatch(im, name, flag=FLAG_OF.get(key)) if game == 'overwatch' else valorant(im, key, name)
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     im.convert('RGB').save(dst, 'JPEG', quality=86, optimize=True, progressive=True)
 
