@@ -35,7 +35,7 @@ FLAG_OF = {
     'aatlis': 'ma', 'new-junk-city': 'au', 'suravasa': 'in',
 }
 FLAG_DIR = os.path.join(ROOT, 'assets', '맵', '국기')
-ARC_START = -70  # 주황 4분의 1 원의 시작 각도
+ARC_START = -98  # 주황 4분의 1 원의 시작 각도
 FONT_VAL_BIG = os.path.join(ROOT, 'assets', 'fonts', 'BebasNeue-Regular.ttf')  # 발로란트 큰 영문 이름
 FONT_KO_REG = WIN + 'malgun.ttf'
 FONT_DIN = WIN + 'bahnschrift.ttf'           # DIN 계열(발로란트 영문)
@@ -85,7 +85,7 @@ REF = {
     'name_h': 97,       # "남극 반도" 글자 높이
     'logo': 100,        # 로고 지름
     'ring': 128,        # 로고 둘레 얇은 원 지름
-    'arc_w': 5.5,       # 주황 4분의 1 원 굵기
+    'arc_w': 7.4,       # 주황 4분의 1 원 굵기(얇은 원 위에 겹쳐 그린다)
     'mode_h': 36,       # 주황 모드 글씨("빠른 대전") 높이
     'mode_over': 19,    # 주황 글씨가 이름 오른쪽 끝보다 더 나간 거리
     'mode_gap': 3,      # 주황 글씨 아래 ~ 이름 위 간격
@@ -121,7 +121,7 @@ def ring_overlay(size, cx, cy, ring, arc_r, arc_w, line_w):
     d = ImageDraw.Draw(big)
     ox, oy = (cx - box[0]) * K, (cy - box[1]) * K
     d.ellipse([ox - ring / 2 * K, oy - ring / 2 * K, ox + ring / 2 * K, oy + ring / 2 * K], outline=(255, 255, 255, 120), width=max(1, int(line_w * K)))
-    d.arc([ox - arc_r * K, oy - arc_r * K, ox + arc_r * K, oy + arc_r * K], ARC_START, ARC_START + 90, fill=(247, 118, 40, 255), width=int(arc_w * K))
+    d.arc([ox - arc_r * K, oy - arc_r * K, ox + arc_r * K, oy + arc_r * K], ARC_START, ARC_START + 102, fill=(242, 106, 36, 255), width=int(arc_w * K))
     small = big.resize((box[2] - box[0], box[3] - box[1]), Image.LANCZOS)
     layer = Image.new('RGBA', size, (0, 0, 0, 0))
     layer.alpha_composite(small, (box[0], box[1]))
@@ -166,7 +166,7 @@ def overwatch(im, name, mode='내전', flag=None):
     name_top = name_cy - th / 2
 
     # 얇은 원 + 주황 4분의 1 원 + 로고
-    im = Image.alpha_composite(im, ring_overlay(im.size, cx, cy, ring, ring / 2 * 0.9, r['arc_w'], 1.6 * SC))
+    im = Image.alpha_composite(im, ring_overlay(im.size, cx, cy, ring, ring / 2 - r['arc_w'] / 2 - 0.5, r['arc_w'], 1.6 * SC))
     logo = None
     if os.path.exists(LOGO_OW):
         logo = whiten(Image.open(LOGO_OW).convert('RGBA')).resize((int(L), int(L)), Image.LANCZOS)
