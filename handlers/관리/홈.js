@@ -89,6 +89,7 @@ ${xpLine}`,
             new ButtonBuilder().setCustomId('admin:panels').setLabel('패널 게시').setEmoji('📌').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId('admin:refresh').setLabel('새로고침').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId('admin:channel').setLabel('게임모집 관리').setEmoji('🧹').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('panel:bot_msg_delete:admin').setLabel('봇 메시지 삭제').setEmoji('🤖').setStyle(ButtonStyle.Secondary),
           ),
           // 테스트 전용 버튼은 테스트 서버에서만 보인다(다른 관리자가 본서버에서 잘못 누르지 않도록)
           ...(isTestGuild(guildId) ? [new ActionRowBuilder().addComponents(

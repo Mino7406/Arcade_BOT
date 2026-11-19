@@ -174,7 +174,6 @@ function buildAdminMenuPayload(panelMessageId, notice) {
     { text: '### 🧹 게임모집 채널 청소\n-# 게임모집 채널의 유저 메시지를 한꺼번에 지워요(봇 메시지는 그대로) · 어느 채널에서 눌러도 게임모집 채널만 청소해요', button: btn('purge', '청소', ButtonStyle.Danger) },
     { text: '### 🔁 모집 ↔ 내전 변환\n-# 잘못 올린 모집을 내전으로(또는 반대로) 바꿔요 · 참가자·마감 상태는 그대로 유지돼요', button: btn('match_convert', '변환', ButtonStyle.Primary) },
     { text: '### 🗑️ 내전/모집 삭제\n-# 목록에서 골라 지우거나 전부 지워요', button: btn('match_delete', '삭제', ButtonStyle.Danger) },
-    { text: '### 🤖 봇 메시지 삭제\n-# 메시지 ID나 링크로 봇이 보낸 메시지를 지워요', button: btn('bot_msg_delete', '삭제', ButtonStyle.Secondary) },
   ];
   return menu({
     header: fromAdmin ? '🧹 게임모집 관리' : '⚙️ 패널 관리',
