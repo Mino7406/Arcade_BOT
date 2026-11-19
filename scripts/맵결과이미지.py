@@ -180,7 +180,7 @@ def overwatch(im, name, mode='내전'):
     im.alpha_composite(layer, (int(name_left - pad), int(name_top - pad)))
 
     # 주황 작은 모드 글씨: 이름 오른쪽 끝보다 조금 더 나가고, 이름 바로 위
-    msz = fit_font(FONT_OW, mode, r['mode_h'] * (0.82 if len(mode) <= 2 else 1.0))
+    msz = fit_font(FONT_OW, mode, r['mode_h'] * (1.2 if len(mode) <= 2 else 1.0))
     mf = ko_font(FONT_OW, msz)
     mb = ImageDraw.Draw(im).textbbox((0, 0), mode, font=mf)
     mx = name_right + r['mode_over'] - (mb[2] - mb[0]) - mb[0]
