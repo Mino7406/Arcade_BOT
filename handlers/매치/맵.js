@@ -46,17 +46,26 @@ const mapName = (game, key) => MAP_POOLS[game]?.find(x => x.key === key)?.name ?
 const mapImageFile = (game, key) => path.join(ASSET_DIR, game, `${key}.jpg`);
 const mapResultFile = (game, key) => path.join(ASSET_DIR, '결과', game, `${key}.jpg`);
 
-// 돌아가는 동안 보여 줄 맵 key 들(SPIN_DELAYS_MS 와 같은 길이). 이웃한 프레임은 서로 다르고,
-// 마지막 프레임은 당첨 맵이 아니다(바로 뒤에 당첨 맵의 확정 프레임이 오므로 같은 그림이 연달아 보이지 않게).
-function spinFrames(game, finalKey, rnd = Math.random) {
+// 맵 투표 화면 연출: 카드 3장이 나란히 놓이고 하이라이트가 칸 사이를 옮겨 다니다 당첨 맵의 칸에서 멈춘다.
+// 프레임 그림은 assets/맵/연출/<게임>/<당첨키>_<칸>.jpg (scripts/맵연출이미지.py). 카드 구성 규칙은 그 스크립트와 같아야 한다:
+// 당첨 맵은 (풀 순번 % 3) 번째 칸, 나머지 두 칸은 풀의 순번+1·순번+5 번째 맵.
+const VOTE_SLOTS = 3;
+const mapSpinFile = (game, key, slot) => path.join(ASSET_DIR, '연출', game, `${key}_${slot}.jpg`);
+function voteCards(game, key) {
   const pool = MAP_POOLS[game] ?? [];
-  const frames = [];
-  for (let i = 0; i < SPIN_DELAYS_MS.length; i++) {
-    const last = i === SPIN_DELAYS_MS.length - 1;
-    const choices = pool.filter(x => x.key !== frames[i - 1] && !(last && x.key === finalKey));
-    frames.push(choices[Math.min(choices.length - 1, Math.floor(rnd() * choices.length))].key);
-  }
-  return frames;
+  const idx = pool.findIndex(x => x.key === key);
+  if (idx < 0) return [];
+  const others = [(idx + 1) % pool.length, (idx + 5) % pool.length];
+  const p = idx % VOTE_SLOTS;
+  let o = 0;
+  return Array.from({ length: VOTE_SLOTS }, (_, s) => pool[s === p ? idx : others[o++]].key);
+}
+// 하이라이트가 켜질 칸(SPIN_DELAYS_MS 와 같은 길이). 이웃한 칸은 항상 다르고, 마지막은 당첨 맵의 칸이다.
+function spinFrames(game, finalKey) {
+  const pool = MAP_POOLS[game] ?? [];
+  const p = Math.max(0, pool.findIndex(x => x.key === finalKey)) % VOTE_SLOTS;
+  const last = SPIN_DELAYS_MS.length - 1;
+  return SPIN_DELAYS_MS.map((_, i) => (((p - (last - i)) % VOTE_SLOTS) + VOTE_SLOTS) % VOTE_SLOTS);
 }
 
-module.exports = { MAP_POOLS, SPIN_DELAYS_MS, hasMapPool, pickMap, mapName, mapImageFile, mapResultFile, spinFrames };
+module.exports = { MAP_POOLS, SPIN_DELAYS_MS, hasMapPool, pickMap, mapName, mapImageFile, mapSpinFile, mapResultFile, voteCards, spinFrames };

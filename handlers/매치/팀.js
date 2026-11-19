@@ -607,7 +607,7 @@ function mapFrameOf(matchMsgId, match) {
   const game = match.data.game;
   if (!maps.hasMapPool(game)) return null;
   const spin = mapSpin.get(matchMsgId);
-  if (spin) return spin.key ? { key: spin.key, n: spin.n, final: false } : null;
+  if (spin) return spin.key ? { key: spin.key, slot: spin.slot, n: spin.n, final: false } : null;
   const saved = match.board?.map;
   return saved && saved.game === game ? { key: saved.key, n: 0, final: true } : null;
 }
@@ -638,7 +638,7 @@ function buildBoardPayload(match, matchMsgId) {
   const files = [];
   const frame = mapFrameOf(matchMsgId, match);
   if (frame) {
-    const file = frame.final ? maps.mapResultFile(game, frame.key) : maps.mapImageFile(game, frame.key);
+    const file = frame.final ? maps.mapResultFile(game, frame.key) : maps.mapSpinFile(game, frame.key, frame.slot);
     const attName = frame.final ? 'map-final.jpg' : `map-${frame.n}.jpg`;
     const hasImage = fs.existsSync(file);
     blocks.push(frame.final ? '## 맵 뽑기 완료' : '## 맵 뽑는 중...'); // 구역 맨 위 헤더(이미지 위)
@@ -646,11 +646,11 @@ function buildBoardPayload(match, matchMsgId) {
       blocks.push({ image: `attachment://${attName}`, noDivider: true });
       files.push(new AttachmentBuilder(file, { name: attName }));
     }
-    // 연출 중엔 지금 보이는 후보 맵 이름과 진행 막대(점점 느려지다 멈춘다)를 보여 줘서 긴장감을 준다.
+    // 연출 중엔 진행 막대와 집계 중 문구를 보여 준다(하이라이트는 점점 느려지다 멈춘다).
     const total = maps.SPIN_DELAYS_MS.length;
     const bar = `${'▰'.repeat(frame.n)}${'▱'.repeat(Math.max(0, total - frame.n))}`;
-    blocks.push({ text: frame.final ? `🗺️ **${maps.mapName(game, frame.key)}**` : `🎲 ${bar}
--# 후보: ${maps.mapName(game, frame.key)} ...`, noDivider: hasImage });
+    blocks.push({ text: frame.final ? `🗺️ **${maps.mapName(game, frame.key)}**` : `🗳️ ${bar}
+-# 투표 집계 중...`, noDivider: hasImage });
   }
 
   return payload(card({
@@ -851,7 +851,7 @@ async function runMapSpin(client, matchMsgId, match, ack = null) {
     saveNow(client);
     const frames = maps.spinFrames(game, picked.key);
     for (let i = 0; i < frames.length; i++) {
-      mapSpin.set(matchMsgId, { key: frames[i], n: i + 1 });
+      mapSpin.set(matchMsgId, { key: picked.key, slot: frames[i], n: i + 1 });
       await editBoardNow(client, matchMsgId, match);
       await mapSleep(maps.SPIN_DELAYS_MS[i]);
     }

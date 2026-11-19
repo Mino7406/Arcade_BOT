@@ -42,17 +42,19 @@ assert.strictEqual(mapName('overwatch', 'nope'), '');
 // 연출 프레임
 assert.deepStrictEqual(SPIN_DELAYS_MS, [450, 500, 550, 650, 800, 1000, 1300, 1750]);
 assert.strictEqual(SPIN_DELAYS_MS.reduce((a, b) => a + b, 0), 7000);
-for (let t = 0; t < 20; t++) {
-  let s = t + 1;
-  const rnd = () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648);
-  for (const game of ['valorant', 'overwatch']) {
-    const final = MAP_POOLS[game][t % MAP_POOLS[game].length].key;
-    const frames = spinFrames(game, final, rnd);
+for (const game of ['valorant', 'overwatch']) {
+  MAP_POOLS[game].forEach((x, idx) => {
+    const frames = spinFrames(game, x.key);
     assert.strictEqual(frames.length, SPIN_DELAYS_MS.length, '프레임 수');
-    assert.ok(frames.every(k => MAP_POOLS[game].some(m => m.key === k)), '프레임 key 가 풀 안에 있어야 함');
-    for (let i = 1; i < frames.length; i++) assert.notStrictEqual(frames[i], frames[i - 1], '이웃 프레임은 달라야 함');
-    assert.notStrictEqual(frames.at(-1), final, '마지막 돌아가는 프레임은 당첨 맵이 아니어야 함');
-  }
+    assert.ok(frames.every(s => s >= 0 && s < 3), '칸은 0~2');
+    for (let i = 1; i < frames.length; i++) assert.notStrictEqual(frames[i], frames[i - 1], '이웃 프레임은 하이라이트 칸이 달라야 함');
+    assert.strictEqual(frames.at(-1), idx % 3, '마지막 하이라이트는 당첨 맵의 칸');
+    const cards = maps.voteCards(game, x.key);
+    assert.strictEqual(cards.length, 3, '카드는 3장');
+    assert.strictEqual(new Set(cards).size, 3, '카드 3장은 서로 다른 맵');
+    assert.strictEqual(cards[frames.at(-1)], x.key, '마지막 하이라이트 칸의 카드가 당첨 맵');
+    for (let s = 0; s < 3; s++) assert.ok(fs.existsSync(maps.mapSpinFile(game, x.key, s)), `${game}/${x.key} 맵 투표 프레임(칸 ${s}) 이미지가 없음`);
+  });
 }
 // 이름이 박힌 결과 이미지(scripts/맵결과이미지.py 로 만든다): 모든 맵에 있고 400KB 이하
 for (const game of ['valorant', 'overwatch']) {
