@@ -24,6 +24,7 @@ FONT_KOVER = os.path.join(ROOT, 'assets', 'fonts', 'koverwatch', 'Koverwatch.ttf
 FONT_OW_FALLBACK = os.path.join(ROOT, 'assets', 'fonts', 'BlackHanSans-Regular.ttf')  # Koverwatch 가 없으면 쓰는 굵은 한국어
 FONT_OW = FONT_KOVER if os.path.exists(FONT_KOVER) else FONT_OW_FALLBACK
 LOGO_OW = os.path.join(ROOT, 'assets', '맵', '로고', 'overwatch.png')  # 오버워치 로고(투명 배경 PNG)
+ARC_START = -70  # 주황 4분의 1 원의 시작 각도
 FONT_VAL_BIG = os.path.join(ROOT, 'assets', 'fonts', 'BebasNeue-Regular.ttf')  # 발로란트 큰 영문 이름
 FONT_KO_REG = WIN + 'malgun.ttf'
 FONT_DIN = WIN + 'bahnschrift.ttf'           # DIN 계열(발로란트 영문)
@@ -88,6 +89,8 @@ def overwatch(im, name, mode='내전'):
     ov = Image.new('RGBA', im.size, (0, 0, 0, 0))
     od = ImageDraw.Draw(ov)
     od.ellipse([cx - ring / 2, cy - ring / 2, cx + ring / 2, cy + ring / 2], outline=(255, 255, 255, 70), width=2)
+    # 로딩 표시처럼 둘레를 도는 주황색 4분의 1 원(인게임 화면). 시작 각도는 ARC_START(도, 3시 방향 0°·시계 방향)
+    od.arc([cx - ring / 2, cy - ring / 2, cx + ring / 2, cy + ring / 2], ARC_START, ARC_START + 90, fill=(246, 132, 60, 255), width=7)
     im = Image.alpha_composite(im, ov)
     logo = None
     if os.path.exists(LOGO_OW):
