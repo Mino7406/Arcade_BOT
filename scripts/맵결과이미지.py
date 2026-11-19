@@ -10,6 +10,7 @@ assets/맵/결과/<게임>/<키>.jpg (1200x675) 로 저장한다. 봇은 이 파
 필요: Python + Pillow, Node.
 """
 import json
+import math
 import os
 import subprocess
 import sys
@@ -35,7 +36,7 @@ FLAG_OF = {
     'aatlis': 'ma', 'new-junk-city': 'au', 'suravasa': 'in',
 }
 FLAG_DIR = os.path.join(ROOT, 'assets', '맵', '국기')
-ARC_START = -98  # 주황 4분의 1 원의 시작 각도
+ARC_START = -69  # 주황 4분의 1 원의 시작 각도
 FONT_VAL_BIG = os.path.join(ROOT, 'assets', 'fonts', 'BebasNeue-Regular.ttf')  # 발로란트 큰 영문 이름
 FONT_KO_REG = WIN + 'malgun.ttf'
 FONT_DIN = WIN + 'bahnschrift.ttf'           # DIN 계열(발로란트 영문)
@@ -113,15 +114,39 @@ def whiten(logo):
 
 
 def ring_overlay(size, cx, cy, ring, arc_r, arc_w, line_w):
-    """얇은 원 + 주황 4분의 1 원을 4배로 그려 줄여 매끈하게 만든다."""
+    """로고 둘레: 오른쪽 아래로 갈수록 흐려지는 얇은 원 + 끝이 가늘고 둥근 주황 호. 4배로 그려 줄여 매끈하게."""
     K = 4
     pad = int(ring) + 8
     box = (int(cx - pad), int(cy - pad), int(cx + pad), int(cy + pad))
     big = Image.new('RGBA', ((box[2] - box[0]) * K, (box[3] - box[1]) * K), (0, 0, 0, 0))
     d = ImageDraw.Draw(big)
     ox, oy = (cx - box[0]) * K, (cy - box[1]) * K
-    d.ellipse([ox - ring / 2 * K, oy - ring / 2 * K, ox + ring / 2 * K, oy + ring / 2 * K], outline=(255, 255, 255, 120), width=max(1, int(line_w * K)))
-    d.arc([ox - arc_r * K, oy - arc_r * K, ox + arc_r * K, oy + arc_r * K], ARC_START, ARC_START + 102, fill=(242, 106, 36, 255), width=int(arc_w * K))
+    R = ring / 2 * K
+
+    # 얇은 원: 3° 마다 끊어 그리며 알파를 바꾼다(위·왼쪽은 진하게, 아래→오른쪽 아래로 흐려져 20° 근처에서 사라진다. 각도는 3시 0°·시계 방향)
+    for deg in range(0, 360, 3):
+        a = ((deg % 360) - 20) / 70.0 if 20 <= deg % 360 <= 90 else (0.0 if 0 <= deg % 360 < 20 else 1.0)
+        if a <= 0:
+            continue
+        d.arc([ox - R, oy - R, ox + R, oy + R], deg, deg + 3.5, fill=(255, 255, 255, int(95 * min(1.0, a))), width=max(1, int(line_w * K)))
+
+    # 주황 호: 시작은 평평하게, 끝(시계 방향)은 가늘어지며 둥글게
+    ar = arc_r * K
+    end = ARC_START + 98
+    pts_out, pts_in = [], []
+    n = 80
+    for k in range(n + 1):
+        t = k / n
+        ang = math.radians(ARC_START + (end - ARC_START) * t)
+        w = arc_w * K * (1.0 if t < 0.72 else 1.0 - 0.45 * (t - 0.72) / 0.28)  # 마지막 28% 에서 55% 굵기까지 가늘어진다
+        pts_out.append((ox + (ar + w / 2) * math.cos(ang), oy + (ar + w / 2) * math.sin(ang)))
+        pts_in.append((ox + (ar - w / 2) * math.cos(ang), oy + (ar - w / 2) * math.sin(ang)))
+    d.polygon(pts_out + pts_in[::-1], fill=(242, 106, 36, 255))
+    wend = arc_w * K * 0.55
+    ea = math.radians(end)
+    ex, ey = ox + ar * math.cos(ea), oy + ar * math.sin(ea)
+    d.ellipse([ex - wend / 2, ey - wend / 2, ex + wend / 2, ey + wend / 2], fill=(242, 106, 36, 255))  # 둥근 끝
+
     small = big.resize((box[2] - box[0], box[3] - box[1]), Image.LANCZOS)
     layer = Image.new('RGBA', size, (0, 0, 0, 0))
     layer.alpha_composite(small, (box[0], box[1]))
@@ -166,7 +191,7 @@ def overwatch(im, name, mode='내전', flag=None):
     name_top = name_cy - th / 2
 
     # 얇은 원 + 주황 4분의 1 원 + 로고
-    im = Image.alpha_composite(im, ring_overlay(im.size, cx, cy, ring, ring / 2 - r['arc_w'] / 2 - 0.5, r['arc_w'], 1.6 * SC))
+    im = Image.alpha_composite(im, ring_overlay(im.size, cx, cy, ring, ring / 2 - r['arc_w'] / 2 - 0.5, r['arc_w'], 1.2 * SC))
     logo = None
     if os.path.exists(LOGO_OW):
         logo = whiten(Image.open(LOGO_OW).convert('RGBA')).resize((int(L), int(L)), Image.LANCZOS)
