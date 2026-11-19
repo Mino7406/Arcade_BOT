@@ -513,7 +513,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     for (const k of ['input', 'balance', 'random', 'map']) assert(btn(`team:${k}:${id}`)?.disabled === true, `다시 그려도 ${k} 버튼은 비활성화 그대로여야 함`);
   });
 
-  await flow('맵 뽑기: 주최자만 · 돌리겠습니까 확인 → 5프레임+확정 연출 · 5분 잠금 · 동시 클릭 · 수정 실패 · 팀을 다시 나눠도 유지', async () => {
+  await flow('맵 뽑기: 주최자만 · 뽑을까요 확인 → 5프레임+확정 연출 · 5분 잠금 · 동시 클릭 · 수정 실패 · 팀을 다시 나눠도 유지', async () => {
     const mapMod = require(path.join(root, 'handlers/매치/맵.js'));
     const cardMod = require(path.join(root, 'handlers/공통/카드.js'));
     await naejeon.handleNaejeonModal(mkInteraction({ user: ADMIN, customId: 'naejeon:modal:valorant', fields: { title: '맵 내전', datetime: '내일 8시', players: '4', description: '' } }));
@@ -543,7 +543,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     let askedFlags = 0; const askedReply = asked.reply.bind(asked); asked.reply = async (p) => { askedFlags = p.flags ?? 0; return askedReply(p); };
     await team.handleTeamButton(asked);
     const aj = replyJson(asked);
-    assert(aj.includes('맵을 돌리겠습니까') && aj.includes(`team:map_ok:${id}`) && aj.includes(`team:map_no:${id}`) && !m.board.map && (askedFlags & 64), '주최자에게 나만 보이는 "맵을 돌리겠습니까?" 확인 창이 떠야 함(아직 안 돎)');
+    assert(aj.includes('맵을 뽑을까요') && aj.includes(`team:map_ok:${id}`) && aj.includes(`team:map_no:${id}`) && !m.board.map && (askedFlags & 64), '주최자에게 나만 보이는 "맵을 뽑을까요?" 확인 창이 떠야 함(아직 안 돎)');
 
     // 취소하면 확인 창이 지워지고 아무 일도 없다
     const no = mkInteraction({ user: ADMIN, customId: `team:map_no:${id}`, message: asked._reply });
@@ -564,11 +564,10 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     assert(w1.log.length === mapMod.SPIN_DELAYS_MS.length + 1, `카드는 ${mapMod.SPIN_DELAYS_MS.length + 1}번 고쳐져야 함(${w1.log.length})`);
     assert(w1.log[0].includes('## 🎲 맵 뽑는 중...') && w1.log[0].includes('map-1.png') && w1.log[4].includes('map-5.png'), '돌아가는 프레임은 map-1..5.png 이고 헤더가 맵 뽑는 중이어야 함');
     assert(w1.log.at(-1).includes('map-final.jpg') && w1.log.at(-1).includes('## ✅ 맵 뽑기 완료'), '마지막은 확정 이미지·헤더(맵 뽑기 완료)');
-    assert(replyJson(ok).includes('돌리는 중'), '확인 창은 "돌리는 중" 안내로 바뀌어야 함');
+    assert(ok.replyDeleted, '뽑기를 누르면 확인 창은 바로 지워져야 함(따로 "돌리는 중" 안내 창을 두지 않음)');
     const lockedNow = findMapBtn(boardMsg().components);
     assert(lockedNow.disabled === true, '뽑은 직후 버튼은 5분간 잠겨야 함');
     assert(!team.__mapSpin.has(id), '연출이 끝나면 프레임 상태가 비워져야 함');
-    assert(ok.replyDeleted, '연출이 끝나면 나만 보이는 "돌리는 중" 확인 창은 지워져야 함');
     w1.restore();
 
     // 잠금 중(5분 안)에는 누르면 안내만(확인 창 없음), 옛 확인 버튼을 눌러도 안 돈다
