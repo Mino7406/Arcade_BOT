@@ -161,15 +161,15 @@ async function buildScreens() {
     const named = users(10);
     const histBoard = { data: base('lol'), participants: users(10), closed: true, board: { current: { how: 'balance', at: Date.now(), no: 3, teams: halves(users(10)) }, history: [2, 1].map(n => ({ at: Date.now() - n * 3600e3, no: n, how: n === 2 ? 'input' : 'balance', teams: halves(users(10)) })) } };
     add('내전 · 모집', '팀 짜기 내전 내역(📜 버튼)', '카드는 짧게 두고 이전 팀표는 두 번째 줄의 📜 내전 내역 버튼으로 나만 보이는 창에 열어요', team.buildHistoryPayload(histBoard, '1'));
-    // 🗺️ 맵 뽑기: 발로란트·오버워치 카드(결과·연출 중). 첨부는 jpg 라서 jpg 데이터 주소로 넣는다.
+    // 🗺️ 맵 추첨: 발로란트·오버워치 카드(결과·연출 중). 첨부는 jpg 라서 jpg 데이터 주소로 넣는다.
     const jpg = p => ({ files: Object.fromEntries((p.files || []).map(f => [f.name, 'data:image/jpeg;base64,' + require('fs').readFileSync(f.attachment).toString('base64')])) });
     const mapBoard = (game, info, title, map) => ({ data: { ...base('lol'), game, gameInfo: info, title }, participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: halves(named) }, history: [], ...(map ? { map } : {}) } });
     const valBoard = mapBoard('valorant', GAMES.val, '발로란트 내전', { game: 'valorant', key: 'ascent', at: Date.now() - team.MAP_LOCK_MS - 60e3 });
     const owBoard = mapBoard('overwatch', owInfo, '오버워치 내전', { game: 'overwatch', key: 'grimsvotn', at: Date.now() });
     const valP = team.buildBoardPayload(valBoard, '1');
-    add('내전 · 모집', '팀 짜기 카드(맵 뽑기 결과 · 발로란트)', '헤더 ### ✔️ 맵 추첨 완료 아래에 이름이 알약 박스 위에 박힌 맵 이미지 · 뽑은 지 5분이 지나서 두 번째 줄의 🎲 맵 뽑기가 눌려요', valP, jpg(valP));
+    add('내전 · 모집', '팀 짜기 카드(맵 추첨 결과 · 발로란트)', '헤더 ### ✔️ 맵 추첨 완료 아래에 이름이 알약 박스 위에 박힌 맵 이미지 · 뽑은 지 5분이 지나서 두 번째 줄의 🔍 맵 추첨가 눌려요', valP, jpg(valP));
     const owP = team.buildBoardPayload(owBoard, '1');
-    add('내전 · 모집', '팀 짜기 카드(맵 뽑기 결과 · 오버워치)', '오버워치는 호위·혼합·밀기·쟁탈·플래시포인트 전체 맵에서 같은 확률 · 방금 뽑아서 🔒 맵 뽑기 버튼이 5분간 비활성화(회색)돼요', owP, jpg(owP));
+    add('내전 · 모집', '팀 짜기 카드(맵 추첨 결과 · 오버워치)', '오버워치는 호위·혼합·밀기·쟁탈·플래시포인트 전체 맵에서 같은 확률 · 방금 뽑아서 🔒 맵 추첨 버튼이 5분간 비활성화(회색)돼요', owP, jpg(owP));
     team.__mapSpin.set('1', { key: 'busan', n: 3 });
     const spinP = team.buildBoardPayload(mapBoard('overwatch', owInfo, '오버워치 내전', null), '1');
     team.__mapSpin.delete('1');

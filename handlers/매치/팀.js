@@ -591,7 +591,7 @@ function buildBoardRows(match, matchMsgId) {
     // 맵 뽑기는 누르는 순간부터 5분간 잠긴다(연출 중 포함). 풀리는 시각에 카드가 스스로 고쳐진다(scheduleMapUnlock).
     const spinning = mapSpin.has(matchMsgId);
     const locked = ended || spinning || mapLocked(match);
-    const label = `${locked ? '🔒' : '🎲'} 맵 뽑기`; // 글자는 그대로, 앞 이모지만 바뀐다(평소 🎲, 뽑는 중·5분 잠금 🔒)
+    const label = `${locked ? '🔒' : '🔍'} 맵 추첨`; // 앞 이모지만 바뀐다(평소 🔍, 추첨 중·5분 잠금 🔒)
     second.push(new ButtonBuilder().setCustomId(`team:map:${matchMsgId}`).setLabel(label).setStyle(ButtonStyle.Primary).setDisabled(locked));
   }
   // 내전 모집 글(내전 정보)로 바로 가는 링크 버튼: 맵 뽑기 버튼 옆. 내전이 자동 삭제돼 글이 사라지면(boardEnded) 눌러지지 않는다.
@@ -1464,20 +1464,20 @@ async function handleTeamButton(interaction) {
     const match = getMatches(interaction.client).get(matchMsgId);
     const say = (text) => (kind === 'ok' ? interaction.update(notice(text, { ephemeral: true })) : interaction.reply(notice(text, { ephemeral: true })));
     if (!match) { await say('⚠️ **끝났거나 취소된 내전이에요.**'); return; }
-    if (!maps.hasMapPool(match.data.game)) { await say('⚠️ **이 게임은 맵 뽑기를 지원하지 않아요.**'); return; }
-    if (!canEdit(match, interaction.user.id)) { await say('⚠️ **맵 뽑기는 이 내전의 주최자만 할 수 있어요.**'); return; }
-    if (mapSpin.has(matchMsgId)) { await say('🎲 **지금 맵을 뽑는 중이에요.**'); return; }
+    if (!maps.hasMapPool(match.data.game)) { await say('⚠️ **이 게임은 맵 추첨을 지원하지 않아요.**'); return; }
+    if (!canEdit(match, interaction.user.id)) { await say('⚠️ **맵 추첨은 이 내전의 주최자만 할 수 있어요.**'); return; }
+    if (mapSpin.has(matchMsgId)) { await say('🔍 **지금 맵을 추첨하는 중이에요.**'); return; }
     if (mapLocked(match)) {
       const at = Math.floor((match.board.map.at + MAP_LOCK_MS) / 1000);
-      await say(`🔒 **맵 뽑기는 <t:${at}:R> 다시 할 수 있어요.**\n-# 한 번 뽑으면 5분간 잠겨요.`);
+      await say(`🔒 **맵 추첨은 <t:${at}:R> 다시 할 수 있어요.**\n-# 한 번 추첨하면 5분간 잠겨요.`);
       return;
     }
     if (kind === 'ask') {
       prepareMapSpin(matchMsgId, match.data.game); // 확인 창이 떠 있는 동안 연출 프레임을 미리 그린다
-      await interaction.reply(notice('🎲 **맵을 뽑을까요?**\n-# 한 번 뽑으면 5분간 다시 뽑을 수 없어요.', {
+      await interaction.reply(notice('🔍 **맵을 추첨할까요?**\n-# 한 번 추첨하면 5분간 다시 추첨할 수 없어요.', {
         ephemeral: true,
         rows: [new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`team:map_ok:${matchMsgId}`).setLabel('뽑기').setEmoji('🎲').setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId(`team:map_ok:${matchMsgId}`).setLabel('추첨').setEmoji('🔍').setStyle(ButtonStyle.Success),
           new ButtonBuilder().setCustomId(`team:map_no:${matchMsgId}`).setLabel('취소').setStyle(ButtonStyle.Secondary),
         )],
       }));

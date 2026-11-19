@@ -453,7 +453,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     }
   });
 
-  // 카드(컴포넌트 JSON)에서 🗺️ 맵 뽑기 버튼 하나를 찾는다
+  // 카드(컴포넌트 JSON)에서 🗺️ 맵 추첨 버튼 하나를 찾는다
   const findMapBtn = (comps) => {
     const all = JSON.parse(JSON.stringify(comps));
     let found = null;
@@ -461,7 +461,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     walk(all);
     return found;
   };
-  await flow('맵 뽑기: 발로란트·오버워치 카드에만 🗺️ 버튼 · 결과가 있으면 이미지와 이름이 보인다', async () => {
+  await flow('맵 추첨: 발로란트·오버워치 카드에만 🗺️ 버튼 · 결과가 있으면 이미지와 이름이 보인다', async () => {
     const mapMod = require(path.join(root, 'handlers/매치/맵.js'));
     const made = {};
     for (const game of ['valorant', 'overwatch', 'lol']) {
@@ -473,8 +473,8 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
       made[game] = m;
     }
     const boardJson = (m) => JSON.stringify(channel.sent.find(x => x.id === m.board.messageId).components);
-    assert(boardJson(made.valorant).includes('team:map:') && boardJson(made.overwatch).includes('team:map:'), '발로란트·오버워치 카드에 🗺️ 맵 뽑기 버튼이 있어야 함');
-    assert(!boardJson(made.lol).includes('team:map:'), '롤 카드에는 맵 뽑기 버튼이 없어야 함');
+    assert(boardJson(made.valorant).includes('team:map:') && boardJson(made.overwatch).includes('team:map:'), '발로란트·오버워치 카드에 🗺️ 맵 추첨 버튼이 있어야 함');
+    assert(!boardJson(made.lol).includes('team:map:'), '롤 카드에는 맵 추첨 버튼이 없어야 함');
     const v = made.valorant;
     const vid = v.message.id;
     assert(!JSON.stringify(team.buildBoardPayload(v, vid).components).includes('attachment://map-'), '맵을 안 뽑았으면 맵 구역이 없어야 함');
@@ -487,14 +487,14 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     assert(lockedBtn.disabled === true, '뽑은 직후 5분간은 버튼이 잠겨야 함');
     v.board.map = { game: 'valorant', key: 'ascent', at: Date.now() - team.MAP_LOCK_MS - 1000 };
     const openBtn = findMapBtn(team.buildBoardPayload(v, vid).components);
-    assert(!openBtn.disabled && openBtn.label.includes('🎲') && openBtn.label.includes('맵 뽑기'), '5분이 지나면 버튼이 다시 눌려야 함');
+    assert(!openBtn.disabled && openBtn.label.includes('🔍') && openBtn.label.includes('맵 추첨'), '5분이 지나면 버튼이 다시 눌려야 함');
     v.board.map = { game: 'valorant', key: 'nope', at: Date.now() - team.MAP_LOCK_MS - 1000 };
     const broken = team.buildBoardPayload(v, vid);
     assert(!(broken.files?.length), '이미지 파일이 없으면 첨부 없이 카드가 만들어져야 함');
     v.board.map = undefined;
   });
 
-  await flow('내전 자동 삭제: 내전채팅 팀 카드는 남기고 직접 입력·밸런스·랜덤·맵 뽑기만 비활성화', async () => {
+  await flow('내전 자동 삭제: 내전채팅 팀 카드는 남기고 직접 입력·밸런스·랜덤·맵 추첨만 비활성화', async () => {
     const cardMod = require(path.join(root, 'handlers/공통/카드.js'));
     await naejeon.handleNaejeonModal(mkInteraction({ user: ADMIN, customId: 'naejeon:modal:valorant', fields: { title: '자동삭제 내전', datetime: '내일 8시', players: '4', description: '' } }));
     await naejeon.handleNaejeonButton(mkInteraction({ user: ADMIN, customId: 'naejeon:publish', message: new FakeMsg(cardMod.notice('p'), channel) }));
@@ -510,7 +510,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
       return out;
     };
     const btn = (prefix) => buttons().find(b => b.custom_id.startsWith(prefix));
-    assert(boardMsg() && !btn(`team:input:${id}`).disabled && !btn(`team:map:${id}`).disabled, '내전 중에는 직접 입력·맵 뽑기가 눌려야 함');
+    assert(boardMsg() && !btn(`team:input:${id}`).disabled && !btn(`team:map:${id}`).disabled, '내전 중에는 직접 입력·맵 추첨가 눌려야 함');
     m.data.autoClose = true;
     common.armAutoEnd(client.naejeonMatches, id, m, '내전', 0);
     await new Promise(r => setTimeout(r, 80));
@@ -524,7 +524,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     for (const k of ['input', 'balance', 'random', 'map']) assert(btn(`team:${k}:${id}`)?.disabled === true, `다시 그려도 ${k} 버튼은 비활성화 그대로여야 함`);
   });
 
-  await flow('맵 뽑기: 주최자만 · 뽑을까요 확인 → 5프레임+확정 연출 · 5분 잠금 · 동시 클릭 · 수정 실패 · 팀을 다시 나눠도 유지', async () => {
+  await flow('맵 추첨: 주최자만 · 뽑을까요 확인 → 5프레임+확정 연출 · 5분 잠금 · 동시 클릭 · 수정 실패 · 팀을 다시 나눠도 유지', async () => {
     const mapMod = require(path.join(root, 'handlers/매치/맵.js'));
     const cardMod = require(path.join(root, 'handlers/공통/카드.js'));
     await naejeon.handleNaejeonModal(mkInteraction({ user: ADMIN, customId: 'naejeon:modal:valorant', fields: { title: '맵 내전', datetime: '내일 8시', players: '4', description: '' } }));
@@ -554,7 +554,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     let askedFlags = 0; const askedReply = asked.reply.bind(asked); asked.reply = async (p) => { askedFlags = p.flags ?? 0; return askedReply(p); };
     await team.handleTeamButton(asked);
     const aj = replyJson(asked);
-    assert(aj.includes('맵을 뽑을까요') && aj.includes(`team:map_ok:${id}`) && aj.includes(`team:map_no:${id}`) && !m.board.map && (askedFlags & 64), '주최자에게 나만 보이는 "맵을 뽑을까요?" 확인 창이 떠야 함(아직 안 돎)');
+    assert(aj.includes('맵을 추첨할까요') && aj.includes(`team:map_ok:${id}`) && aj.includes(`team:map_no:${id}`) && !m.board.map && (askedFlags & 64), '주최자에게 나만 보이는 "맵을 추첨할까요?" 확인 창이 떠야 함(아직 안 돎)');
 
     // 취소하면 확인 창이 지워지고 아무 일도 없다
     const no = mkInteraction({ user: ADMIN, customId: `team:map_no:${id}`, message: asked._reply });
@@ -566,16 +566,16 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await team.handleTeamButton(sneaky);
     assert(!m.board.map && replyJson(sneaky).includes('주최자만'), '주최자가 아니면 확인 버튼도 소용없어야 함');
 
-    // 확인하면 카드에서 연출: 첫 수정은 헤더 맵 뽑는 중, 마지막은 확정 이미지·이름·헤더(맵 뽑기 완료)
+    // 확인하면 카드에서 연출: 첫 수정은 헤더 맵 추첨 중, 마지막은 확정 이미지·이름·헤더(맵 추첨 완료)
     const w1 = watch();
     const ok = okBtn();
     await team.handleTeamButton(ok);
     const picked = m.board.map;
     assert(picked && mapMod.MAP_POOLS.valorant.some(x => x.key === picked.key) && picked.game === 'valorant', '뽑은 결과가 board.map 에 저장돼야 함');
     assert(w1.log.length === mapMod.SPIN_DELAYS_MS.length + 1, `카드는 ${mapMod.SPIN_DELAYS_MS.length + 1}번 고쳐져야 함(${w1.log.length})`);
-    assert(w1.log[0].includes('### 🔍 맵 추첨 중...') && w1.log[0].includes('map-1.png') && w1.log[4].includes('map-5.png'), '돌아가는 프레임은 map-1..5.png 이고 헤더가 맵 뽑는 중이어야 함');
-    assert(w1.log.at(-1).includes('map-final.jpg') && w1.log.at(-1).includes('### ✔️ 맵 추첨 완료'), '마지막은 확정 이미지·헤더(맵 뽑기 완료)');
-    assert(ok.replyDeleted, '뽑기를 누르면 확인 창은 바로 지워져야 함(따로 "돌리는 중" 안내 창을 두지 않음)');
+    assert(w1.log[0].includes('### 🔍 맵 추첨 중...') && w1.log[0].includes('map-1.png') && w1.log[4].includes('map-5.png'), '돌아가는 프레임은 map-1..5.png 이고 헤더가 맵 추첨 중이어야 함');
+    assert(w1.log.at(-1).includes('map-final.jpg') && w1.log.at(-1).includes('### ✔️ 맵 추첨 완료'), '마지막은 확정 이미지·헤더(맵 추첨 완료)');
+    assert(ok.replyDeleted, '추첨을 누르면 확인 창은 바로 지워져야 함(따로 "돌리는 중" 안내 창을 두지 않음)');
     const lockedNow = findMapBtn(boardMsg().components);
     assert(lockedNow.disabled === true, '뽑은 직후 버튼은 5분간 잠겨야 함');
     assert(!team.__mapSpin.has(id), '연출이 끝나면 프레임 상태가 비워져야 함');
@@ -606,13 +606,13 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     const at1 = m.board.map.at;
     const second = okBtn();
     await team.handleTeamButton(second);
-    assert(replyJson(second).includes('뽑는 중') && m.board.map.at === at1, '연출 중 두 번째 확인은 "뽑는 중" 안내만 받고 결과를 바꾸지 않아야 함');
+    assert(replyJson(second).includes('추첨하는 중') && m.board.map.at === at1, '연출 중 두 번째 확인은 "추첨하는 중" 안내만 받고 결과를 바꾸지 않아야 함');
     const askDuring = ask(ADMIN);
     await team.handleTeamButton(askDuring);
-    assert(replyJson(askDuring).includes('뽑는 중') && !replyJson(askDuring).includes('team:map_ok:'), '연출 중 맵 뽑기 버튼은 확인 창 없이 안내만');
+    assert(replyJson(askDuring).includes('추첨하는 중') && !replyJson(askDuring).includes('team:map_ok:'), '연출 중 맵 추첨 버튼은 확인 창 없이 안내만');
     const midP = team.buildBoardPayload(m, id);
     const mid = JSON.stringify(midP.components);
-    assert(mid.includes('attachment://map-1.png') && !mid.includes('map-final.jpg') && mid.includes('### 🔍 맵 추첨 중...'), '연출 도중 카드를 다시 그려도 현재 프레임이 유지되고 헤더는 맵 뽑는 중...');
+    assert(mid.includes('attachment://map-1.png') && !mid.includes('map-final.jpg') && mid.includes('### 🔍 맵 추첨 중...'), '연출 도중 카드를 다시 그려도 현재 프레임이 유지되고 헤더는 맵 추첨 중...');
     const spinBtn = findMapBtn(midP.components);
     assert(spinBtn.disabled === true && spinBtn.label.includes('🔒'), '연출 중에는 버튼이 잠기고 🔒 라벨이어야 함');
     hold = false; waiters.forEach(r => r()); await first;
