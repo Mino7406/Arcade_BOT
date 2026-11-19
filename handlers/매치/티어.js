@@ -322,23 +322,6 @@ function save(userId) {
   }
 }
 
-// /관리 티어 초기화용: 저장된 사람 수·티어 개수(게임 단위), 테스트 서버 가짜 인원(test_ 로 시작) 수
-function tierStats() {
-  const ids = [...Object.keys(realStore), ...Object.keys(testStore)].filter(id => Object.keys((realStore[id] ?? testStore[id]) || {}).length > 0);
-  const entries = ids.reduce((n, id) => n + Object.keys((realStore[id] ?? testStore[id]) || {}).length, 0);
-  return { users: ids.length, entries, testUsers: Object.keys(testStore).length };
-}
-
-// onlyTest: 테스트 서버 가짜 인원만 지운다. 지운 사람 수를 돌려준다.
-function clearTiers({ onlyTest = false } = {}) {
-  const ids = [...(onlyTest ? [] : Object.keys(realStore)), ...Object.keys(testStore)];
-  for (const id of Object.keys(realStore)) if (!onlyTest) delete realStore[id];
-  for (const id of Object.keys(testStore)) delete testStore[id];
-  if (!onlyTest) save('');
-  save('test_');
-  return ids.length;
-}
-
 const storeOf = userId => (isTestUser(userId) ? testStore : realStore);
 
 const tierOnly = t => ({ tier: t.tier, ...(t.div ? { div: t.div } : {}), ...(t.score ? { score: t.score } : {}) });
@@ -584,8 +567,6 @@ module.exports = {
   openTier,
   getPositions,
   setTier,
-  tierStats,
-  clearTiers,
   setPositions,
   resetAll,
   onChange,
