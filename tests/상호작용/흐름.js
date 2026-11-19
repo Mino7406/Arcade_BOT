@@ -824,11 +824,11 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     console.log(`   (50명 동시: ${ms}ms, 메모리 +${grewMb.toFixed(1)}MB)`);
   });
 
-  // ── 해킹 툴: 레이드 보상(최대 3개) · 룰렛 꽝 번복 ──
+  // ── 해킹 툴: 레이드 보상(최대 2개) · 룰렛 꽝 번복 ──
   const hack = require(path.join(root, 'handlers/게임/해킹툴.js'));
-  await flow('해킹 툴: 최대 3개 · 꽝이면 본인에게만 묻고 번복 · 넘기기', async () => {
-    assert(hack.grantHackTool('g1', 'h0') && hack.grantHackTool('g1', 'h0') && hack.grantHackTool('g1', 'h0'), '3개까지 못 받음');
-    assert(!hack.grantHackTool('g1', 'h0') && hack.getHackTools('g1', 'h0') === 3, '4개째를 받아 버림');
+  await flow('해킹 툴: 최대 2개 · 꽝이면 본인에게만 묻고 번복 · 넘기기', async () => {
+    assert(hack.grantHackTool('g1', 'h0') && hack.grantHackTool('g1', 'h0'), '2개까지 못 받음');
+    assert(!hack.grantHackTool('g1', 'h0') && hack.getHackTools('g1', 'h0') === 2, '3개째를 받아 버림');
 
     const realRandom = Math.random;
     const queue = [];
@@ -839,7 +839,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
       const xp0 = lv.getXp('g1', 'h1');
       const s = mkInteraction({ user: 'h1', command: '룰렛' });
       await roulette.startRouletteCommand(s);
-      assert(JSON.stringify(s._reply.components).includes('1/3개'), '로비에 해킹 툴 보유 수가 안 보임');
+      assert(JSON.stringify(s._reply.components).includes('1/2개'), '로비에 해킹 툴 보유 수가 안 보임');
       await roulette.handleRouletteButton(mkInteraction({ user: 'h1', customId: `roulette:bet:${s.id}:10`, message: s._reply }));
       const spin = mkInteraction({ user: 'h1', customId: `roulette:spin:${s.id}`, message: s._reply });
       queue.push(0.1, 0.4, 0.6); // 🍒 🍋 🍇 → 꽝
@@ -934,11 +934,11 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     for (const cid of ['xp:menu:manage', 'xp:mng:boost', 'xp:mng:raidauto', 'xp:mng:farm', 'xp:mngno', 'xp:menu:home', 'xp:menu:adjust', 'xp:menu:home']) {
       await xp.handleXpButton(mkInteraction({ user: ADMIN, customId: cid, message: msg }));
     }
-    // XP 조정 유저 패널: 해킹 툴 지급(최대 3개에서 멈춤) · 회수
+    // XP 조정 유저 패널: 해킹 툴 지급(최대 2개에서 멈춤) · 회수
     const hackMod = require(path.join(root, 'handlers/게임/해킹툴.js'));
-    for (let i = 0; i < 4; i++) await xp.handleXpButton(mkInteraction({ user: ADMIN, customId: 'xp:itemadd:hx1:hack', message: msg }));
-    assert(hackMod.getHackTools('g1', 'hx1') === 3, `관리자 지급이 최대 3개에서 멈추지 않음(${hackMod.getHackTools('g1', 'hx1')})`);
-    assert(JSON.stringify(msg.components).includes('3 / 3개'), '인벤토리에 해킹 툴 보유 개수가 안 보임');
+    for (let i = 0; i < 3; i++) await xp.handleXpButton(mkInteraction({ user: ADMIN, customId: 'xp:itemadd:hx1:hack', message: msg }));
+    assert(hackMod.getHackTools('g1', 'hx1') === 2, `관리자 지급이 최대 2개에서 멈추지 않음(${hackMod.getHackTools('g1', 'hx1')})`);
+    assert(JSON.stringify(msg.components).includes('2 / 2개'), '인벤토리에 해킹 툴 보유 개수가 안 보임');
     const gwMod = require(path.join(root, 'handlers/게임/블랙월게이트웨이.js'));
     await xp.handleXpButton(mkInteraction({ user: ADMIN, customId: 'xp:inv:hx1', message: msg }));
     for (let i = 0; i < 2; i++) await xp.handleXpButton(mkInteraction({ user: ADMIN, customId: 'xp:itemadd:hx1:gateway', message: msg }));
@@ -947,9 +947,9 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     assert(gwMod.getGateways('g1', 'hx1') === 0, '인벤토리 게이트웨이 회수가 안 됨');
     await xp.handleXpButton(mkInteraction({ user: ADMIN, customId: 'xp:invback:hx1', message: msg }));
     await xp.handleXpButton(mkInteraction({ user: ADMIN, customId: 'xp:itemsub:hx1:hack', message: msg }));
-    assert(hackMod.getHackTools('g1', 'hx1') === 2, '관리자 회수가 안 됨');
+    assert(hackMod.getHackTools('g1', 'hx1') === 1, '관리자 회수가 안 됨');
     await xp.handleXpButton(mkInteraction({ user: 'u9', customId: 'xp:itemadd:hx1:hack', message: msg }));
-    assert(hackMod.getHackTools('g1', 'hx1') === 2, '관리자가 아닌데 해킹 툴이 지급됨');
+    assert(hackMod.getHackTools('g1', 'hx1') === 1, '관리자가 아닌데 해킹 툴이 지급됨');
     for (const cid of ['quiz:refresh', 'quiz:pause', 'quiz:resume']) {
       await quizAdmin.handleQuizAdminButton(mkInteraction({ user: ADMIN, customId: cid, message: msg }));
     }
