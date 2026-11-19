@@ -266,6 +266,15 @@ function rowsIn(list, acc = []) {
     assert.strictEqual(c.syncAutoNotify(near, prev), 'changed'); assert.strictEqual(near.notifyOnClose, true, '10분 전이 지났으면 자동 발송(마감 시)');
     assert.ok(c.notifySyncNote('changed', near).includes('마감'));
   });
+  check('복원 때 알림이 없던 진행 중 매치만 자동으로 켠다(일부러 끈 것·마감·이미 보낸 것 제외)', () => {
+    const c = require('../handlers/매치/공용');
+    const mk = (extra = {}, data = {}) => ({ data: { datetime: '모이면', createdAt: Date.now(), ...data }, closed: false, ...extra });
+    const a = mk(); assert.strictEqual(c.autoEnableNotifyOnRestore(a), true); assert.strictEqual(a.data.notifyOnClose, true); assert.strictEqual(a.data.notifyAuto, true);
+    assert.strictEqual(c.autoEnableNotifyOnRestore(mk({}, { notifyDisabled: true })), false, '일부러 끈 매치');
+    assert.strictEqual(c.autoEnableNotifyOnRestore(mk({ closed: true })), false, '마감된 매치');
+    assert.strictEqual(c.autoEnableNotifyOnRestore(mk({ notifySent: true })), false, '이미 보낸 매치');
+    assert.strictEqual(c.autoEnableNotifyOnRestore(mk({}, { notifyAt: 5 })), false, '이미 알림이 있는 매치');
+  });
   check('알림 발송 규칙: 직접 정한 시각은 마감과 무관하게, 자동 발송은 마감 때', () => {
     const c = require('../handlers/매치/공용');
     const mk = (extra) => ({ data: { notifyAt: Date.now() - 1000, ...extra }, participants: [], closed: false, notifySent: false });

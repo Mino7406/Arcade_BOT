@@ -801,6 +801,7 @@ async function handleMojipNotifyModal(interaction) {
       data.notifyOnClose = false;
     } else {
       data.notifyAt = null;
+      data.notifyDisabled = true; // 주최자가 일부러 끔 → 복원 때 자동으로 다시 켜지 않는다
       data.notify12h = false;
       data.notifyAuto = false;
       data.notifyAutoSrc = null;
@@ -818,6 +819,7 @@ async function handleMojipNotifyModal(interaction) {
 
   if (!raw) {
     match.data.notifyAt = null;
+    match.data.notifyDisabled = true; // 주최자가 일부러 끔 → 복원 때 자동으로 다시 켜지 않는다
     match.data.notify12h = false;
     match.data.notifyAuto = false;
     match.data.notifyAutoSrc = null;

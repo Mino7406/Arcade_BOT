@@ -14,7 +14,7 @@ require('./migrate').migrateOldDbFiles();
 
 const { handleGameSelect, handleNaejeonModal, handleNaejeonEditModal, handleNaejeonButton, handleNaejeonMatchEditModal, handleNaejeonNotifyModal, handleNaejeonMemberAdd, handleNaejeonMemberRemove, buildPublicMessagePayload: buildNaejeonMessagePayload } = require('./handlers/매치/내전');
 const { handleMojipGameSelect, handleMojipModal, handleMojipEditModal, handleMojipButton, handleMojipMatchEditModal, handleMojipNotifyModal, handleMojipMemberAdd, handleMojipMemberRemove, buildMojipMessagePayload } = require('./handlers/매치/모집');
-const { armAutoEnd, autoEndAt, AUTO_CLOSE_DELAY_MS, GENERAL_MESSAGE_DELETE_DELAY_MS, announceMatchCompletionXp, scheduleCancelledDelete, scheduleMessageDelete, deleteMentionMessage, armNotifyReminder, ADMIN_IDS, saveAll, enableSaveNow, loadRows, recoverCancelledEmbeds, ensureMatchRole } = require('./handlers/매치/공용');
+const { armAutoEnd, autoEndAt, AUTO_CLOSE_DELAY_MS, GENERAL_MESSAGE_DELETE_DELAY_MS, announceMatchCompletionXp, scheduleCancelledDelete, scheduleMessageDelete, deleteMentionMessage, armNotifyReminder, autoEnableNotifyOnRestore, ADMIN_IDS, saveAll, enableSaveNow, loadRows, recoverCancelledEmbeds, ensureMatchRole } = require('./handlers/매치/공용');
 const { handleTeamSelect, handleTeamButton, handleTeamAssignSelect, handleTeamModal } = require('./handlers/매치/팀');
 const { handleRMatchSelect } = require('./handlers/매치/불러오기');
 const { handleWcButton, handleWcMessage } = require('./handlers/게임/끝말잇기');
@@ -203,6 +203,10 @@ async function restoreMatches(c) {
 
       // 알림 예약(notifyAt)도 setTimeout이 소실되므로 다시 건다. 꺼져 있던 동안 시각이 조금 지났으면 바로 보내고,
       // 30분 넘게 지났으면 armNotifyReminder가 보내지 않고 건너뛴다(게임이 끝난 뒤 "곧 시작" DM이 가지 않게).
+      // 알림이 없던 옛 매치는 한 번 자동으로 켠다(일부러 끈 매치는 notifyDisabled 로 제외). 카드의 🔔도 다시 그린다.
+      if (!deleted && autoEnableNotifyOnRestore(match)) {
+        await match.message.edit(buildPayload(match)).catch(err => console.error('복원 후 알림 아이콘 갱신 중 오류:', err));
+      }
       if (!deleted && match.data?.notifyAt) {
         armNotifyReminder(map, row.message_id, match, label);
       }

@@ -306,6 +306,16 @@ function syncAutoNotify(data, prevDatetime) {
   return 'off';
 }
 
+// 봇이 켜질 때 알림이 없는 진행 중 매치에 자동 알림을 한 번 걸어 준다(일시를 읽으면 10분 전, 못 읽으면 마감 시 발송).
+// 주최자가 일부러 끈 매치(notifyDisabled)·이미 보낸 매치·마감된 매치는 건드리지 않는다. 걸었으면 true.
+function autoEnableNotifyOnRestore(match) {
+  const d = match?.data;
+  if (!d || d.notifyAt || d.notifyDisabled || match.notifySent || match.closed) return false;
+  const auto = deriveNotifyFromDatetime(d.datetime, { base: d.createdAt });
+  Object.assign(d, auto, { notifyAuto: true, notifyAutoSrc: d.datetime });
+  return true;
+}
+
 // 공개된 매치의 일시를 고쳤을 때 알림 처리. 아직 안 보낸 알림은 syncAutoNotify 그대로.
 // 이미 보냈거나(지나서 건너뛴 것 포함) 일시를 뒤로 미뤄 새 일시 10분 전이 아직 안 왔으면 알림을 한 번 더 건다 → 'rearmed'
 // (미뤄진 줄 모르고 옛 시각에 모이는 일이 없게). 새 시각도 이미 지났으면 다시 걸지 않는다.
@@ -1304,6 +1314,7 @@ module.exports = {
   lateJoinNote,
   syncNotifyOnEdit,
   syncAutoNotify,
+  autoEnableNotifyOnRestore,
   formatNotifyTime,
   formatNotifyTimeKorean,
   formatNotifyTimeSmart,
