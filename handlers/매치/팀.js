@@ -592,7 +592,7 @@ function buildBoardRows(match, matchMsgId) {
     const spinning = mapSpin.has(matchMsgId);
     const locked = ended || spinning || mapLocked(match);
     const label = `${locked ? '🔒' : '🎲'} 맵 뽑기`; // 글자는 그대로, 앞 이모지만 바뀐다(평소 🎲, 뽑는 중·5분 잠금 🔒)
-    second.push(new ButtonBuilder().setCustomId(`team:map:${matchMsgId}`).setLabel(label).setStyle(ButtonStyle.Secondary).setDisabled(locked));
+    second.push(new ButtonBuilder().setCustomId(`team:map:${matchMsgId}`).setLabel(label).setStyle(ButtonStyle.Primary).setDisabled(locked));
   }
   return [new ActionRowBuilder().addComponents(...buttons), ...(second.length ? [new ActionRowBuilder().addComponents(...second)] : [])];
 }
@@ -816,7 +816,7 @@ async function endBoard(client, matchMsgId, match) {
   match.boardEnded = true;
   clearTimeout(mapUnlockTimers.get(matchMsgId));
   mapUnlockTimers.delete(matchMsgId);
-  dropMapPrep(matchMsgId);
+  dropMapPrep(matchMsgId, true);
   mapSpin.delete(matchMsgId);
   const ch = await fetchChannel(client, board.channelId);
   const msg = ch && await ch.messages.fetch(board.messageId).catch(() => null);
@@ -861,22 +861,24 @@ async function editBoardNow(client, matchMsgId, match) {
 // 맵 뽑기 미리 데우기: "맵을 뽑을까요?" 확인 창이 떠 있는 동안 당첨 맵을 정하고 연출 프레임을 미리 그려 둬서, "뽑기"를 누르면 바로 돈다.
 // 확인 창을 닫거나 3분이 지나면 버린다(프레임 8~10장 ≈ 5MB + 카드 그림 캐시).
 const mapPrep = new Map(); // matchMsgId → { picked, strip, offsets, frames, ready }
-function dropMapPrep(matchMsgId) {
+// cancel: 쓰지 않고 버릴 때(확인 창 닫기·다시 열기·내전 끝남) true — 아직 그리는 중이면 그리기를 멈춘다. 뽑기가 가져다 쓸 땐 false.
+function dropMapPrep(matchMsgId, cancel = false) {
   const prep = mapPrep.get(matchMsgId);
   if (!prep) return null;
   clearTimeout(prep.timer);
   mapPrep.delete(matchMsgId);
+  if (cancel) prep.cancelled = true;
   return prep;
 }
 function prepareMapSpin(matchMsgId, game) {
-  dropMapPrep(matchMsgId);
+  dropMapPrep(matchMsgId, true);
   const picked = maps.pickMap(game);
   const { strip, offsets } = maps.reelPlan(game, picked.key);
   const prep = { game, picked, strip, offsets, frames: [] };
   prep.ready = (async () => {
-    for (let i = 0; i < offsets.length; i++) { await new Promise(r => setImmediate(r)); prep.frames.push(mapReel.frame(game, strip, offsets[i], offsets[i] - (offsets[i - 1] ?? 0))); } // 프레임 사이에 숨을 돌려 다른 요청을 막지 않는다
+    for (let i = 0; i < offsets.length && !prep.cancelled; i++) { await new Promise(r => setImmediate(r)); if (prep.cancelled) break; prep.frames.push(mapReel.frame(game, strip, offsets[i], offsets[i] - (offsets[i - 1] ?? 0))); } // 프레임 사이에 숨을 돌려 다른 요청을 막지 않는다
   })().catch(() => {}).finally(() => { prep.done = true; });
-  prep.timer = setTimeout(() => { if (mapPrep.get(matchMsgId) === prep) { mapPrep.delete(matchMsgId); if (!mapSpin.has(matchMsgId)) mapReel.clearReelCache(); } }, 3 * 60 * 1000);
+  prep.timer = setTimeout(() => { if (mapPrep.get(matchMsgId) === prep) { prep.cancelled = true; mapPrep.delete(matchMsgId); if (!mapSpin.has(matchMsgId)) mapReel.clearReelCache(); } }, 3 * 60 * 1000);
   prep.timer.unref?.();
   mapPrep.set(matchMsgId, prep);
 }
@@ -1447,7 +1449,7 @@ async function handleTeamButton(interaction) {
   if (customId.startsWith('team:map:') || customId.startsWith('team:map_ok:') || customId.startsWith('team:map_no:')) {
     const kind = customId.startsWith('team:map_ok:') ? 'ok' : customId.startsWith('team:map_no:') ? 'no' : 'ask';
     const matchMsgId = customId.slice(customId.indexOf(':', 'team:map'.length) + 1);
-    if (kind === 'no') { if (dropMapPrep(matchMsgId)) mapReel.clearReelCache(); await interaction.deferUpdate(); await interaction.deleteReply().catch(() => {}); return; }
+    if (kind === 'no') { if (dropMapPrep(matchMsgId, true)) mapReel.clearReelCache(); await interaction.deferUpdate(); await interaction.deleteReply().catch(() => {}); return; }
     const match = getMatches(interaction.client).get(matchMsgId);
     const say = (text) => (kind === 'ok' ? interaction.update(notice(text, { ephemeral: true })) : interaction.reply(notice(text, { ephemeral: true })));
     if (!match) { await say('⚠️ **끝났거나 취소된 내전이에요.**'); return; }
