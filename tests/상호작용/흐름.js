@@ -126,6 +126,7 @@ function mkInteraction({ user = 'u1', customId, values, fields = {}, message = n
 // ── 흐름 ────────────────────────────────────────────
 const ADMIN = '457437911869161472';
 async function flow(name, fn) {
+  if (process.env.SKIP_FLOW && name.includes(process.env.SKIP_FLOW)) { console.log(`⏭️ ${name}`); return; } // 원인 비교용: SKIP_FLOW=맵 node tests/상호작용/실행.js
   flowName = name;
   const before = problems.length;
   try { await fn(); } catch (err) { fail(`예외 발생: ${err.stack.split('\n').slice(0, 3).join(' | ')}`); }
@@ -537,6 +538,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     const lockedNow = findMapBtn(boardMsg().components);
     assert(lockedNow.disabled === true && lockedNow.label.includes('5분'), '뽑은 직후 버튼은 5분간 잠겨야 함');
     assert(!team.__mapSpin.has(id), '연출이 끝나면 프레임 상태가 비워져야 함');
+    assert(ok.replyDeleted, '연출이 끝나면 나만 보이는 "돌리는 중" 확인 창은 지워져야 함');
     w1.restore();
 
     // 잠금 중(5분 안)에는 누르면 안내만(확인 창 없음), 옛 확인 버튼을 눌러도 안 돈다
@@ -547,7 +549,14 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     const staleOk = okBtn();
     await team.handleTeamButton(staleOk);
     assert(m.board.map.at === at0 && replyJson(staleOk).includes('다시 할 수 있어요'), '잠금 중 옛 확인 버튼은 연출하지 않고 잠금 안내여야 함');
+    // 봇이 재시작된 것처럼 타이머를 비워도, 카드를 다시 그릴 때(refreshAllBoards) 잠금이 남아 있으면 풀리는 시각에 카드를 고치도록 타이머를 다시 건다
+    team.__mapUnlockTimers.forEach(t => clearTimeout(t)); team.__mapUnlockTimers.clear();
+    await team.refreshAllBoards(client);
+    assert(team.__mapUnlockTimers.has(id), '재시작 직후 잠금 중이면 잠금 해제 타이머를 다시 걸어야 함');
+    team.__mapUnlockTimers.forEach(t => clearTimeout(t)); team.__mapUnlockTimers.clear();
     unlock();
+    await team.refreshAllBoards(client);
+    assert(!team.__mapUnlockTimers.has(id), '잠금이 이미 풀렸으면 타이머를 걸지 않아야 함');
 
     // 연출 중에 또 누르면 안내만 + 연출 도중 카드가 다시 그려져도 현재 프레임이 유지됨
     let hold = true; const waiters = [];
@@ -573,10 +582,12 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
 
     // 카드 수정이 실패해도(메시지가 지워짐 등) 예외 없이 멈추고, 결과는 저장돼 있고, 다시 돌릴 수 있다
     const bm2 = boardMsg(); const orig2 = bm2.edit.bind(bm2);
-    bm2.edit = async () => { throw new Error('Unknown Message'); };
+    let failEdits = 0;
+    bm2.edit = async () => { failEdits++; throw new Error('Unknown Message'); };
     await team.handleTeamButton(okBtn());
     bm2.edit = orig2;
     assert(m.board.map && !team.__mapSpin.has(id), '수정이 실패해도 결과는 저장되고 프레임 상태는 비워져야 함');
+    assert(failEdits >= 2, `연출 수정이 실패하면 카드를 다시 그려 보려고 한 번 더 시도해야 함(시도 ${failEdits}번)`);
     unlock();
     const w2 = watch();
     await team.handleTeamButton(okBtn());

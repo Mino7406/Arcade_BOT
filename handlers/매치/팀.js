@@ -811,6 +811,7 @@ async function refreshAllBoards(client) {
   for (const [id, m] of getMatches(client)) {
     if (!m.board?.messageId) continue;
     await refreshBoard(client, id, m).catch(() => {});
+    if (mapLocked(m)) scheduleMapUnlock(client, id, m); // 재시작 전에 뽑은 맵의 5분 잠금이 남아 있으면 풀리는 시각에 카드를 다시 고친다
     await new Promise(r => setTimeout(r, 300));
   }
 }
@@ -838,7 +839,7 @@ async function editBoardNow(client, matchMsgId, match) {
 
 // 🗺️ 맵 뽑기 연출: 결과를 먼저 저장(연출 중 봇이 꺼져도 다음 카드에 보임)하고, 돌아가는 프레임을 점점 느리게 보여 준 뒤 이름이 박힌 확정 이미지로 끝낸다.
 // 카드 수정이 실패하면(메시지가 지워짐 등) 연출만 멈추고 결과는 그대로 둔다. 끝나면 잠금이 풀리는 시각에 카드를 한 번 고친다.
-async function runMapSpin(client, matchMsgId, match) {
+async function runMapSpin(client, matchMsgId, match, ack = null) {
   const game = match.data.game;
   try {
     const picked = maps.pickMap(game);
@@ -854,9 +855,12 @@ async function runMapSpin(client, matchMsgId, match) {
     await editBoardNow(client, matchMsgId, match);
   } catch (err) {
     logError('팀 카드', `맵 뽑기 연출 중 카드 수정 실패 — ${err?.message ?? err}`, err);
+    mapSpin.delete(matchMsgId);
+    await refreshBoard(client, matchMsgId, match).catch(() => {}); // 카드가 살아 있으면 새 결과가 바로 보이게 한 번 더 시도
   } finally {
     mapSpin.delete(matchMsgId);
     scheduleMapUnlock(client, matchMsgId, match);
+    if (ack?.deleteReply) await ack.deleteReply().catch(() => {}); // 나만 보이던 "돌리는 중" 확인 창은 연출이 끝나면 지운다
   }
 }
 
@@ -1407,7 +1411,7 @@ async function handleTeamButton(interaction) {
       mapSpin.delete(matchMsgId);
       throw err;
     }
-    await runMapSpin(interaction.client, matchMsgId, match);
+    await runMapSpin(interaction.client, matchMsgId, match, interaction);
     return;
   }
 
@@ -1557,6 +1561,7 @@ module.exports = {
   buildBoardPayload, // 화면 모음·테스트용
   buildHistoryPayload, // 화면 모음·테스트용
   __mapSpin: mapSpin, // 화면 모음·테스트용(연출 중 프레임)
+  __mapUnlockTimers: mapUnlockTimers, // 테스트용
   __setMapSleep: (fn) => { mapSleep = fn; }, // 테스트용
   __setMapClock: (fn) => { mapNow = fn; }, // 테스트용
   MAP_LOCK_MS,
