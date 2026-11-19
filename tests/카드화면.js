@@ -167,7 +167,7 @@ async function buildScreens() {
     const valBoard = mapBoard('valorant', GAMES.val, '발로란트 내전', { game: 'valorant', key: 'ascent', at: Date.now() - team.MAP_LOCK_MS - 60e3 });
     const owBoard = mapBoard('overwatch', owInfo, '오버워치 내전', { game: 'overwatch', key: 'grimsvotn', at: Date.now() });
     const valP = team.buildBoardPayload(valBoard, '1');
-    add('내전 · 모집', '팀 짜기 카드(맵 추첨 결과 · 발로란트)', '헤더 ### ✔️ 맵 추첨 완료 아래에 이름이 알약 박스 위에 박힌 맵 이미지 · 뽑은 지 5분이 지나서 두 번째 줄의 🔍 맵 추첨가 눌려요', valP, jpg(valP));
+    add('내전 · 모집', '팀 짜기 카드(맵 추첨 결과 · 발로란트)', '윗줄 ✔️ 맵 추첨 완료 - **맵 이름** 아래에 이름이 알약 박스 위에 박힌 맵 이미지 · 뽑은 지 5분이 지나서 두 번째 줄의 🔍 맵 추첨가 눌려요', valP, jpg(valP));
     const owP = team.buildBoardPayload(owBoard, '1');
     add('내전 · 모집', '팀 짜기 카드(맵 추첨 결과 · 오버워치)', '오버워치는 호위·혼합·밀기·쟁탈·플래시포인트 전체 맵에서 같은 확률 · 방금 뽑아서 🔒 맵 추첨 버튼이 5분간 비활성화(회색)돼요', owP, jpg(owP));
     team.__mapSpin.set('1', { key: 'busan', n: 3 });

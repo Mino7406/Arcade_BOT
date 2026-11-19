@@ -647,13 +647,11 @@ function buildBoardPayload(match, matchMsgId) {
     const file = frame.final ? maps.mapResultFile(game, frame.key) : null;
     const attName = frame.final ? 'map-final.jpg' : `map-${frame.n}.png`;
     const hasImage = frame.final ? fs.existsSync(file) : !!frame.png;
-    blocks.push(frame.final ? '### ✔️ 맵 추첨 완료' : '### 🔍 맵 추첨 중...'); // 구역 맨 위 헤더(이미지 위)
+    blocks.push(frame.final ? `✔️ 맵 추첨 완료 - **${maps.mapName(game, frame.key)}**` : '### 🔍 맵 추첨 중...'); // 구역 맨 위 줄(이미지 위). 완료는 굵은 제목 없이 "맵 추첨 완료 - **맵 이름**"
     if (hasImage) {
       blocks.push({ image: `attachment://${attName}`, noDivider: true });
       files.push(new AttachmentBuilder(frame.final ? file : frame.png, { name: attName }));
     }
-    // 맵 이름은 결과 이미지에 박혀 있어서 따로 글을 붙이지 않는다. 이미지가 없을 때만 이름 한 줄.
-    if (frame.final && !hasImage) blocks.push({ text: `🗺️ **${maps.mapName(game, frame.key)}**` });
   }
 
   return payload(card({
