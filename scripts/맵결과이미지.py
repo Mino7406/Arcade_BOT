@@ -3,7 +3,7 @@
 assets/맵/<게임>/<키>.jpg 원본 위에 맵 이름을 게임 로딩 화면 느낌으로 박아
 assets/맵/결과/<게임>/<키>.jpg (1200x675) 로 저장한다. 봇은 이 파일을 그대로 첨부만 한다.
  - 오버워치: 오른쪽 아래에 크게 기울어진(이탤릭) 흰 이름(로딩 화면의 맵 이름 자리)
- - 발로란트: 왼쪽 위에 굵은 대문자 영문 이름 + 아래에 자간 넓은 작은 글줄(한국어 이름·STANDARD) + 작은 흰 점
+ - 발로란트: 왼쪽 위에 굵은 대문자 영문 이름 + 아래에 자간 넓은 작은 글줄(한국어 이름·ARCADE 내전) + 작은 흰 점
 맵 이름은 handlers/매치/맵.js 의 MAP_POOLS 에서 노드로 읽어 온다(한 곳에서만 관리).
 글꼴: 두 게임의 공식 글꼴(Big Noodle Titling·Tungsten)은 상용이라 쓰지 않고, 비슷한 무료(OFL) 글꼴을 assets/fonts/ 에 두고 쓴다.
  - 오버워치 이름: Black Han Sans(굵은 한국어, 기울여서)  - 발로란트 큰 영문 이름: Bebas Neue  - 작은 글줄: Windows 의 Bahnschrift(DIN 계열)·맑은 고딕
@@ -283,7 +283,13 @@ def valorant(im, key, name):
     sub = din_font(22, 'Regular')
     kofont = ko_font(FONT_KO_BOLD, 26)
     spaced(draw, (x0 + 4, base), name, kofont, (236, 244, 244, 235), 6)               # 한국어 이름(자간 넓게)
-    spaced(draw, (x0 + 4, base + 44), 'STANDARD', sub, (214, 232, 232, 200), 8)
+    # 모드 글줄: 인게임의 STANDARD 자리에 "ARCADE 내전". 영문은 DIN, 한글은 맑은 고딕(DIN 에 한글이 없다)
+    sub_ko = ko_font(FONT_KO_BOLD, 20)
+    mx = x0 + 4
+    for ch in 'ARCADE 내전':
+        f = sub if ch.isascii() else sub_ko
+        draw.text((mx, base + 44 + 22), ch, font=f, fill=(214, 232, 232, 200), anchor='ls')  # 같은 기준선에 맞춘다
+        mx += draw.textlength(ch, font=f) + 8
     draw.rectangle([x0 + 4, base + 90, x0 + 16, base + 102], fill=(255, 255, 255, 240))  # 작은 흰 점(인게임 화면의 표식)
     return im
 
