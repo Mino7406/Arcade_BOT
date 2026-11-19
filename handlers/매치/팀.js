@@ -919,6 +919,8 @@ async function runMapSpin(client, matchMsgId, match) {
       while (!png && prep && !prep.done) { await new Promise(r => setTimeout(r, 15)); png = plan.frames[i]; } // 미리 그리는 중이면 그 프레임이 나올 때까지만 기다린다(전부 기다리지 않는다)
       png ??= mapReel.frame(game, plan.strip, plan.offsets[i], plan.offsets[i] - (plan.offsets[i - 1] ?? 0)); // 카드가 다시 그려져도 같은 그림이 나오게 프레임을 들고 있는다
       mapSpin.set(matchMsgId, { key: picked.key, n: i + 1, png });
+      // 앞선 수정이 아직 안 끝났어도 뒤쪽 두 프레임(속도가 줄다가 멈추는 부분)은 건너뛰지 않고 잠깐(최대 3초) 기다려 보낸다 — 건너뛰면 "멈추는 듯한" 연출이 사라지고 바로 결과로 넘어간다.
+      if (inflight && i >= plan.offsets.length - 2) await Promise.race([inflight, new Promise(r => setTimeout(r, 3000))]);
       if (!inflight) send();
       await mapSleep(maps.SPIN_DELAYS_MS[i]);
       if (inflight) await Promise.race([inflight, new Promise(r => setTimeout(r, 50))]); // 곧 끝날 수정만 잠깐 기다린다(길게 기다리면 프레임마다 밀려 연출이 늘어난다)
@@ -1010,6 +1012,8 @@ async function commitTeams(interaction, matchMsgId, match, teams, how, extraNote
     await interaction.editReply(notice('⚠️ **팀은 저장했지만 카드를 다시 올리지 못했어요.** 주최자 관리 메뉴의 📌 팀 불러오기를 눌러 주세요.'));
     return;
   }
+  // 카드가 새로 올라온 것 자체가 결과라서 "나눴어요" 확인 메시지는 남기지 않고 지운다. 티어 저장 같은 덧붙일 안내가 있을 때만 남긴다.
+  if (!extraNote) { await interaction.deleteReply().catch(() => {}); return; }
   const head = { input: '✅ **팀을 올렸어요.**', balance: '⚖️ **티어로 밸런스를 맞춰 나눴어요.**', random: '🎲 **무작위로 나눴어요.**' }[how];
   await interaction.editReply(notice(`${head}${extraNote}`));
 }
