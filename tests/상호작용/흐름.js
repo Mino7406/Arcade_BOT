@@ -195,7 +195,10 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
 
     const input = mkInteraction({ user: ADMIN, customId: `team:input:${id}` });
     await team.handleTeamButton(input);
-    assert(input.modalShown, '팀 입력 창이 안 뜸');
+    assert(!input.modalShown && JSON.stringify(input._reply?.components).includes(`team:regen:input:${id}`), '자동으로 나눈 #1 에서 직접 입력을 눌렀는데 경고가 안 뜸');
+    const inputOk = mkInteraction({ user: ADMIN, customId: `team:regen:input:${id}`, message: input._reply });
+    await team.handleTeamButton(inputOk);
+    assert(inputOk.modalShown, '팀 입력 창이 안 뜸');
     const outsider = mkInteraction({ user: 'u2', customId: `team:input:${id}` });
     await team.handleTeamButton(outsider);
     assert(!outsider.modalShown, '주최자·관리자가 아닌 참가자인데 입력 창이 뜸');
@@ -367,7 +370,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     await new Promise(r => setTimeout(r, 20));
     assert(match.board?.messageId, '가짜 인원으로 마감됐는데 팀 설정 카드가 안 올라감');
     assert(match.board.current?.draft && match.board.current.how === 'balance', `티어 8/10명이면 초안이 밸런스여야 함(${match.board.current?.how})`);
-    await team.handleTeamButton(mkInteraction({ user: ADMIN, guildId: G, customId: `team:balance:${id}` }));
+    await team.handleTeamButton(mkInteraction({ user: ADMIN, guildId: G, customId: `team:regen:balance:${id}` }));
     assert(match.board.current?.how === 'balance', '밸런스가 안 됨');
     assert(match.board.history.length === 1 && match.board.history[0].no === 1 && match.board.current.no === 2, `자동으로 나눈 #1 이 내역에 남고 다음은 #2 여야 함(내역 ${match.board.history.length}, 지금 #${match.board.current.no})`);
     // 📜 내전 내역: 누구나 나만 보이는 창으로 열고(삭제 버튼은 없음), 쌓인 #1 내역이 보인다
@@ -419,9 +422,9 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
 
     // 두 사람이 동시에 ⚖️ 밸런스 / 🎲 랜덤 → 카드는 한 장만 남아야 함
     await Promise.all([
-      team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:balance:${id1}` })),
-      team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:random:${id1}` })),
-      team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:balance:${id1}` })),
+      team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:regen:balance:${id1}` })),
+      team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:regen:random:${id1}` })),
+      team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:regen:balance:${id1}` })),
     ]);
     const boardsLeft = channel.sent.filter(x => !x.deleted && JSON.stringify(x.components).includes(`team:input:${id1}`));
     assert(boardsLeft.length === 1, `동시에 눌렀더니 카드가 ${boardsLeft.length}장 남음`);
@@ -657,7 +660,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
 
     // 팀을 다시 나눠도 맵은 그대로
     const keep = { ...m.board.map };
-    await team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:random:${id}` }));
+    await team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:regen:random:${id}` }));
     assert(m.board.map && m.board.map.key === keep.key, '팀을 다시 나눠도 뽑은 맵은 그대로여야 함');
     assert(JSON.stringify(boardMsg().components).includes('map-final.jpg'), '다시 올라온 카드에도 맵 이미지가 있어야 함');
 

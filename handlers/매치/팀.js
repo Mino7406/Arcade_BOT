@@ -1000,8 +1000,8 @@ function linkRow(url) {
 
 const NOTE_LIFETIME_MS = 10 * 1000;
 
-// 이미 정해 둔 팀이 있으면(자동 초안은 제외) 다시 만들기 전에 한 번 경고한다.
-const hasSetTeams = match => !!(match.board?.current && !match.board.current.draft);
+// 카드에 팀이 올라가 있으면(자동으로 나눈 #1 초안 포함) 다시 만들기 전에 한 번 경고한다.
+const hasSetTeams = match => !!match.board?.current;
 
 async function askRegen(interaction, how, matchMsgId) {
   const word = { input: '직접 입력', balance: '⚖️ 밸런스', random: '🎲 랜덤' }[how];
@@ -1009,7 +1009,7 @@ async function askRegen(interaction, how, matchMsgId) {
 ${word}(으)로 다시 만들면 지금 팀은 📜 내전 내역으로 넘어가요.`, {
     ephemeral: true,
     rows: [new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`team:regen:${how}:${matchMsgId}`).setLabel('다시 만들기').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`team:regen:${how}:${matchMsgId}`).setLabel('다시 만들기').setEmoji('🔁').setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId(`team:regen_no:${matchMsgId}`).setLabel('취소').setStyle(ButtonStyle.Secondary),
     )],
   }));

@@ -195,7 +195,7 @@ async function buildScreens() {
       add('나만 보이는 메시지', '⚠️ 팀 다시 만들기 경고(✏️·⚖️·🎲)', '이미 정한 팀이 있을 때만 · 만들면 이 창은 자동 삭제', card.notice('⚠️ **이미 설정한 팀이 있어요.**\n⚖️ 밸런스(으)로 다시 만들면 지금 팀은 📜 내전 내역으로 넘어가요.', {
         ephemeral: true,
         rows: [new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('team:regen:balance:1').setLabel('다시 만들기').setStyle(ButtonStyle.Danger),
+          new ButtonBuilder().setCustomId('team:regen:balance:1').setLabel('다시 만들기').setEmoji('🔁').setStyle(ButtonStyle.Success),
           new ButtonBuilder().setCustomId('team:regen_no:1').setLabel('취소').setStyle(ButtonStyle.Secondary),
         )],
       }));
