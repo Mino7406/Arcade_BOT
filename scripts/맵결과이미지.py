@@ -218,11 +218,7 @@ def overwatch(im, name, mode='ARCADE 내전', flag=None):
     mb = ImageDraw.Draw(im).textbbox((0, 0), mode, font=mf)
     mx = name_right + r['mode_over'] - (mb[2] - mb[0]) - mb[0]
     my = name_top - r['mode_gap'] - (mb[3] - mb[1]) - mb[1]
-    # 밝은 배경에서도 읽히게: 어두운 번짐 + 얇은 어두운 테두리 위에 주황 글씨
-    sh = Image.new('RGBA', im.size, (0, 0, 0, 0))
-    ImageDraw.Draw(sh).text((mx, my + 2), mode, font=mf, fill=(10, 24, 48, 200), stroke_width=3, stroke_fill=(10, 24, 48, 200))
-    im = Image.alpha_composite(im, sh.filter(ImageFilter.GaussianBlur(3)))
-    ImageDraw.Draw(im).text((mx, my), mode, font=mf, fill=(255, 140, 50, 255), stroke_width=1, stroke_fill=(10, 24, 48, 235))
+    ImageDraw.Draw(im).text((mx, my), mode, font=mf, fill=(247, 130, 62, 255))
 
     flag_file = os.path.join(FLAG_DIR, f'{flag}.png') if flag else None
     if flag_file and os.path.exists(flag_file):

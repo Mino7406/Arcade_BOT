@@ -576,10 +576,11 @@ function teamBlocks(teams, match) {
 
 function buildBoardRows(match, matchMsgId) {
   const game = match.data.game;
+  const ended = !!match.boardEnded; // 내전이 자동 삭제돼 카드만 남은 상태: ✏️ 직접 입력·⚖️ 밸런스·🎲 랜덤·🎲 맵 뽑기는 눌러지지 않는다
   const board = normalizeBoard(match);
-  const buttons = [new ButtonBuilder().setCustomId(`team:input:${matchMsgId}`).setLabel('✏️ 직접 입력').setStyle(ButtonStyle.Primary)];
-  if (tiers.hasTiers(game)) buttons.push(new ButtonBuilder().setCustomId(`team:balance:${matchMsgId}`).setLabel('⚖️ 밸런스').setStyle(ButtonStyle.Secondary));
-  buttons.push(new ButtonBuilder().setCustomId(`team:random:${matchMsgId}`).setLabel('🎲 랜덤').setStyle(ButtonStyle.Secondary));
+  const buttons = [new ButtonBuilder().setCustomId(`team:input:${matchMsgId}`).setLabel('✏️ 직접 입력').setStyle(ButtonStyle.Primary).setDisabled(ended)];
+  if (tiers.hasTiers(game)) buttons.push(new ButtonBuilder().setCustomId(`team:balance:${matchMsgId}`).setLabel('⚖️ 밸런스').setStyle(ButtonStyle.Secondary).setDisabled(ended));
+  buttons.push(new ButtonBuilder().setCustomId(`team:random:${matchMsgId}`).setLabel('🎲 랜덤').setStyle(ButtonStyle.Secondary).setDisabled(ended));
   // 내전 내역(나만 보이는 창으로 열림): 첫 줄 맨 끝. 내역이 없으면 눌러지지 않는다.
   const n = board.history.length;
   buttons.push(new ButtonBuilder().setCustomId(`team:hist:${matchMsgId}`).setLabel(n ? `📜 내전 내역 (${n})` : '📜 내전 내역').setStyle(ButtonStyle.Secondary).setDisabled(!n));
@@ -589,7 +590,7 @@ function buildBoardRows(match, matchMsgId) {
   if (maps.hasMapPool(game)) {
     // 맵 뽑기는 누르는 순간부터 5분간 잠긴다(연출 중 포함). 풀리는 시각에 카드가 스스로 고쳐진다(scheduleMapUnlock).
     const spinning = mapSpin.has(matchMsgId);
-    const locked = spinning || mapLocked(match);
+    const locked = ended || spinning || mapLocked(match);
     const label = `${locked ? '🔒' : '🎲'} 맵 뽑기`; // 글자는 그대로, 앞 이모지만 바뀐다(평소 🎲, 뽑는 중·5분 잠금 🔒)
     second.push(new ButtonBuilder().setCustomId(`team:map:${matchMsgId}`).setLabel(label).setStyle(ButtonStyle.Secondary).setDisabled(locked));
   }
@@ -643,7 +644,7 @@ function buildBoardPayload(match, matchMsgId) {
     const file = frame.final ? maps.mapResultFile(game, frame.key) : null;
     const attName = frame.final ? 'map-final.jpg' : `map-${frame.n}.png`;
     const hasImage = frame.final ? fs.existsSync(file) : !!frame.png;
-    blocks.push(frame.final ? '## 맵 뽑기 완료' : '## 🎰 맵 뽑는 중...'); // 구역 맨 위 헤더(이미지 위)
+    blocks.push(frame.final ? '## ✅ 맵 뽑기 완료' : '## 🎲 맵 뽑는 중...'); // 구역 맨 위 헤더(이미지 위)
     if (hasImage) {
       blocks.push({ image: `attachment://${attName}`, noDivider: true });
       files.push(new AttachmentBuilder(frame.final ? file : frame.png, { name: attName }));
@@ -659,7 +660,7 @@ function buildBoardPayload(match, matchMsgId) {
     thumb: gameThumb(gameInfo),
     thumbAlt: gameInfo.name,
     blocks,
-    footer: '✏️ 직접 입력에 지금 팀과 역할이 채워져 있어요 · 바꿀 사람만 고치면 돼요',
+    footer: match.boardEnded ? '🔒 내전이 끝나서 팀을 더 바꿀 수 없어요' : '✏️ 직접 입력에 지금 팀과 역할이 채워져 있어요 · 바꿀 사람만 고치면 돼요',
     rows: buildBoardRows(match, matchMsgId),
   }), files.length ? { files } : {});
 }
@@ -807,6 +808,21 @@ async function refreshBoard(client, matchMsgId, match) {
   if (msg) await msg.edit(buildBoardPayload(match, matchMsgId)).catch(() => {});
 }
 
+// 내전이 자동 삭제될 때: 팀 카드는 내전채팅에 남기고 ✏️ 직접 입력·⚖️ 밸런스·🎲 랜덤·🎲 맵 뽑기 버튼만 눌러지지 않게 고친다.
+// match.boardEnded 를 켜 두면 뒤늦게 도는 타이머(맵 5분 잠금 해제 등)가 카드를 다시 그려도 버튼이 다시 켜지지 않는다.
+async function endBoard(client, matchMsgId, match) {
+  const board = match?.board;
+  if (!board?.channelId || !board.messageId) return; // 팀 카드를 올린 적이 없으면 할 일 없음
+  match.boardEnded = true;
+  clearTimeout(mapUnlockTimers.get(matchMsgId));
+  mapUnlockTimers.delete(matchMsgId);
+  dropMapPrep(matchMsgId);
+  mapSpin.delete(matchMsgId);
+  const ch = await fetchChannel(client, board.channelId);
+  const msg = ch && await ch.messages.fetch(board.messageId).catch(() => null);
+  if (msg) await msg.edit(buildBoardPayload(match, matchMsgId));
+}
+
 // 봇이 켜질 때: 이미 올라가 있는 팀 짜기 카드를 지금 티어 DB·지금 디자인으로 다시 그린다(꺼져 있던 동안 바뀐 티어도 반영).
 // 한꺼번에 고치면 디스코드 제한에 걸리므로 하나씩 천천히 처리하고, 실패한 카드는 건너뛴다.
 async function refreshAllBoards(client) {
@@ -896,7 +912,7 @@ async function runMapSpin(client, matchMsgId, match, ack = null) {
       mapSpin.set(matchMsgId, { key: picked.key, n: i + 1, png });
       if (!inflight) send();
       await mapSleep(maps.SPIN_DELAYS_MS[i]);
-      if (inflight) await Promise.race([inflight, new Promise(r => setTimeout(r, 400))]); // 곧 끝날 수정은 조금 기다려 준다
+      if (inflight) await Promise.race([inflight, new Promise(r => setTimeout(r, 50))]); // 곧 끝날 수정만 잠깐 기다린다(길게 기다리면 프레임마다 밀려 연출이 늘어난다)
     }
     if (inflight) await inflight; // 마지막 확정 수정 전에 앞선 수정이 끝나게
     if (failure) throw failure;
@@ -1623,6 +1639,7 @@ module.exports = {
   buildOwRolesPayload,
   buildResetAllConfirmPayload,
   postBoard,
+  endBoard,
   refreshAllBoards,
   handleTeamSelect,
   handleTeamButton,

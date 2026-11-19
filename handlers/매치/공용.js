@@ -529,6 +529,8 @@ function armAutoEnd(matchesMap, msgId, match, label, delayMs) {
       clearNotifyTimer(current); // 삭제된 매치는 알림을 보내지 않으므로 남은 예약 타이머를 취소한다.
       await announceMatchCompletionXp(current);
       matchesMap.delete(msgId);
+      // 내전채팅의 팀 카드는 남기고 버튼만 비활성화한다(실패해도 삭제는 계속).
+      await require('./팀').endBoard(current.message.client, msgId, current).catch(err => logError('팀 카드', `자동 삭제 때 팀 카드 비활성화 실패 — ${err?.message ?? err}`, err));
       await deleteMentionMessage(current.message.client, current);
       await current.message.delete();
       logSystem({ 유형: '자동 삭제', 채널: matchChannelName(current), 내용: `${matchTag(current, label)} 마감 후 자동 삭제` });

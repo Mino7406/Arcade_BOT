@@ -471,7 +471,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     const withMap = team.buildBoardPayload(v, vid);
     const wj = JSON.stringify(withMap.components);
     assert(wj.includes('attachment://map-final.jpg') && withMap.files?.length === 1, '뽑은 맵의 결과 이미지가 카드에 있어야 함');
-    assert(wj.includes('## 맵 뽑기 완료') && !wj.includes('맵 뽑는 중'), '확정되면 헤더가 맵 뽑기 완료여야 함');
+    assert(wj.includes('## ✅ 맵 뽑기 완료') && !wj.includes('맵 뽑는 중'), '확정되면 헤더가 맵 뽑기 완료여야 함');
     const lockedBtn = findMapBtn(withMap.components);
     assert(lockedBtn.disabled === true, '뽑은 직후 5분간은 버튼이 잠겨야 함');
     v.board.map = { game: 'valorant', key: 'ascent', at: Date.now() - team.MAP_LOCK_MS - 1000 };
@@ -481,6 +481,36 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     const broken = team.buildBoardPayload(v, vid);
     assert(!(broken.files?.length), '이미지 파일이 없으면 첨부 없이 카드가 만들어져야 함');
     v.board.map = undefined;
+  });
+
+  await flow('내전 자동 삭제: 내전채팅 팀 카드는 남기고 직접 입력·밸런스·랜덤·맵 뽑기만 비활성화', async () => {
+    const cardMod = require(path.join(root, 'handlers/공통/카드.js'));
+    await naejeon.handleNaejeonModal(mkInteraction({ user: ADMIN, customId: 'naejeon:modal:valorant', fields: { title: '자동삭제 내전', datetime: '내일 8시', players: '4', description: '' } }));
+    await naejeon.handleNaejeonButton(mkInteraction({ user: ADMIN, customId: 'naejeon:publish', message: new FakeMsg(cardMod.notice('p'), channel) }));
+    const m = [...client.naejeonMatches.values()].at(-1);
+    for (const u of ['u1', 'u2', 'u3', 'u4']) await naejeon.handleNaejeonButton(mkInteraction({ user: u, customId: 'naejeon:join', message: m.message }));
+    await new Promise(r => setTimeout(r, 20));
+    const id = m.message.id;
+    const boardMsg = () => channel.sent.find(x => x.id === m.board?.messageId);
+    const buttons = () => {
+      const out = [];
+      const walk = (n) => { if (Array.isArray(n)) n.forEach(walk); else if (n && typeof n === 'object') { if (n.custom_id) out.push(n); Object.values(n).forEach(walk); } };
+      walk((boardMsg().components ?? []).map(c => c.toJSON?.() ?? c));
+      return out;
+    };
+    const btn = (prefix) => buttons().find(b => b.custom_id.startsWith(prefix));
+    assert(boardMsg() && !btn(`team:input:${id}`).disabled && !btn(`team:map:${id}`).disabled, '내전 중에는 직접 입력·맵 뽑기가 눌려야 함');
+    m.data.autoClose = true;
+    common.armAutoEnd(client.naejeonMatches, id, m, '내전', 0);
+    await new Promise(r => setTimeout(r, 80));
+    assert(!client.naejeonMatches.has(id) && m.message.deleted, '자동 삭제로 내전 게시글은 사라져야 함');
+    assert(boardMsg() && !boardMsg().deleted, '내전채팅의 팀 카드는 남아 있어야 함');
+    for (const k of ['input', 'balance', 'random', 'map']) assert(btn(`team:${k}:${id}`)?.disabled === true, `${k} 버튼이 비활성화돼야 함`);
+    assert(JSON.stringify(boardMsg().components).includes('내전이 끝나서'), '끝났다는 안내가 카드에 보여야 함');
+    // 5분 잠금 타이머 등이 카드를 다시 그려도 버튼이 다시 켜지면 안 됨
+    const teamMod = require(path.join(root, 'handlers/매치/팀.js'));
+    await teamMod.endBoard(client, id, m);
+    for (const k of ['input', 'balance', 'random', 'map']) assert(btn(`team:${k}:${id}`)?.disabled === true, `다시 그려도 ${k} 버튼은 비활성화 그대로여야 함`);
   });
 
   await flow('맵 뽑기: 주최자만 · 돌리겠습니까 확인 → 5프레임+확정 연출 · 5분 잠금 · 동시 클릭 · 수정 실패 · 팀을 다시 나눠도 유지', async () => {
@@ -532,8 +562,8 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     const picked = m.board.map;
     assert(picked && mapMod.MAP_POOLS.valorant.some(x => x.key === picked.key) && picked.game === 'valorant', '뽑은 결과가 board.map 에 저장돼야 함');
     assert(w1.log.length === mapMod.SPIN_DELAYS_MS.length + 1, `카드는 ${mapMod.SPIN_DELAYS_MS.length + 1}번 고쳐져야 함(${w1.log.length})`);
-    assert(w1.log[0].includes('## 🎰 맵 뽑는 중...') && w1.log[0].includes('map-1.png') && w1.log[4].includes('map-5.png'), '돌아가는 프레임은 map-1..5.png 이고 헤더가 맵 뽑는 중이어야 함');
-    assert(w1.log.at(-1).includes('map-final.jpg') && w1.log.at(-1).includes('## 맵 뽑기 완료'), '마지막은 확정 이미지·헤더(맵 뽑기 완료)');
+    assert(w1.log[0].includes('## 🎲 맵 뽑는 중...') && w1.log[0].includes('map-1.png') && w1.log[4].includes('map-5.png'), '돌아가는 프레임은 map-1..5.png 이고 헤더가 맵 뽑는 중이어야 함');
+    assert(w1.log.at(-1).includes('map-final.jpg') && w1.log.at(-1).includes('## ✅ 맵 뽑기 완료'), '마지막은 확정 이미지·헤더(맵 뽑기 완료)');
     assert(replyJson(ok).includes('돌리는 중'), '확인 창은 "돌리는 중" 안내로 바뀌어야 함');
     const lockedNow = findMapBtn(boardMsg().components);
     assert(lockedNow.disabled === true, '뽑은 직후 버튼은 5분간 잠겨야 함');
@@ -572,7 +602,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     assert(replyJson(askDuring).includes('뽑는 중') && !replyJson(askDuring).includes('team:map_ok:'), '연출 중 맵 뽑기 버튼은 확인 창 없이 안내만');
     const midP = team.buildBoardPayload(m, id);
     const mid = JSON.stringify(midP.components);
-    assert(mid.includes('attachment://map-1.png') && !mid.includes('map-final.jpg') && mid.includes('## 🎰 맵 뽑는 중...'), '연출 도중 카드를 다시 그려도 현재 프레임이 유지되고 헤더는 맵 뽑는 중...');
+    assert(mid.includes('attachment://map-1.png') && !mid.includes('map-final.jpg') && mid.includes('## 🎲 맵 뽑는 중...'), '연출 도중 카드를 다시 그려도 현재 프레임이 유지되고 헤더는 맵 뽑는 중...');
     const spinBtn = findMapBtn(midP.components);
     assert(spinBtn.disabled === true && spinBtn.label.includes('🔒'), '연출 중에는 버튼이 잠기고 🔒 라벨이어야 함');
     hold = false; waiters.forEach(r => r()); await first;
