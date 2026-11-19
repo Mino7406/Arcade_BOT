@@ -138,11 +138,11 @@ def ring_overlay(size, cx, cy, ring, arc_r, arc_w, line_w):
     for k in range(n + 1):
         t = k / n
         ang = math.radians(ARC_START + (end - ARC_START) * t)
-        w = arc_w * K * (1.0 if t < 0.72 else 1.0 - 0.45 * (t - 0.72) / 0.28)  # 마지막 28% 에서 55% 굵기까지 가늘어진다
+        w = arc_w * K * (1.0 if t < 0.85 else 1.0 - 0.12 * (t - 0.85) / 0.15)  # 거의 같은 굵기(끝에서 12%만 가늘어짐)
         pts_out.append((ox + (ar + w / 2) * math.cos(ang), oy + (ar + w / 2) * math.sin(ang)))
         pts_in.append((ox + (ar - w / 2) * math.cos(ang), oy + (ar - w / 2) * math.sin(ang)))
     d.polygon(pts_out + pts_in[::-1], fill=(242, 106, 36, 255))
-    wend = arc_w * K * 0.55
+    wend = arc_w * K * 0.88   # 둥근 끝의 지름 = 호 끝 굵기
     ea = math.radians(end)
     ex, ey = ox + ar * math.cos(ea), oy + ar * math.sin(ea)
     d.ellipse([ex - wend / 2, ey - wend / 2, ex + wend / 2, ey + wend / 2], fill=(242, 106, 36, 255))  # 둥근 끝
