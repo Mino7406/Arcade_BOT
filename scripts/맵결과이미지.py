@@ -20,7 +20,9 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 W, H = 1200, 675
 WIN = 'C:/Windows/Fonts/'
 FONT_KO_BOLD = WIN + 'malgunbd.ttf'          # 한국어(굵게) — 발로란트 작은 글줄
-FONT_OW = os.path.join(ROOT, 'assets', 'fonts', 'BlackHanSans-Regular.ttf')   # 오버워치 이름(굵은 한국어)
+FONT_KOVER = os.path.join(ROOT, 'assets', 'fonts', 'koverwatch', 'Koverwatch.ttf')   # 오버워치 이름(한글 포함). 저장소에는 올리지 않는 로컬 파일(.gitignore)
+FONT_OW_FALLBACK = os.path.join(ROOT, 'assets', 'fonts', 'BlackHanSans-Regular.ttf')  # Koverwatch 가 없으면 쓰는 굵은 한국어
+FONT_OW = FONT_KOVER if os.path.exists(FONT_KOVER) else FONT_OW_FALLBACK
 LOGO_OW = os.path.join(ROOT, 'assets', '맵', '로고', 'overwatch.png')  # 오버워치 로고(투명 배경 PNG)
 FONT_VAL_BIG = os.path.join(ROOT, 'assets', 'fonts', 'BebasNeue-Regular.ttf')  # 발로란트 큰 영문 이름
 FONT_KO_REG = WIN + 'malgun.ttf'
@@ -74,7 +76,7 @@ def overwatch(im, name):
         gd.line([(0, y), (W, y)], fill=(8, 12, 24, int(185 * (y - top) / (H - top))))
     im = Image.alpha_composite(im, grad)
 
-    size = 112
+    size = 140
     shear = 0.22  # 기울기(이탤릭)
     while size > 40:
         font = ko_font(FONT_OW, size)

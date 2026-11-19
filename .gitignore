@@ -9,3 +9,6 @@ DB/
 docs/
 # 미리보기 서버 설정(컴퓨터마다 경로가 다름)
 .claude/launch.json
+
+# Koverwatch 글꼴은 라이선스상 저장소(공개)에 올리지 않는다 — 내 컴퓨터에서 이미지를 만들 때만 쓴다(완성된 이미지만 커밋)
+assets/fonts/koverwatch/
