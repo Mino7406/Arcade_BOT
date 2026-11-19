@@ -221,10 +221,10 @@ def overwatch(im, name, mode='ARCADE 내전', flag=None):
     # 배경이 주황·노랑·갈색인 맵에서도 읽히게 어두운 남색 그림자와 얇은 윤곽을 먼저 깔고 주황 글씨를 올린다
     shadow = Image.new('RGBA', im.size, (0, 0, 0, 0))
     sdw = ImageDraw.Draw(shadow)
-    sdw.text((mx + 2, my + 3), mode, font=mf, fill=(10, 20, 44, 200), stroke_width=3, stroke_fill=(10, 20, 44, 200))
-    shadow = shadow.filter(ImageFilter.GaussianBlur(2))
+    sdw.text((mx + 1, my + 2), mode, font=mf, fill=(10, 20, 44, 130), stroke_width=2, stroke_fill=(10, 20, 44, 130))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(2.5))
     im = Image.alpha_composite(im, shadow)
-    ImageDraw.Draw(im).text((mx, my), mode, font=mf, fill=(247, 130, 62, 255), stroke_width=2, stroke_fill=(10, 20, 44, 235))
+    ImageDraw.Draw(im).text((mx, my), mode, font=mf, fill=(247, 130, 62, 255))
 
     flag_file = os.path.join(FLAG_DIR, f'{flag}.png') if flag else None
     if flag_file and os.path.exists(flag_file):
