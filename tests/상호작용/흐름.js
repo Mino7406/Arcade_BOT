@@ -354,7 +354,18 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
       const view = mkInteraction({ user: 'u2', guildId: G, customId: `team:hist:${id}` });
       await team.handleTeamButton(view);
       const vj = view._reply ? JSON.stringify(view._reply.components) : '';
-      assert(vj.includes('#1') && !vj.includes('hist_clear'), '내전 내역 창이 안 뜸(#1 내역이 있어야 하고 삭제 버튼은 없어야 함)');
+      assert(vj.includes('#1') && !vj.includes('hist_clear'), '내전 내역 창이 안 뜸(#1 내역이 있어야 하고 일반 참가자에겐 삭제 버튼이 없어야 함)');
+      const own = mkInteraction({ user: ADMIN, guildId: G, customId: `team:hist:${id}` });
+      await team.handleTeamButton(own);
+      assert(JSON.stringify(own._reply.components).includes('team:hist_clear:'), '주최자·관리자에겐 내역 삭제 버튼이 보여야 함');
+    }
+    {
+      const clr = mkInteraction({ user: 'u2', guildId: G, customId: `team:hist_clear:${id}` });
+      await team.handleTeamButton(clr);
+      assert(match.board.history.length === 1, '일반 참가자는 내역을 지울 수 없어야 함');
+      const clr2 = mkInteraction({ user: ADMIN, guildId: G, customId: `team:hist_clear:${id}`, message: new FakeMsg(require(path.join(root, 'handlers/공통/카드.js')).notice('x'), channel) });
+      await team.handleTeamButton(clr2);
+      assert(match.board.history.length === 0 && match.board.current.no === 2, '주최자가 내역을 비워야 함(지금 팀은 그대로)');
     }
     const normal = mkInteraction({ user: ADMIN, customId: 'naejeon:manage', message: match.message });
     common.clearNotifyTimer?.(match);
@@ -536,7 +547,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     // 일반 참가자(관리자 아님)는 못 누른다: 안내만, 확인 창도 없음
     const stranger = ask('u2');
     await team.handleTeamButton(stranger);
-    assert(replyJson(stranger).includes('일반 참가자는 주최자만 가능합니다') && !replyJson(stranger).includes('team:map_ok:') && !m.board.map, '일반 참가자는 "주최자만 가능합니다" 안내만 받아야 함');
+    assert(replyJson(stranger).includes('주최자만 할 수 있어요') && !replyJson(stranger).includes('team:map_ok:') && !m.board.map, '일반 참가자는 "주최자만" 안내만 받아야 함');
 
     // 주최자가 누르면 나만 보이는 확인 창(돌리겠습니까?) — 아직 돌지 않는다
     const asked = ask(ADMIN);

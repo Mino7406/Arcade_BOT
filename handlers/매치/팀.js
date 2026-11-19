@@ -594,6 +594,9 @@ function buildBoardRows(match, matchMsgId) {
     const label = `${locked ? '🔒' : '🎲'} 맵 뽑기`; // 글자는 그대로, 앞 이모지만 바뀐다(평소 🎲, 뽑는 중·5분 잠금 🔒)
     second.push(new ButtonBuilder().setCustomId(`team:map:${matchMsgId}`).setLabel(label).setStyle(ButtonStyle.Primary).setDisabled(locked));
   }
+  // 내전 모집 글(내전 정보)로 바로 가는 링크 버튼: 맵 뽑기 버튼 옆. 내전이 자동 삭제돼 글이 사라지면(boardEnded) 눌러지지 않는다.
+  const postUrl = match.message?.url;
+  if (postUrl) second.push(new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(postUrl).setLabel('내전 정보').setEmoji('🔗').setDisabled(ended));
   return [new ActionRowBuilder().addComponents(...buttons), ...(second.length ? [new ActionRowBuilder().addComponents(...second)] : [])];
 }
 
@@ -656,7 +659,8 @@ function buildBoardPayload(match, matchMsgId) {
   return payload(card({
     color: gameInfo.color,
     header: title,
-    sub: [gameInfo.name, status],
+    sub: `${[gameInfo.name, status].filter(Boolean).join(' · ')}
+-# 주최자 : ${escapeMarkdown(match.data.organizer.displayName ?? '')}`, // 부제 바로 아래 줄에 주최자
     thumb: gameThumb(gameInfo),
     thumbAlt: gameInfo.name,
     blocks,
@@ -666,15 +670,18 @@ function buildBoardPayload(match, matchMsgId) {
 }
 
 // 📜 내전 내역(나만 보이는 메시지): 순번(#3)·직전 표시·시각(몇 분 전)·방식 한 줄 + 팀별 인용 줄. 내역마다 칸을 띄워 구분한다.
-// 나만 보이는 창이라 내역은 지우는 버튼 없이, 새로 나눌 때마다 쌓이다가 가장 오래된 것부터 밀려난다(HISTORY_KEPT).
-function buildHistoryPayload(match, matchMsgId) {
+// 새로 나눌 때마다 쌓이다가 가장 오래된 것부터 밀려난다(HISTORY_KEPT).
+function buildHistoryPayload(match, matchMsgId, userId) {
   const { gameInfo, title } = match.data;
   const board = normalizeBoard(match);
   const blocks = [];
   if (!board.history.length) {
     blocks.push('-# 아직 내전 내역이 없어요. 팀을 다시 나누면 이전 팀이 여기에 쌓여요.');
   } else {
-    blocks.push({ text: `### 📜 내전 내역 (${board.history.length})` });
+    const head = { text: `### 📜 내전 내역 (${board.history.length})` };
+    // 🗑️ 내역 삭제: 주최자·관리자에게만 보인다. 지금 팀은 그대로 두고 이전 팀표만 비운다.
+    if (userId && canEdit(match, userId)) head.button = new ButtonBuilder().setCustomId(`team:hist_clear:${matchMsgId}`).setLabel('🗑️ 내역 삭제').setStyle(ButtonStyle.Danger);
+    blocks.push(head);
     board.history.forEach((h, k) => {
       const no = h.no ? `#${h.no}` : '이전';
       const tag = k === 0 ? ' · 직전 팀' : '';
@@ -1454,7 +1461,7 @@ async function handleTeamButton(interaction) {
     const say = (text) => (kind === 'ok' ? interaction.update(notice(text, { ephemeral: true })) : interaction.reply(notice(text, { ephemeral: true })));
     if (!match) { await say('⚠️ **끝났거나 취소된 내전이에요.**'); return; }
     if (!maps.hasMapPool(match.data.game)) { await say('⚠️ **이 게임은 맵 뽑기를 지원하지 않아요.**'); return; }
-    if (match.data.organizer.id !== interaction.user.id) { await say('⚠️ **일반 참가자는 주최자만 가능합니다.**'); return; }
+    if (!canEdit(match, interaction.user.id)) { await say('⚠️ **맵 뽑기는 이 내전의 주최자만 할 수 있어요.**'); return; }
     if (mapSpin.has(matchMsgId)) { await say('🎲 **지금 맵을 뽑는 중이에요.**'); return; }
     if (mapLocked(match)) {
       const at = Math.floor((match.board.map.at + MAP_LOCK_MS) / 1000);
@@ -1489,7 +1496,19 @@ async function handleTeamButton(interaction) {
     const matchMsgId = customId.slice('team:hist:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
     if (!match) { await interaction.reply(notice('⚠️ **끝났거나 취소된 내전이에요.**', { ephemeral: true })); return; }
-    await interaction.reply(buildHistoryPayload(match, matchMsgId));
+    await interaction.reply(buildHistoryPayload(match, matchMsgId, interaction.user.id));
+    return;
+  }
+
+  // 🗑️ 내전 내역 삭제: 지금 팀은 그대로 두고 이전 팀표만 비운다(주최자·관리자). 카드의 📜 버튼도 같이 고친다.
+  if (customId.startsWith('team:hist_clear:')) {
+    const matchMsgId = customId.slice('team:hist_clear:'.length);
+    const match = await getEditableMatch(interaction, matchMsgId);
+    if (!match) return;
+    normalizeBoard(match).history = [];
+    await interaction.update(buildHistoryPayload(match, matchMsgId, interaction.user.id));
+    saveNow(interaction.client);
+    refreshBoard(interaction.client, matchMsgId, match).catch(() => {});
     return;
   }
 

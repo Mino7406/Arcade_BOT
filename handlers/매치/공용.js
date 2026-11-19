@@ -413,14 +413,15 @@ function notifyWhenText(data) {
   return data?.notifyAuto ? `${when} (자동)` : when;
 }
 
-// 알림 버튼 글자: 꺼짐 / 마감 시 알림 / 시각 알림(오늘이면 날짜 생략). 자동·직접 구분은 눌러서 나오는 방식 선택 창에 표시한다.
+// 알림 버튼 글자: 꺼짐 / 마감 시 알림 / 시각 알림(오늘이면 날짜 생략). 자동으로 잡힌 알림은 끝에 (자동)을 붙인다.
 function notifyButtonLabel(data) {
   if (!data?.notifyAt) return '🔔 알림 꺼짐';
-  if (data.notifyOnClose) return '🔔 마감 시 알림';
+  const auto = data.notifyAuto ? '(자동)' : ''; // 봇이 일시를 보고 자동으로 잡은 알림
+  if (data.notifyOnClose) return `🔔 마감 시 알림${auto}`;
   let when = formatNotifyTimeSmart(data.notifyAt, data.notify12h);
   const day = t => Math.floor((t + KST_OFFSET_MS) / DAY_MS);
   if (day(data.notifyAt) === day(Date.now())) when = when.replace(/^\d+\/\d+ /, '');
-  return `🔔 ${when} 알림`;
+  return `🔔 ${when} 알림${auto}`;
 }
 
 // 일시를 고친 뒤 주최자에게 덧붙일 알림 안내(syncAutoNotify 결과별).
