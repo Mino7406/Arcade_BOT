@@ -998,6 +998,23 @@ function linkRow(url) {
 
 // ── 팀 바꾸기 ───────────────────────────────────────────────
 
+const NOTE_LIFETIME_MS = 10 * 1000;
+
+// 이미 정해 둔 팀이 있으면(자동 초안은 제외) 다시 만들기 전에 한 번 경고한다.
+const hasSetTeams = match => !!(match.board?.current && !match.board.current.draft);
+
+async function askRegen(interaction, how, matchMsgId) {
+  const word = { input: '직접 입력', balance: '⚖️ 밸런스', random: '🎲 랜덤' }[how];
+  await interaction.reply(notice(`⚠️ **이미 짜 둔 팀이 있어요.**
+${word}(으)로 다시 만들면 지금 팀은 📜 내전 내역으로 넘어가요.`, {
+    ephemeral: true,
+    rows: [new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`team:regen:${how}:${matchMsgId}`).setLabel('다시 만들기').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`team:regen_no:${matchMsgId}`).setLabel('취소').setStyle(ButtonStyle.Secondary),
+    )],
+  }));
+}
+
 async function commitTeams(interaction, matchMsgId, match, teams, how, extraNote = '') {
   const board = normalizeBoard(match);
   if (board.current) board.history = [board.current, ...board.history].slice(0, HISTORY_KEPT); // 자동으로 나눈 #1 도 내역에 남긴다
@@ -1014,6 +1031,7 @@ async function commitTeams(interaction, matchMsgId, match, teams, how, extraNote
   if (!extraNote) { await interaction.deleteReply().catch(() => {}); return; }
   const head = { input: '✅ **팀을 올렸어요.**', balance: '⚖️ **티어로 밸런스를 맞춰 나눴어요.**', random: '🎲 **무작위로 나눴어요.**' }[how];
   await interaction.editReply(notice(`${head}${extraNote}`));
+  setTimeout(() => interaction.deleteReply().catch(() => {}), NOTE_LIFETIME_MS).unref?.(); // 나만 보이는 안내는 잠깐 보여 주고 지운다
 }
 
 // 팀 입력에 적힌 티어를 참가자에게 저장한다. 저장한 것/못 찾은 것을 안내 문구로 돌려준다.
@@ -1055,7 +1073,8 @@ const INPUT_PLACEHOLDER = {
 };
 
 // ✏️ 직접 입력: 팀마다 칸 하나(디스코드 입력창은 칸이 최대 5개라 팀이 6개 이상이면 예전처럼 칸 하나에 한 줄 한 팀).
-function buildInputModal(match, matchMsgId) {
+function buildInputModal(match, matchMsgId, { warned = false } = {}) {
+  const modalId = `team:modal:${warned ? 'w:' : ''}${matchMsgId}`; // w: 경고 창에서 이어 온 입력 — 제출하면 그 경고 창을 지운다
   const cur = normalizeBoard(match).current;
   const game = match.data.game;
   if (cur.teams.length <= 5) {
@@ -1073,7 +1092,7 @@ function buildInputModal(match, matchMsgId) {
       if (value) input.setValue(value.slice(0, 1000));
       return new ActionRowBuilder().addComponents(input);
     });
-    return new ModalBuilder().setCustomId(`team:modal:${matchMsgId}`).setTitle('직접 입력').addComponents(...rows);
+    return new ModalBuilder().setCustomId(modalId).setTitle('직접 입력').addComponents(...rows);
   }
   const prefill = teamsToText(cur.teams);
   const input = new TextInputBuilder()
@@ -1085,7 +1104,7 @@ function buildInputModal(match, matchMsgId) {
     .setMaxLength(1000);
   if (prefill) input.setValue(prefill.slice(0, 1000));
   return new ModalBuilder()
-    .setCustomId(`team:modal:${matchMsgId}`)
+    .setCustomId(modalId)
     .setTitle('직접 입력')
     .addComponents(new ActionRowBuilder().addComponents(input));
 }
@@ -1449,7 +1468,30 @@ async function handleTeamButton(interaction) {
     const matchMsgId = customId.slice('team:input:'.length);
     const match = await getEditableMatch(interaction, matchMsgId);
     if (!match) return;
+    if (hasSetTeams(match)) return askRegen(interaction, 'input', matchMsgId);
     await interaction.showModal(buildInputModal(match, matchMsgId));
+    return;
+  }
+
+  // 경고 창의 [다시 만들기]·[취소]. 만들면 경고 창은 바로 지운다.
+  if (customId.startsWith('team:regen_no:')) {
+    await interaction.deferUpdate();
+    await interaction.deleteReply().catch(() => {});
+    return;
+  }
+  if (customId.startsWith('team:regen:')) {
+    const [, , how, matchMsgId] = customId.split(':');
+    const match = await getEditableMatch(interaction, matchMsgId);
+    if (!match) return;
+    if (how === 'input') { await interaction.showModal(buildInputModal(match, matchMsgId, { warned: true })); return; }
+    if (how !== 'random' && how !== 'balance') return;
+    if (match.participants.length < 2) {
+      await interaction.update(notice('⚠️ **팀을 나누려면 참가자가 2명 이상이어야 해요.**'));
+      return;
+    }
+    await interaction.deferUpdate();
+    const teams = how === 'random' ? randomTeams(match.participants) : balanceTeams(match.participants, match.data.game);
+    await commitTeams(interaction, matchMsgId, match, teams, how);
     return;
   }
 
@@ -1525,6 +1567,7 @@ async function handleTeamButton(interaction) {
       await interaction.reply(notice('⚠️ **팀을 나누려면 참가자가 2명 이상이어야 해요.**', { ephemeral: true }));
       return;
     }
+    if (hasSetTeams(match)) return askRegen(interaction, how, matchMsgId);
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const teams = how === 'random' ? randomTeams(match.participants) : balanceTeams(match.participants, match.data.game);
     await commitTeams(interaction, matchMsgId, match, teams, how);
@@ -1618,7 +1661,9 @@ async function handleTeamModal(interaction) {
     }
     return saveMyTier(interaction, game, { tier: key, score }, matchMsgId);
   }
-  const matchMsgId = interaction.customId.slice('team:modal:'.length);
+  let matchMsgId = interaction.customId.slice('team:modal:'.length);
+  const warned = matchMsgId.startsWith('w:'); // 경고 창에서 이어 온 입력
+  if (warned) matchMsgId = matchMsgId.slice(2);
   const match = await getEditableMatch(interaction, matchMsgId);
   if (!match) return;
   // 팀별 칸(team0~team4)이 있으면 그걸로, 없으면 예전 한 칸짜리(teams). 없는 칸을 읽으면 discord.js 가 오류를 내서 감싼다.
@@ -1631,7 +1676,8 @@ async function handleTeamModal(interaction) {
     await interaction.reply(notice(`⚠️ ${parsed.error}`, { ephemeral: true }));
     return;
   }
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  if (warned) await interaction.deferUpdate(); // 경고 창을 그대로 이어 쓰고, 끝나면 지운다
+  else await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const note = learnTiers(match, parsed.hints);
   await commitTeams(interaction, matchMsgId, match, parsed.teams, 'input', note);
 }

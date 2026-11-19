@@ -231,14 +231,35 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     const glued = team.parseTeamBoxes(['민호다이아2' + NL + '승훈(골1)', '지수/미드' + NL + '나'], { game: 'lol', participants: P });
     assert(glued.teams[0].members.join() === '민호,승훈' && glued.hints.length === 2 && glued.teams[1].pos[0] === 'mid', `이름에 붙인 티어·괄호·/ 를 못 읽음(${JSON.stringify(glued)})`);
 
-    await team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:balance:${id}` }));
-    assert(match.board.current.how === 'balance' && match.board.history.length === 3, '밸런스 후 이전 팀표로 안 밀림');
-    await team.handleTeamButton(mkInteraction({ user: ADMIN, customId: `team:random:${id}` }));
-    assert(match.board.history.length === 4, '랜덤 후 이전 팀표가 안 쌓임');
+    // 이미 정한 팀이 있으면 ⚖️·🎲·✏️ 는 경고부터: 누른 것만으론 팀이 안 바뀌고, 경고 창의 [다시 만들기]를 눌러야 바뀐다(만들면 경고 창은 지운다)
+    const hist0 = match.board.history.length;
+    const warnB = mkInteraction({ user: ADMIN, customId: `team:balance:${id}` });
+    await team.handleTeamButton(warnB);
+    assert(warnB._reply && JSON.stringify(warnB._reply.components).includes(`team:regen:balance:${id}`) && match.board.history.length === hist0, '밸런스를 눌렀는데 경고 없이 팀이 바뀜');
+    const okB = mkInteraction({ user: ADMIN, customId: `team:regen:balance:${id}`, message: warnB._reply });
+    await team.handleTeamButton(okB);
+    assert(match.board.current.how === 'balance' && match.board.history.length === hist0 + 1 && okB.replyDeleted, '경고 후 밸런스가 안 되었거나 경고 창이 안 지워짐');
+    const warnR = mkInteraction({ user: ADMIN, customId: `team:random:${id}` });
+    await team.handleTeamButton(warnR);
+    const noR = mkInteraction({ user: ADMIN, customId: `team:regen_no:${id}`, message: warnR._reply });
+    await team.handleTeamButton(noR);
+    assert(match.board.history.length === hist0 + 1 && noR.replyDeleted, '취소했는데 팀이 바뀌었거나 경고 창이 안 지워짐');
+    const okR = mkInteraction({ user: ADMIN, customId: `team:regen:random:${id}`, message: warnR._reply });
+    await team.handleTeamButton(okR);
+    assert(match.board.history.length === hist0 + 2 && okR.replyDeleted, '경고 후 랜덤이 안 되었거나 경고 창이 안 지워짐');
+    const warnI = mkInteraction({ user: ADMIN, customId: `team:input:${id}` });
+    await team.handleTeamButton(warnI);
+    assert(!warnI.modalShown && JSON.stringify(warnI._reply?.components).includes(`team:regen:input:${id}`), '직접 입력도 이미 정한 팀이 있으면 경고부터 떠야 함');
+    const okI = mkInteraction({ user: ADMIN, customId: `team:regen:input:${id}`, message: warnI._reply });
+    await team.handleTeamButton(okI);
+    assert(okI.modalShown, '경고 후 [다시 만들기]를 누르면 입력 창이 떠야 함');
+    const subI = mkInteraction({ user: ADMIN, customId: `team:modal:w:${id}`, message: warnI._reply, fields: { teams: ['a1-a2', 'a3-a4'].join(String.fromCharCode(10)) } });
+    await team.handleTeamModal(subI);
+    assert(match.board.history.length === hist0 + 3 && subI.replyDeleted, '경고에서 이어 온 직접 입력이 안 되었거나 경고 창이 안 지워짐');
 
     const bad = mkInteraction({ user: ADMIN, customId: `team:modal:${id}`, fields: { teams: '혼자' } });
     await team.handleTeamModal(bad);
-    assert(match.board.history.length === 4, '잘못된 입력인데 팀이 바뀜');
+    assert(match.board.history.length === hist0 + 3, '잘못된 입력인데 팀이 바뀜');
 
     // 🏅 내 티어: 티어 고르기 → 단계 고르기 → 저장 / 단계 없는 티어 / 지우기
     const tierBtn = mkInteraction({ user: 'u3', customId: `team:tier:lol:${id}` });
