@@ -296,6 +296,7 @@ function deriveNotifyFromDatetime(datetime, { base } = {}) {
 //    (직접 시각을 적어 둔 알림도 마찬가지 — 일시를 바꿨다는 건 시작 시각이 바뀌었다는 뜻이므로)
 //  - 못 읽으면: 일시로 자동 설정된 알림은 끄고 → 'off', 직접 시각을 적어 둔 알림은 그대로 둔다 → 'kept'
 function syncAutoNotify(data, prevDatetime) {
+  if (data?.notifyPinClose) return null; // 주최자가 '마감 시 발송'으로 직접 골랐으면 일시를 고쳐도 그대로
   if (!data?.notifyAt && !data?.notifyAuto) return null;
   const before = data.notifyAuto ? data.notifyAutoSrc : prevDatetime;
   if (before === undefined || data.datetime === before) return null;
@@ -316,10 +317,65 @@ function autoEnableNotifyOnRestore(match) {
   return true;
 }
 
+// 알림 방식 고르기(주최자·관리자): 마감 시 발송 / 자동(일시 10분 전) / 시각 지정 / 끄기.
+function notifyModeOf(data) {
+  if (!data?.notifyAt) return 'off';
+  if (data.notifyOnClose) return data.notifyPinClose ? 'close' : 'auto';
+  return data.notifyAuto ? 'auto' : 'manual';
+}
+
+function buildNotifyModeRows(prefix, msgId, data) {
+  const cur = notifyModeOf(data);
+  const b = (mode, label, id) => new ButtonBuilder()
+    .setCustomId(id || `${prefix}:notify_mode:${mode}:${msgId}`)
+    .setLabel(label)
+    .setStyle(cur === mode ? ButtonStyle.Success : ButtonStyle.Secondary);
+  return [
+    new ActionRowBuilder().addComponents(
+      b('close', '⏹️ 마감 시 발송'),
+      b('auto', '🤖 자동(일시 10분 전)'),
+      b('manual', '✏️ 시각 지정', `${prefix}:notify_edit:${msgId}`),
+      b('off', '🔕 끄기'),
+    ),
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`${prefix}:manage_back:${msgId}`).setLabel('↩️ 돌아가기').setStyle(ButtonStyle.Secondary),
+    ),
+  ];
+}
+
+function notifyModeMenuText(data) {
+  const cur = data?.notifyAt ? `**${notifyWhenText(data)}**` : '**꺼짐**';
+  return `🔔 **알림 방식을 골라주세요.** (지금: ${cur})
+⏹️ 마감 시 발송 — 모집이 마감되는 순간
+🤖 자동 — 일시를 읽어 시작 10분 전(못 읽으면 마감 시 발송)
+✏️ 시각 지정 — 직접 입력한 시각에
+🔕 끄기 — 알림 안 보냄`;
+}
+
+// close / auto / off 를 data 에 적용하고 안내 문구를 돌려준다(manual 은 모달에서 처리). 타이머·카드 갱신은 호출 쪽에서.
+function applyNotifyMode(match, mode) {
+  const d = match.data;
+  if (mode === 'off') {
+    Object.assign(d, { notifyAt: null, notify12h: false, notifyAuto: false, notifyAutoSrc: null, notifyOnClose: false, notifyPinClose: false, notifyDisabled: true });
+    return '🔕 **알림을 껐어요.**';
+  }
+  if (mode === 'close') {
+    Object.assign(d, { notifyAt: Math.max(d.createdAt || 0, Date.now()), notify12h: false, notifyAuto: false, notifyAutoSrc: null, notifyOnClose: true, notifyPinClose: true, notifyDisabled: false });
+    return '🔔 **마감 시 발송으로 설정했어요.** 마감되는 순간 참가자에게 DM 알림을 보내요. (일시를 고쳐도 그대로예요)';
+  }
+  const auto = deriveNotifyFromDatetime(d.datetime, { base: d.createdAt });
+  Object.assign(d, auto, { notifyAuto: true, notifyAutoSrc: d.datetime, notifyPinClose: false, notifyDisabled: false });
+  return auto.notifyOnClose
+    ? '🔔 **자동으로 설정했어요.** 일시를 읽지 못했거나 10분 전이 이미 지나서, 마감되는 순간 참가자에게 DM 알림을 보내요.'
+    : `🔔 **자동으로 설정했어요.** 일시 10분 전인 ${formatNotifyTimeSmart(auto.notifyAt, auto.notify12h)}에 참가자에게 DM 알림을 보낼게요.
+일시를 고치면 알림도 따라 옮겨져요.`;
+}
+
 // 공개된 매치의 일시를 고쳤을 때 알림 처리. 아직 안 보낸 알림은 syncAutoNotify 그대로.
 // 이미 보냈거나(지나서 건너뛴 것 포함) 일시를 뒤로 미뤄 새 일시 10분 전이 아직 안 왔으면 알림을 한 번 더 건다 → 'rearmed'
 // (미뤄진 줄 모르고 옛 시각에 모이는 일이 없게). 새 시각도 이미 지났으면 다시 걸지 않는다.
 function syncNotifyOnEdit(match, prevDatetime) {
+  if (match.data?.notifyPinClose) return null;
   if (!match.notifySent) return syncAutoNotify(match.data, prevDatetime);
   if (match.data.datetime === prevDatetime) return null;
   const auto = deriveNotifyFromDatetime(match.data.datetime, { base: match.data.createdAt });
@@ -1314,6 +1370,9 @@ module.exports = {
   lateJoinNote,
   syncNotifyOnEdit,
   syncAutoNotify,
+  buildNotifyModeRows,
+  notifyModeMenuText,
+  applyNotifyMode,
   autoEnableNotifyOnRestore,
   formatNotifyTime,
   formatNotifyTimeKorean,

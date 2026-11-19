@@ -212,12 +212,12 @@ const oneLine = (s) => s.replace(/\*\*/g, '').replace(/\n+/g, ' / ').replace(/-#
   await scenario('5. 일시를 못 읽는 글자로 바꿈', async () => {
     const a = await create({ datetime: '20:00', title: '자동 알림 내전' });
     const said = await edit(a, '모이면 시작');
-    check(/읽을 수 없어 알림 예약이 꺼졌/.test(said) && !a.data.notifyAt, '자동 알림은 꺼지고 이유 안내');
-    showCard(a); check(status(a) === '🟢 모집 중', '🔔 사라짐');
+    check(/마감되는 순간/.test(said) && a.data.notifyOnClose === true, '못 읽으면 마감 시 발송으로 바뀌고 안내');
+    showCard(a); check(status(a) === '🟢 모집 중 · 🔔', '🔔 유지(마감 때 발송)');
     const b = await create({ datetime: '20:00', title: '직접 알림 내전' });
     await notifyModal(b, '11/13 19:00');
     const said2 = await edit(b, '모이면 시작');
-    check(/직접 정한 알림 11\/13 19:00은 그대로/.test(said2) && b.data.notifyAt === at('19:00'), '직접 적은 알림은 그대로 유지');
+    check(/마감되는 순간/.test(said2) && b.data.notifyOnClose === true, '직접 적은 알림도 못 읽으면 마감 시 발송');
   });
 
   await scenario('6. 직접 적은 알림이 있는데 일시를 읽을 수 있는 글자로 바꿈', async () => {
@@ -231,7 +231,7 @@ const oneLine = (s) => s.replace(/\*\*/g, '').replace(/\n+/g, ' / ').replace(/-#
   await scenario('7. 24일보다 먼 일정 / 지난 시각을 직접 입력', async () => {
     const m = await create({ datetime: '20:00' });
     const said = await edit(m, '12/25 20:00');
-    check(/24일보다 멀어서/.test(said), '먼 일시로 바꾸면 "24일보다 멀어서 꺼짐"(읽을 수 없다고 하지 않음)');
+    check(/마감되는 순간/.test(said) && m.data.notifyOnClose === true, '먼 일시로 바꾸면 마감 시 발송');
     const s1 = await notifyModal(m, '11/13 17:00');
     check(/이미 지난 시각이에요/.test(s1), '지난 시각 입력 → "이미 지난 시각이에요"');
     const s2 = await notifyModal(m, '12/25 20:00');
