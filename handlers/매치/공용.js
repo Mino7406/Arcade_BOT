@@ -1124,7 +1124,7 @@ function buildPreviewComponents(type, data = null) {
   );
   const autoCloseToggle = new ButtonBuilder()
     .setCustomId(`${type}:toggle_autoclose`)
-    .setEmoji('⏰')
+    .setEmoji('🗑️')
     .setLabel(data && data.autoClose ? '자동 삭제: ON' : '자동 삭제: OFF')
     .setStyle(data && data.autoClose ? ButtonStyle.Success : ButtonStyle.Secondary);
   const notifyAt = data?.notifyAt;

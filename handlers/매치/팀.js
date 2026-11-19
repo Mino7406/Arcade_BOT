@@ -647,7 +647,7 @@ function buildBoardPayload(match, matchMsgId) {
     const file = frame.final ? maps.mapResultFile(game, frame.key) : null;
     const attName = frame.final ? 'map-final.jpg' : `map-${frame.n}.png`;
     const hasImage = frame.final ? fs.existsSync(file) : !!frame.png;
-    blocks.push(frame.final ? '## ✅ 맵 뽑기 완료' : '## 🎲 맵 뽑는 중...'); // 구역 맨 위 헤더(이미지 위)
+    blocks.push(frame.final ? '### ✔️ 맵 추첨 완료' : '### 🔍 맵 추첨 중...'); // 구역 맨 위 헤더(이미지 위)
     if (hasImage) {
       blocks.push({ image: `attachment://${attName}`, noDivider: true });
       files.push(new AttachmentBuilder(frame.final ? file : frame.png, { name: attName }));
@@ -660,7 +660,7 @@ function buildBoardPayload(match, matchMsgId) {
     color: gameInfo.color,
     header: title,
     sub: `${[gameInfo.name, status].filter(Boolean).join(' · ')}
--# 주최자 : ${escapeMarkdown(match.data.organizer.displayName ?? '')}`, // 부제 바로 아래 줄에 주최자
+-# 👑 주최자 : **\`${String(match.data.organizer.displayName ?? '').replace(/`/g, "'")}\`**`, // 부제 바로 아래 줄에 주최자
     thumb: gameThumb(gameInfo),
     thumbAlt: gameInfo.name,
     blocks,
@@ -1505,7 +1505,9 @@ async function handleTeamButton(interaction) {
     const matchMsgId = customId.slice('team:hist_clear:'.length);
     const match = await getEditableMatch(interaction, matchMsgId);
     if (!match) return;
-    normalizeBoard(match).history = [];
+    const board = normalizeBoard(match);
+    board.history = [];
+    if (board.current) { board.current.no = 1; board.count = 1; } // 순번도 처음(#1)부터 다시: 지금 팀이 #1, 다음에 나누면 #2
     await interaction.update(buildHistoryPayload(match, matchMsgId, interaction.user.id));
     saveNow(interaction.client);
     refreshBoard(interaction.client, matchMsgId, match).catch(() => {});

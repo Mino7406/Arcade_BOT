@@ -115,7 +115,7 @@ function buildAutoCloseToggleButton(match, matchMsgId, label) {
   }
   return new ButtonBuilder()
     .setCustomId(`naejeon:toggle_match_autoclose:${matchMsgId}`)
-    .setEmoji('⏰')
+    .setEmoji('🗑️')
     .setLabel(match.data.autoClose ? '자동 삭제: ON' : '자동 삭제: OFF')
     .setStyle(match.data.autoClose ? ButtonStyle.Success : ButtonStyle.Secondary);
 }
@@ -494,7 +494,7 @@ async function handleNaejeonButton(interaction) {
       await interaction.update(notice('✅ **자동 삭제 시간이 지나 내전이 삭제되었습니다.**'));
       return;
     }
-    await interaction.update(buildManagePayload({ label: '내전', match, note: `⏰ **자동 삭제가 ${match.data.autoClose ? 'ON' : 'OFF'}으로 변경되었습니다.**`, rows: buildManageMenu(match, matchMsgId) }));
+    await interaction.update(buildManagePayload({ label: '내전', match, note: `🗑️ **자동 삭제가 ${match.data.autoClose ? 'ON' : 'OFF'}으로 변경되었습니다.**`, rows: buildManageMenu(match, matchMsgId) }));
     return;
   }
 

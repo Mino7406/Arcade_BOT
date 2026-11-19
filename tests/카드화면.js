@@ -167,13 +167,13 @@ async function buildScreens() {
     const valBoard = mapBoard('valorant', GAMES.val, '발로란트 내전', { game: 'valorant', key: 'ascent', at: Date.now() - team.MAP_LOCK_MS - 60e3 });
     const owBoard = mapBoard('overwatch', owInfo, '오버워치 내전', { game: 'overwatch', key: 'grimsvotn', at: Date.now() });
     const valP = team.buildBoardPayload(valBoard, '1');
-    add('내전 · 모집', '팀 짜기 카드(맵 뽑기 결과 · 발로란트)', '헤더 ## ✅ 맵 뽑기 완료 아래에 이름이 알약 박스 위에 박힌 맵 이미지 · 뽑은 지 5분이 지나서 두 번째 줄의 🎲 맵 뽑기가 눌려요', valP, jpg(valP));
+    add('내전 · 모집', '팀 짜기 카드(맵 뽑기 결과 · 발로란트)', '헤더 ### ✔️ 맵 추첨 완료 아래에 이름이 알약 박스 위에 박힌 맵 이미지 · 뽑은 지 5분이 지나서 두 번째 줄의 🎲 맵 뽑기가 눌려요', valP, jpg(valP));
     const owP = team.buildBoardPayload(owBoard, '1');
     add('내전 · 모집', '팀 짜기 카드(맵 뽑기 결과 · 오버워치)', '오버워치는 호위·혼합·밀기·쟁탈·플래시포인트 전체 맵에서 같은 확률 · 방금 뽑아서 🔒 맵 뽑기 버튼이 5분간 비활성화(회색)돼요', owP, jpg(owP));
     team.__mapSpin.set('1', { key: 'busan', n: 3 });
     const spinP = team.buildBoardPayload(mapBoard('overwatch', owInfo, '오버워치 내전', null), '1');
     team.__mapSpin.delete('1');
-    add('내전 · 모집', '팀 짜기 카드(맵 뽑는 중)', '누르는 순간 헤더가 ## 🎲 맵 뽑는 중... 이 되고 버튼이 잠겨요 · 이름 없는 맵 이미지가 5번 바뀌고 점점 느려져요(총 약 5초)', spinP, jpg(spinP));
+    add('내전 · 모집', '팀 짜기 카드(맵 뽑는 중)', '누르는 순간 헤더가 ### 🔍 맵 추첨 중... 이 되고 버튼이 잠겨요 · 이름 없는 맵 이미지가 5번 바뀌고 점점 느려져요(총 약 5초)', spinP, jpg(spinP));
     add('내전 · 모집', '팀 짜기 카드(내역 버튼이 켜진 모습)', '내전 내역이 있으면 📜 내전 내역 (개수) 버튼이 두 번째 줄에 눌리게 보여요', team.buildBoardPayload(histBoard, '1'));
     add('내전 · 모집', '팀 짜기 카드(롤 포지션)', '포지션을 저장한 사람이 있으면 5명 팀마다 탑~서포터를 맡기고 그 순서로 줄을 세움', team.buildBoardPayload({ data: base('lol'), participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 2, teams: halves(named) }, history: [] } }, '1'));
     add('내전 · 모집', '팀 짜기 카드(발로란트 역할)', '발로란트는 역할이 고정이 아니라 가능한 역할 2개(주·부)를 티어 앞에 나란히 보여 줌 · 안 정한 사람은 투명 아이콘으로 칸만 맞춤', team.buildBoardPayload({ data: { ...base('lol'), game: 'valorant', gameInfo: owInfo, title: '발로란트 내전' }, participants: named, closed: true, board: { current: { how: 'balance', at: Date.now(), no: 1, teams: halves(named) }, history: [] } }, '1'));

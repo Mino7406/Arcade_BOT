@@ -94,7 +94,7 @@ function buildAutoCloseToggleButton(match, msgId, label) {
   }
   return new ButtonBuilder()
     .setCustomId(`mojip:toggle_match_autoclose:${msgId}`)
-    .setEmoji('⏰')
+    .setEmoji('🗑️')
     .setLabel(match.data.autoClose ? '자동 삭제: ON' : '자동 삭제: OFF')
     .setStyle(match.data.autoClose ? ButtonStyle.Success : ButtonStyle.Secondary);
 }
@@ -424,7 +424,7 @@ async function handleMojipButton(interaction) {
       await interaction.update(notice('✅ **자동 삭제 시간이 지나 모집이 삭제되었습니다.**'));
       return;
     }
-    await interaction.update(buildManagePayload({ label: '모집', match, note: `⏰ **자동 삭제가 ${match.data.autoClose ? 'ON' : 'OFF'}으로 변경되었습니다.**`, rows: buildManageMenu(match, msgId) }));
+    await interaction.update(buildManagePayload({ label: '모집', match, note: `🗑️ **자동 삭제가 ${match.data.autoClose ? 'ON' : 'OFF'}으로 변경되었습니다.**`, rows: buildManageMenu(match, msgId) }));
     return;
   }
 
