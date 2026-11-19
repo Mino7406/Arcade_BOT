@@ -439,6 +439,7 @@ function normalizeBoard(match) {
     b.count = (b.count || 0) + 1;
     b.current = { ...makeDraft(match), no: b.count };
   } else if (b.current.draft && !sameMembers(b.current.teams, match.participants)) {
+    logError('팀 카드', `자동 초안을 다시 나눔(참가자가 달라졌다고 판단) — 팀 ${b.current.teams.flatMap(t => t.members).length}명 vs 참가자 ${match.participants.length}명`);
     b.current = { ...makeDraft(match), no: b.current.no ?? ((b.count = (b.count || 0) + 1)) }; // 참가자가 바뀌면 같은 순번으로 다시 나눔
   }
   return b;
