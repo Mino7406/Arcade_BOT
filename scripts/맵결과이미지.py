@@ -67,46 +67,59 @@ def spaced_width(draw, text, font, tracking):
     return sum(draw.textlength(ch, font=font) + tracking for ch in text) - tracking
 
 
-def overwatch(im, name):
-    """오른쪽 아래, 크게 기울어진 흰 이름 + 그림자. 바닥에 어두운 그라데이션(글자 가독성)."""
-    grad = Image.new('RGBA', (W, H), (0, 0, 0, 0))
-    gd = ImageDraw.Draw(grad)
-    top = int(H * 0.62)
-    for y in range(top, H):
-        gd.line([(0, y), (W, y)], fill=(8, 12, 24, int(110 * (y - top) / (H - top))))  # 게임은 그림을 거의 안 어둡게 한다 — 옅게만
-    im = Image.alpha_composite(im, grad)
-
-    size = 140
-    shear = 0.22  # 기울기(이탤릭)
-    while size > 40:
+def overwatch(im, name, mode='내전'):
+    """오버워치 한국어 인게임 화면 모양(오른쪽 아래): [로고 태그] 이름(바로 선 흰 글씨) [로고+얇은 원], 이름 위에 주황색 작은 모드 글씨. 그림은 어둡게 가리지 않는다."""
+    size = 130
+    while size > 44:
         font = ko_font(FONT_OW, size)
         probe = ImageDraw.Draw(im).textbbox((0, 0), name, font=font)
-        if (probe[2] - probe[0]) * 1.0 + size * shear <= W * 0.62:
+        if probe[2] - probe[0] <= W * 0.5:
             break
         size -= 4
     tw, th = probe[2] - probe[0], probe[3] - probe[1]
-    pad = 40
-    layer = Image.new('RGBA', (tw + pad * 2 + int(size * shear), th + pad * 2), (0, 0, 0, 0))
-    ld = ImageDraw.Draw(layer)
-    # 은은하게 번진 그림자(딱딱한 검은 외곽 대신) → 흰 글씨는 살짝 굵게
-    sh = Image.new('RGBA', layer.size, (0, 0, 0, 0))
-    ImageDraw.Draw(sh).text((pad - probe[0], pad - probe[1] + 5), name, font=font, fill=(0, 0, 0, 200), stroke_width=2, stroke_fill=(0, 0, 0, 200))
-    layer.alpha_composite(sh.filter(ImageFilter.GaussianBlur(7)))
-    ld.text((pad - probe[0], pad - probe[1]), name, font=font, fill=(255, 255, 255, 255), stroke_width=1, stroke_fill=(255, 255, 255, 255))
-    # x' = x + shear*(h - y): 아래쪽을 기준으로 윗부분이 오른쪽으로 기운다
-    lh = layer.size[1]
-    layer = layer.transform(layer.size, Image.AFFINE, (1, shear, -shear * lh, 0, 1, 0), Image.BICUBIC)
-    # 로고: 이름 오른쪽(로딩 화면처럼). 글자 높이에 맞춰 키우고 세로 가운데를 이름과 맞춘다.
-    right = W - 46
-    cy = H - 52 - th / 2
+    cy = H - 58 - th / 2                     # 이름 세로 가운데
+    L = int(max(96, th * 1.25))              # 로고 지름
+    ring = int(L * 1.42)                     # 로고를 감싸는 얇은 원 지름
+    cx = W - 24 - ring / 2                   # 로고 가운데 x
+    name_right = cx - ring / 2 - 14
+    name_left = name_right - tw
+
+    # 얇은 원 + 로고
+    ov = Image.new('RGBA', im.size, (0, 0, 0, 0))
+    od = ImageDraw.Draw(ov)
+    od.ellipse([cx - ring / 2, cy - ring / 2, cx + ring / 2, cy + ring / 2], outline=(255, 255, 255, 70), width=2)
+    im = Image.alpha_composite(im, ov)
+    logo = None
     if os.path.exists(LOGO_OW):
-        L = int(min(150, max(96, th * 1.5)))
         logo = Image.open(LOGO_OW).convert('RGBA').resize((L, L), Image.LANCZOS)
-        im.alpha_composite(logo, (right - L, int(cy - L / 2)))
-        right -= L + 18
-    x = right - layer.size[0] + pad
-    y = cy - layer.size[1] / 2
-    im.alpha_composite(layer, (max(0, int(x)), max(0, int(y))))
+        im.alpha_composite(logo, (int(cx - L / 2), int(cy - L / 2)))
+
+    # 이름: 은은한 그림자 + 살짝 푸른 흰색(바로 선 글씨)
+    pad = 30
+    layer = Image.new('RGBA', (tw + pad * 2, th + pad * 2), (0, 0, 0, 0))
+    sh = Image.new('RGBA', layer.size, (0, 0, 0, 0))
+    ImageDraw.Draw(sh).text((pad - probe[0], pad - probe[1] + 4), name, font=font, fill=(10, 24, 48, 190), stroke_width=2, stroke_fill=(10, 24, 48, 190))
+    layer.alpha_composite(sh.filter(ImageFilter.GaussianBlur(6)))
+    ImageDraw.Draw(layer).text((pad - probe[0], pad - probe[1]), name, font=font, fill=(238, 244, 252, 255), stroke_width=1, stroke_fill=(238, 244, 252, 255))
+    im.alpha_composite(layer, (int(name_left - pad), int(cy - layer.size[1] / 2)))
+
+    # 이름 위 주황색 작은 모드 글씨(이름 오른쪽 끝에 맞춤)
+    mf = ko_font(FONT_OW, max(26, int(size * 0.44)))
+    mb = ImageDraw.Draw(im).textbbox((0, 0), mode, font=mf)
+    mx = name_right - (mb[2] - mb[0])
+    my = cy - th / 2 - (mb[3] - mb[1]) - 18 - mb[1]
+    ImageDraw.Draw(im).text((mx, my), mode, font=mf, fill=(246, 132, 60, 255))
+
+    # 이름 왼쪽의 작은 태그: 남색 둥근 사각형 안에 작은 로고
+    bh = int(th * 0.46)
+    bw = int(bh * 1.45)
+    bx, by = int(name_left - 14 - bw), int(cy - bh / 2)
+    tag = Image.new('RGBA', im.size, (0, 0, 0, 0))
+    ImageDraw.Draw(tag).rounded_rectangle([bx, by, bx + bw, by + bh], radius=int(bh * 0.28), fill=(18, 30, 52, 225))
+    im = Image.alpha_composite(im, tag)
+    if logo is not None:
+        sm = int(bh * 0.72)
+        im.alpha_composite(logo.resize((sm, sm), Image.LANCZOS), (bx + (bw - sm) // 2, by + (bh - sm) // 2))
     return im
 
 
