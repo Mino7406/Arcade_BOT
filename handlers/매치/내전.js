@@ -483,7 +483,7 @@ async function handleNaejeonButton(interaction) {
     return;
   }
 
-  // ── 참가자 멘션 (주최자 전용, 1시간에 1번) ───────────────────────────────
+  // ── 참가자 멘션 (주최자 전용, 30분에 1번) ───────────────────────────────
   if (customId.startsWith('naejeon:match_mention:')) {
     const matchMsgId = customId.slice('naejeon:match_mention:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);

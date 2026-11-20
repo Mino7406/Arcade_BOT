@@ -132,8 +132,8 @@ async function deleteMentionOnly(client, match) {
   }
 }
 
-// 참가자 멘션은 알림 도배를 막으려고 1시간에 한 번만 보낼 수 있다(다시 보내면 이전 멘션 메시지는 지우고 교체).
-const MENTION_COOLDOWN_MS = 60 * 60 * 1000;
+// 참가자 멘션은 알림 도배를 막으려고 30분에 한 번만 보낼 수 있다(다시 보내면 이전 멘션 메시지는 지우고 교체).
+const MENTION_COOLDOWN_MS = 30 * 60 * 1000;
 function mentionCooldownLeft(match) {
   return Math.max(0, (match.mentionAt ?? 0) + MENTION_COOLDOWN_MS - Date.now());
 }

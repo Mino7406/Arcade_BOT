@@ -428,7 +428,7 @@ async function handleMojipButton(interaction) {
     return;
   }
 
-  // ── 참가자 멘션 (주최자 전용, 1시간에 1번) ──────────────────────────────
+  // ── 참가자 멘션 (주최자 전용, 30분에 1번) ──────────────────────────────
   if (customId.startsWith('mojip:match_mention:')) {
     const msgId = customId.slice('mojip:match_mention:'.length);
     const match = getMojips(interaction.client).get(msgId);
