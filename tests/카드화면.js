@@ -209,6 +209,8 @@ async function buildScreens() {
   const mm = (extra = {}) => ({ data: base('lol'), participants: users(6), closed: false, teams: null, ...extra });
   add('나만 보이는 메시지', '주최자 관리 메뉴 (모집 중)', '제목·상태·버튼이 한 카드에', common.buildManagePayload({ label: '내전', match: mm(), rows: naejeonMod.buildManageMenu(mm(), '1'), ephemeral: true }));
   add('나만 보이는 메시지', '주최자 관리 메뉴 (마감 + 조작 결과)', '방금 한 조작 결과가 맨 위에', common.buildManagePayload({ label: '내전', match: mm({ closed: true }), note: '✅ **내전이 마감되었습니다.**', rows: naejeonMod.buildManageMenu(mm({ closed: true }), '1') }));
+  add('나만 보이는 메시지', '주최자 관리 메뉴 (멘션 쿨타임 중)', '📣 참가자 멘션 버튼이 1시간 동안 잠기고 남은 분이 붙어요', common.buildManagePayload({ label: '내전', match: mm({ closed: true, mentionSent: true, mentionAt: Date.now() - 18 * 60000 }), note: '📣 **참가자에게 멘션을 보냈습니다.**', rows: naejeonMod.buildManageMenu(mm({ closed: true, mentionSent: true, mentionAt: Date.now() - 18 * 60000 }), '1') }));
+  add('나만 보이는 메시지', '멘션 쿨타임 안내', '쿨타임 중 버튼을 누른 경우', common.buildManagePayload({ label: '내전', match: mm({ closed: true, mentionAt: Date.now() - 18 * 60000 }), note: '⚠️ **멘션은 42분 뒤에 다시 보낼 수 있습니다.**', rows: naejeonMod.buildManageMenu(mm({ closed: true, mentionAt: Date.now() - 18 * 60000 }), '1') }));
   add('나만 보이는 메시지', '참가 완료 안내 + 참가 취소', '이전엔 평문 한 줄이었던 화면', card.notice('✅ **참가 완료!** 명단에 등록되었습니다.\n취소하려면 아래 버튼을 눌러주세요.', { rows: [naejeonMod.buildLeaveButton('1')], ephemeral: true }));
   add('나만 보이는 메시지', '게임 선택 메뉴', '', gameSelect.buildNaejeonGameSelectPayload('1'));
   add('나만 보이는 메시지', '불러오기 목록', '', reload.buildReloadListPayload({ guildId: '1', client: { naejeonMatches: new Map([['1', { guildId: '1', participants: users(3), closed: false, data: base('lol') }]]), mojipMatches: new Map() } }));

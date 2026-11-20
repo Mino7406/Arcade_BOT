@@ -3,10 +3,9 @@
 
 const { ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
 const { menu, notice } = require('../공통/카드');
-const { GAME_EMOJIS, OWNER_IDS } = require('../../config');
+const { GAME_EMOJIS } = require('../../config');
 
 // 안내 패널의 "내전 생성" 버튼(index.js)에서도 재사용하기 위해 페이로드 생성 로직을 분리.
-// 코블몬 토너먼트는 OWNER_IDS에 든 사람이 열었을 때만 선택지에 넣는다.
 function buildNaejeonGameSelectPayload(userId) {
   const selectMenu = new StringSelectMenuBuilder()
     .setCustomId('naejeon:game_select')
@@ -18,9 +17,6 @@ function buildNaejeonGameSelectPayload(userId) {
       { label: '배틀그라운드',     value: 'pubg',      emoji: { id: GAME_EMOJIS.pubg } },
       { label: '직접 입력',        value: 'custom',    emoji: '✏️' },
     ]);
-  if (OWNER_IDS.includes(userId)) {
-    selectMenu.addOptions({ label: '코블몬 토너먼트', value: 'cobblemon', emoji: { id: GAME_EMOJIS.cobblemon } });
-  }
 
   return menu({ header: '⚔️ 내전 생성', note: '어떤 게임의 내전을 만들까요?', rows: [new ActionRowBuilder().addComponents(selectMenu)], ephemeral: true });
 }

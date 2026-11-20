@@ -8,7 +8,7 @@ const {
 
 const {
   ADMIN_IDS, buildCancelledCard, buildMatchCard, findMatchRole, buildMatchMessagePayload, buildPreviewPayload, buildManagePayload, buildMentionPayload, markClosed, markReopened, toggleAutoCloseWhileClosed, announceMatchCompletionXp,
-  ROLE_NAMES, scheduleCancelledDelete, deleteMentionMessage, autoEndAt, armAutoEnd, saveNow,
+  ROLE_NAMES, scheduleCancelledDelete, deleteMentionMessage, deleteMentionOnly, mentionCooldownLeft, mentionButtonLabel, autoEndAt, armAutoEnd, saveNow,
   getClientMap, getMojipMatches: getMojips,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
   buildNotifyModal: buildNotifyModalBase, parseNotifyTime, deriveNotifyFromDatetime, syncAutoNotify, buildNotifyModeRows, notifyModeMenuText, applyNotifyMode, syncNotifyOnEdit, notifySyncNote, notifySentMessage, notifyTooFarMessage, lateJoinNote, notifyWhenText, notifyButtonLabel, formatNotifyTimeSmart, isNotify12HourInput, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
@@ -129,9 +129,9 @@ function buildManageMenu(match, msgId) {
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`mojip:match_mention:${msgId}`)
-          .setLabel('📣 참가자 멘션')
+          .setLabel(mentionButtonLabel(match))
           .setStyle(ButtonStyle.Success)
-          .setDisabled(!!match.mentionSent),
+          .setDisabled(mentionCooldownLeft(match) > 0),
       ),
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
@@ -428,7 +428,7 @@ async function handleMojipButton(interaction) {
     return;
   }
 
-  // ── 참가자 멘션 (주최자 전용, 1회) ──────────────────────────────
+  // ── 참가자 멘션 (주최자 전용, 1시간에 1번) ──────────────────────────────
   if (customId.startsWith('mojip:match_mention:')) {
     const msgId = customId.slice('mojip:match_mention:'.length);
     const match = getMojips(interaction.client).get(msgId);
@@ -444,8 +444,8 @@ async function handleMojipButton(interaction) {
       await interaction.update(buildManagePayload({ label: '모집', match, note: '⚠️ **마감된 모집에서만 사용할 수 있습니다.**', rows: buildManageMenu(match, msgId) }));
       return;
     }
-    if (match.mentionSent) {
-      await interaction.update(buildManagePayload({ label: '모집', match, note: '⚠️ **이미 멘션을 보냈습니다.**', rows: buildManageMenu(match, msgId) }));
+    if (mentionCooldownLeft(match) > 0) {
+      await interaction.update(buildManagePayload({ label: '모집', match, note: `⚠️ **멘션은 ${Math.ceil(mentionCooldownLeft(match) / 60000)}분 뒤에 다시 보낼 수 있습니다.**`, rows: buildManageMenu(match, msgId) }));
       return;
     }
     if (match.participants.length === 0) {
@@ -453,11 +453,20 @@ async function handleMojipButton(interaction) {
       return;
     }
     match.mentionSent = true;
+    const prevMentionAt = match.mentionAt;
+    match.mentionAt = Date.now(); // await 전에 잡아 둬서 연타해도 두 번 나가지 않는다
     const mentionText = match.participants.map(u => `<@${u.id}>`).join(' ');
     // 멘션 발송(네트워크 요청)이 3초 인터랙션 응답 제한을 넘겨 Unknown interaction(10062)이
     // 나는 걸 막기 위해, 느릴 수 있는 channel.send보다 먼저 ack한다.
     await interaction.deferUpdate();
-    const mentionMsg = await interaction.channel.send(buildMentionPayload({ title: match.data.title, mentionText }));
+    let mentionMsg;
+    try {
+      mentionMsg = await interaction.channel.send(buildMentionPayload({ title: match.data.title, mentionText }));
+    } catch (err) {
+      match.mentionAt = prevMentionAt;
+      throw err;
+    }
+    await deleteMentionOnly(interaction.client, match); // 이전 멘션은 지우고 새 것으로 교체
     match.mentionMessageId = mentionMsg.id;
     await interaction.editReply(buildManagePayload({ label: '모집', match, note: '📣 **참가자에게 멘션을 보냈습니다.**', rows: buildManageMenu(match, msgId) }));
     return;

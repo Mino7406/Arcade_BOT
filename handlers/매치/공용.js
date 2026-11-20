@@ -25,7 +25,6 @@ const { thumbUrlFor } = require('../공통/썸네일');
 // (역할 멘션 대상 채널이 있으면 해당 역할을 핑한다.)
 const ROLE_NAMES = {
   lol: '롤', valorant: '발로란트', overwatch: '오버워치', pubg: '배그',
-  cobblemon: '마크', // 코블몬 토너먼트(내전 전용) 게시 시 @마크 역할을 핑한다.
 };
 
 // client에 lazy 생성하는 Map을 돌려주는 공통 헬퍼. 예전엔 내전/모집/취소·삭제 예약마다
@@ -114,16 +113,33 @@ function clearAutoEndTimer(match) {
 // 이미 지워졌거나 채널 접근이 불가한 경우도 조용히 무시한다(본 임베드 삭제를 막으면 안 되므로).
 async function deleteMentionMessage(client, match) {
   await deleteBoardShortcut(client, match);
+  await deleteMentionOnly(client, match);
+}
+
+// 참가자 멘션 메시지만 지운다(팀 짜기 바로가기는 그대로). 멘션을 다시 보낼 때 이전 것을 교체하는 데에도 쓴다.
+async function deleteMentionOnly(client, match) {
   if (!match.mentionMessageId) return;
+  const oldId = match.mentionMessageId;
+  match.mentionMessageId = null;
   try {
     const channel = client.channels.cache.get(match.message.channelId)
       || await client.channels.fetch(match.message.channelId).catch(() => null);
-    const mentionMsg = channel && await channel.messages.fetch(match.mentionMessageId).catch(() => null);
+    const mentionMsg = channel && await channel.messages.fetch(oldId).catch(() => null);
     if (mentionMsg) await mentionMsg.delete();
   } catch (err) {
     console.error('멘션 메시지 자동 삭제 중 오류:', err);
     logError('자동 삭제 실패', `${matchTag(match)} 참가자 멘션 메시지 삭제 실패`, err, { 채널: matchChannelName(match) });
   }
+}
+
+// 참가자 멘션은 알림 도배를 막으려고 1시간에 한 번만 보낼 수 있다(다시 보내면 이전 멘션 메시지는 지우고 교체).
+const MENTION_COOLDOWN_MS = 60 * 60 * 1000;
+function mentionCooldownLeft(match) {
+  return Math.max(0, (match.mentionAt ?? 0) + MENTION_COOLDOWN_MS - Date.now());
+}
+function mentionButtonLabel(match) {
+  const left = mentionCooldownLeft(match);
+  return left > 0 ? `📣 참가자 멘션 (⏳${Math.ceil(left / 60000)}분)` : '📣 참가자 멘션';
 }
 
 // 내전채팅에 팀 설정 카드가 올라갈 때 게임모집 채널의 내전 게시글에 답장으로 단 바로가기 카드를 지운다.
@@ -1338,6 +1354,10 @@ module.exports = {
   recoverCancelledEmbeds,
   scheduleMessageDelete,
   deleteMentionMessage,
+  deleteMentionOnly,
+  MENTION_COOLDOWN_MS,
+  mentionCooldownLeft,
+  mentionButtonLabel,
   deleteBoardShortcut,
   shuffleIntoTeams,
   buildMatchCard,

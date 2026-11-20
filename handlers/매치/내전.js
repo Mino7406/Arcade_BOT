@@ -8,7 +8,7 @@ const {
 
 const {
   ADMIN_IDS, getClientMap, getNaejeonMatches: getMatches, buildCancelledCard, buildMatchCard, findMatchRole, buildMatchMessagePayload, buildPreviewPayload, buildManagePayload, buildMentionPayload, markClosed, markReopened, toggleAutoCloseWhileClosed, announceMatchCompletionXp,
-  ROLE_NAMES, scheduleCancelledDelete, deleteMentionMessage, autoEndAt, armAutoEnd, saveNow,
+  ROLE_NAMES, scheduleCancelledDelete, deleteMentionMessage, deleteMentionOnly, mentionCooldownLeft, mentionButtonLabel, autoEndAt, armAutoEnd, saveNow,
   buildModal: buildModalBase, buildLeaveButton: buildLeaveButtonBase, buildPreviewComponents: buildPreviewComponentsBase, buildCancelComponents: buildCancelComponentsBase,
   buildNotifyModal: buildNotifyModalBase, parseNotifyTime, deriveNotifyFromDatetime, syncAutoNotify, buildNotifyModeRows, notifyModeMenuText, applyNotifyMode, syncNotifyOnEdit, notifySyncNote, notifySentMessage, notifyTooFarMessage, lateJoinNote, notifyWhenText, notifyButtonLabel, formatNotifyTimeSmart, isNotify12HourInput, armNotifyReminder, clearNotifyTimer, isNotifyTooFar,
   setPublicPayloadBuilder,
@@ -16,7 +16,7 @@ const {
 const { notice, payload, text } = require('../공통/카드');
 const { displayNameFromInteraction } = require('../공통/이름');
 const { logAction, logError } = require('../공통/로그');
-const { OWNER_IDS, isTestGuild } = require('../../config');
+const { isTestGuild } = require('../../config');
 
 // 테스트 서버의 🧪 가짜 인원 채우기에 쓰는 이름과 티어(롤·발로, 오버워치·배그는 아래에서 채움). 두 명은 티어 없이 둬서 "티어 모름" 안내도 보이게 한다.
 const TEST_FILL = [
@@ -43,7 +43,6 @@ const GAMES = {
   valorant:  { name: '발로란트',         emoji: '<:Val:1510933698349109268>',    defaultPlayers: 10,   color: 0xFF4655 },
   overwatch: { name: '오버워치',         emoji: '<:Over:1510933569554612324>',   defaultPlayers: 10,   color: 0xF99E1A },
   pubg:      { name: '배틀그라운드',     emoji: '<:PUBG:1510933567646203964>',   defaultPlayers: 8,    color: 0xC8A96E },
-  cobblemon: { name: '코블몬 토너먼트',  emoji: '<:cobblemon:1562830370368528384>', defaultPlayers: 16, color: 0xE3350D },
   custom:    { name: '직접 입력',        emoji: '🎮',                            defaultPlayers: null, color: 0x5865F2 },
 };
 
@@ -164,9 +163,9 @@ function buildManageMenu(match, matchMsgId) {
           .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
           .setCustomId(`naejeon:match_mention:${matchMsgId}`)
-          .setLabel('📣 참가자 멘션')
+          .setLabel(mentionButtonLabel(match))
           .setStyle(ButtonStyle.Success)
-          .setDisabled(!!match.mentionSent),
+          .setDisabled(mentionCooldownLeft(match) > 0),
       ),
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
@@ -212,33 +211,8 @@ function getPending(client) {
 
 // ─── 핸들러 ───────────────────────────────────────────────────
 
-// 코블몬 토너먼트 정원이 다 차면 참가자 전원을 멘션해 코블몬 서버에서 엔트리하라고 안내한다.
-// 수동 "참가자 멘션" 버튼과 같은 mentionSent/mentionMessageId를 써서 중복 멘션을 막고, 취소 시 함께 지워지게 한다.
-async function announceCobblemonEntry(match) {
-  if (match.data.game !== 'cobblemon' || match.mentionSent || match.participants.length === 0) return;
-  match.mentionSent = true;
-  const mentionText = match.participants.map(u => `<@${u.id}>`).join(' ');
-  try {
-    const msg = await match.message.channel.send(buildMentionPayload({
-      headline: `<:cobblemon:1562830370368528384> ${match.data.title}`,
-      mentionText: `**인원이 모두 모였습니다!**\n${mentionText}`,
-      tail: '코블몬 서버에 접속해 **토너먼트에 엔트리**해 주세요.',
-    }));
-    match.mentionMessageId = msg.id;
-  } catch (err) {
-    match.mentionSent = false;
-    console.error('코블몬 엔트리 안내 전송 실패:', err);
-    logError('처리 오류', `코블몬 엔트리 안내 전송 실패 (${match.message.id})`, err);
-  }
-}
-
 async function handleGameSelect(interaction) {
   const game = interaction.values[0];
-  // 코블몬 토너먼트는 오너 전용 — 선택지는 오너에게만 보이지만, 남이 띄운 메뉴를 재사용하는 경우까지 막는다.
-  if (game === 'cobblemon' && !OWNER_IDS.includes(interaction.user.id)) {
-    await interaction.reply(notice('⚠️ **코블몬 토너먼트는 소유자만 생성할 수 있습니다.**', { ephemeral: true }));
-    return;
-  }
   await interaction.showModal(buildModal(game));
 }
 
@@ -370,7 +344,6 @@ async function handleNaejeonButton(interaction) {
     await interaction.deferUpdate();
     await match.message.edit(buildPublicMessagePayload(match));
     if (match.closed) await announceMatchCompletionXp(match);
-    if (match.participants.length >= maxPlayers) await announceCobblemonEntry(match);
     await interaction.followUp(notice(`✅ **참가 완료!** 명단에 등록되었습니다.${lateNote}\n취소하려면 아래 버튼을 눌러주세요.`, { rows: [buildLeaveButton(interaction.message.id)], ephemeral: true }));
     return;
   }
@@ -510,7 +483,7 @@ async function handleNaejeonButton(interaction) {
     return;
   }
 
-  // ── 참가자 멘션 (주최자 전용, 1회) ───────────────────────────────
+  // ── 참가자 멘션 (주최자 전용, 1시간에 1번) ───────────────────────────────
   if (customId.startsWith('naejeon:match_mention:')) {
     const matchMsgId = customId.slice('naejeon:match_mention:'.length);
     const match = getMatches(interaction.client).get(matchMsgId);
@@ -526,8 +499,8 @@ async function handleNaejeonButton(interaction) {
       await interaction.update(buildManagePayload({ label: '내전', match, note: '⚠️ **마감된 내전에서만 사용할 수 있습니다.**', rows: buildManageMenu(match, matchMsgId) }));
       return;
     }
-    if (match.mentionSent) {
-      await interaction.update(buildManagePayload({ label: '내전', match, note: '⚠️ **이미 멘션을 보냈습니다.**', rows: buildManageMenu(match, matchMsgId) }));
+    if (mentionCooldownLeft(match) > 0) {
+      await interaction.update(buildManagePayload({ label: '내전', match, note: `⚠️ **멘션은 ${Math.ceil(mentionCooldownLeft(match) / 60000)}분 뒤에 다시 보낼 수 있습니다.**`, rows: buildManageMenu(match, matchMsgId) }));
       return;
     }
     if (match.participants.length === 0) {
@@ -535,11 +508,20 @@ async function handleNaejeonButton(interaction) {
       return;
     }
     match.mentionSent = true;
+    const prevMentionAt = match.mentionAt;
+    match.mentionAt = Date.now(); // await 전에 잡아 둬서 연타해도 두 번 나가지 않는다
     const mentionText = match.participants.map(u => `<@${u.id}>`).join(' ');
     // 멘션 발송(네트워크 요청)이 3초 인터랙션 응답 제한을 넘겨 Unknown interaction(10062)이
     // 나는 걸 막기 위해, 느릴 수 있는 channel.send보다 먼저 ack한다.
     await interaction.deferUpdate();
-    const mentionMsg = await interaction.channel.send(buildMentionPayload({ title: match.data.title, mentionText }));
+    let mentionMsg;
+    try {
+      mentionMsg = await interaction.channel.send(buildMentionPayload({ title: match.data.title, mentionText }));
+    } catch (err) {
+      match.mentionAt = prevMentionAt;
+      throw err;
+    }
+    await deleteMentionOnly(interaction.client, match); // 이전 멘션은 지우고 새 것으로 교체
     match.mentionMessageId = mentionMsg.id;
     await interaction.editReply(buildManagePayload({ label: '내전', match, note: '📣 **참가자에게 멘션을 보냈습니다.**', rows: buildManageMenu(match, matchMsgId) }));
     return;
@@ -662,6 +644,8 @@ async function handleNaejeonButton(interaction) {
     clearNotifyTimer(match); // 취소된 매치는 알림을 보내지 않으므로 남은 예약 타이머를 취소한다.
     await match.message.edit(payload(cancelledCard, { allowedMentions: { parse: [] } }));
     getMatches(interaction.client).delete(matchMsgId);
+    // 마감 후 취소면 내전채팅의 팀 카드 버튼도 비활성화(내전 종료 처리). 실패해도 취소는 계속한다.
+    await require('./팀').endBoard(interaction.client, matchMsgId, match).catch(err => logError('팀 카드', `취소 때 팀 카드 비활성화 실패 — ${err?.message ?? err}`, err));
     await deleteMentionMessage(interaction.client, match);
     scheduleCancelledDelete(interaction.client, matchMsgId, match.message.channelId, Date.now(), match.data.title);
     await interaction.update(notice('✅ **내전이 취소되었습니다.**'));
@@ -1011,7 +995,6 @@ async function handleNaejeonMemberAdd(interaction) {
   if (justClosed) markClosed(getMatches(interaction.client), matchMsgId, match, '내전');
   await match.message.edit(buildPublicMessagePayload(match));
   if (justClosed) await announceMatchCompletionXp(match);
-  if (justClosed) await announceCobblemonEntry(match);
   const lines = [];
   if (added.length > 0)   lines.push(`✅ 추가됨: ${added.map(n => `**${n}**`).join(', ')}`);
   if (skipped.length > 0) lines.push(`⚠️ 이미 참가 중: ${skipped.map(n => `**${n}**`).join(', ')}`);
