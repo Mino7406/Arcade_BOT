@@ -1771,41 +1771,66 @@ function renderEnd(r, outcome, rewards = []) {
       if (wall) {
         const rnd = seeded(y * 31 + 7), rx = RP.x + 14, rw2 = RP.w - 28;
         p.strokeRoundRect(rx - 4, y + 3, rw2, 86, 12, 3, '#b81c2a'); p.strokeRoundRect(rx + 3, y - 2, rw2, 86, 12, 2, '#5a0f1a'); // 어긋난 뒷 테두리
-        for (let k = 0; k < 12; k++) { // 가로로 찢긴 붉은 띠
-          const gy = y + 5 + Math.floor(rnd() * 70), gw = 30 + Math.floor(rnd() * 130), gx = rx + 6 + Math.floor(rnd() * (rw2 - gw - 12));
-          p.rect(gx, gy, gw, 3 + Math.floor(rnd() * 4), rnd() < 0.4 ? '#6a1020' : rnd() < 0.7 ? '#b81c2a' : '#ff3a4a');
+        for (let sy = y + 6; sy < y + 82; sy += 4) p.rect(rx + 4, sy, rw2 - 8, 1, '#340810'); // 모니터 주사선
+        // 침식 게이지(위 왼쪽): 10칸 중 마지막 칸만 남기고 붉게 잠식됨
+        for (let g = 0; g < 10; g++) p.rect(rx + 16 + g * 7, y + 6, 5, 4, g < 9 ? (g < 6 ? '#b81c2a' : '#ff3a4a') : '#3a0c14');
+        // 경고 빗금 띠(아래 양옆, 안내 문구 양쪽): 기울어진 붉은 줄무늬
+        for (const hx of [rx + 16, rx + rw2 - 100]) for (let h = 0; h < 7; h++) p.poly([hx + h * 12 + 4, y + 74, hx + h * 12 + 9, y + 74, hx + h * 12 + 5, y + 81, hx + h * 12, y + 81], h % 2 ? '#b81c2a' : '#6a1020');
+        p.rect(rx + 1, y + 24, 3, 38, '#ff3a4a'); p.rect(rx + rw2 - 4, y + 24, 3, 38, '#ff3a4a'); // 양옆 신호 막대
+        text('ERR 0xB1ACK', COL.dmg + 35, y + 11, 9, '#8a2030'); // 어두운 오류 코드
+        // 가로로 찢긴 붉은 띠: 글자·숫자 뒤를 피해 위·아래 여백 띠에만, 아래 줄은 안내 문구 양옆에만(읽기 쉽게)
+        const band = (by, bx0, bx1, n) => { for (let k = 0; k < n; k++) {
+          const gw = 24 + Math.floor(rnd() * 90), gx = bx0 + Math.floor(rnd() * Math.max(1, bx1 - bx0 - gw));
+          p.rect(gx, by + Math.floor(rnd() * 4), gw, 2 + Math.floor(rnd() * 2), rnd() < 0.5 ? '#6a1020' : '#b81c2a');
+        } };
+        // 오염이 번지는 흔적: 블랙월 이모지(오른쪽)에서 왼쪽으로 퍼질수록 성긴 사각 조각. 글자·숫자 뒤엔 어두운 색만 깔아 읽히게 둔다.
+        for (let k = 0; k < 70; k++) {
+          const t = Math.pow(rnd(), 1.8), sz = 3 + Math.floor(rnd() * 4);
+          const px = rx + rw2 - 10 - t * (rw2 * 0.78), py = y + 4 + rnd() * 74;
+          const safe = px > COL.block + 28 || py < y + 15 || py > y + 69; // 글자·숫자 줄 밖이면 밝은 색도 가능
+          p.rect(Math.round(px), Math.round(py), sz, sz, safe && rnd() < 0.45 ? (rnd() < 0.3 ? '#ff3a4a' : '#b81c2a') : '#5a0f1a');
         }
+        band(y + 5, rx + 14, rx + rw2 - 14, 5);
         p.strokeRoundRect(rx, y, rw2, 86, 12, 2, '#ff3a4a');
-        text('▓ BLACKWALL GATEWAY — ACCESS GRANTED ▓', rx + rw2 / 2, y + 79, 11, '#ff6a78');
+        text('▓ BLACKWALL GATEWAY — ACCESS GRANTED ▓', rx + rw2 / 2, y + 78, 11, '#ff6a78');
       } else if (mvp) p.strokeRoundRect(RP.x + 14, y, RP.w - 28, 86, 12, 2, C.gold);
       drawPixels(ROLE_SPRITES[mem.role], RP.x + 52, y + 43, 2.7, { dim: mem.hp <= 0 && !clear });
       const nameX = RP.x + 86;
-      text(mem.name, nameX, y + 32, 26, C.text, { align: 'left', maxWidth: 132 });
+      const dy = wall ? -5 : 0; // 블랙월 줄은 아래 안내 문구 자리를 위해 이름·역할 줄을 살짝 올린다
+      if (wall) { // 이름도 블랙월에 오염돼 청록·붉은 색이 어긋나고 띠가 밀린다
+        const nw = Math.min(132, p.textWidth(B(), mem.name, 26));
+        glitchText(mem.name, nameX + nw / 2, y + 32 + dy, 26, C.text, { seed: 11, off: 3, strips: 4, shift: 6, holes: 3, tint: true, maxWidth: 132 });
+      } else text(mem.name, nameX, y + 32, 26, C.text, { align: 'left', maxWidth: 132 });
       // MVP 배지는 역할 줄 옆에(이름 줄에 두면 긴 이름일 때 피해 숫자와 겹친다)
       const roleName = ROLES[mem.role].name;
-      text(roleName, nameX, y + 62, 18, C.orange, { align: 'left' });
+      text(roleName, nameX, y + 62 + dy, 18, C.orange, { align: 'left' });
       if (mvp) {
         const rw = p.textWidth(B(), roleName, 18);
-        p.roundRect(nameX + rw + 8, y + 51, 46, 22, 6, wall ? '#ff3a4a' : '#e2b14a');
-        text('MVP', nameX + rw + 31, y + 62, 14, wall ? '#2a0408' : '#2a1a04');
+        p.roundRect(nameX + rw + 8, y + 51 + dy, 46, 22, 6, wall ? '#ff3a4a' : '#e2b14a');
+        text('MVP', nameX + rw + 31, y + 62 + dy, 14, wall ? '#2a0408' : '#2a1a04');
       }
       text(mem.damage.toLocaleString(), COL.dmg, y + 43, 22, C.text);
       text(mem.healing ? mem.healing.toLocaleString() : '-', COL.heal, y + 43, 22, mem.healing ? '#8fe0a8' : C.dim);
       text(mem.blocked ? mem.blocked.toLocaleString() : '-', COL.block, y + 43, 22, mem.blocked ? '#9cc8ff' : C.dim);
-      if (wall) { // 블랙월 게이트웨이 이모지: 가둔 상자 없이, 이모지에서 회로 배선이 직각으로 꺾여 줄 안쪽으로 뻗어 나간다(끝마다 접점)
-        const gx = COL.reward, gy = y + 43, X0 = COL.block + 26;
-        const trace = (pts, lw = 2) => { for (let k = 0; k + 1 < pts.length; k++) { const [ax, ay] = pts[k], [bx2, by2] = pts[k + 1]; p.rect(Math.min(ax, bx2) - lw / 2, Math.min(ay, by2) - lw / 2, Math.abs(bx2 - ax) + lw, Math.abs(by2 - ay) + lw, '#ff3a4a'); } };
-        const node = (nx, ny) => { p.rect(nx - 4, ny - 4, 8, 8, '#7a0c18'); p.rect(nx - 2.5, ny - 2.5, 5, 5, '#ff3a4a'); p.rect(nx - 1, ny - 1, 2, 2, '#ffd2d6'); };
-        const paths = [
-          [[gx - 26, gy - 9], [gx - 46, gy - 9], [gx - 46, y + 17], [X0, y + 17]],     // 왼쪽 위로 꺾여 나가는 배선
-          [[gx - 26, gy + 9], [gx - 40, gy + 9], [gx - 40, y + 68], [X0 + 10, y + 68]], // 왼쪽 아래로 꺾여 나가는 배선
-          [[gx, gy - 27], [gx, y + 9]],                                                   // 위로 짧게
-          [[gx + 24, gy - 8], [gx + 36, gy - 8], [gx + 36, y + 20]],                      // 오른쪽 위 가지
-        ];
-        for (const pts of paths) { trace(pts); node(...pts[pts.length - 1]); }
-        node(gx - 46, gy - 9); node(gx - 40, gy + 9); // 꺾이는 곳의 접점
-        drawEmojiFile(p, 'blackwall.png', gx + 2, gy, 58); // 어긋난 붉은 잔상
+      if (wall) { // 블랙월 게이트웨이 이모지: 배선 없이, 이모지 자체가 오염돼 잔상이 어긋나고 가로 띠가 밀리며 조각이 흩어진다
+        const gx = COL.reward, gy = y + 43, k = RENDER_SCALE, r2 = seeded(y * 17 + 3);
+        drawEmojiFile(p, 'blackwall.png', gx - 5, gy + 1, 58); // 어긋난 붉은 잔상
+        drawEmojiFile(p, 'blackwall.png', gx + 4, gy - 1, 52);
         drawEmojiFile(p, 'blackwall.png', gx, gy, 58);
+        const bx0 = Math.max(0, Math.round((gx - 36) * k)), bx1 = Math.min(p.w, Math.round((gx + 36) * k));
+        for (let n = 0; n < 4; n++) { // 가로 띠 밀림(이모지 영역만)
+          const sy = Math.round((gy - 28 + r2() * 52) * k), sh = Math.round((2 + r2() * 4) * k), dx = Math.round((r2() < 0.5 ? -1 : 1) * (4 + r2() * 8) * k);
+          for (let yy = sy; yy < sy + sh && yy < p.h; yy++) {
+            const st = (yy * p.w + bx0) * 3, len = (bx1 - bx0) * 3, row = Buffer.from(p.buf.subarray(st, st + len));
+            const a = Math.abs(dx) * 3;
+            if (a >= len) continue;
+            if (dx > 0) row.copy(p.buf, st + a, 0, len - a); else row.copy(p.buf, st, a, len);
+          }
+        }
+        for (let n = 0; n < 14; n++) { // 떨어져 나간 조각
+          const ang = r2() * Math.PI * 2, d = 26 + r2() * 14, sz = 2 + Math.floor(r2() * 3);
+          p.rect(Math.round(gx + Math.cos(ang) * d), Math.round(gy + Math.sin(ang) * d * 0.9), sz, sz, r2() < 0.5 ? '#ff3a4a' : '#7a0c18');
+        }
       }
       else if (reward) pill(COL.reward - 34, y + 27, 68, 32, reward.xp > 0 ? `+${reward.xp}` : (reward.gateway ? '아이템' : '+0'), reward.xp > 0 ? 20 : 17, mvp ? '#6b4e12' : '#1f4a2c', mvp ? '#ffe39a' : '#bff0cf');
       else text('-', COL.reward, y + 43, 22, C.dim);
