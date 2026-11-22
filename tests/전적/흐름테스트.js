@@ -25,7 +25,8 @@ function setup({ linked = {}, lolResult, valResult, verifyLol, verifyVal } = {})
   const lookups = { lol: [], val: [] };
   const saved = { links: [], saves: 0 };
   const handlers = createRecordHandlers({
-    canUse: g => g === TEST_GUILD,
+    canUse: g => g === TEST_GUILD || g === 'PUB',
+    canUseHere: (g, c) => g === TEST_GUILD || ['MAIN', 'TTS', 'TEMPVC'].includes(c),
     getLinked: id => linked[id] ?? null,
     setLinked: (id, v) => { saved.links.push([id, v]); },
     save: () => { saved.saves++; },
@@ -79,6 +80,27 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   await handlers.handleRecordModal(i);
   assert.ok(textOf(first(i, 'reply')[1]).includes('준비 중') || first(i, 'deferReply'), '모달도 막힘');
   assert.strictEqual(lookups.lol.length, 0);
+
+  // 공개 서버에서는 메인·TTS·임시 음성채널 채팅에서만: 다른 채널이면 안내만(선택 카드·조회·모달 없음)
+  ({ handlers, lookups } = setup());
+  for (const [label, run] of [
+    ['명령', i2 => handlers.startRecordCommand(i2)],
+    ['버튼', i2 => handlers.handleRecordButton(i2)],
+    ['메뉴', i2 => handlers.handleRecordSelect(i2)],
+    ['모달', i2 => handlers.handleRecordModal(i2)],
+  ]) {
+    i = fakeInteraction({ guildId: 'PUB', channelId: 'ELSEWHERE', customId: 'record:lol:me', values: ['U9'] });
+    await run(i);
+    assert.ok(textOf(first(i, 'reply')[1]).includes('임시 음성채널'), `${label}: 허용 채널 안내`);
+    assert.ok(isEph(first(i, 'reply')[1]), `${label}: 안내는 나에게만`);
+    assert.ok(!first(i, 'deferUpdate') && !first(i, 'deferReply') && !first(i, 'showModal'), `${label}: 아무 동작도 안 함`);
+  }
+  assert.strictEqual(lookups.lol.length, 0);
+  for (const ch of ['MAIN', 'TTS', 'TEMPVC']) {
+    i = fakeInteraction({ guildId: 'PUB', channelId: ch });
+    await handlers.startRecordCommand(i);
+    assert.deepStrictEqual(idsOf(first(i, 'reply')[1]).slice(0, 3), ['record:lol:me', 'record:val:me', 'record:link'], `${ch} 에서는 선택 카드`);
+  }
 
   // (b) 선택 카드: 내 전적 / 다른 사람 전적 구역, 나에게만 보임
   const startCard = async () => { const x = fakeInteraction(); await handlers.startRecordCommand(x); return first(x, 'reply')[1]; };

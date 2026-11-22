@@ -6,6 +6,7 @@ const path = require('path');
 const { Painter, loadFont } = require('../레이드/그림판');
 const { drawIconFile } = require('./아이콘');
 const { ratio, killParticipation, queueLabel } = require('./집계');
+const { timeAgo, ringContours } = require('./표시');
 
 const W = 900;
 const H = 900;
@@ -35,23 +36,6 @@ function ratingText(r) {
   return r === null ? 'Perfect' : `${r.toFixed(2)}:1`;
 }
 
-function timeAgo(ts, now) {
-  const min = Math.max(0, (now - ts) / 60000);
-  if (min < 60) return `${Math.max(1, Math.round(min))}분 전`;
-  if (min < 24 * 60) return `${Math.floor(min / 60)}시간 전`;
-  if (min < 30 * 24 * 60) return `${Math.floor(min / 1440)}일 전`;
-  return `${Math.floor(min / 43200)}달 전`;
-}
-
-// 도넛 한 조각의 윤곽선(a0~a1 라디안). 한 바퀴면 바깥 원 + 거꾸로 감은 안쪽 원(구멍).
-function ringContours(cx, cy, ro, ri, a0, a1) {
-  const sweep = a1 - a0;
-  const n = Math.max(8, Math.ceil(Math.abs(sweep) * 20));
-  const pts = (r, from, to, steps) => { const out = []; for (let k = 0; k <= steps; k++) { const a = from + (to - from) * (k / steps); out.push(cx + Math.cos(a) * r, cy + Math.sin(a) * r); } return out; };
-  if (sweep >= Math.PI * 2 - 1e-6) return [pts(ro, a0, a0 + Math.PI * 2, 48), Painter.reversed(pts(ri, a0, a0 + Math.PI * 2, 48))];
-  return [[...pts(ro, a0, a1, n), ...Painter.reversed(pts(ri, a0, a1, n))]];
-}
-
 function createLolRenderer({ fontDir = FONT_DIR } = {}) {
   let fonts = null;
   let painter = null;
@@ -61,6 +45,8 @@ function createLolRenderer({ fontDir = FONT_DIR } = {}) {
     if (painter || unavailable) return painter;
     try {
       fonts = { regular: loadFont(path.join(fontDir, 'NanumGothic-Regular.ttf')), bold: loadFont(path.join(fontDir, 'NanumGothic-Bold.ttf')) };
+      const fallback = loadFont(path.join(fontDir, 'DejaVuSans.ttf')); // 나눔고딕에 없는 글자(그리스 문자 등)는 이 폰트로
+      fonts.regular.fallback = fallback; fonts.bold.fallback = fallback;
       painter = new Painter(W, H, RENDER_SCALE);
     } catch (err) {
       unavailable = true;

@@ -10,8 +10,9 @@ const CD_EMBLEM = 'https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-sta
 const VERSION_TTL_MS = 24 * 3600 * 1000;
 const EMBLEM_SIZE = 128;
 
-// 투명한 여백을 잘라 정사각형으로 만든 뒤 EMBLEM_SIZE 로 줄인 PNG(엠블럼은 원본이 1280×720 이라 그대로 읽으면 메모리가 크다).
-function shrinkEmblem(buf) {
+// 투명한 여백을 잘라 정사각형으로 만든 뒤 maxSize 이하로 줄인 PNG. 엠블럼(1280×720)·발로란트 요원(1024×1024)처럼 큰 원본을
+// 그대로 읽으면 한 번에 수 MB 를 쓰므로 내려받을 때 한 번만 줄여서 저장한다.
+function shrinkPng(buf, maxSize) {
   const src = decodePng(buf);
   let x0 = src.w, y0 = src.h, x1 = -1, y1 = -1;
   for (let y = 0; y < src.h; y++) for (let x = 0; x < src.w; x++) {
@@ -26,7 +27,7 @@ function shrinkEmblem(buf) {
     if (ox < 0 || oy < 0 || ox >= src.w || oy >= src.h) continue;
     src.data.copy(square, (y * side + x) * 4, (oy * src.w + ox) * 4, (oy * src.w + ox) * 4 + 4);
   }
-  const out = Math.min(EMBLEM_SIZE, side);
+  const out = Math.min(maxSize, side);
   const small = boxResize(square, side, side, out, out);
   const bytes = Buffer.alloc(out * out * 4);
   for (let i = 0; i < out * out; i++) {
@@ -108,7 +109,7 @@ function createStatic({ fetchJson, fetchBuffer, dir }) {
       const url = sourceOf(kind, key, v);
       if (!url) return null;
       let data = await fetchBuffer(url);
-      if (kind === 'emblem') data = shrinkEmblem(data);
+      if (kind === 'emblem') data = shrinkPng(data, EMBLEM_SIZE);
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, data);
       return file;
@@ -117,12 +118,13 @@ function createStatic({ fetchJson, fetchBuffer, dir }) {
     }
   }
 
-  // 주소가 정해진 아이콘(발로란트 티어 등)을 dir/<kind>/<key>.png 로 내려받아 둔다. 실패는 null.
-  async function urlIcon(kind, key, url) {
+  // 주소가 정해진 아이콘(발로란트 티어·요원 등)을 dir/<kind>/<key>.png 로 내려받아 둔다. size 를 주면 그 크기 이하로 줄여 저장한다. 실패는 null.
+  async function urlIcon(kind, key, url, { size } = {}) {
     try {
       const file = path.join(dir, kind, `${String(key).toLowerCase().replace(/[^a-z0-9]+/g, '-')}.png`);
       if (fs.existsSync(file)) return file;
-      const data = await fetchBuffer(url);
+      let data = await fetchBuffer(url);
+      if (size) data = shrinkPng(data, size);
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, data);
       return file;

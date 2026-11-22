@@ -349,7 +349,7 @@ async function buildScreens() {
     const { renderValorant } = req('handlers/전적/발로그림.js');
     const { summarize } = req('handlers/전적/집계.js');
     const captured = [];
-    const rec = createRecordHandlers({ canUse: () => true, getLinked: () => null, setLinked() {}, save() {}, lol: {}, valorant: {}, verifyLol: async () => ({}), verifyValorant: async () => ({}) });
+    const rec = createRecordHandlers({ canUse: () => true, canUseHere: () => true, getLinked: () => null, setLinked() {}, save() {}, lol: {}, valorant: {}, verifyLol: async () => ({}), verifyValorant: async () => ({}) });
     await rec.startRecordCommand({ guildId: '1', reply: async p => captured.push(p) });
     add('전적 검색', '/전적 — 선택 카드 (나에게만 보임)', '구분선으로 내 전적 / 다른 사람 전적 · 멤버를 고르기 전엔 다른 사람용 롤·발로란트가 회색', captured[0]);
     await rec.handleRecordSelect({ guildId: '1', values: ['101'], update: async p => captured.push(p) });
@@ -362,8 +362,13 @@ async function buildScreens() {
     const { card: cardOf, payload: payloadOf } = req('handlers/공통/카드.js');
     const shot = (accent, rows) => payloadOf(cardOf({ color: accent, blocks: [{ image: 'attachment://record.png' }], rows }), { keepAttachments: true });
     add('전적 검색', '롤 전적 이미지 (유저 정보 · 최근 20판 통계 · 최근 5경기)', '채널에 공개로 올라가요 · 아래 버튼으로 전체/솔로랭크/자유랭크를 바꿔요', shot(0x3b82f6, [tabs('all')]), { files: png([{ name: 'record.png', attachment: lolPng }]) });
-    const valPng = renderValorant({ profile: { name: 'Mino#KR1', tier: 'Gold 2', rr: 47, peak: 'Platinum 1', seasons: [{ season: 'e9a1', endTier: 'Silver 3', wins: 30, games: 58 }, { season: 'e9a2', endTier: 'Gold 1', wins: 41, games: 80 }, { season: 'e10a1', endTier: 'Gold 3', wins: 35, games: 70 }, { season: 'e10a2', endTier: 'Gold 2', wins: 18, games: 33 }] }, tierIcons: {} });
-    add('전적 검색', '발로란트 전적 이미지 (HenrikDev)', '현재 티어 · RR · 최고 티어 · 시즌별 기록', shot(0xff4655, []), { files: png([{ name: 'record.png', attachment: valPng }]) });
+    // 발로란트: 실제 응답 모양의 샘플(tests/전적/fixtures)로 그린다
+    const { parseStoredMatches } = req('handlers/전적/헨릭.js');
+    const { summarizeValorant } = req('handlers/전적/발로집계.js');
+    const valMatches = parseStoredMatches(JSON.parse(fs2.readFileSync(require('path').join(__dirname, '전적', 'fixtures', 'henrik-stored.json'), 'utf8')));
+    const valReal = require('path').join(__dirname, '전적', 'out', 'real-val.png');
+    const valPng = fs2.existsSync(valReal) ? fs2.readFileSync(valReal) : renderValorant({ profile: { name: 'Mino#KR1', tier: 'Gold 2', rr: 47, peak: 'Platinum 1', seasons: [] }, summary: summarizeValorant(valMatches), matches: valMatches.slice(0, 5), icons: {}, names: {}, now: valMatches[0].ts + 3600e3 });
+    add('전적 검색', '발로란트 전적 이미지 (HenrikDev)', '유저 정보 · 최근 20판 통계(승패·K/D·ACS·ADR·헤드샷) · 최근 5경기(맵·요원·K/D/A)', shot(0xff4655, []), { files: png([{ name: 'record.png', attachment: valPng }]) });
   }
 
   // ── 레이드 (기존 디자인 유지 — 그림 + 글자 + 버튼) ───────────────────────

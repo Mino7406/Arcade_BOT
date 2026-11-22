@@ -20,6 +20,8 @@ const EXCLUDED_GUILD_IDS = ['1282694117255548960'];
 
 // 전적 검색(/전적)을 테스트 서버에서만 쓰게 한다. 전체 공개할 때는 false 로 바꾸면 된다.
 const RECORD_SEARCH_TEST_ONLY = true;
+// 전적 검색을 쓸 수 있는 채널: 메인 채팅·TTS 채팅 두 곳 + 임시 음성채널의 채팅방(handlers/레벨/음성채널.js 가 만든 방). 테스트 서버는 어디서나.
+const RECORD_SEARCH_CHANNEL_IDS = ['1340523443413844048', '1374679502394884178', '1522575222589620254'];
 
 function isTestGuild(guildId) {
   return !!guildId && TEST_GUILD_IDS.includes(guildId);
@@ -34,6 +36,7 @@ module.exports = {
   PLAYGROUND_CHANNEL_ID,
   TEST_GUILD_IDS,
   RECORD_SEARCH_TEST_ONLY,
+  RECORD_SEARCH_CHANNEL_IDS,
   isTestGuild,
   isExcludedGuild,
 

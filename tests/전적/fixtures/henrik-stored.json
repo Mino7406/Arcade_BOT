@@ -1,0 +1,290 @@
+{
+ "status": 200,
+ "results": {
+  "total": 6
+ },
+ "data": [
+  {
+   "meta": {
+    "id": "5cc97e03-24bd-4ff4-813a-a9cdb8174fef",
+    "map": {
+     "id": "2c9d57ec-4431-9c5e-2939-8f9ef6dd5cba",
+     "name": "Bind"
+    },
+    "version": "release-13.10-shipping-18-5893614",
+    "mode": "Competitive",
+    "started_at": "2026-11-15T20:56:55.244Z",
+    "season": {
+     "id": "d816f426-48ea-f052-117f-9697a155b319",
+     "short": "e11a6"
+    },
+    "region": "ap",
+    "cluster": "Seoul"
+   },
+   "stats": {
+    "puuid": "V-PUUID",
+    "name": "",
+    "tag": "",
+    "team": "Red",
+    "level": 618,
+    "character": {
+     "id": "1dbf2edd-4729-0984-3115-daa5eed44993",
+     "name": "Clove"
+    },
+    "tier": 23,
+    "score": 3317,
+    "kills": 11,
+    "deaths": 18,
+    "assists": 8,
+    "shots": {
+     "head": 9,
+     "body": 29,
+     "leg": 2
+    },
+    "damage": {
+     "made": 2184,
+     "received": 3274
+    }
+   },
+   "teams": {
+    "red": 6,
+    "blue": 13
+   }
+  },
+  {
+   "meta": {
+    "id": "06f0ee83-d54e-493b-b7b4-43c621033e2d",
+    "map": {
+     "id": "2fe4ed3a-450a-948b-6d6b-e89a78e680a9",
+     "name": "Lotus"
+    },
+    "version": "release-13.10-shipping-18-5893614",
+    "mode": "Competitive",
+    "started_at": "2026-11-15T20:20:54.969Z",
+    "season": {
+     "id": "d816f426-48ea-f052-117f-9697a155b319",
+     "short": "e11a6"
+    },
+    "region": "ap",
+    "cluster": "Seoul"
+   },
+   "stats": {
+    "puuid": "V-PUUID",
+    "name": "",
+    "tag": "",
+    "team": "Blue",
+    "level": 618,
+    "character": {
+     "id": "8e253930-4c05-31dd-1b6c-968525494517",
+     "name": "Omen"
+    },
+    "tier": 23,
+    "score": 3499,
+    "kills": 12,
+    "deaths": 16,
+    "assists": 7,
+    "shots": {
+     "head": 11,
+     "body": 24,
+     "leg": 1
+    },
+    "damage": {
+     "made": 2412,
+     "received": 2909
+    }
+   },
+   "teams": {
+    "red": 9,
+    "blue": 13
+   }
+  },
+  {
+   "meta": {
+    "id": "2d3a1531-8c2a-45c9-a4c1-b9a02ca9b6b0",
+    "map": {
+     "id": "92584fbe-486a-b1b2-9faa-39b0f486b498",
+     "name": "Sunset"
+    },
+    "version": "release-13.10-shipping-18-5893614",
+    "mode": "Competitive",
+    "started_at": "2026-11-15T19:49:05.53Z",
+    "season": {
+     "id": "d816f426-48ea-f052-117f-9697a155b319",
+     "short": "e11a6"
+    },
+    "region": "ap",
+    "cluster": "Seoul"
+   },
+   "stats": {
+    "puuid": "V-PUUID",
+    "name": "",
+    "tag": "",
+    "team": "Red",
+    "level": 617,
+    "character": {
+     "id": "1dbf2edd-4729-0984-3115-daa5eed44993",
+     "name": "Clove"
+    },
+    "tier": 23,
+    "score": 5544,
+    "kills": 20,
+    "deaths": 12,
+    "assists": 7,
+    "shots": {
+     "head": 15,
+     "body": 38,
+     "leg": 3
+    },
+    "damage": {
+     "made": 3842,
+     "received": 2669
+    }
+   },
+   "teams": {
+    "red": 13,
+    "blue": 6
+   }
+  },
+  {
+   "meta": {
+    "id": "a1c42c29-a664-44cc-be6f-bf501a173f24",
+    "map": {
+     "id": "224b0a95-48b9-f703-1bd8-67aca101a61f",
+     "name": "Abyss"
+    },
+    "version": "release-13.10-shipping-18-5893614",
+    "mode": "Competitive",
+    "started_at": "2026-11-15T19:11:59.677Z",
+    "season": {
+     "id": "d816f426-48ea-f052-117f-9697a155b319",
+     "short": "e11a6"
+    },
+    "region": "ap",
+    "cluster": "Seoul"
+   },
+   "stats": {
+    "puuid": "V-PUUID",
+    "name": "",
+    "tag": "",
+    "team": "Red",
+    "level": 617,
+    "character": {
+     "id": "41fb69c1-4189-7b37-f117-bcaf1e96f1bf",
+     "name": "Astra"
+    },
+    "tier": 23,
+    "score": 4804,
+    "kills": 16,
+    "deaths": 15,
+    "assists": 7,
+    "shots": {
+     "head": 12,
+     "body": 35,
+     "leg": 1
+    },
+    "damage": {
+     "made": 3178,
+     "received": 2778
+    }
+   },
+   "teams": {
+    "red": 9,
+    "blue": 13
+   }
+  },
+  {
+   "meta": {
+    "id": "f0d6d5a7-5842-47e7-b54e-573b955d46e9",
+    "map": {
+     "id": "2bee0dc9-4ffe-519b-1cbd-7fbe763a6047",
+     "name": "Haven"
+    },
+    "version": "release-13.10-shipping-18-5893614",
+    "mode": "Competitive",
+    "started_at": "2026-11-15T18:25:19.315Z",
+    "season": {
+     "id": "d816f426-48ea-f052-117f-9697a155b319",
+     "short": "e11a6"
+    },
+    "region": "ap",
+    "cluster": "Seoul"
+   },
+   "stats": {
+    "puuid": "V-PUUID",
+    "name": "",
+    "tag": "",
+    "team": "Blue",
+    "level": 617,
+    "character": {
+     "id": "1dbf2edd-4729-0984-3115-daa5eed44993",
+     "name": "Clove"
+    },
+    "tier": 23,
+    "score": 4039,
+    "kills": 15,
+    "deaths": 16,
+    "assists": 7,
+    "shots": {
+     "head": 7,
+     "body": 35,
+     "leg": 1
+    },
+    "damage": {
+     "made": 2471,
+     "received": 2889
+    }
+   },
+   "teams": {
+    "red": 8,
+    "blue": 13
+   }
+  },
+  {
+   "meta": {
+    "id": "d1c5fd95-665e-401f-bfb6-f746238f937d",
+    "map": {
+     "id": "224b0a95-48b9-f703-1bd8-67aca101a61f",
+     "name": "Abyss"
+    },
+    "version": "release-13.10-shipping-18-5893614",
+    "mode": "Competitive",
+    "started_at": "2026-11-13T20:45:27.493Z",
+    "season": {
+     "id": "d816f426-48ea-f052-117f-9697a155b319",
+     "short": "e11a6"
+    },
+    "region": "ap",
+    "cluster": "Seoul"
+   },
+   "stats": {
+    "puuid": "V-PUUID",
+    "name": "",
+    "tag": "",
+    "team": "Red",
+    "level": 617,
+    "character": {
+     "id": "41fb69c1-4189-7b37-f117-bcaf1e96f1bf",
+     "name": "Astra"
+    },
+    "tier": 23,
+    "score": 6996,
+    "kills": 25,
+    "deaths": 16,
+    "assists": 8,
+    "shots": {
+     "head": 21,
+     "body": 42,
+     "leg": 7
+    },
+    "damage": {
+     "made": 5154,
+     "received": 2970
+    }
+   },
+   "teams": {
+    "red": 14,
+    "blue": 12
+   }
+  }
+ ]
+}

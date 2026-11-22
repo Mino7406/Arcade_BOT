@@ -476,6 +476,8 @@ client.on('interactionCreate', async (interaction) => {
       interaction.customId?.startsWith('panel:') || // 채널 관리(청소·삭제) 메뉴 — 관리자 전용이라 어느 채널에서든 쓸 수 있다
       interaction.customId?.startsWith('realm:') ||
       interaction.customId?.startsWith('cobblemon:') ||
+      (interaction.isChatInputCommand() && interaction.commandName === '전적') || // /전적은 자체 채널 규칙(메인·TTS·임시 음성채널 채팅)을 쓴다
+      interaction.customId?.startsWith('record:') ||
       interaction.customId?.startsWith('raid:') || // 레이드는 출현한 채널(놀이터·테스트 채널)에서 그대로 진행
       interaction.customId?.startsWith('form:');
 

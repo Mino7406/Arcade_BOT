@@ -24,6 +24,7 @@ const { card, payload, menu, notice } = require('../공통/카드');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const NOT_READY = '🚧 전적 검색은 아직 준비 중이에요.';
+const WRONG_CHANNEL = '이 채널에서는 /전적을 쓸 수 없어요. 메인 채팅, TTS 채팅, 임시 음성채널 채팅에서 사용해 주세요.';
 const QUEUE_TABS = [['all', '전체'], ['solo', '솔로랭크'], ['flex', '자유랭크']];
 const eph = content => notice(content, { ephemeral: true }); // 나에게만 보이는 안내 카드(프로젝트의 v2 카드 형식)
 const ACCENT = { lol: 0x3b82f6, valorant: 0xff4655 };
@@ -37,7 +38,9 @@ function resultPayload(res, game, row) {
   return { ...payload(card({ color: ACCENT[game], blocks: [{ image: 'attachment://record.png' }], rows })), files: [new AttachmentBuilder(res.png, { name: 'record.png' })] };
 }
 
-function createRecordHandlers({ canUse, getLinked, setLinked, save, lol, valorant, verifyLol, verifyValorant }) {
+function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, lol, valorant, verifyLol, verifyValorant }) {
+  // 쓸 수 없는 곳이면 안내 문구, 쓸 수 있으면 null(서버 한정 → 채널 제한 순서)
+  const blockedMessage = i => (!canUse(i.guildId) ? NOT_READY : !canUseHere(i.guildId, i.channelId) ? WRONG_CHANNEL : null);
   const button = (id, label, style = ButtonStyle.Secondary) => new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(style);
   const queueRow = (puuid, current) => new ActionRowBuilder().addComponents(
     QUEUE_TABS.map(([q, label]) => button(`record:q:lol:${q}:${puuid}`, label, q === current ? ButtonStyle.Primary : ButtonStyle.Secondary)));
@@ -62,13 +65,15 @@ function createRecordHandlers({ canUse, getLinked, setLinked, save, lol, valoran
 
   // /전적 → 나에게만 보이는 선택 카드
   async function startRecordCommand(interaction) {
-    if (!canUse(interaction.guildId)) return interaction.reply(eph(NOT_READY));
+    const blocked = blockedMessage(interaction);
+    if (blocked) return interaction.reply(eph(blocked));
     return interaction.reply(selectCard(null, true));
   }
 
   // 멤버 선택 메뉴: 같은 카드를 그 멤버용 버튼이 켜진 모습으로 바꾼다
   async function handleRecordSelect(interaction) {
-    if (!canUse(interaction.guildId)) return interaction.reply(eph(NOT_READY));
+    const blocked = blockedMessage(interaction);
+    if (blocked) return interaction.reply(eph(blocked));
     return interaction.update(selectCard(interaction.values[0], false));
   }
 
@@ -91,7 +96,8 @@ function createRecordHandlers({ canUse, getLinked, setLinked, save, lol, valoran
   }
 
   async function handleRecordButton(interaction) {
-    if (!canUse(interaction.guildId)) return interaction.reply(eph(NOT_READY));
+    const blocked = blockedMessage(interaction);
+    if (blocked) return interaction.reply(eph(blocked));
     const parts = interaction.customId.split(':');
     const action = parts[1];
 
@@ -168,7 +174,8 @@ function createRecordHandlers({ canUse, getLinked, setLinked, save, lol, valoran
 
   // 계정 연결 모달 제출: 입력한 계정이 실제로 있는지 확인하고, 하나라도 틀리면 아무것도 저장하지 않는다.
   async function handleRecordModal(interaction) {
-    if (!canUse(interaction.guildId)) return interaction.reply(eph(NOT_READY));
+    const blocked = blockedMessage(interaction);
+    if (blocked) return interaction.reply(eph(blocked));
     await interaction.deferReply({ flags: EPHEMERAL });
     if (interaction.customId === 'record:find_modal') return handleFind(interaction);
     const lolText = interaction.fields.getTextInputValue('lol').trim();
@@ -214,7 +221,7 @@ function getLive() {
   live = {
     store,
     handlers: createRecordHandlers({
-      canUse: accounts.canUseRecordSearch, getLinked: accounts.getLinked, setLinked: accounts.setLinked, save: accounts.saveRecordAccounts,
+      canUse: accounts.canUseRecordSearch, canUseHere: accounts.canUseRecordChannel, getLinked: accounts.getLinked, setLinked: accounts.setLinked, save: accounts.saveRecordAccounts,
       lol,
       valorant: createValorantService({ key: henrikKey, statics }),
       verifyLol: lol.verify,

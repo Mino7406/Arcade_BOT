@@ -3,7 +3,8 @@
 const fs = require('fs');
 const path = require('path');
 const { writeJsonIfChanged } = require('../공통/저장');
-const { RECORD_SEARCH_TEST_ONLY, isTestGuild } = require('../../config');
+const { RECORD_SEARCH_TEST_ONLY, RECORD_SEARCH_CHANNEL_IDS, isTestGuild } = require('../../config');
+const { isTempVoiceChannel } = require('../레벨/음성채널');
 
 const ACCOUNTS_PATH = path.join(__dirname, '..', '..', 'DB', 'riot-accounts.json');
 let accounts = {};
@@ -46,4 +47,9 @@ function canUseRecordSearch(guildId) {
   return !RECORD_SEARCH_TEST_ONLY || isTestGuild(guildId);
 }
 
-module.exports = { parseRiotId, loadRecordAccounts, saveRecordAccounts, getLinked, setLinked, canUseRecordSearch };
+// 이 채널에서 /전적을 쓸 수 있나: 테스트 서버는 어디서나, 그 밖에는 메인·TTS 채팅과 임시 음성채널 채팅방에서만.
+function canUseRecordChannel(guildId, channelId) {
+  return isTestGuild(guildId) || RECORD_SEARCH_CHANNEL_IDS.includes(channelId) || isTempVoiceChannel(channelId);
+}
+
+module.exports = { canUseRecordChannel, parseRiotId, loadRecordAccounts, saveRecordAccounts, getLinked, setLinked, canUseRecordSearch };

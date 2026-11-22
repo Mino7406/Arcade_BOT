@@ -1,12 +1,14 @@
-// 헨릭.js — 발로란트 전적(HenrikDev 비공식 API). 윤수봇(bot/games/gameprofiles.py)과 같은 주소·같은 읽기 규칙이다.
-// 현재 티어·RR·최고 티어·시즌별 요약을 가져온다. Riot 공식 API 는 개인 키로 발로란트 전적을 못 받아서 이 API 를 쓴다.
+// 헨릭.js — 발로란트 전적(HenrikDev 비공식 API). Riot 공식 API 는 개인 키로 발로란트 전적을 못 받아서 이 API 를 쓴다.
+//  - v3 mmr: 현재 티어·RR·최고 티어·시즌별 요약 (윤수봇과 같은 주소)
+//  - v1 stored-matches: 최근 경쟁전 경기 목록(맵·요원·K/D/A·점수·피해·라운드 스코어). 20판이 13KB 정도라 가볍다.
 const { RiotError } = require('./리오트');
 
 const BASE = 'https://api.henrikdev.xyz';
+const MATCH_COUNT = 20;
 
 const isObj = x => x !== null && typeof x === 'object' && !Array.isArray(x);
 
-// HenrikDev v3 mmr 응답 → { name, tier, rr, peak, seasons: [{ season, endTier, wins, games }] }. 읽을 게 없으면 not_found.
+// HenrikDev v3 mmr 응답 → { name, tier, rr, peak, seasons: [{ season, endTier, wins, games }] }. 계정 정보조차 없으면 not_found.
 function parseValorant(data) {
   if (!isObj(data) || !isObj(data.data)) throw new RiotError('not_found', 0);
   const d = data.data;
@@ -35,6 +37,35 @@ function parseValorant(data) {
   return profile;
 }
 
+// stored-matches 응답 → 최근순 경기 목록. 깨진 항목은 건너뛴다.
+// Match = { id, ts, mode, map: {id, name}, agent: {id, name}, tier(번호), k, d, a, score, head, body, leg, dmg, rounds: [내 팀, 상대 팀], result: 'win'|'loss'|'draw' }
+function parseStoredMatches(data) {
+  const out = [];
+  for (const m of isObj(data) && Array.isArray(data.data) ? data.data : []) {
+    if (!isObj(m) || !isObj(m.meta) || !isObj(m.stats) || !isObj(m.teams) || !m.meta.id) continue;
+    const st = m.stats;
+    const team = String(st.team ?? '').toLowerCase();
+    const mine = Number(m.teams[team]), theirs = Number(m.teams[team === 'red' ? 'blue' : 'red']);
+    if (!Number.isFinite(mine) || !Number.isFinite(theirs) || !isObj(st.character)) continue;
+    const shots = isObj(st.shots) ? st.shots : {};
+    out.push({
+      id: String(m.meta.id),
+      ts: Date.parse(m.meta.started_at) || 0,
+      mode: String(m.meta.mode ?? ''),
+      map: { id: String(m.meta.map?.id ?? ''), name: String(m.meta.map?.name ?? '') },
+      agent: { id: String(st.character.id ?? ''), name: String(st.character.name ?? '') },
+      tier: Number(st.tier) || 0,
+      k: Number(st.kills) || 0, d: Number(st.deaths) || 0, a: Number(st.assists) || 0,
+      score: Number(st.score) || 0,
+      head: Number(shots.head) || 0, body: Number(shots.body) || 0, leg: Number(shots.leg) || 0,
+      dmg: Number(st.damage?.made) || 0,
+      rounds: [mine, theirs],
+      result: mine > theirs ? 'win' : mine < theirs ? 'loss' : 'draw',
+    });
+  }
+  return out.sort((x, y) => y.ts - x.ts);
+}
+
 function kindOf(status) {
   if (status === 404) return 'not_found';
   if (status === 401 || status === 403) return 'denied';
@@ -43,13 +74,13 @@ function kindOf(status) {
 }
 
 // kr 에서 못 찾으면 ap 를 시도한다. 키 거부·한도·서버 오류는 다른 지역을 시도해도 같으므로 바로 던진다.
-async function fetchValorant({ name, tag, key, fetchFn = fetch, regions = ['kr', 'ap'] }) {
+async function fetchRegions({ key, fetchFn, regions, urlOf, parse }) {
   if (!key) throw new RiotError('no_key', 0);
   let last = new RiotError('not_found', 404);
   for (const region of regions) {
     let res;
     try {
-      res = await fetchFn(`${BASE}/valorant/v3/mmr/${region}/pc/${encodeURIComponent(name)}/${encodeURIComponent(tag)}`, { headers: { Authorization: key } });
+      res = await fetchFn(urlOf(region), { headers: { Authorization: key } });
     } catch {
       throw new RiotError('unavailable', 0);
     }
@@ -59,7 +90,7 @@ async function fetchValorant({ name, tag, key, fetchFn = fetch, regions = ['kr',
       continue;
     }
     try {
-      return parseValorant(await res.json());
+      return parse(await res.json());
     } catch (err) {
       if (!(err instanceof RiotError)) throw new RiotError('unavailable', 0);
       last = err;
@@ -68,4 +99,18 @@ async function fetchValorant({ name, tag, key, fetchFn = fetch, regions = ['kr',
   throw last;
 }
 
-module.exports = { parseValorant, fetchValorant };
+const enc = encodeURIComponent;
+
+function fetchValorant({ name, tag, key, fetchFn = fetch, regions = ['kr', 'ap'] }) {
+  return fetchRegions({ key, fetchFn, regions, urlOf: r => `${BASE}/valorant/v3/mmr/${r}/pc/${enc(name)}/${enc(tag)}`, parse: parseValorant });
+}
+
+// 최근 경쟁전 경기(기본 20판). 경기가 없으면 빈 목록.
+function fetchValorantMatches({ name, tag, key, fetchFn = fetch, regions = ['kr', 'ap'], size = MATCH_COUNT }) {
+  return fetchRegions({
+    key, fetchFn, regions, parse: parseStoredMatches,
+    urlOf: r => `${BASE}/valorant/v1/stored-matches/${r}/${enc(name)}/${enc(tag)}?mode=competitive&size=${size}`,
+  });
+}
+
+module.exports = { parseValorant, fetchValorant, parseStoredMatches, fetchValorantMatches };

@@ -36,12 +36,34 @@ function loadFont(filePath) {
   return font;
 }
 
-// 이모지는 폰트에 없어 네모로 나오므로 빼고, 폰트에 없는 글자는 '?'로 바꾼다.
+// 폰트에 글자가 있는지(공백은 항상 통과)
+const hasGlyph = (font, ch) => font.charToGlyphIndex(ch) > 0;
+
+// 이모지는 폰트에 없어 네모로 나오므로 빼고, 폰트에 없는 글자는 대체 폰트(font.fallback — 예: 그리스 문자용 DejaVu Sans)에
+// 있으면 그대로 두고, 거기에도 없으면 '?'로 바꾼다.
 function cleanText(font, s) {
-  const stripped = String(s).replace(/[\p{Extended_Pictographic}️‍]/gu, '').replace(/ {2,}/g, ' ').trim();
+  const stripped = String(s).replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '').replace(/ {2,}/g, ' ').trim();
   let out = '';
-  for (const ch of stripped) out += (ch === ' ' || font.charToGlyphIndex(ch) > 0) ? ch : '?';
+  for (const ch of stripped) out += (ch === ' ' || hasGlyph(font, ch) || (font.fallback && hasGlyph(font.fallback, ch))) ? ch : '?';
   return out;
+}
+
+// 문자열을 "기본 폰트로 그릴 덩어리 / 대체 폰트로 그릴 덩어리"로 나눈다(대체 폰트가 없으면 한 덩어리).
+function fontRuns(font, str) {
+  if (!font.fallback) return [{ font, text: str }];
+  const runs = [];
+  for (const ch of str) {
+    const f = (ch === ' ' || hasGlyph(font, ch)) ? font : font.fallback;
+    const last = runs[runs.length - 1];
+    if (last && last.font === f) last.text += ch; else runs.push({ font: f, text: ch });
+  }
+  return runs;
+}
+
+function advanceOf(font, str, size) {
+  let w = 0;
+  for (const r of fontRuns(font, str)) w += r.font.getAdvanceWidth(r.text, size);
+  return w;
 }
 
 // ── 칠하기 핵심 ─────────────────────────────────────────────────
@@ -184,7 +206,12 @@ function textMask(font, str, size) {
   const key = `${fontId(font)}|${size.toFixed(2)}|${str}`;
   let m = maskCache.get(key);
   if (m) { maskCache.delete(key); maskCache.set(key, m); return m; } // 최근 사용으로 갱신
-  const contours = glyphContours(font.getPath(str, 0, 0, size), size > 30 ? 8 : 5);
+  const contours = [];
+  let penX = 0;
+  for (const r of fontRuns(font, str)) {
+    contours.push(...glyphContours(r.font.getPath(r.text, penX, 0, size), size > 30 ? 8 : 5));
+    penX += r.font.getAdvanceWidth(r.text, size);
+  }
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const c of contours) for (let k = 0; k < c.length; k += 2) {
     if (c[k] < minX) minX = c[k]; if (c[k] > maxX) maxX = c[k];
@@ -324,14 +351,14 @@ class Painter {
 
   // ── 글자 ─────────────────────────────────────────────────────
   textWidth(font, s, size) {
-    return font.getAdvanceWidth(cleanText(font, s), size);
+    return advanceOf(font, cleanText(font, s), size);
   }
 
   // y는 글자 줄의 세로 가운데. maxWidth를 넘으면 글자 크기를 줄여 맞춘다.
   text(font, s, x, y, { size = 16, color = '#ffffff', align = 'center', maxWidth } = {}) {
     const str = cleanText(font, s);
     if (!str) return;
-    let w = font.getAdvanceWidth(str, size);
+    let w = advanceOf(font, str, size);
     if (maxWidth && w > maxWidth) { size = size * (maxWidth / w); w = maxWidth; }
     const k = this.s; // 배율
     const baseline = Math.round((y + size * 0.36) * k);

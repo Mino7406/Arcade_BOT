@@ -90,5 +90,14 @@ const solid = (w, h, rgba) => { const b = Buffer.alloc(w * h * 4); for (let i = 
   const small = decodePng(fs.readFileSync(ef));
   assert.ok(small.w <= 128 && small.h <= 128, `엠블럼은 128 이하로 줄어야 함(${small.w}x${small.h})`);
   assert.ok(small.data[3] > 200, '줄인 뒤에도 그림이 남아 있음(여백 제거)');
+  // urlIcon: size 를 주면 큰 원본(1024)을 줄여서 저장, 같은 키는 디스크 캐시
+  let urlDownloads = 0;
+  const big2 = solid(1024, 1024, [10, 200, 30, 255]);
+  const agentStatics = createStatic({ fetchJson, fetchBuffer: async () => { urlDownloads++; return encodePng(big2, 1024, 1024); }, dir: tmp() });
+  const af = await agentStatics.urlIcon('valorant-agent', 'abc-123', 'https://example.test/a.png', { size: 128 });
+  const asmall = decodePng(fs.readFileSync(af));
+  assert.ok(asmall.w <= 128 && asmall.h <= 128, `요원 아이콘은 128 이하로 줄어야 함(${asmall.w}x${asmall.h})`);
+  await agentStatics.urlIcon('valorant-agent', 'abc-123', 'https://example.test/a.png', { size: 128 });
+  assert.strictEqual(urlDownloads, 1, '두 번째는 디스크 캐시');
   console.log('정적 데이터·아이콘 테스트 통과');
 })();
