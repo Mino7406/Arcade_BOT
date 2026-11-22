@@ -29,7 +29,7 @@ const QUEUE_TABS = [['all', '전체'], ['solo', '솔로랭크'], ['flex', '자�
 const VAL_TABS = [['all', '전체'], ['comp', '경쟁전'], ['unrated', '일반전'], ['swift', '신속 플레이'], ['spike', '스파이크 돌격'], ['tdm', '팀 데스매치'], ['dm', '데스매치']];
 // 탭 버튼 이모지: 발로란트는 게임 모드 로고(앱 이모지, 아직 준비 전이면 기본 이모지). 롤은 큐별 로고가 따로 없어 기본 이모지.
 const VAL_TAB_EMOJI = { all: () => EMOJI.valorant, comp: () => recordEmoji('val_rank') ?? '🏆', unrated: () => recordEmoji('val_standard') ?? '🎮', swift: () => recordEmoji('val_swift') ?? '⚡', spike: () => recordEmoji('val_spike') ?? '💣', tdm: () => recordEmoji('val_tdm') ?? '🔫', dm: () => recordEmoji('val_dm') ?? '🎯' };
-const QUEUE_TAB_EMOJI = { all: () => EMOJI.lol, solo: () => '👤', flex: () => '👥', arena: () => '⚔️', normal: () => recordEmoji('lol_rift') ?? '🎮', aram: () => recordEmoji('lol_aram') ?? '❄️' };
+const QUEUE_TAB_EMOJI = { all: () => EMOJI.lol, solo: () => recordEmoji('lol_rift') ?? '👤', flex: () => recordEmoji('lol_rift') ?? '👥', arena: () => recordEmoji('lol_arena') ?? '⚔️', normal: () => recordEmoji('lol_rift') ?? '🎮', aram: () => recordEmoji('lol_aram') ?? '❄️' };
 // 안내 메시지는 전부 카드(제목·부제·본문·버튼)로 보낸다. ephemeral 이면 나에게만 보이고, 모달 응답처럼 이미 대기 중인 메시지를 고칠 때는 false.
 const info = ({ color = 'warn', header, sub, lines = [], rows, footer }, ephemeral = true) => payload(card({ color, header, sub, blocks: lines, rows, footer }), { ephemeral });
 const notReadyCard = () => info({ color: 'muted', header: '🚧 준비 중이에요', sub: '전적 검색', lines: ['전적 검색은 지금 테스트 서버에서만 쓸 수 있어요.'] });

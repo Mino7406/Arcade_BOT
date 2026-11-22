@@ -8,7 +8,8 @@ const DIR = path.join(__dirname, '..', '..', 'assets', '이모지');
 // val_rank 경쟁전(불멸 티어 배지) · val_standard 일반전(기본 모드) · val_swift 신속 플레이 · val_spike 스파이크 돌격
 // lol_rift 롤 일반(소환사의 협곡) · lol_aram 칼바람
 // val_tdm 팀 데스매치 · val_dm 데스매치
-const EMOJI_FILES = ['val_rank', 'val_standard', 'val_swift', 'val_spike', 'lol_rift', 'lol_aram', 'val_tdm', 'val_dm'];
+// lol_arena 아레나
+const EMOJI_FILES = ['val_rank', 'val_standard', 'val_swift', 'val_spike', 'lol_rift', 'lol_aram', 'val_tdm', 'val_dm', 'lol_arena'];
 
 const emojis = new Map(); // 'val_rank' → { id, name }
 
