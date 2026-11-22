@@ -25,6 +25,7 @@ const { RECORD_SEARCH_CHANNEL_IDS } = require('../../config');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const QUEUE_TABS = [['all', '전체'], ['solo', '솔로랭크'], ['flex', '자유랭크']];
+const VAL_TABS = [['all', '전체'], ['comp', '경쟁전'], ['unrated', '일반'], ['swift', '빠른 대전'], ['etc', '기타']];
 // 안내 메시지는 전부 카드(제목·부제·본문·버튼)로 보낸다. ephemeral 이면 나에게만 보이고, 모달 응답처럼 이미 대기 중인 메시지를 고칠 때는 false.
 const info = ({ color = 'warn', header, sub, lines = [], rows, footer }, ephemeral = true) => payload(card({ color, header, sub, blocks: lines, rows, footer }), { ephemeral });
 const notReadyCard = () => info({ color: 'muted', header: '🚧 준비 중이에요', sub: '전적 검색', lines: ['전적 검색은 지금 테스트 서버에서만 쓸 수 있어요.'] });
@@ -49,6 +50,11 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
   const button = (id, label, style = ButtonStyle.Secondary) => new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(style);
   const queueRow = (puuid, current) => new ActionRowBuilder().addComponents(
     QUEUE_TABS.map(([q, label]) => button(`record:q:lol:${q}:${puuid}`, label, q === current ? ButtonStyle.Primary : ButtonStyle.Secondary)));
+
+  // 발로란트 모드 탭(customId 에 이름#태그를 담는다). 결과 이미지가 있을 때만 붙는다.
+  const valRow = (id, current) => new ActionRowBuilder().addComponents(
+    VAL_TABS.map(([t, label]) => button(`record:q:val:${t}:${id}`, label, t === current ? ButtonStyle.Primary : ButtonStyle.Secondary)));
+  const tabsFor = (game, res) => (!res.ok || !res.png ? null : game === 'lol' ? queueRow(res.puuid, 'all') : valRow(res.id, 'all'));
 
   // 선택 카드 한 장: 구분선으로 "내 전적 / 다른 사람 전적"을 나눈다. pickedId 가 있으면 그 멤버용 버튼이 켜진다.
   function selectCard(pickedId, ephemeral, note) {
@@ -125,7 +131,16 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
         .addComponents(input('lol', '롤 Riot ID (비워두면 조회 안 함)'), input('valorant', '발로란트 Riot ID (비워두면 조회 안 함)')));
     }
 
-    if (action === 'q') { // 롤 이미지의 큐 탭: 같은 메시지를 새 이미지로 바꾼다
+    if (action === 'q') { // 이미지의 탭 버튼: 같은 메시지를 그 큐·모드의 새 이미지로 바꾼다
+      if (parts[2] === 'val') {
+        const tab = parts[3];
+        const id = parseRiotId(parts.slice(4).join(':'));
+        await interaction.deferUpdate();
+        if (!id) return interaction.followUp(info({ color: 'err', header: '❌ 전적을 불러오지 못했어요', sub: '발로란트 전적', lines: ['닉네임을 읽지 못했어요.'] }));
+        const res = await valorant.lookup(id, tab);
+        if (!res.ok) return interaction.followUp(info({ color: 'err', header: '❌ 전적을 불러오지 못했어요', sub: '발로란트 전적', lines: [res.message] }));
+        return interaction.editReply(resultPayload(res, 'valorant', valRow(res.id, tab)));
+      }
       const queue = parts[3], puuid = parts[4];
       await interaction.deferUpdate();
       const res = await lol.lookup({ puuid }, queue);
@@ -144,7 +159,7 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
       }
       await interaction.update(searchingCard(game));
       const res = await (game === 'lol' ? lol : valorant).lookup(target, 'all');
-      const problem = await upload(interaction, res, game, game === 'lol' && res.ok && res.png ? queueRow(res.puuid, 'all') : null);
+      const problem = await upload(interaction, res, game, tabsFor(game, res));
       if (problem) return interaction.editReply(selectCard(null, false, problem)); // 선택 카드로 돌아와 다시 고를 수 있게
       return interaction.deleteReply().catch(() => {}); // 이미지가 올라갔으니 선택 카드는 지운다
     }
@@ -176,7 +191,7 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
     await interaction.editReply(payload(card({ color: 'info', header: '🔎 전적 검색 중...', sub: `${jobs.map(([label], n) => `${label} ${ids[n].name}#${ids[n].tag}`).join(' · ')} · 잠시만 기다려 주세요` })));
     for (const [n, [label, game, , service]] of jobs.entries()) {
       const res = await service.lookup(ids[n], 'all');
-      const problem = await upload(interaction, res, game, game === 'lol' && res.ok && res.png ? queueRow(res.puuid, 'all') : null);
+      const problem = await upload(interaction, res, game, tabsFor(game, res));
       if (problem) problems.push(`${label}: ${problem}`);
     }
     if (problems.length) return interaction.editReply(info({ color: 'err', header: '❌ 전적을 불러오지 못했어요', sub: '닉네임으로 검색', lines: problems }, false));

@@ -80,4 +80,18 @@ assert.strictEqual(again.list('P1').length, 100, '저장 후 다시 읽기');
 const capped = createMatchStore({ file: path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'rec-')), 'c.json'), keep: 100, maxPlayers: 3 });
 for (let n = 1; n <= 5; n++) capped.add('P' + n, { id: 'M' + n, ts: n * 1000, queue: 420 });
 assert.deepStrictEqual([1, 2, 3, 4, 5].map(n => capped.list('P' + n).length), [0, 0, 1, 1, 1], '최근 3명만 남음');
+// 바뀐 게 없으면 저장하지 않는다(30초마다 도는 자동 저장이 큰 JSON 을 매번 직렬화하지 않게)
+const dirtyFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'rec-')), 'd.json');
+const dirtyStore = createMatchStore({ file: dirtyFile, keep: 100 });
+dirtyStore.save();
+assert.ok(!fs.existsSync(dirtyFile), '아무것도 안 넣었으면 파일을 만들지 않음');
+dirtyStore.add('P1', { id: 'M1', ts: 1, queue: 420 });
+dirtyStore.save();
+assert.ok(fs.existsSync(dirtyFile), '넣었으면 저장');
+fs.unlinkSync(dirtyFile);
+dirtyStore.save();
+assert.ok(!fs.existsSync(dirtyFile), '그 뒤로 바뀐 게 없으면 다시 쓰지 않음');
+dirtyStore.add('P1', { id: 'M2', ts: 2, queue: 420 });
+dirtyStore.save();
+assert.ok(fs.existsSync(dirtyFile), '다시 바뀌면 저장');
 console.log('집계·저장소 테스트 통과');

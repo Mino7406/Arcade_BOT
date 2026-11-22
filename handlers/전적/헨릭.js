@@ -4,7 +4,17 @@
 const { RiotError } = require('./리오트');
 
 const BASE = 'https://api.henrikdev.xyz';
-const MATCH_COUNT = 20;
+const MATCH_COUNT = 100; // 한 번에 100판(약 65KB)을 받아 모드 탭은 화면에서 거른다 → 탭을 바꿔도 호출이 늘지 않는다
+
+// HenrikDev 의 모드 이름 → [탭 분류, 한글 이름, 라운드가 있는 모드인가]. 탭: comp 경쟁전 · unrated 일반 · swift 빠른 대전 · etc 나머지.
+const MODES = {
+  Competitive: ['comp', '경쟁전', true], Unrated: ['unrated', '일반', true], Swiftplay: ['swift', '빠른 대전', true],
+  'Spike Rush': ['etc', '스파이크 러시', true], Premier: ['etc', '프리미어', true], 'Custom Game': ['etc', '사용자 지정', true], 'All Random One Site': ['etc', '랜덤 원 사이트', true],
+  Deathmatch: ['etc', '데스매치', false], 'Team Deathmatch': ['etc', '팀 데스매치', false], Escalation: ['etc', '에스컬레이션', false], Replication: ['etc', '복제', false], 'Snowball Fight': ['etc', '눈싸움', false],
+};
+function modeInfo(raw) {
+  return MODES[raw] ?? ['etc', !raw || raw === 'unknown' ? '기타 모드' : raw, true];
+}
 
 const isObj = x => x !== null && typeof x === 'object' && !Array.isArray(x);
 
@@ -38,20 +48,24 @@ function parseValorant(data) {
 }
 
 // stored-matches 응답 → 최근순 경기 목록. 깨진 항목은 건너뛴다.
-// Match = { id, ts, mode, map: {id, name}, agent: {id, name}, tier(번호), k, d, a, score, head, body, leg, dmg, rounds: [내 팀, 상대 팀], result: 'win'|'loss'|'draw' }
+// Match = { id, ts, mode, modeKey, modeLabel, hasRounds, map: {id, name}, agent: {id, name}, tier(번호), k, d, a, score, head, body, leg, dmg,
+//           rounds: [내 팀, 상대 팀](개인전은 [0, 0]), result: 'win'|'loss'|'draw'|'none'(개인전이라 승패 없음) }
+// hasRounds 가 false 인 모드(데스매치류)는 점수가 "킬 수"라서 ACS·ADR 을 계산하지 않는다.
 function parseStoredMatches(data) {
   const out = [];
   for (const m of isObj(data) && Array.isArray(data.data) ? data.data : []) {
     if (!isObj(m) || !isObj(m.meta) || !isObj(m.stats) || !isObj(m.teams) || !m.meta.id) continue;
     const st = m.stats;
     const team = String(st.team ?? '').toLowerCase();
-    const mine = Number(m.teams[team]), theirs = Number(m.teams[team === 'red' ? 'blue' : 'red']);
+    const teamMode = team === 'red' || team === 'blue'; // 개인전(데스매치)은 team 이 내 id 라서 승패가 없다
+    const mine = teamMode ? Number(m.teams[team]) : 0, theirs = teamMode ? Number(m.teams[team === 'red' ? 'blue' : 'red']) : 0;
     if (!Number.isFinite(mine) || !Number.isFinite(theirs) || !isObj(st.character)) continue;
     const shots = isObj(st.shots) ? st.shots : {};
+    const [modeKey, modeLabel, hasRounds] = modeInfo(String(m.meta.mode ?? ''));
     out.push({
       id: String(m.meta.id),
       ts: Date.parse(m.meta.started_at) || 0,
-      mode: String(m.meta.mode ?? ''),
+      mode: String(m.meta.mode ?? ''), modeKey, modeLabel, hasRounds,
       map: { id: String(m.meta.map?.id ?? ''), name: String(m.meta.map?.name ?? '') },
       agent: { id: String(st.character.id ?? ''), name: String(st.character.name ?? '') },
       tier: Number(st.tier) || 0,
@@ -60,7 +74,7 @@ function parseStoredMatches(data) {
       head: Number(shots.head) || 0, body: Number(shots.body) || 0, leg: Number(shots.leg) || 0,
       dmg: Number(st.damage?.made) || 0,
       rounds: [mine, theirs],
-      result: mine > theirs ? 'win' : mine < theirs ? 'loss' : 'draw',
+      result: !teamMode ? 'none' : mine > theirs ? 'win' : mine < theirs ? 'loss' : 'draw',
     });
   }
   return out.sort((x, y) => y.ts - x.ts);
@@ -105,11 +119,11 @@ function fetchValorant({ name, tag, key, fetchFn = fetch, regions = ['kr', 'ap']
   return fetchRegions({ key, fetchFn, regions, urlOf: r => `${BASE}/valorant/v3/mmr/${r}/pc/${enc(name)}/${enc(tag)}`, parse: parseValorant });
 }
 
-// 최근 경쟁전 경기(기본 20판). 경기가 없으면 빈 목록.
-function fetchValorantMatches({ name, tag, key, fetchFn = fetch, regions = ['kr', 'ap'], size = MATCH_COUNT }) {
+// 최근 경기(모든 모드, 기본 100판). mode 를 주면 그 모드만. 경기가 없으면 빈 목록.
+function fetchValorantMatches({ name, tag, key, fetchFn = fetch, regions = ['kr', 'ap'], size = MATCH_COUNT, mode }) {
   return fetchRegions({
     key, fetchFn, regions, parse: parseStoredMatches,
-    urlOf: r => `${BASE}/valorant/v1/stored-matches/${r}/${enc(name)}/${enc(tag)}?mode=competitive&size=${size}`,
+    urlOf: r => `${BASE}/valorant/v1/stored-matches/${r}/${enc(name)}/${enc(tag)}?${mode ? `mode=${mode}&` : ''}size=${size}`,
   });
 }
 

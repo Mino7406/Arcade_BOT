@@ -22,7 +22,7 @@ const idsOf = p => {
 };
 
 function setup({ linked = {}, lolResult, valResult, verifyLol, verifyVal } = {}) {
-  const lookups = { lol: [], val: [] };
+  const lookups = { lol: [], val: [], valTabs: [] };
   const saved = { links: [], saves: 0 };
   const handlers = createRecordHandlers({
     canUse: g => g === TEST_GUILD || g === 'PUB',
@@ -31,7 +31,7 @@ function setup({ linked = {}, lolResult, valResult, verifyLol, verifyVal } = {})
     setLinked: (id, v) => { saved.links.push([id, v]); },
     save: () => { saved.saves++; },
     lol: { lookup: async (t, q) => { lookups.lol.push([t, q]); return lolResult ?? { ok: true, png: Buffer.from('png'), text: 't', puuid: t.puuid ?? 'PUUID-X', label: 'A bc#KR1' }; } },
-    valorant: { lookup: async t => { lookups.val.push(t); return valResult ?? { ok: true, png: Buffer.from('png'), text: 't', label: 'V#KR1' }; } },
+    valorant: { lookup: async (t, tab) => { lookups.val.push(t); lookups.valTabs.push(tab); return valResult ?? { ok: true, png: Buffer.from('png'), text: 't', label: 'V#KR1', id: `${t.name}#${t.tag}` }; } },
     verifyLol: verifyLol ?? (async (name, tag) => ({ puuid: 'PUUID-' + name, name, tag })),
     verifyValorant: verifyVal ?? (async (name, tag) => ({ name, tag, region: 'kr' })),
   });
@@ -201,6 +201,8 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   assert.deepStrictEqual(lookups.val[0], { name: 'Mino', tag: 'KR1' });
   assert.strictEqual(first(i, 'send')[1].files.length, 1);
   assert.deepStrictEqual(i.calls.map(c => c[0]), ['update', 'send', 'deleteReply']);
+  assert.strictEqual(lookups.valTabs[0], 'all', '처음에는 전체 탭');
+  assert.deepStrictEqual(idsOf(first(i, 'send')[1]), ['all', 'comp', 'unrated', 'swift', 'etc'].map(t => `record:q:val:${t}:Mino#KR1`), '모드 탭 버튼 5개');
 
   // 채널에 이미지를 못 올리면 선택 카드로 돌아와 안내(삭제 안 함)
   ({ handlers } = setup({ linked }));
@@ -238,8 +240,10 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   // 둘 다 채우면 둘 다, 형식이 틀리거나 둘 다 비면 안내(조회 없음)
   i = fakeInteraction({ customId: 'record:find_modal', fieldValues: { lol: 'Mino#KR1', valorant: 'Mino#KR1' } });
   await handlers.handleRecordModal(i);
-  assert.strictEqual(lookups.lol.length, 2); assert.strictEqual(lookups.val.length, 1);
-  assert.strictEqual(i.calls.filter(c => c[0] === 'send').length, 2);
+  assert.strictEqual(lookups.lol.length, 2); assert.strictEqual(lookups.val.length >= 1, true);
+  const sends = i.calls.filter(c => c[0] === 'send');
+  assert.strictEqual(sends.length, 2);
+  assert.ok(idsOf(sends[1][1]).every(id => id.startsWith('record:q:val:')), '발로란트 결과에도 모드 탭');
   const before = lookups.lol.length;
   i = fakeInteraction({ customId: 'record:find_modal', fieldValues: {} });
   await handlers.handleRecordModal(i);
@@ -255,6 +259,25 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   assert.ok(!first(i, 'send'));
   assert.ok(!first(i, 'deleteReply'));
   assert.ok(textOf(i.calls.filter(c => c[0] === 'editReply').at(-1)[1]).includes('찾을 수 없'));
+
+  // 발로란트 모드 탭: 같은 메시지를 그 모드의 이미지로 바꾼다(customId 의 이름#태그로 조회)
+  ({ handlers, lookups } = setup({ linked }));
+  i = fakeInteraction({ customId: 'record:q:val:comp:Mino#KR1' });
+  await handlers.handleRecordButton(i);
+  assert.ok(first(i, 'deferUpdate'));
+  assert.deepStrictEqual(lookups.val.at(-1), { name: 'Mino', tag: 'KR1' });
+  assert.strictEqual(lookups.valTabs.at(-1), 'comp');
+  const valEdited = first(i, 'editReply')[1];
+  assert.strictEqual(valEdited.files.length, 1);
+  const tabStyles = [];
+  (function walk(x) { if (x?.custom_id?.startsWith('record:q:val:')) tabStyles.push([x.custom_id.split(':')[3], x.style]); (x?.components ?? []).forEach(walk); })({ components: valEdited.components.map(json) });
+  assert.deepStrictEqual(tabStyles.map(t => t[0]), ['all', 'comp', 'unrated', 'swift', 'etc']);
+  assert.strictEqual(tabStyles.find(t => t[0] === 'comp')[1], 1, '현재 탭은 파란 버튼(Primary)');
+  assert.strictEqual(tabStyles.find(t => t[0] === 'all')[1], 2);
+  // 이름에 : 가 들어 있어도 이름#태그를 그대로 읽는다
+  i = fakeInteraction({ customId: 'record:q:val:etc:O:O#1116' });
+  await handlers.handleRecordButton(i);
+  assert.deepStrictEqual(lookups.val.at(-1), { name: 'O:O', tag: '1116' });
 
   // [계정 연결] → 모달(입력칸 2개, 둘 다 선택)
   i = fakeInteraction({ customId: 'record:link' });

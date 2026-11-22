@@ -8,6 +8,7 @@ const { isTempVoiceChannel } = require('../레벨/음성채널');
 
 const ACCOUNTS_PATH = path.join(__dirname, '..', '..', 'DB', 'riot-accounts.json');
 let accounts = {};
+let dirty = false; // 마지막 저장 뒤 바뀌었나
 
 // "이름#태그" → { name, tag }. 이름 3~16자(공백·한글 허용), 태그 3~5자(영문·숫자). 틀리면 null.
 function parseRiotId(text) {
@@ -31,7 +32,9 @@ function loadRecordAccounts() {
 }
 
 function saveRecordAccounts() {
+  if (!dirty) return;
   writeJsonIfChanged(ACCOUNTS_PATH, accounts);
+  dirty = false;
 }
 
 function getLinked(userId) {
@@ -40,6 +43,7 @@ function getLinked(userId) {
 
 function setLinked(userId, linked) {
   accounts[userId] = { ...(accounts[userId] ?? {}), ...linked };
+  dirty = true;
 }
 
 // 테스트 한정 동안은 테스트 서버(길드)에서만 true.

@@ -1,0 +1,287 @@
+{
+ "status": 200,
+ "data": [
+  {
+   "meta": {
+    "id": "e7103a9b-2115-497f-920e-c2ea821affaa",
+    "map": {
+     "id": "e2ad5c54-4114-a870-9641-8ea21279579a",
+     "name": "Icebox"
+    },
+    "version": "release-13.10-shipping-18-5893614",
+    "mode": "Unrated",
+    "started_at": "2026-11-15T22:44:56.105Z",
+    "season": {
+     "id": "d816f426-48ea-f052-117f-9697a155b319",
+     "short": "e11a6"
+    },
+    "region": "ap",
+    "cluster": "Seoul"
+   },
+   "stats": {
+    "puuid": "V-PUUID",
+    "name": "",
+    "tag": "",
+    "team": "Blue",
+    "level": 618,
+    "character": {
+     "id": "ddd5a15c-4fbe-42fa-3789-11a55ca5ee04",
+     "name": "Hush"
+    },
+    "tier": 0,
+    "score": 6076,
+    "kills": 21,
+    "deaths": 17,
+    "assists": 5,
+    "shots": {
+     "head": 17,
+     "body": 40,
+     "leg": 0
+    },
+    "damage": {
+     "made": 4032,
+     "received": 3517
+    }
+   },
+   "teams": {
+    "red": 8,
+    "blue": 13
+   }
+  },
+  {
+   "meta": {
+    "id": "5cc97e03-24bd-4ff4-813a-a9cdb8174fef",
+    "map": {
+     "id": "2c9d57ec-4431-9c5e-2939-8f9ef6dd5cba",
+     "name": "Bind"
+    },
+    "version": "release-13.10-shipping-18-5893614",
+    "mode": "Competitive",
+    "started_at": "2026-11-15T20:56:55.244Z",
+    "season": {
+     "id": "d816f426-48ea-f052-117f-9697a155b319",
+     "short": "e11a6"
+    },
+    "region": "ap",
+    "cluster": "Seoul"
+   },
+   "stats": {
+    "puuid": "V-PUUID",
+    "name": "",
+    "tag": "",
+    "team": "Red",
+    "level": 618,
+    "character": {
+     "id": "1dbf2edd-4729-0984-3115-daa5eed44993",
+     "name": "Clove"
+    },
+    "tier": 23,
+    "score": 3317,
+    "kills": 11,
+    "deaths": 18,
+    "assists": 8,
+    "shots": {
+     "head": 9,
+     "body": 29,
+     "leg": 2
+    },
+    "damage": {
+     "made": 2184,
+     "received": 3274
+    }
+   },
+   "teams": {
+    "red": 6,
+    "blue": 13
+   }
+  },
+  {
+   "meta": {
+    "id": "bfe20a67-a35f-4b85-9cee-dea2970561e5",
+    "map": {
+     "id": "2bee0dc9-4ffe-519b-1cbd-7fbe763a6047",
+     "name": "Haven"
+    },
+    "version": "release-13.10-shipping-18-5893614",
+    "mode": "Deathmatch",
+    "started_at": "2026-11-15T16:19:45.005Z",
+    "season": {
+     "id": "d816f426-48ea-f052-117f-9697a155b319",
+     "short": "e11a6"
+    },
+    "region": "ap",
+    "cluster": "Seoul"
+   },
+   "stats": {
+    "puuid": "V-PUUID",
+    "name": "",
+    "tag": "",
+    "team": "V-PUUID",
+    "level": 617,
+    "character": {
+     "id": "320b2a48-4d9b-a075-30f1-1f93a9b638fa",
+     "name": "Sova"
+    },
+    "tier": 0,
+    "score": 7802,
+    "kills": 26,
+    "deaths": 16,
+    "assists": 5,
+    "shots": {
+     "head": 0,
+     "body": 0,
+     "leg": 0
+    },
+    "damage": {
+     "made": 0,
+     "received": 0
+    }
+   },
+   "teams": {
+    "red": 26,
+    "blue": 26
+   }
+  },
+  {
+   "meta": {
+    "id": "c76e3100-793d-4ac0-9d77-032228a72f92",
+    "map": {
+     "id": "a38a3f9a-4042-844c-8970-a3ac2f7ce93d",
+     "name": "Skirmish B"
+    },
+    "version": "release-13.10-shipping-18-5893614",
+    "mode": "unknown",
+    "started_at": "2026-11-15T16:12:00.034Z",
+    "season": {
+     "id": "d816f426-48ea-f052-117f-9697a155b319",
+     "short": "e11a6"
+    },
+    "region": "ap",
+    "cluster": "Seoul"
+   },
+   "stats": {
+    "puuid": "V-PUUID",
+    "name": "",
+    "tag": "",
+    "team": "Blue",
+    "level": 617,
+    "character": {
+     "id": "7f94d92c-4234-0a36-9646-3a87eb8b5c89",
+     "name": "Yoru"
+    },
+    "tier": 0,
+    "score": 4358,
+    "kills": 17,
+    "deaths": 11,
+    "assists": 0,
+    "shots": {
+     "head": 0,
+     "body": 0,
+     "leg": 0
+    },
+    "damage": {
+     "made": 0,
+     "received": 0
+    }
+   },
+   "teams": {
+    "red": 10,
+    "blue": 7
+   }
+  },
+  {
+   "meta": {
+    "id": "b6ab6361-69a0-4df4-b10f-375daac95948",
+    "map": {
+     "id": "1c18ab1f-420d-0d8b-71d0-77ad3c439115",
+     "name": "Corrode"
+    },
+    "version": "release-13.09-shipping-18-5804228",
+    "mode": "Swiftplay",
+    "started_at": "2026-11-09T11:21:51.154Z",
+    "season": {
+     "id": "d816f426-48ea-f052-117f-9697a155b319",
+     "short": "e11a6"
+    },
+    "region": "ap",
+    "cluster": "Seoul"
+   },
+   "stats": {
+    "puuid": "V-PUUID",
+    "name": "",
+    "tag": "",
+    "team": "Blue",
+    "level": 616,
+    "character": {
+     "id": "1dbf2edd-4729-0984-3115-daa5eed44993",
+     "name": "Clove"
+    },
+    "tier": 0,
+    "score": 3983,
+    "kills": 16,
+    "deaths": 6,
+    "assists": 1,
+    "shots": {
+     "head": 11,
+     "body": 26,
+     "leg": 0
+    },
+    "damage": {
+     "made": 2446,
+     "received": 994
+    }
+   },
+   "teams": {
+    "red": 5,
+    "blue": 2
+   }
+  },
+  {
+   "meta": {
+    "id": "31a13111-93af-4e7a-8bde-0526f333dd8c",
+    "map": {
+     "id": "b529448b-4d60-346e-e89e-00a4c527a405",
+     "name": "Fracture"
+    },
+    "version": "release-07.01-shipping-28-925799",
+    "mode": "Spike Rush",
+    "started_at": "2023-07-22T17:39:13.866Z",
+    "season": {
+     "id": "0981a882-4e7d-371a-70c4-c3b4f46c504a",
+     "short": "e7a1"
+    },
+    "region": "ap",
+    "cluster": "Seoul"
+   },
+   "stats": {
+    "puuid": "V-PUUID",
+    "name": "",
+    "tag": "",
+    "team": "Red",
+    "level": 147,
+    "character": {
+     "id": "bb2a4828-46eb-8cd1-e765-15848195d751",
+     "name": "Neon"
+    },
+    "tier": 0,
+    "score": 509,
+    "kills": 2,
+    "deaths": 4,
+    "assists": 0,
+    "shots": {
+     "head": 1,
+     "body": 4,
+     "leg": 1
+    },
+    "damage": {
+     "made": 325,
+     "received": 624
+    }
+   },
+   "teams": {
+    "red": 1,
+    "blue": 4
+   }
+  }
+ ]
+}

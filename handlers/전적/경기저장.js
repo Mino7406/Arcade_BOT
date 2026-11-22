@@ -5,6 +5,7 @@ const { writeJsonIfChanged } = require('../공통/저장');
 
 function createMatchStore({ file, keep = 100, maxPlayers = 60 }) {
   let data = {}; // { [puuid]: { [matchId]: compact } }
+  let dirty = false; // 마지막 저장 뒤 바뀌었나(자동 저장이 큰 JSON 을 매번 직렬화하지 않게)
 
   function load() {
     try {
@@ -16,7 +17,9 @@ function createMatchStore({ file, keep = 100, maxPlayers = 60 }) {
   }
 
   function save() {
+    if (!dirty) return;
     writeJsonIfChanged(file, data);
+    dirty = false;
   }
 
   function has(puuid, id) {
@@ -26,6 +29,7 @@ function createMatchStore({ file, keep = 100, maxPlayers = 60 }) {
   function add(puuid, compact) {
     const mine = (data[puuid] ??= {});
     mine[compact.id] = compact;
+    dirty = true;
     const ids = Object.keys(mine);
     if (ids.length > keep) {
       ids.sort((x, y) => mine[y].ts - mine[x].ts).slice(keep).forEach(id => delete mine[id]);

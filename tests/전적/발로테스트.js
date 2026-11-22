@@ -11,6 +11,7 @@ const { RiotError } = require(path.join(root, 'handlers', '전적', '리오트.j
 const fx = name => JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', name), 'utf8'));
 const fixture = fx('henrik-mmr.json');
 const stored = fx('henrik-stored.json');
+const modes = fx('henrik-modes.json');
 const isPng = b => Buffer.isBuffer(b) && b.subarray(0, 4).toString('hex') === '89504e47';
 const res = (status, body) => ({ status, ok: status >= 200 && status < 300, json: async () => body });
 const fake = (...responses) => { const calls = []; let i = 0; const fn = async (url, opt) => { calls.push({ url, opt }); return responses[Math.min(i++, responses.length - 1)]; }; fn.calls = calls; return fn; };
@@ -48,6 +49,7 @@ const fake = (...responses) => { const calls = []; let i = 0; const fn = async (
     id: '5cc97e03-24bd-4ff4-813a-a9cdb8174fef', ts: Date.parse('2026-11-15T20:56:55.244Z'), mode: 'Competitive',
     map: { id: '2c9d57ec-4431-9c5e-2939-8f9ef6dd5cba', name: 'Bind' }, agent: { id: '1dbf2edd-4729-0984-3115-daa5eed44993', name: 'Clove' },
     tier: 23, k: 11, d: 18, a: 8, score: 3317, head: 9, body: 29, leg: 2, dmg: 2184, rounds: [6, 13], result: 'loss',
+    modeKey: 'comp', modeLabel: '경쟁전', hasRounds: true,
   });
   assert.deepStrictEqual(ms.map(m => m.result), ['loss', 'win', 'win', 'loss', 'win', 'win'], '내 팀 라운드와 상대 라운드 비교');
   assert.ok(ms.every((m, i) => i === 0 || ms[i - 1].ts >= m.ts), '최근순');
@@ -56,13 +58,27 @@ const fake = (...responses) => { const calls = []; let i = 0; const fn = async (
   assert.deepStrictEqual(parseStoredMatches({ data: [{}, null, { meta: {} }, { meta: { id: 'x' }, stats: {} }] }), [], '깨진 항목은 건너뜀');
   assert.deepStrictEqual(parseStoredMatches({}), []);
 
+  const mm = parseStoredMatches(modes);
+  const byMode = Object.fromEntries(mm.map(m => [m.mode, m]));
+  assert.deepStrictEqual(['Unrated', 'Competitive', 'Deathmatch', 'unknown', 'Swiftplay', 'Spike Rush'].map(k => [byMode[k].modeKey, byMode[k].modeLabel, byMode[k].hasRounds, byMode[k].result]), [
+    ['unrated', '일반', true, 'win'], ['comp', '경쟁전', true, 'loss'], ['etc', '데스매치', false, 'none'],
+    ['etc', '기타 모드', true, 'loss'], ['swift', '빠른 대전', true, 'loss'], ['etc', '스파이크 러시', true, 'loss'],
+  ], '모드 이름·탭 분류·승패(개인전은 승패 없음)');
+  assert.deepStrictEqual(byMode.Deathmatch.rounds, [0, 0], '개인전은 라운드 스코어가 없다');
+  const tdm = JSON.parse(JSON.stringify(modes.data.find(m => m.meta.mode === 'Deathmatch'))); tdm.meta.mode = 'Team Deathmatch'; tdm.stats.team = 'Blue'; tdm.teams = { red: 89, blue: 100 };
+  const tdmParsed = parseStoredMatches({ data: [tdm] })[0];
+  assert.deepStrictEqual([tdmParsed.modeLabel, tdmParsed.hasRounds, tdmParsed.result, tdmParsed.rounds], ['팀 데스매치', false, 'win', [100, 89]], '팀 데스매치는 킬 수 스코어, 라운드 개념 없음');
+
   f = fake(res(404, {}), res(200, stored));
   const fetched = await fetchValorantMatches({ name: 'Mino', tag: 'KR1', key: 'k', fetchFn: f });
   assert.strictEqual(fetched.length, 6);
-  assert.ok(f.calls[0].url.endsWith('/valorant/v1/stored-matches/kr/Mino/KR1?mode=competitive&size=20'));
+  assert.ok(f.calls[0].url.endsWith('/valorant/v1/stored-matches/kr/Mino/KR1?size=100'), '모드 구분 없이 한 번에 100판(탭은 화면에서 거름)');
   assert.ok(f.calls[1].url.includes('/stored-matches/ap/Mino/KR1'));
   assert.strictEqual(f.calls[0].opt.headers.Authorization, 'k');
   assert.deepStrictEqual(await fetchValorantMatches({ name: 'Mino', tag: 'KR1', key: 'k', fetchFn: fake(res(200, { data: [] })) }), [], '경기가 없으면 빈 목록');
+  f = fake(res(200, stored));
+  await fetchValorantMatches({ name: 'Mino', tag: 'KR1', key: 'k', fetchFn: f, mode: 'competitive', size: 20 });
+  assert.ok(f.calls[0].url.endsWith('?mode=competitive&size=20'), '모드·개수를 지정할 수도 있다');
   await assert.rejects(fetchValorantMatches({ name: 'Mino', tag: 'KR1', key: 'k', fetchFn: fake(res(429, {})) }), e => e.kind === 'rate');
   await assert.rejects(fetchValorantMatches({ name: 'Mino', tag: 'KR1', key: '', fetchFn: fake(res(200, stored)) }), e => e.kind === 'no_key');
 
@@ -77,6 +93,14 @@ const fake = (...responses) => { const calls = []; let i = 0; const fn = async (
   assert.ok(Math.abs(s.hs - sum(ms, m => m.head) / sum(ms, m => m.head + m.body + m.leg)) < 1e-9);
   assert.strictEqual(s.agents[0].id, '1dbf2edd-4729-0984-3115-daa5eed44993'); assert.strictEqual(s.agents[0].games, 3); assert.strictEqual(s.agents[0].wins, 2);
   assert.ok(s.agents.length <= 3);
+  // 여러 모드: 승패는 팀 모드만, ACS·ADR 은 라운드가 있는 모드만
+  const sm = summarizeValorant(mm);
+  assert.strictEqual(sm.games, 6);
+  assert.strictEqual(sm.wins, 1); assert.strictEqual(sm.losses, 4, '개인전(승패 없음)은 승패에서 빠짐');
+  const rm = mm.filter(m => m.hasRounds);
+  assert.ok(Math.abs(sm.acs - sum(rm, m => m.score) / sum(rm, m => m.rounds[0] + m.rounds[1])) < 1e-9, 'ACS 는 라운드 모드만');
+  assert.ok(Math.abs(sm.kd - sum(mm, m => m.k) / sum(mm, m => m.d)) < 1e-9, 'K/D 는 전체');
+  assert.strictEqual(summarizeValorant(mm.filter(m => !m.hasRounds)).acs, 0, '라운드 모드가 없으면 ACS 0');
   const none = summarizeValorant([]);
   assert.deepStrictEqual([none.games, none.wins, none.losses, none.acs, none.adr, none.hs], [0, 0, 0, 0, 0, 0]);
   assert.strictEqual(none.kd, null); assert.deepStrictEqual(none.agents, []);
@@ -105,6 +129,10 @@ const fake = (...responses) => { const calls = []; let i = 0; const fn = async (
   assert.ok(isPng(renderValorant(view({ profile: { name: 'A#B', tier: '', rr: null, peak: '', seasons: [] } }))), '언랭크·티어 없음');
   const drawn = [{ ...ms[0], result: 'draw', rounds: [13, 13] }];
   assert.ok(isPng(renderValorant(view({ matches: drawn, summary: summarizeValorant(drawn) }))), '무승부도');
+  const mixed = renderValorant(view({ tab: '전체', matches: mm.slice(0, 5), summary: summarizeValorant(mm) }));
+  assert.ok(isPng(mixed), '개인전·팀 데스매치 등 모드가 섞여도');
+  keep('valorant-modes.png', mixed);
+  assert.ok(isPng(renderValorant(view({ tab: '빠른 대전', matches: [], summary: summarizeValorant([]) }))), '탭에 경기가 없어도');
   const zeroDeath = [{ ...ms[0], d: 0 }];
   assert.ok(isPng(renderValorant(view({ matches: zeroDeath, summary: summarizeValorant(zeroDeath) }))), '데스 0도');
 
@@ -137,6 +165,38 @@ const fake = (...responses) => { const calls = []; let i = 0; const fn = async (
   let calls = 0;
   const counting = createValorantService({ key: 'k', statics, fetchFn: async u => { calls++; return router()(u); }, fetchJson });
   await Promise.all([1, 2, 3].map(() => counting.lookup({ name: 'Mino', tag: 'KR1' })));
-  assert.ok(calls <= 4, `동시 3번 조회가 mmr·경기 목록 호출을 합쳐 쓰는지(${calls}번)`);
+  assert.strictEqual(calls, 2, `동시 3번 조회가 티어·경기 목록 호출 2번으로 합쳐지는지(${calls}번)`);
+
+  // 호출 한도 줄이기: 한 번 받은 티어·경기 목록은 잠시 두고 쓴다. 탭을 바꿔도 다시 받지 않는다.
+  let clock = 1_000_000;
+  const urls = [];
+  const cached = createValorantService({
+    key: 'k', statics, fetchJson, now: () => clock, cacheMs: 120000,
+    fetchFn: async u => { urls.push(u); return u.includes('/mmr/') ? res(200, fixture) : res(200, modes); },
+  });
+  const sees = [];
+  const shown = createValorantService({
+    key: 'k', statics, fetchJson, now: () => clock, cacheMs: 120000, render: v => { sees.push(v); return Buffer.from('png'); },
+    fetchFn: async u => { urls.push(u); return u.includes('/mmr/') ? res(200, fixture) : res(200, modes); },
+  });
+  await shown.lookup({ name: 'Mino', tag: 'KR1' }, 'all');
+  assert.strictEqual(urls.length, 2, '처음은 티어 + 경기 목록');
+  assert.strictEqual(sees[0].matches.length, 5); assert.strictEqual(sees[0].summary.games, 6);
+  const gamesOf = async tab => { await shown.lookup({ name: 'Mino', tag: 'KR1' }, tab); return sees.at(-1); };
+  assert.deepStrictEqual((await gamesOf('comp')).matches.map(m => m.modeLabel), ['경쟁전'], '경쟁전 탭');
+  assert.deepStrictEqual((await gamesOf('unrated')).matches.map(m => m.modeLabel), ['일반']);
+  assert.deepStrictEqual((await gamesOf('swift')).matches.map(m => m.modeLabel), ['빠른 대전']);
+  assert.deepStrictEqual((await gamesOf('etc')).matches.map(m => m.modeLabel).sort(), ['기타 모드', '데스매치', '스파이크 러시'].sort(), '기타 탭');
+  assert.strictEqual(urls.length, 2, '탭을 바꿔도 호출은 늘지 않는다');
+  assert.strictEqual(sees.at(-1).tab, '기타', '화면에 탭 이름');
+  clock += 121000;
+  await shown.lookup({ name: 'Mino', tag: 'KR1' }, 'all');
+  assert.strictEqual(urls.length, 4, '시간이 지나면 새로 받는다');
+  await cached.lookup({ name: 'Mino', tag: 'KR1' }, 'all');
+  // 한도(429)로 실패한 건 캐시하지 않는다
+  let flaky = 0;
+  const retrying = createValorantService({ key: 'k', statics, fetchJson, now: () => clock, cacheMs: 120000, fetchFn: async u => { flaky++; return u.includes('/mmr/') ? res(200, fixture) : flaky < 3 ? res(429, {}) : res(200, stored); } });
+  assert.strictEqual((await retrying.lookup({ name: 'Mino', tag: 'KR1' }, 'all')).ok, false);
+  assert.strictEqual((await retrying.lookup({ name: 'Mino', tag: 'KR1' }, 'all')).ok, true, '실패는 캐시하지 않아 다음에 성공');
   console.log('발로란트 테스트 통과');
 })();

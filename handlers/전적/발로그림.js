@@ -20,6 +20,7 @@ const RESULT = {
   win: { label: '승리', bg: C.win, bar: C.winBar, text: C.winText },
   loss: { label: '패배', bg: C.lose, bar: C.loseBar, text: C.loseText },
   draw: { label: '무승부', bg: C.draw, bar: C.drawBar, text: C.muted },
+  none: { label: '', bg: C.draw, bar: C.drawBar, text: C.muted }, // 개인전(데스매치)은 승패가 없다
 };
 
 // "Gold 2" → "골드 2", "" → "언랭크"
@@ -72,16 +73,20 @@ function createValorantRenderer({ fontDir = FONT_DIR } = {}) {
     T(prof.peak ? `경쟁전 · 최고 ${tierKo(prof.peak)}` : '경쟁전', 150, 124, { color: C.muted, maxWidth: 700 });
 
     // ② 간단 통계
-    T(`최근 ${sum.games}판 · 경쟁전`, 28, 174, { color: C.muted });
+    T(`최근 ${sum.games}판 · ${v.tab ?? '경쟁전'}`, 28, 174, { color: C.muted });
     p.roundRect(24, 194, 280, 170, 10, C.panel);
     p.roundRect(314, 194, 300, 170, 10, C.panel);
     p.roundRect(624, 194, 252, 170, 10, C.panel);
+    const decided = sum.wins + sum.losses; // 승패가 있는 판(개인전·무승부는 빠짐)
     if (sum.games > 0) {
-      const frac = sum.wins / sum.games;
+      const frac = decided ? sum.wins / decided : 0;
       const start = -Math.PI / 2;
-      if (sum.wins > 0) p.fill(ringContours(98, 279, 52, 36, start, start + Math.PI * 2 * frac), C.winBar);
-      if (sum.games - sum.wins > 0) p.fill(ringContours(98, 279, 52, 36, start + Math.PI * 2 * frac, start + Math.PI * 2), C.loseBar);
-      T(`${Math.round(100 * frac)}%`, 98, 279, { align: 'center', bold: true });
+      if (!decided) p.fill(ringContours(98, 279, 52, 36, 0, Math.PI * 2), C.hole);
+      else {
+        if (sum.wins > 0) p.fill(ringContours(98, 279, 52, 36, start, start + Math.PI * 2 * frac), C.winBar);
+        if (sum.losses > 0) p.fill(ringContours(98, 279, 52, 36, start + Math.PI * 2 * frac, start + Math.PI * 2), C.loseBar);
+      }
+      T(decided ? `${Math.round(100 * frac)}%` : '-', 98, 279, { align: 'center', bold: true });
       T(`${sum.games}전 ${sum.wins}승 ${sum.losses}패`, 164, 238, { maxWidth: 134 });
       T(`K/D ${kdText(sum.kd)}`, 164, 280, { size: 28, bold: true, maxWidth: 134 });
       T(`${sum.avgK.toFixed(1)} / ${sum.avgD.toFixed(1)} / ${sum.avgA.toFixed(1)}`, 164, 322, { color: C.muted, maxWidth: 134 });
@@ -109,23 +114,32 @@ function createValorantRenderer({ fontDir = FONT_DIR } = {}) {
       const shots = m.head + m.body + m.leg;
       p.roundRect(24, y, 852, 90, 10, r.bg);
       p.rect(24, y + 8, 6, 74, r.bar);
-      T(r.label, 44, cy - 26, { size: 24, bold: true, color: r.text });
-      T(`${m.rounds[0]} : ${m.rounds[1]}`, 44, cy, { bold: true, maxWidth: 150 });
+      // 왼쪽 칸: 승패(+스코어) / 모드 / 맵 · 시간. 개인전(승패 없음)은 모드 이름을 크게, 그 밑에 킬·데스.
+      if (m.result === 'none') {
+        T(m.modeLabel, 44, cy - 26, { size: 24, bold: true, color: r.text, maxWidth: 170 });
+        T(`${m.k}킬 ${m.d}데스`, 44, cy, { maxWidth: 170 });
+      } else {
+        T(r.label, 44, cy - 26, { size: 24, bold: true, color: r.text });
+        T(`${m.rounds[0]} : ${m.rounds[1]}`, 44 + p.textWidth(fonts.bold, r.label, 24) + 12, cy - 26, { size: 22, bold: true, maxWidth: 90 });
+        T(m.modeLabel, 44, cy, { color: C.muted, maxWidth: 170 });
+      }
       T(`${names.maps?.[m.map.id] ?? m.map.name} · ${timeAgo(m.ts, now)}`, 44, cy + 25, { color: C.muted, maxWidth: 170 });
       holder(252, cy, 60);
       icon(icons.agents?.[m.agent.id], 252, cy, 60, { circle: true });
       T(`${m.k} / ${m.d} / ${m.a}`, 380, cy - 14, { align: 'center', size: 26, bold: true, maxWidth: 130 });
       T(`K/D ${kdText(m.d > 0 ? m.k / m.d : null)}`, 380, cy + 16, { align: 'center', color: m.d > 0 ? C.muted : C.winText, maxWidth: 130 });
-      T(`ACS ${Math.round(m.score / rounds)}`, 470, cy - 26, { maxWidth: 118 });
-      T(`ADR ${Math.round(m.dmg / rounds)}`, 470, cy, { maxWidth: 118 });
+      T(m.hasRounds ? `ACS ${Math.round(m.score / rounds)}` : 'ACS -', 470, cy - 26, { maxWidth: 118 });
+      T(m.hasRounds ? `ADR ${Math.round(m.dmg / rounds)}` : 'ADR -', 470, cy, { maxWidth: 118 });
       T(`HS ${shots ? Math.round(100 * m.head / shots) : 0}%`, 470, cy + 26, { color: C.muted, maxWidth: 118 });
       T(`점수 ${m.score}`, 600, cy - 14, { maxWidth: 130 });
       T(`피해 ${m.dmg}`, 600, cy + 16, { color: C.muted, maxWidth: 130 });
-      holder(820, cy, 50);
-      icon(icons.tiers?.[m.tier], 820, cy, 50);
+      if (m.tier > 0) { // 일반·데스매치 등은 티어가 없다(0)
+        holder(820, cy, 50);
+        icon(icons.tiers?.[m.tier], 820, cy, 50);
+      }
     });
 
-    T('Riot Games가 보증하지 않음 · 데이터: HenrikDev API · 아이콘: valorant-api.com', 450, 884, { align: 'center', color: C.muted, maxWidth: 840 });
+    T('Riot Games가 보증하지 않음 · 데이터: HenrikDev API', 450, 884, { align: 'center', color: C.muted, maxWidth: 840 });
   }
 
   function render(view) {

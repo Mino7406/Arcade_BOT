@@ -391,7 +391,7 @@ async function buildScreens() {
     const valMatches = parseStoredMatches(JSON.parse(fs2.readFileSync(require('path').join(__dirname, '전적', 'fixtures', 'henrik-stored.json'), 'utf8')));
     const valReal = require('path').join(__dirname, '전적', 'out', 'real-val.png');
     const valPng = fs2.existsSync(valReal) ? fs2.readFileSync(valReal) : renderValorant({ profile: { name: 'Mino#KR1', tier: 'Gold 2', rr: 47, peak: 'Platinum 1', seasons: [] }, summary: summarizeValorant(valMatches), matches: valMatches.slice(0, 5), icons: {}, names: {}, now: valMatches[0].ts + 3600e3 });
-    add('전적 검색', '발로란트 전적 이미지 (HenrikDev)', '유저 정보 · 최근 20판 통계(승패·K/D·ACS·ADR·헤드샷) · 최근 5경기(맵·요원·K/D/A)', shot(0xff4655, []), { files: png([{ name: 'record.png', attachment: valPng }]) });
+    add('전적 검색', '발로란트 전적 이미지 (HenrikDev)', '유저 정보 · 최근 20판 통계 · 최근 5경기(모드·맵·요원·K/D/A) · 아래 버튼으로 전체/경쟁전/일반/빠른 대전/기타', shot(0xff4655, []), { files: png([{ name: 'record.png', attachment: valPng }]) });
   }
 
   // ── 레이드 (기존 디자인 유지 — 그림 + 글자 + 버튼) ───────────────────────
