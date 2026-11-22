@@ -4,6 +4,7 @@ const path = require('path');
 const { Painter, loadFont } = require('../레이드/그림판');
 const { drawIconFile } = require('./아이콘');
 const { timeAgo, ringContours } = require('./표시');
+const { summarizeValorant } = require('./발로집계');
 
 const W = 900;
 const H = 900;
@@ -154,10 +155,24 @@ function createValorantRenderer({ fontDir = FONT_DIR } = {}) {
     }
   }
 
-  return { render };
+  function warm() {
+    return render(sampleView()) !== null;
+  }
+
+  return { render, warm };
+}
+
+// 미리 데우기용 샘플(아이콘 없이 그린다)
+function sampleView() {
+  const matches = [0, 1, 2, 3, 4].map(i => ({
+    id: `W${i}`, ts: Date.now() - (i + 1) * 3600000, mode: 'Competitive', modeKey: 'comp', modeLabel: '경쟁전', hasRounds: true, map: { id: 'm', name: 'Bind' }, agent: { id: 'a', name: 'Jett' },
+    tier: 0, k: 15, d: 12, a: 4, score: 4000, head: 10, body: 30, leg: 5, dmg: 2600, rounds: [13, 9], result: i % 2 ? 'loss' : 'win',
+  }));
+  return { profile: { name: '미리 데우기#KR1', tier: 'Gold 2', rr: 40, peak: 'Gold 3', seasons: [] }, summary: summarizeValorant(matches), matches, icons: {}, names: {}, tab: '전체' };
 }
 
 const defaultRenderer = createValorantRenderer();
 const renderValorant = view => defaultRenderer.render(view);
+const warmValorantRender = () => defaultRenderer.warm();
 
-module.exports = { renderValorant, createValorantRenderer, seasonLabel, tierKo };
+module.exports = { renderValorant, createValorantRenderer, seasonLabel, tierKo, warmValorantRender };

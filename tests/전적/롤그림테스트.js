@@ -57,6 +57,9 @@ keep('lol-positions.png', withPos);
 assert.ok(isPng(renderLol(view({ name: '가나다라마바사아자차카타파하가나', queue: 'solo' }))), '긴 이름');
 keep('lol-solo.png', renderLol(view({ queue: 'solo' })));
 
+// 미리 데우기: 샘플을 한 번 그려 엔진·글자 모양을 준비한다(결과는 버림). 폰트가 없으면 false
+assert.strictEqual(createLolRenderer().warm(), true, '미리 데우기 성공');
+assert.strictEqual(createLolRenderer({ fontDir: path.join(__dirname, 'no-such-dir') }).warm(), false, '폰트가 없으면 false');
 // 폰트를 못 찾으면 null(호출부가 글자 화면으로 대신함)
 assert.strictEqual(createLolRenderer({ fontDir: path.join(__dirname, 'no-such-dir') }).render(view()), null);
 

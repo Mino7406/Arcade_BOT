@@ -5,7 +5,7 @@
 const path = require('path');
 const { Painter, loadFont } = require('../레이드/그림판');
 const { drawIconFile } = require('./아이콘');
-const { ratio, killParticipation, queueLabel } = require('./집계');
+const { ratio, killParticipation, queueLabel, summarize } = require('./집계');
 const { timeAgo, ringContours } = require('./표시');
 
 const W = 900;
@@ -168,10 +168,28 @@ function createLolRenderer({ fontDir = FONT_DIR } = {}) {
     }
   }
 
-  return { render };
+  // 미리 데우기(레이드와 같은 방식): 샘플을 한 번 그려 엔진·글자 모양·JIT 를 준비한다. 결과 그림은 버린다.
+  function warm() {
+    return render(sampleView()) !== null;
+  }
+
+  return { render, warm };
+}
+
+// 미리 데우기용 샘플(아이콘 없이 그린다)
+function sampleView() {
+  const matches = [0, 1, 2, 3, 4].map(i => ({
+    id: `W${i}`, ts: Date.now() - (i + 1) * 3600000, dur: 1500 + i * 60, queue: i % 2 ? 440 : 420, win: i % 2 === 0, champ: 'Ahri', champId: 103,
+    k: 8 - i, d: 3 + i, a: 6, cs: 180, lvl: 16, items: [0, 0, 0, 0, 0, 0, 0], spells: [4, 14], keystone: 0, subStyle: 0, vision: 1, pos: 'MIDDLE', multi: 0, teamKills: 30,
+  }));
+  return {
+    name: '미리 데우기', tag: 'KR1', level: 100, queue: 'all', solo: { tier: 'GOLD', rank: 'II', lp: 50, wins: 10, losses: 10 }, flex: null,
+    summary: summarize(matches), matches, icons: { champs: {}, items: {}, spells: {}, runes: {}, styles: {}, positions: {} }, names: { Ahri: '아리' },
+  };
 }
 
 const defaultRenderer = createLolRenderer();
 const renderLol = view => defaultRenderer.render(view);
+const warmLolRender = () => defaultRenderer.warm();
 
-module.exports = { renderLol, createLolRenderer, tierText };
+module.exports = { renderLol, createLolRenderer, tierText, warmLolRender };

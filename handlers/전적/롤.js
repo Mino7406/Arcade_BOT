@@ -14,6 +14,8 @@ const POSITION_FILES = { TOP: 'top', JUNGLE: 'jungle', MIDDLE: 'mid', BOTTOM: 'a
 const POSITION_DIR = path.join(__dirname, '..', '..', 'assets', '티어');
 const STATS_GAMES = 20;
 const LIST_GAMES = 5;
+const CACHE_MS = 60 * 1000;   // 계정·랭크·경기 목록·완성된 그림을 잠시 두고 쓴다(탭을 바꿔도 호출이 늘지 않게)
+const CACHE_ENTRIES = 30;      // 종류별로 최대 30개(그림 한 장이 100~200KB 라 서버 메모리 보호)
 const LAST_RESORT_MESSAGE = '전적을 불러오지 못했어요. 잠시 후 다시 해 주세요.';
 
 function rankOf(entries, queueType) {
@@ -31,7 +33,17 @@ function plainText(v) {
   return lines.join('\n');
 }
 
-function createLolService({ riot, store, statics, render = renderLol }) {
+function createLolService({ riot, store, statics, render = renderLol, now = Date.now, cacheMs = CACHE_MS }) {
+  const profiles = new Map(); // puuid → { at, puuid, summoner, entries, name, tag }
+  const idLists = new Map();  // 'puuid|탭' → { at, ids }
+  const results = new Map();  // 'puuid|탭' → { at, value }  (완성된 결과: 그림 포함)
+  const fresh = (map, key) => { const e = map.get(key); return e && now() - e.at < cacheMs ? e : null; };
+  const remember = (map, key, value) => {
+    map.delete(key);
+    map.set(key, { at: now(), ...value });
+    while (map.size > CACHE_ENTRIES) map.delete(map.keys().next().value); // 가장 오래된 것부터 버린다
+  };
+
   // 그림에 필요한 아이콘 파일 경로를 모은다(없는 건 null → 그림이 빈 칸으로 그림).
   async function collectIcons(profileIconId, solo, flex, matches, champKeys) {
     const icons = { profile: null, solo: null, flex: null, champs: {}, items: {}, spells: {}, runes: {}, styles: {} };
@@ -52,11 +64,16 @@ function createLolService({ riot, store, statics, render = renderLol }) {
   }
 
   async function fetchNewMatches(puuid, queue) {
-    const qs = QUEUES[queue] ?? [];
-    const lists = qs.length
-      ? await Promise.all(qs.map(q => riot.matchIds(puuid, { count: qs.length > 1 ? 10 : STATS_GAMES, queue: q })))
-      : [await riot.matchIds(puuid, { count: STATS_GAMES })];
-    const ids = [...new Set(lists.flat())];
+    const key = `${puuid}|${queue}`;
+    let ids = fresh(idLists, key)?.ids;
+    if (!ids) {
+      const qs = QUEUES[queue] ?? [];
+      const lists = qs.length
+        ? await Promise.all(qs.map(q => riot.matchIds(puuid, { count: qs.length > 1 ? 10 : STATS_GAMES, queue: q })))
+        : [await riot.matchIds(puuid, { count: STATS_GAMES })];
+      ids = [...new Set(lists.flat())];
+      remember(idLists, key, { ids });
+    }
     const missing = ids.filter(id => !store.has(puuid, id));
     await Promise.all(missing.map(async id => {
       const compact = compactMatch(await riot.match(id), puuid);
@@ -65,13 +82,23 @@ function createLolService({ riot, store, statics, render = renderLol }) {
     if (missing.length) store.save();
   }
 
-  async function run({ name, tag, puuid }, queue) {
+  // 계정(이름)·레벨·랭크. 잠시 두고 쓴다 — 탭 버튼은 puuid 만 들고 오므로 이름 조회도 한 번만 한다.
+  async function loadProfile({ name, tag, puuid }) {
+    const hit = puuid && fresh(profiles, puuid);
+    if (hit) return hit;
     let shownName = name, shownTag = tag;
-    if (!puuid || !name) { // 큐 탭 버튼은 puuid 만 들고 온다 → 이름은 계정 조회로 채운다
+    if (!puuid || !name) {
       const acc = puuid ? await riot.accountByPuuid(puuid) : await riot.accountByRiotId(name, tag);
       puuid = acc.puuid ?? puuid; shownName = acc.gameName ?? name; shownTag = acc.tagLine ?? tag;
     }
-    const [summoner, entries] = await Promise.all([riot.summonerByPuuid(puuid), riot.leagueEntries(puuid), statics.load()]);
+    const [summoner, entries] = await Promise.all([riot.summonerByPuuid(puuid), riot.leagueEntries(puuid)]);
+    remember(profiles, puuid, { puuid, summoner, entries, name: shownName, tag: shownTag });
+    return profiles.get(puuid);
+  }
+
+  async function run(target, queue) {
+    const { puuid, summoner, entries, name: shownName, tag: shownTag } = await loadProfile(target);
+    await statics.load();
     await fetchNewMatches(puuid, queue);
     const recent = store.list(puuid, QUEUES[queue]).slice(0, STATS_GAMES);
     const summary = summarize(recent);
@@ -111,10 +138,20 @@ function createLolService({ riot, store, statics, render = renderLol }) {
   // 같은 조회가 동시에 들어오면(큐 탭 연타) 한 번만 호출하고 결과를 나눠 쓴다.
   const inflight = new Map();
   function lookup(target, queue = 'all') {
+    const done = target.puuid && fresh(results, `${target.puuid}|${queue}`); // 같은 탭을 다시 열면 그림까지 그대로
+    if (done) return Promise.resolve(done.value);
     const key = `${target.puuid ?? `${target.name}#${target.tag}`}|${queue}`;
-    if (!inflight.has(key)) inflight.set(key, lookupOnce(target, queue).finally(() => inflight.delete(key)));
+    if (!inflight.has(key)) {
+      inflight.set(key, lookupOnce(target, queue).then(res => {
+        if (res.ok) remember(results, `${res.puuid}|${queue}`, { value: res }); // 실패는 두지 않는다
+        return res;
+      }).finally(() => inflight.delete(key)));
+    }
     return inflight.get(key);
   }
+
+  // 미리 데우기: 정적 데이터(챔피언·아이템 이름과 아이콘 주소)를 봇이 켜질 때 받아 둔다.
+  const warm = () => statics.load();
 
   // 계정 연결 확인: Riot ID 가 있고, 롤 소환사도 있어야 한다(발로란트만 하는 계정은 롤 연결에서 걸러낸다). 오류는 RiotError 로 던진다.
   async function verify(name, tag) {
@@ -123,7 +160,7 @@ function createLolService({ riot, store, statics, render = renderLol }) {
     return { puuid: acc.puuid, name: acc.gameName ?? name, tag: acc.tagLine ?? tag };
   }
 
-  return { lookup, verify };
+  return { lookup, verify, warm };
 }
 
 module.exports = { createLolService };

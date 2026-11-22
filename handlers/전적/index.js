@@ -21,6 +21,8 @@ const { createLolService } = require('./롤');
 const { createValorantService } = require('./발로');
 const { fetchValorant } = require('./헨릭');
 const { recordEmoji } = require('./이모지');
+const { warmLolRender } = require('./롤그림');
+const { warmValorantRender } = require('./발로그림');
 const { card, payload, menu } = require('../공통/카드');
 const { RECORD_SEARCH_CHANNEL_IDS } = require('../../config');
 
@@ -43,6 +45,7 @@ const wrongChannelCard = () => info({
 // 안내 카드의 문제 줄: 게임 이름(굵게)을 한 줄로 쓰고 줄을 바꿔 문구를 쓴다(긴 문구가 이름 옆에서 어색하게 꺾이지 않게)
 const problemLine = (label, message) => `**${label}**
 ${message}`;
+const ZOOM_FOOTER = '🔍 사진을 눌러 확대해서 볼 수 있어요';
 const ACCENT = { lol: 0x3b82f6, valorant: 0xff4655 };
 // 앱 이모지(개발자 포털에 올려 둔 롤·발로란트 로고)
 const EMOJI = { lol: { id: '1510933684750913626', name: 'Lol' }, valorant: { id: '1510933698349109268', name: 'Val' } };
@@ -51,7 +54,7 @@ const EMOJI = { lol: { id: '1510933684750913626', name: 'Lol' }, valorant: { id:
 function resultPayload(res, game, row) {
   const rows = [].concat(row ?? []); // 탭 버튼 줄(여러 줄일 수 있다)
   if (!res.png) return payload(card({ color: ACCENT[game], blocks: [res.text], rows }));
-  return { ...payload(card({ color: ACCENT[game], blocks: [{ image: 'attachment://record.png' }], rows })), files: [new AttachmentBuilder(res.png, { name: 'record.png' })] };
+  return { ...payload(card({ color: ACCENT[game], blocks: [{ image: 'attachment://record.png' }], footer: ZOOM_FOOTER, rows })), files: [new AttachmentBuilder(res.png, { name: 'record.png' })] };
 }
 
 function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, lol, valorant, verifyLol, verifyValorant }) {
@@ -60,12 +63,14 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
   const button = (id, label, style = ButtonStyle.Secondary) => new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(style);
   // 탭 버튼들을 정해 둔 줄 배치(QUEUE_ROWS·VAL_ROWS)대로 ActionRow 로 만든다.
   const tabRows = (layout, tabs, build) => layout.map(keys => new ActionRowBuilder().addComponents(keys.map(k => build(k, tabs.find(([t]) => t === k)[1]))));
-  const queueRow = (puuid, current) => tabRows(QUEUE_ROWS, QUEUE_TABS, (q, label) =>
-    button(`record:q:lol:${q}:${puuid}`, label, q === current ? ButtonStyle.Primary : ButtonStyle.Secondary).setEmoji(QUEUE_TAB_EMOJI[q]()));
+  const queueRow = (puuid, current, locked = false) => tabRows(QUEUE_ROWS, QUEUE_TABS, (q, label) =>
+    button(`record:q:lol:${q}:${puuid}`, label, q === current ? ButtonStyle.Primary : ButtonStyle.Secondary).setEmoji(QUEUE_TAB_EMOJI[q]()).setDisabled(locked));
 
   // 발로란트 모드 탭(customId 에 이름#태그를 담는다). 결과 이미지가 있을 때만 붙는다.
-  const valRow = (id, current) => tabRows(VAL_ROWS, VAL_TABS, (t, label) =>
-    button(`record:q:val:${t}:${id}`, label, t === current ? ButtonStyle.Primary : ButtonStyle.Secondary).setEmoji(VAL_TAB_EMOJI[t]()));
+  const valRow = (id, current, locked = false) => tabRows(VAL_ROWS, VAL_TABS, (t, label) =>
+    button(`record:q:val:${t}:${id}`, label, t === current ? ButtonStyle.Primary : ButtonStyle.Secondary).setEmoji(VAL_TAB_EMOJI[t]()).setDisabled(locked));
+  // 탭을 누른 직후 곧바로 보여 주는 카드: 옛 그림은 그대로(attachments 를 건드리지 않음) 두고 눌린 탭만 파랗게, 버튼은 잠근다. 새 그림이 오면 교체된다.
+  const pendingCard = (game, rows) => payload(card({ color: ACCENT[game], blocks: [{ image: 'attachment://record.png' }], footer: ZOOM_FOOTER, rows }), { keepAttachments: true });
   const tabsFor = (game, res) => (!res.ok || !res.png ? null : game === 'lol' ? queueRow(res.puuid, 'all') : valRow(res.id, 'all'));
 
   // 선택 카드 한 장: 구분선으로 "내 전적 / 다른 사람 전적"을 나눈다. pickedId 가 있으면 그 멤버용 버튼이 켜진다.
@@ -109,7 +114,8 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
   }
 
   // 누른 선택 카드를 바로 이 카드로 바꿔서(버튼이 없어 중복으로 누를 수 없다) 조회하는 동안 기다리게 한다.
-  const searchingCard = game => payload(card({ color: 'info', header: '🔎 전적 검색 중...', sub: `${game === 'lol' ? '롤' : '발로란트'} · 잠시만 기다려 주세요` }));
+  const gameTag = game => (game === 'lol' ? `<:${EMOJI.lol.name}:${EMOJI.lol.id}>` : `<:${EMOJI.valorant.name}:${EMOJI.valorant.id}>`); // 게임 로고 이모지 글자
+  const searchingCard = game => payload(card({ color: 'info', header: `${gameTag(game)} 전적 검색 중...`, sub: `${game === 'lol' ? '롤' : '발로란트'} · 잠시만 기다려 주세요` }));
 
   // 결과 이미지(또는 글자)를 채널에 올린다. 성공이면 null, 실패하면 안내 문구를 돌려준다.
   async function upload(interaction, res, game, row) {
@@ -143,20 +149,27 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
         .addComponents(input('lol', '롤 Riot ID (비워두면 조회 안 함)'), input('valorant', '발로란트 Riot ID (비워두면 조회 안 함)')));
     }
 
-    if (action === 'q') { // 이미지의 탭 버튼: 같은 메시지를 그 큐·모드의 새 이미지로 바꾼다
+    if (action === 'q') { // 이미지의 탭 버튼: 누르는 즉시 눌린 탭을 표시하고, 새 이미지가 준비되면 같은 메시지를 교체한다
       if (parts[2] === 'val') {
         const tab = parts[3];
         const id = parseRiotId(parts.slice(4).join(':'));
-        await interaction.deferUpdate();
-        if (!id) return interaction.followUp(info({ color: 'err', header: '❌ 전적을 불러오지 못했어요', sub: '발로란트 전적', lines: ['닉네임을 읽지 못했어요.'] }));
+        if (!id) return interaction.reply(info({ color: 'err', header: '❌ 전적을 불러오지 못했어요', sub: '발로란트 전적', lines: ['닉네임을 읽지 못했어요.'] }));
+        const idText = `${id.name}#${id.tag}`;
+        await interaction.update(pendingCard('valorant', valRow(idText, tab, true)));
         const res = await valorant.lookup(id, tab);
-        if (!res.ok) return interaction.followUp(info({ color: 'err', header: '❌ 전적을 불러오지 못했어요', sub: '발로란트 전적', lines: [res.message] }));
+        if (!res.ok) { // 실패하면 잠근 버튼을 풀고 오류를 안내한다
+          await interaction.editReply(pendingCard('valorant', valRow(idText, null)));
+          return interaction.followUp(info({ color: 'err', header: '❌ 전적을 불러오지 못했어요', sub: '발로란트 전적', lines: [res.message] }));
+        }
         return interaction.editReply(resultPayload(res, 'valorant', valRow(res.id, tab)));
       }
       const queue = parts[3], puuid = parts[4];
-      await interaction.deferUpdate();
+      await interaction.update(pendingCard('lol', queueRow(puuid, queue, true)));
       const res = await lol.lookup({ puuid }, queue);
-      if (!res.ok) return interaction.followUp(info({ color: 'err', header: '❌ 전적을 불러오지 못했어요', sub: '롤 전적', lines: [res.message] }));
+      if (!res.ok) {
+        await interaction.editReply(pendingCard('lol', queueRow(puuid, null)));
+        return interaction.followUp(info({ color: 'err', header: '❌ 전적을 불러오지 못했어요', sub: '롤 전적', lines: [res.message] }));
+      }
       return interaction.editReply(resultPayload(res, 'lol', queueRow(res.puuid ?? puuid, queue))); // 첨부를 비우고 새 그림으로 바꾼다
     }
 
@@ -200,7 +213,7 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
       return id;
     });
     if (problems.length) return interaction.editReply(info({ header: '✏️ 형식을 확인해 주세요', sub: '닉네임으로 검색', lines: problems }, false));
-    await interaction.editReply(payload(card({ color: 'info', header: '🔎 전적 검색 중...', sub: `${jobs.map(([label], n) => `${label} ${ids[n].name}#${ids[n].tag}`).join(' · ')} · 잠시만 기다려 주세요` })));
+    await interaction.editReply(payload(card({ color: 'info', header: `${jobs.map(([, game]) => gameTag(game)).join(' ')} 전적 검색 중...`, sub: `${jobs.map(([label], n) => `${label} ${ids[n].name}#${ids[n].tag}`).join(' · ')} · 잠시만 기다려 주세요` })));
     for (const [n, [label, game, , service]] of jobs.entries()) {
       const res = await service.lookup(ids[n], 'all');
       const problem = await upload(interaction, res, game, tabsFor(game, res));
@@ -256,12 +269,13 @@ function getLive() {
     dir: ICON_DIR,
   });
   const lol = createLolService({ riot, store, statics });
+  const valorant = createValorantService({ key: henrikKey, statics });
   live = {
-    store,
+    store, lol, valorant,
     handlers: createRecordHandlers({
       canUse: accounts.canUseRecordSearch, canUseHere: accounts.canUseRecordChannel, getLinked: accounts.getLinked, setLinked: accounts.setLinked, save: accounts.saveRecordAccounts,
       lol,
-      valorant: createValorantService({ key: henrikKey, statics }),
+      valorant,
       verifyLol: lol.verify,
       verifyValorant: async (name, tag) => { await fetchValorant({ name, tag, key: henrikKey }); return { name, tag }; },
     }),
@@ -279,8 +293,25 @@ function saveRecordSearch() {
   if (live) live.store.save();
 }
 
+// 봇이 켜진 뒤 한가할 때 미리 데운다(레이드 그림과 같은 방식): 그림 엔진·글자 모양은 잘게 나눠 한 조각씩, 정적 데이터는 네트워크로.
+// 첫 /전적이 느리지 않게 하는 것이 목적이라 실패해도 조용히 넘어간다.
+function warmUpRecordSearch() {
+  const startedAt = Date.now();
+  const steps = [() => warmLolRender(), () => warmValorantRender()];
+  const next = () => {
+    const step = steps.shift();
+    if (!step) {
+      Promise.allSettled([getLive().lol.warm(), getLive().valorant.warm()]).then(() => console.warn(`🎨 전적 그림·정적 데이터 미리 데우기 완료 — ${Date.now() - startedAt}ms`));
+      return;
+    }
+    try { step(); } catch (err) { console.error('전적 그림 미리 데우기 실패(첫 조회가 조금 느릴 수 있음):', err); }
+    setImmediate(next);
+  };
+  setImmediate(next);
+}
+
 module.exports = {
-  createRecordHandlers, loadRecordSearch, saveRecordSearch,
+  createRecordHandlers, loadRecordSearch, saveRecordSearch, warmUpRecordSearch,
   startRecordCommand: i => getLive().handlers.startRecordCommand(i),
   handleRecordButton: i => getLive().handlers.handleRecordButton(i),
   handleRecordSelect: i => getLive().handlers.handleRecordSelect(i),

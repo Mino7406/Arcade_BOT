@@ -136,6 +136,11 @@ const fake = (...responses) => { const calls = []; let i = 0; const fn = async (
   const zeroDeath = [{ ...ms[0], d: 0 }];
   assert.ok(isPng(renderValorant(view({ matches: zeroDeath, summary: summarizeValorant(zeroDeath) }))), '데스 0도');
 
+  // 미리 데우기
+  const { createValorantRenderer } = require(path.join(root, 'handlers', '전적', '발로그림.js'));
+  assert.strictEqual(createValorantRenderer().warm(), true, '미리 데우기 성공');
+  assert.strictEqual(createValorantRenderer({ fontDir: path.join(__dirname, 'no-such-dir') }).warm(), false);
+
   // ── 서비스 ──
   const statics = { urlIcon: async () => null };
   const fetchJson = async url => {
@@ -189,9 +194,12 @@ const fake = (...responses) => { const calls = []; let i = 0; const fn = async (
   assert.deepStrictEqual((await gamesOf('spike')).matches.map(m => m.modeLabel), ['스파이크 돌격']);
   assert.deepStrictEqual((await gamesOf('dm')).matches.map(m => m.modeLabel), ['데스매치']);
   assert.deepStrictEqual((await gamesOf('tdm')).matches, [], '해당 모드 경기가 없으면 빈 목록');
-  assert.strictEqual((await gamesOf('etc')).tab, '전체', '모르는 탭(기타 탭은 없어짐)은 전체');
+  assert.strictEqual((await shown.lookup({ name: 'Mino', tag: 'KR1' }, 'etc')).tab, 'all', '모르는 탭(기타 탭은 없어짐)은 전체');
+  const rendered = sees.length;
+  await shown.lookup({ name: 'Mino', tag: 'KR1' }, 'comp');
+  assert.strictEqual(sees.length, rendered, '같은 탭을 다시 열면 그림을 다시 그리지 않는다(완성된 그림 캐시)');
   assert.strictEqual(urls.length, 2, '탭을 바꿔도 호출은 늘지 않는다');
-  assert.strictEqual((await gamesOf('dm')).tab, '데스매치', '화면에 탭 이름');
+  assert.strictEqual(sees.find(v => v.tab === '데스매치').tab, '데스매치', '화면에 탭 이름');
   clock += 121000;
   await shown.lookup({ name: 'Mino', tag: 'KR1' }, 'all');
   assert.strictEqual(urls.length, 4, '시간이 지나면 새로 받는다');
@@ -201,5 +209,12 @@ const fake = (...responses) => { const calls = []; let i = 0; const fn = async (
   const retrying = createValorantService({ key: 'k', statics, fetchJson, now: () => clock, cacheMs: 120000, fetchFn: async u => { flaky++; return u.includes('/mmr/') ? res(200, fixture) : flaky < 3 ? res(429, {}) : res(200, stored); } });
   assert.strictEqual((await retrying.lookup({ name: 'Mino', tag: 'KR1' }, 'all')).ok, false);
   assert.strictEqual((await retrying.lookup({ name: 'Mino', tag: 'KR1' }, 'all')).ok, true, '실패는 캐시하지 않아 다음에 성공');
+  // 서비스 미리 데우기: 요원·맵·티어 표를 미리 불러 두면 첫 조회에서 다시 받지 않는다
+  let tableCalls = 0;
+  const warmSvc = createValorantService({ key: 'k', statics, fetchFn: router(), fetchJson: async u => { tableCalls++; return fetchJson(u); } });
+  await warmSvc.warm();
+  assert.strictEqual(tableCalls, 3, '표 3개(요원·맵·티어)를 미리 받는다');
+  await warmSvc.lookup({ name: 'Mino', tag: 'KR1' }, 'all');
+  assert.strictEqual(tableCalls, 3, '첫 조회에서는 다시 받지 않는다');
   console.log('발로란트 테스트 통과');
 })();

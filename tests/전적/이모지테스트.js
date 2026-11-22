@@ -3,7 +3,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const root = path.join(__dirname, '..', '..');
-const { ensureRecordEmojis, recordEmoji, EMOJI_FILES } = require(path.join(root, 'handlers', '전적', '이모지.js'));
+const { ensureRecordEmojis, recordEmoji, EMOJI_FILES, emojiName } = require(path.join(root, 'handlers', '전적', '이모지.js'));
 const { decodePng } = require(path.join(root, 'handlers', '공통', '이모지그림.js'));
 
 assert.ok(EMOJI_FILES.includes('lol_rift') && EMOJI_FILES.includes('lol_aram'), '롤 일반(협곡)·칼바람 이모지');
@@ -24,14 +24,15 @@ for (const key of EMOJI_FILES) {
   // 이미 있는 건 다시 만들지 않고, 없는 것만 등록한다
   const created = [];
   const client = { application: { emojis: {
-    fetch: async () => [{ name: 'rec_val_rank', id: 'EXIST' }],
+    fetch: async () => [{ name: 'rec_val_rank', id: 'OLD' }, { name: 'rec2_val_rank', id: 'EXIST' }], // rec_ 는 옛 이름(흰색 그림) — 새 이름(rec2_)으로 따로 등록한다
     create: async ({ attachment, name }) => { assert.ok(fs.existsSync(attachment), '등록할 그림 파일이 있어야 함'); created.push(name); return { id: `ID_${name}`, name }; },
   } } };
   const ready = await ensureRecordEmojis(client);
   assert.strictEqual(ready, EMOJI_FILES.length);
-  assert.deepStrictEqual(created.sort(), EMOJI_FILES.filter(k => k !== 'val_rank').map(k => `rec_${k}`).sort());
-  assert.deepStrictEqual(recordEmoji('val_rank'), { id: 'EXIST', name: 'rec_val_rank' });
-  assert.deepStrictEqual(recordEmoji('val_swift'), { id: 'ID_rec_val_swift', name: 'rec_val_swift' });
+  assert.deepStrictEqual(created.sort(), EMOJI_FILES.filter(k => k !== 'val_rank').map(k => emojiName(k)).sort());
+  assert.strictEqual(emojiName('val_rank'), 'rec2_val_rank', '앱 이모지 이름에는 버전(rec2_)이 붙는다 — 그림을 바꾸면 이름을 올려 새로 등록되게 한다');
+  assert.deepStrictEqual(recordEmoji('val_rank'), { id: 'EXIST', name: 'rec2_val_rank' });
+  assert.deepStrictEqual(recordEmoji('val_swift'), { id: 'ID_rec2_val_swift', name: 'rec2_val_swift' });
   assert.strictEqual(recordEmoji('nope'), null);
 
   // 등록이 실패해도 예외 없이 넘어간다(그 이모지만 기본 이모지로 표시)

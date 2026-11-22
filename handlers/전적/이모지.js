@@ -12,6 +12,10 @@ const DIR = path.join(__dirname, '..', '..', 'assets', '이모지');
 // lol_solo 솔랭(랭크 엠블럼 하나) · lol_flex 자랭(엠블럼 둘이 겹침)
 const EMOJI_FILES = ['val_rank', 'val_standard', 'val_swift', 'val_spike', 'lol_rift', 'lol_aram', 'val_tdm', 'val_dm', 'lol_arena', 'lol_solo', 'lol_flex'];
 
+// 앱 이모지 이름. 그림을 바꾸면 PREFIX 를 올려서(rec2_ → rec3_ …) 이미 등록된 옛 그림과 따로 새로 등록되게 한다.
+const EMOJI_PREFIX = 'rec2_'; // rec2: 발로란트 모드 아이콘을 흰색 → 빨강으로 바꾼 버전
+const emojiName = key => `${EMOJI_PREFIX}${key}`;
+
 const emojis = new Map(); // 'val_rank' → { id, name }
 
 async function ensureRecordEmojis(client) {
@@ -26,10 +30,10 @@ async function ensureRecordEmojis(client) {
   }
   let created = 0;
   for (const key of EMOJI_FILES) {
-    const name = `rec_${key}`;
+    const name = emojiName(key);
     let emoji = list.find(e => e.name === name);
     if (!emoji) {
-      emoji = await manager.create({ attachment: path.join(DIR, `${name}.png`), name }).catch(err => {
+      emoji = await manager.create({ attachment: path.join(DIR, `rec_${key}.png`), name }).catch(err => {
         logError('처리 오류', `전적 이모지 등록 실패 (${name})`, err);
         return null;
       });
@@ -44,4 +48,4 @@ async function ensureRecordEmojis(client) {
 // 준비된 앱 이모지({ id, name }) 또는 null.
 const recordEmoji = key => emojis.get(key) ?? null;
 
-module.exports = { ensureRecordEmojis, recordEmoji, EMOJI_FILES };
+module.exports = { ensureRecordEmojis, recordEmoji, EMOJI_FILES, emojiName };

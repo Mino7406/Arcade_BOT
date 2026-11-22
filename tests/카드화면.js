@@ -567,7 +567,7 @@ function localEmojiScript() {
     map[f.slice(0, -4)] = 'data:image/png;base64,' + fs.readFileSync(path.join(tier.EMOJI_DIR, f)).toString('base64');
   }
   const rec = require(path.join(ROOT, 'handlers/전적/이모지.js'));
-  for (const key of rec.EMOJI_FILES) map[`rec_${key}`] = 'data:image/png;base64,' + fs.readFileSync(path.join(ROOT, 'assets/이모지', `rec_${key}.png`)).toString('base64');
+  for (const key of rec.EMOJI_FILES) map[rec.emojiName(key)] = 'data:image/png;base64,' + fs.readFileSync(path.join(ROOT, 'assets/이모지', `rec_${key}.png`)).toString('base64');
   return 'window.LOCAL_EMOJI = ' + JSON.stringify(map) + ';window.LOCAL_THUMB = ' + JSON.stringify(thumbs) + ';';
 }
 

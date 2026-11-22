@@ -58,6 +58,8 @@ function fakeInteraction(over = {}) {
   return i;
 }
 const first = (i, name) => i.calls.find(c => c[0] === name);
+// 탭 버튼들의 [탭, 스타일, 잠김]
+const tabButtons = (p, game) => { const out = []; (function walk(x) { if (x?.custom_id?.startsWith(`record:q:${game}:`)) out.push([x.custom_id.split(':')[3], x.style, !!x.disabled]); (x?.components ?? []).forEach(walk); })({ components: p.components.map(json) }); return out; };
 
 (async () => {
   // 명령 정의
@@ -174,6 +176,7 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   assert.deepStrictEqual(order, ['update', 'send', 'deleteReply'], '검색 중 카드로 교체 → 이미지 올림 → 선택 카드 삭제');
   const searching = first(i, 'update')[1];
   assert.ok(textOf(searching).includes('검색 중'), '검색 중 안내');
+  assert.ok(textOf(searching).includes('<:Lol:1510933684750913626>'), '롤 검색 중에는 롤 로고 이모지');
   assert.deepStrictEqual(idsOf(searching), [], '검색 중에는 버튼이 없어 다시 누를 수 없다');
   const [, sent] = first(i, 'send');
   // 롤 탭 이모지: 솔랭은 랭크 엠블럼 하나, 자랭은 엠블럼 둘, 일반은 소환사의 협곡, 칼바람·아레나는 각자 로고(앱 이모지가 준비된 경우)
@@ -182,9 +185,10 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   await handlers.handleRecordButton(i);
   const lolEmoji = {};
   (function walk(x) { if (x?.custom_id?.startsWith('record:q:lol:')) lolEmoji[x.custom_id.split(':')[3]] = x.emoji?.id; (x?.components ?? []).forEach(walk); })({ components: first(i, 'send')[1].components.map(json) });
-  assert.deepStrictEqual(lolEmoji, { all: '1510933684750913626', solo: 'ID_rec_lol_solo', flex: 'ID_rec_lol_flex', normal: 'ID_rec_lol_rift', aram: 'ID_rec_lol_aram', arena: 'ID_rec_lol_arena' });
+  assert.deepStrictEqual(lolEmoji, { all: '1510933684750913626', solo: 'ID_rec2_lol_solo', flex: 'ID_rec2_lol_flex', normal: 'ID_rec2_lol_rift', aram: 'ID_rec2_lol_aram', arena: 'ID_rec2_lol_arena' });
   // 탭 버튼 배치: 롤은 3+3(랭크 / 모드), 발로란트는 4+3
   const rowSizes = payload => { const sizes = []; (function walk(x) { if (x?.type === 1 && (x.components ?? []).some(c => c.custom_id?.startsWith('record:q:'))) sizes.push(x.components.map(c => c.custom_id.split(':')[3])); (x?.components ?? []).forEach(walk); })({ components: payload.components.map(json) }); return sizes; };
+  assert.ok(textOf(sent).includes('사진을 눌러 확대해서 볼 수 있어요'), '결과 카드 푸터(롤)');
   assert.deepStrictEqual(rowSizes(sent), [['all', 'solo', 'flex'], ['normal', 'aram', 'arena']], '롤 탭 두 줄(전체·솔로·자유 / 일반·칼바람·아레나)');
   assert.strictEqual(sent.files.length, 1);
   assert.deepStrictEqual(idsOf(sent), ['all', 'solo', 'flex', 'normal', 'aram', 'arena'].map(t => `record:q:lol:${t}:PUUID-1`), '롤 큐 탭 6개(두 줄)');
@@ -212,6 +216,8 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   assert.deepStrictEqual(lookups.val[0], { name: 'Mino', tag: 'KR1' });
   assert.strictEqual(first(i, 'send')[1].files.length, 1);
   assert.deepStrictEqual(i.calls.map(c => c[0]), ['update', 'send', 'deleteReply']);
+  assert.ok(textOf(first(i, 'update')[1]).includes('<:Val:1510933698349109268>'), '발로란트 검색 중에는 발로란트 로고 이모지');
+  assert.ok(textOf(first(i, 'send')[1]).includes('사진을 눌러 확대해서 볼 수 있어요'), '결과 카드 푸터(발로란트)');
   assert.strictEqual(lookups.valTabs[0], 'all', '처음에는 전체 탭');
   assert.deepStrictEqual(idsOf(first(i, 'send')[1]), ['all', 'comp', 'unrated', 'swift', 'spike', 'tdm', 'dm'].map(t => `record:q:val:${t}:Mino#KR1`), '모드 탭 버튼 7개(두 줄)');
 
@@ -226,7 +232,13 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   // (e) 큐 탭: 같은 메시지를 새 이미지로 바꾼다
   i = fakeInteraction({ customId: 'record:q:lol:solo:PUUID-1' });
   await handlers.handleRecordButton(i);
-  assert.ok(first(i, 'deferUpdate'));
+  // 누르는 순간: 눌린 탭을 파랗게 표시하고 버튼을 잠근 같은 카드(옛 그림 유지)로 바로 바꾼 뒤, 새 그림으로 교체
+  const pendingLol = first(i, 'update')[1];
+  assert.strictEqual(i.calls[0][0], 'update', '맨 먼저 화면을 바꾼다');
+  assert.ok(textOf(pendingLol).includes('attachment://record.png') && pendingLol.attachments === undefined, '옛 그림은 그대로 둔다');
+  assert.ok(tabButtons(pendingLol, 'lol').every(([, , locked]) => locked), '기다리는 동안 버튼은 잠김');
+  assert.strictEqual(tabButtons(pendingLol, 'lol').find(([t]) => t === 'solo')[1], 1, '누른 탭이 파랗게');
+  assert.ok(tabButtons(first(i, 'editReply')[1], 'lol').every(([, , locked]) => !locked), '새 그림이 오면 버튼이 다시 켜짐');
   const [, edited] = first(i, 'editReply');
   assert.strictEqual(edited.files.length, 1);
   assert.strictEqual(lookups.lol.at(-1)[1], 'solo');
@@ -247,6 +259,7 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   assert.strictEqual(lookups.val.length, 0);
   assert.strictEqual(first(i, 'send')[1].files.length, 1);
   assert.ok(textOf(first(i, 'editReply')[1]).includes('검색 중'), '모달 제출 뒤에도 검색 중 안내');
+  assert.ok(textOf(first(i, 'editReply')[1]).includes('<:Lol:1510933684750913626>'), '닉네임 검색 중에도 게임 이모지');
   assert.ok(first(i, 'deleteReply'), '이미지를 올린 뒤 안내 메시지는 삭제');
   // 둘 다 채우면 둘 다, 형식이 틀리거나 둘 다 비면 안내(조회 없음)
   i = fakeInteraction({ customId: 'record:find_modal', fieldValues: { lol: 'Mino#KR1', valorant: 'Mino#KR1' } });
@@ -275,7 +288,10 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   ({ handlers, lookups } = setup({ linked }));
   i = fakeInteraction({ customId: 'record:q:val:comp:Mino#KR1' });
   await handlers.handleRecordButton(i);
-  assert.ok(first(i, 'deferUpdate'));
+  const pendingVal = first(i, 'update')[1];
+  assert.strictEqual(i.calls[0][0], 'update', '맨 먼저 화면을 바꾼다');
+  assert.ok(tabButtons(pendingVal, 'val').length === 7 && tabButtons(pendingVal, 'val').every(([, , locked]) => locked));
+  assert.strictEqual(tabButtons(pendingVal, 'val').find(([t]) => t === 'comp')[1], 1, '누른 탭이 파랗게');
   assert.deepStrictEqual(lookups.val.at(-1), { name: 'Mino', tag: 'KR1' });
   assert.strictEqual(lookups.valTabs.at(-1), 'comp');
   assert.deepStrictEqual(rowSizes(first(i, 'editReply')[1]), [['all', 'comp', 'unrated', 'swift'], ['spike', 'tdm', 'dm']], '발로란트 탭 두 줄(전체·경쟁전·일반전·신속 플레이 / 스파이크·팀 데스·데스매치)');
@@ -290,6 +306,13 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   assert.strictEqual(tabEmoji.length, 7); assert.ok(tabEmoji.every(e => e && (e.id || e.name)), '발로란트 탭마다 이모지');
   assert.strictEqual(tabEmoji[0].id, '1510933698349109268', '전체 탭은 발로란트 로고');
   assert.strictEqual(tabStyles.find(t => t[0] === 'all')[1], 2);
+  // 조회가 실패하면 잠근 버튼을 다시 풀고 오류를 안내한다
+  ({ handlers } = setup({ linked, valResult: { ok: false, message: '요청이 몰려 있어요.' } }));
+  i = fakeInteraction({ customId: 'record:q:val:comp:Mino#KR1' });
+  await handlers.handleRecordButton(i);
+  assert.ok(tabButtons(first(i, 'editReply')[1], 'val').every(([, , locked]) => !locked), '실패하면 버튼이 다시 켜진다');
+  assert.ok(textOf(first(i, 'followUp')[1]).includes('요청이 몰려'));
+  ({ handlers, lookups } = setup({ linked }));
   // 이름에 : 가 들어 있어도 이름#태그를 그대로 읽는다
   i = fakeInteraction({ customId: 'record:q:val:dm:O:O#1116' });
   await handlers.handleRecordButton(i);

@@ -15,6 +15,7 @@ const STATS_GAMES = 20;
 const LIST_GAMES = 5;
 const ICON_SIZE = 128; // 요원 아이콘 원본이 1024×1024 라 줄여서 저장한다
 const TAB_LABEL = { all: '전체', comp: '경쟁전', unrated: '일반전', swift: '신속 플레이', spike: '스파이크 돌격', tdm: '팀 데스매치', dm: '데스매치' };
+const CACHE_ENTRIES = 30; // 완성된 그림(100~200KB)을 둘 최대 개수
 const LAST_RESORT_MESSAGE = '전적을 불러오지 못했어요. 잠시 후 다시 해 주세요.';
 
 function plainText(profile, summary, rows, names, tab) {
@@ -109,11 +110,19 @@ function createValorantService({
 
   // lookup({ name, tag }, tab) — tab: all | comp | unrated | swift | etc. 같은 조회가 동시에 들어오면 한 번만 만든다.
   const inflight = new Map();
+  const results = new Map(); // 'name#tag|탭' → { at, value } — 같은 탭을 다시 열면 그림까지 그대로(티어·경기 목록과 같은 시간 동안)
   function lookup(target, tab = 'all') {
     if (!TAB_LABEL[tab]) tab = 'all';
     const id = `${target.name}#${target.tag}|${tab}`;
+    const done = results.get(id);
+    if (done && now() - done.at < cacheMs) return Promise.resolve(done.value);
     if (!inflight.has(id)) {
-      inflight.set(id, run(target, tab).catch(err => {
+      inflight.set(id, run(target, tab).then(res => {
+        results.delete(id);
+        results.set(id, { at: now(), value: res });
+        while (results.size > CACHE_ENTRIES) results.delete(results.keys().next().value);
+        return res;
+      }).catch(err => {
         if (err instanceof RiotError) return { ok: false, message: riotErrorMessage(err) };
         console.error('발로란트 전적 조회 실패:', err);
         return { ok: false, message: LAST_RESORT_MESSAGE };
@@ -122,7 +131,8 @@ function createValorantService({
     return inflight.get(id);
   }
 
-  return { lookup };
+  // 미리 데우기: 요원·맵·티어 표(valorant-api.com 3번 요청)를 봇이 켜질 때 받아 둔다.
+  return { lookup, warm: getTable };
 }
 
 module.exports = { createValorantService, TAB_LABEL };
