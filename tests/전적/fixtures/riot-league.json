@@ -1,0 +1,18 @@
+[
+ {
+  "queueType": "RANKED_SOLO_5x5",
+  "tier": "MASTER",
+  "rank": "I",
+  "leaguePoints": 606,
+  "wins": 448,
+  "losses": 371
+ },
+ {
+  "queueType": "RANKED_FLEX_SR",
+  "tier": "DIAMOND",
+  "rank": "II",
+  "leaguePoints": 40,
+  "wins": 52,
+  "losses": 48
+ }
+]
