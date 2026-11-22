@@ -145,6 +145,25 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   await handlers.handleRecordButton(i);
   assert.notStrictEqual(textOf(first(i, 'reply')[1]), mineMsg, '다른 멤버일 때 문구가 다르다');
 
+  // 안내 카드 꾸미기: 계정 연결 안내에는 [계정 연결] 버튼, 다른 멤버 안내에는 [닉네임으로 검색] 버튼이 카드 안에 있다
+  i = fakeInteraction({ customId: 'record:lol:me' });
+  await handlers.handleRecordButton(i);
+  const noLinkMine = first(i, 'reply')[1];
+  assert.ok(textOf(noLinkMine).includes('계정 연결이 필요해요'), '제목');
+  assert.deepStrictEqual(idsOf(noLinkMine), ['record:link'], '[계정 연결] 버튼');
+  i = fakeInteraction({ customId: 'record:val:u:U9' });
+  await handlers.handleRecordButton(i);
+  const noLinkOther = first(i, 'reply')[1];
+  assert.ok(textOf(noLinkOther).includes('<@U9>'), '멤버 멘션');
+  assert.deepStrictEqual(idsOf(noLinkOther), ['record:find'], '[닉네임으로 검색] 버튼');
+  assert.ok(textOf(noLinkOther).includes('발로란트'));
+  // 잘못된 채널 안내에는 쓸 수 있는 채널이 링크로 나온다
+  i = fakeInteraction({ guildId: 'PUB', channelId: 'ELSEWHERE' });
+  await handlers.startRecordCommand(i);
+  const wrongText = textOf(first(i, 'reply')[1]);
+  for (const id of ['1340523443413844048', '1374679502394884178', '1522575222589620254']) assert.ok(wrongText.includes(`<#${id}>`), `${id} 채널 링크`);
+  assert.ok(wrongText.includes('임시 음성채널'));
+
   // 연결 있으면: 채널에 이미지 한 장 + 큐 버튼 3개
   const linked = { U1: { lol: { puuid: 'PUUID-1', name: 'Mino', tag: 'KR1' }, valorant: { name: 'Mino', tag: 'KR1', region: 'kr' } } };
   ({ handlers, lookups } = setup({ linked }));
@@ -214,7 +233,7 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   assert.deepStrictEqual(lookups.lol[0][0], { name: 'Mino', tag: 'KR1' });
   assert.strictEqual(lookups.val.length, 0);
   assert.strictEqual(first(i, 'send')[1].files.length, 1);
-  assert.ok(first(i, 'editReply')[1].content.includes('검색 중'), '모달 제출 뒤에도 검색 중 안내');
+  assert.ok(textOf(first(i, 'editReply')[1]).includes('검색 중'), '모달 제출 뒤에도 검색 중 안내');
   assert.ok(first(i, 'deleteReply'), '이미지를 올린 뒤 안내 메시지는 삭제');
   // 둘 다 채우면 둘 다, 형식이 틀리거나 둘 다 비면 안내(조회 없음)
   i = fakeInteraction({ customId: 'record:find_modal', fieldValues: { lol: 'Mino#KR1', valorant: 'Mino#KR1' } });
@@ -224,10 +243,10 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   const before = lookups.lol.length;
   i = fakeInteraction({ customId: 'record:find_modal', fieldValues: {} });
   await handlers.handleRecordModal(i);
-  assert.ok(first(i, 'editReply')[1].content.includes('하나 이상'));
+  assert.ok(textOf(first(i, 'editReply')[1]).includes('하나 이상'));
   i = fakeInteraction({ customId: 'record:find_modal', fieldValues: { lol: 'nohash' } });
   await handlers.handleRecordModal(i);
-  assert.ok(first(i, 'editReply')[1].content.includes('이름#태그'));
+  assert.ok(textOf(first(i, 'editReply')[1]).includes('이름#태그'));
   assert.strictEqual(lookups.lol.length, before);
   // 조회 실패는 나에게만 보이는 문구
   ({ handlers } = setup({ lolResult: { ok: false, message: '그 닉네임의 계정을 찾을 수 없어요.' } }));
@@ -235,7 +254,7 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   await handlers.handleRecordModal(i);
   assert.ok(!first(i, 'send'));
   assert.ok(!first(i, 'deleteReply'));
-  assert.ok(i.calls.filter(c => c[0] === 'editReply').at(-1)[1].content.includes('찾을 수 없'));
+  assert.ok(textOf(i.calls.filter(c => c[0] === 'editReply').at(-1)[1]).includes('찾을 수 없'));
 
   // [계정 연결] → 모달(입력칸 2개, 둘 다 선택)
   i = fakeInteraction({ customId: 'record:link' });
@@ -253,22 +272,24 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   await ctx.handlers.handleRecordModal(i);
   assert.deepStrictEqual(ctx.saved.links, [['U1', { lol: { puuid: 'PUUID-Mino', name: 'Mino', tag: 'KR1' } }]]);
   assert.ok(ctx.saved.saves >= 1);
-  assert.ok(first(i, 'deferReply')[0] && (first(i, 'editReply')[1].content ?? '').includes('연결'));
+  assert.ok(first(i, 'deferReply')[0] && textOf(first(i, 'editReply')[1]).includes('연결'));
+  const doneText = textOf(first(i, 'editReply')[1]);
+  assert.ok(doneText.includes('계정을 연결했어요') && doneText.includes('Mino#KR1'), '연결 성공 카드');
   // 롤 유효 + 발로란트 없는 계정 → 아무것도 저장 안 함, 발로란트 쪽 문구
   ctx = setup({ verifyVal: async () => { throw new RiotError('not_found', 404); } });
   i = fakeInteraction({ customId: 'record:link_modal', fieldValues: { lol: 'Mino#KR1', valorant: 'Ghost abc#KR1' } });
   await ctx.handlers.handleRecordModal(i);
   assert.deepStrictEqual(ctx.saved.links, []);
-  const failText = first(i, 'editReply')[1].content;
+  const failText = textOf(first(i, 'editReply')[1]);
   assert.ok(failText.includes('발로란트') && failText.includes('찾을 수 없'), failText);
   // 둘 다 빔 / 형식 오류
   ctx = setup();
   i = fakeInteraction({ customId: 'record:link_modal', fieldValues: {} });
   await ctx.handlers.handleRecordModal(i);
-  assert.ok(first(i, 'editReply')[1].content.includes('하나 이상'));
+  assert.ok(textOf(first(i, 'editReply')[1]).includes('하나 이상'));
   i = fakeInteraction({ customId: 'record:link_modal', fieldValues: { lol: 'nohash' } });
   await ctx.handlers.handleRecordModal(i);
-  assert.ok(first(i, 'editReply')[1].content.includes('이름#태그'));
+  assert.ok(textOf(first(i, 'editReply')[1]).includes('이름#태그'));
   assert.deepStrictEqual(ctx.saved.links, []);
   console.log('/전적 흐름 테스트 통과');
 })();

@@ -20,13 +20,18 @@ const { createStatic } = require('./정적데이터');
 const { createLolService } = require('./롤');
 const { createValorantService } = require('./발로');
 const { fetchValorant } = require('./헨릭');
-const { card, payload, menu, notice } = require('../공통/카드');
+const { card, payload, menu } = require('../공통/카드');
+const { RECORD_SEARCH_CHANNEL_IDS } = require('../../config');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
-const NOT_READY = '🚧 전적 검색은 아직 준비 중이에요.';
-const WRONG_CHANNEL = '이 채널에서는 /전적을 쓸 수 없어요. 메인 채팅, TTS 채팅, 임시 음성채널 채팅에서 사용해 주세요.';
 const QUEUE_TABS = [['all', '전체'], ['solo', '솔로랭크'], ['flex', '자유랭크']];
-const eph = content => notice(content, { ephemeral: true }); // 나에게만 보이는 안내 카드(프로젝트의 v2 카드 형식)
+// 안내 메시지는 전부 카드(제목·부제·본문·버튼)로 보낸다. ephemeral 이면 나에게만 보이고, 모달 응답처럼 이미 대기 중인 메시지를 고칠 때는 false.
+const info = ({ color = 'warn', header, sub, lines = [], rows, footer }, ephemeral = true) => payload(card({ color, header, sub, blocks: lines, rows, footer }), { ephemeral });
+const notReadyCard = () => info({ color: 'muted', header: '🚧 준비 중이에요', sub: '전적 검색', lines: ['전적 검색은 지금 테스트 서버에서만 쓸 수 있어요.'] });
+const wrongChannelCard = () => info({
+  header: '📍 이 채널에서는 쓸 수 없어요', sub: '전적 검색',
+  lines: ['`/전적`은 아래 채널에서 쓸 수 있어요.', `${RECORD_SEARCH_CHANNEL_IDS.map(id => `<#${id}>`).join('\n')}\n🔊 임시 음성채널 채팅방`],
+});
 const ACCENT = { lol: 0x3b82f6, valorant: 0xff4655 };
 // 앱 이모지(개발자 포털에 올려 둔 롤·발로란트 로고)
 const EMOJI = { lol: { id: '1510933684750913626', name: 'Lol' }, valorant: { id: '1510933698349109268', name: 'Val' } };
@@ -39,8 +44,8 @@ function resultPayload(res, game, row) {
 }
 
 function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, lol, valorant, verifyLol, verifyValorant }) {
-  // 쓸 수 없는 곳이면 안내 문구, 쓸 수 있으면 null(서버 한정 → 채널 제한 순서)
-  const blockedMessage = i => (!canUse(i.guildId) ? NOT_READY : !canUseHere(i.guildId, i.channelId) ? WRONG_CHANNEL : null);
+  // 쓸 수 없는 곳이면 안내 카드, 쓸 수 있으면 null(서버 한정 → 채널 제한 순서)
+  const blockedCard = i => (!canUse(i.guildId) ? notReadyCard() : !canUseHere(i.guildId, i.channelId) ? wrongChannelCard() : null);
   const button = (id, label, style = ButtonStyle.Secondary) => new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(style);
   const queueRow = (puuid, current) => new ActionRowBuilder().addComponents(
     QUEUE_TABS.map(([q, label]) => button(`record:q:lol:${q}:${puuid}`, label, q === current ? ButtonStyle.Primary : ButtonStyle.Secondary)));
@@ -58,22 +63,22 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
       button(pickedId ? `record:val:u:${pickedId}` : 'record:val:none', '발로란트', ButtonStyle.Danger).setEmoji(EMOJI.valorant).setDisabled(!pickedId),
       button('record:find', '닉네임으로 검색').setEmoji('🔍'));
     return payload(card({
-      color: 'info', header: '📊 전적 검색', sub: '롤 · 발로란트',
-      blocks: [note, '### 🙋 내 전적', { rows: [mine] }, '### 👥 다른 사람 전적', { rows: [new ActionRowBuilder().addComponents(pick), others] }],
+      color: note ? 'warn' : 'info', header: '📊 전적 검색', sub: '롤 · 발로란트',
+      blocks: [note ? `### ⚠️ 조회하지 못했어요\n${note}` : null, '### 🙋 내 전적', { rows: [mine] }, '### 👥 다른 사람 전적', { rows: [new ActionRowBuilder().addComponents(pick), others] }],
     }), { ephemeral });
   }
 
   // /전적 → 나에게만 보이는 선택 카드
   async function startRecordCommand(interaction) {
-    const blocked = blockedMessage(interaction);
-    if (blocked) return interaction.reply(eph(blocked));
+    const blocked = blockedCard(interaction);
+    if (blocked) return interaction.reply(blocked);
     return interaction.reply(selectCard(null, true));
   }
 
   // 멤버 선택 메뉴: 같은 카드를 그 멤버용 버튼이 켜진 모습으로 바꾼다
   async function handleRecordSelect(interaction) {
-    const blocked = blockedMessage(interaction);
-    if (blocked) return interaction.reply(eph(blocked));
+    const blocked = blockedCard(interaction);
+    if (blocked) return interaction.reply(blocked);
     return interaction.update(selectCard(interaction.values[0], false));
   }
 
@@ -81,7 +86,7 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
   function resolveTarget(key, userId, game) {
     const ownerId = key.startsWith('u:') ? key.slice(2) : userId;
     const acc = getLinked(ownerId)?.[game];
-    if (!acc) return { target: null, own: ownerId === userId };
+    if (!acc) return { target: null, own: ownerId === userId, ownerId };
     return { target: game === 'lol' ? { name: acc.name, tag: acc.tag, puuid: acc.puuid } : { name: acc.name, tag: acc.tag }, own: ownerId === userId };
   }
 
@@ -101,8 +106,8 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
   }
 
   async function handleRecordButton(interaction) {
-    const blocked = blockedMessage(interaction);
-    if (blocked) return interaction.reply(eph(blocked));
+    const blocked = blockedCard(interaction);
+    if (blocked) return interaction.reply(blocked);
     const parts = interaction.customId.split(':');
     const action = parts[1];
 
@@ -124,21 +129,23 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
       const queue = parts[3], puuid = parts[4];
       await interaction.deferUpdate();
       const res = await lol.lookup({ puuid }, queue);
-      if (!res.ok) return interaction.followUp(eph(res.message));
+      if (!res.ok) return interaction.followUp(info({ color: 'err', header: '❌ 전적을 불러오지 못했어요', sub: '롤 전적', lines: [res.message] }));
       return interaction.editReply(resultPayload(res, 'lol', queueRow(res.puuid ?? puuid, queue))); // 첨부를 비우고 새 그림으로 바꾼다
     }
 
     if (action === 'lol' || action === 'val') {
       const game = action === 'lol' ? 'lol' : 'valorant';
-      const { target, own } = resolveTarget(parts.slice(2).join(':'), interaction.user.id, game);
+      const { target, own, ownerId } = resolveTarget(parts.slice(2).join(':'), interaction.user.id, game);
       if (!target) {
         const name = game === 'lol' ? '롤' : '발로란트';
-        return interaction.reply(eph(own ? `아직 ${name} 계정이 연결되지 않았어요. [계정 연결]을 눌러 먼저 연결해 주세요.` : `그 멤버는 아직 ${name} 계정을 연결하지 않았어요. [닉네임으로 검색]으로 직접 찾아보세요.`));
+        return interaction.reply(own
+          ? info({ header: '🔗 계정 연결이 필요해요', sub: `${name} 전적`, lines: [`아직 **${name}** 계정이 연결되지 않았어요.`, '연결해 두면 이름을 입력하지 않아도 바로 조회할 수 있어요.'], rows: [new ActionRowBuilder().addComponents(button('record:link', '계정 연결', ButtonStyle.Primary).setEmoji('🔗'))] })
+          : info({ header: '🙅 연결된 계정이 없어요', sub: `${name} 전적`, lines: [`<@${ownerId}>님은 아직 **${name}** 계정을 연결하지 않았어요.`, '닉네임을 알고 있다면 직접 찾아볼 수 있어요.'], rows: [new ActionRowBuilder().addComponents(button('record:find', '닉네임으로 검색').setEmoji('🔍'))] }));
       }
       await interaction.update(searchingCard(game));
       const res = await (game === 'lol' ? lol : valorant).lookup(target, 'all');
       const problem = await upload(interaction, res, game, game === 'lol' && res.ok && res.png ? queueRow(res.puuid, 'all') : null);
-      if (problem) return interaction.editReply(selectCard(null, false, `⚠️ ${problem}`)); // 선택 카드로 돌아와 다시 고를 수 있게
+      if (problem) return interaction.editReply(selectCard(null, false, problem)); // 선택 카드로 돌아와 다시 고를 수 있게
       return interaction.deleteReply().catch(() => {}); // 이미지가 올라갔으니 선택 카드는 지운다
     }
   }
@@ -157,7 +164,7 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
   async function handleFind(interaction) {
     const lolText = interaction.fields.getTextInputValue('lol').trim();
     const valText = interaction.fields.getTextInputValue('valorant').trim();
-    if (!lolText && !valText) return interaction.editReply({ content: '롤이나 발로란트 중 하나 이상 입력해 주세요.' });
+    if (!lolText && !valText) return interaction.editReply(info({ header: '✏️ 입력이 필요해요', sub: '닉네임으로 검색', lines: ['롤이나 발로란트 중 하나 이상 입력해 주세요.'] }, false));
     const jobs = [['롤', 'lol', lolText, lol], ['발로란트', 'valorant', valText, valorant]].filter(j => j[2]);
     const problems = [];
     const ids = jobs.map(([label, , text]) => {
@@ -165,41 +172,41 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
       if (!id) problems.push(`${label}: 이름#태그 형식으로 적어 주세요. (예: Mino#KR1)`);
       return id;
     });
-    if (problems.length) return interaction.editReply({ content: problems.join('\n') });
-    await interaction.editReply({ content: '🔎 전적 검색 중...' });
+    if (problems.length) return interaction.editReply(info({ header: '✏️ 형식을 확인해 주세요', sub: '닉네임으로 검색', lines: problems }, false));
+    await interaction.editReply(payload(card({ color: 'info', header: '🔎 전적 검색 중...', sub: `${jobs.map(([label], n) => `${label} ${ids[n].name}#${ids[n].tag}`).join(' · ')} · 잠시만 기다려 주세요` })));
     for (const [n, [label, game, , service]] of jobs.entries()) {
       const res = await service.lookup(ids[n], 'all');
       const problem = await upload(interaction, res, game, game === 'lol' && res.ok && res.png ? queueRow(res.puuid, 'all') : null);
       if (problem) problems.push(`${label}: ${problem}`);
     }
-    if (problems.length) return interaction.editReply({ content: problems.join('\n') });
+    if (problems.length) return interaction.editReply(info({ color: 'err', header: '❌ 전적을 불러오지 못했어요', sub: '닉네임으로 검색', lines: problems }, false));
     return interaction.deleteReply().catch(() => {}); // 올라갔으니 안내 메시지는 지운다
   }
 
   // 계정 연결 모달 제출: 입력한 계정이 실제로 있는지 확인하고, 하나라도 틀리면 아무것도 저장하지 않는다.
   async function handleRecordModal(interaction) {
-    const blocked = blockedMessage(interaction);
-    if (blocked) return interaction.reply(eph(blocked));
+    const blocked = blockedCard(interaction);
+    if (blocked) return interaction.reply(blocked);
     await interaction.deferReply({ flags: EPHEMERAL });
     if (interaction.customId === 'record:find_modal') return handleFind(interaction);
     const lolText = interaction.fields.getTextInputValue('lol').trim();
     const valText = interaction.fields.getTextInputValue('valorant').trim();
-    if (!lolText && !valText) return interaction.editReply({ content: '롤이나 발로란트 중 하나 이상 입력해 주세요.' });
+    if (!lolText && !valText) return interaction.editReply(info({ header: '✏️ 입력이 필요해요', sub: '계정 연결', lines: ['롤이나 발로란트 중 하나 이상 입력해 주세요.'] }, false));
     const [lolRes, valRes] = await Promise.all([
       lolText ? checkOne('롤', lolText, verifyLol) : null,
       valText ? checkOne('발로란트', valText, verifyValorant) : null,
     ]);
     const problems = [lolRes?.error, valRes?.error].filter(Boolean);
-    if (problems.length) return interaction.editReply({ content: `❌ 연결하지 않았어요.\n${problems.join('\n')}` });
+    if (problems.length) return interaction.editReply(info({ color: 'err', header: '❌ 연결하지 않았어요', sub: '계정 연결', lines: problems, footer: '입력한 계정이 모두 확인돼야 연결돼요' }, false));
     const linked = {};
     if (lolRes) linked.lol = { puuid: lolRes.account.puuid, name: lolRes.account.name, tag: lolRes.account.tag };
     if (valRes) linked.valorant = valRes.account;
     setLinked(interaction.user.id, linked);
     save();
-    const lines = ['✅ 연결했어요.'];
-    if (lolRes) lines.push(`롤: **${lolRes.account.name}#${lolRes.account.tag}**`);
-    if (valRes) lines.push(`발로란트: **${valRes.account.name}#${valRes.account.tag}**`);
-    return interaction.editReply({ content: lines.join('\n') });
+    const lines = [];
+    if (lolRes) lines.push(`<:${EMOJI.lol.name}:${EMOJI.lol.id}> **롤** · ${lolRes.account.name}#${lolRes.account.tag}`);
+    if (valRes) lines.push(`<:${EMOJI.valorant.name}:${EMOJI.valorant.id}> **발로란트** · ${valRes.account.name}#${valRes.account.tag}`);
+    return interaction.editReply(info({ color: 'ok', header: '✅ 계정을 연결했어요', sub: '계정 연결', lines, footer: '이제 /전적에서 이름 없이 바로 볼 수 있어요' }, false));
   }
 
   return { startRecordCommand, handleRecordSelect, handleRecordButton, handleRecordModal };

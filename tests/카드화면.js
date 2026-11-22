@@ -360,6 +360,24 @@ async function buildScreens() {
     const searchingShots = [];
     await searchHandlers.handleRecordButton({ guildId: '1', channelId: '2', customId: 'record:lol:me', user: { id: '1' }, update: async p => searchingShots.push(p), channel: { send: async () => {} }, deleteReply: async () => {}, editReply: async () => {} });
     add('전적 검색', '/전적 — 검색 중 (선택 카드가 바뀜)', '롤·발로란트를 누르면 선택 카드가 이 카드로 바뀌고, 이미지가 올라오면 자동으로 사라져요 · 실패하면 오류 안내와 함께 선택 카드로 돌아와요', searchingShots[0]);
+    // 안내 카드들(계정 미연결 · 채널 제한 · 연결 결과 · 조회 실패)
+    const grab = [];
+    const base = { guildId: '1', channelId: '2', user: { id: '1' }, reply: async p => grab.push(p), editReply: async p => grab.push(p), update: async () => {}, deferReply: async () => {}, channel: { send: async () => {} } };
+    const mk = (over = {}) => createRecordHandlers({ canUse: () => true, canUseHere: () => true, getLinked: () => null, setLinked() {}, save() {}, lol: {}, valorant: {}, verifyLol: async (name, tag) => ({ puuid: 'P', name, tag }), verifyValorant: async (name, tag) => ({ name, tag }), ...over });
+    await mk().handleRecordButton({ ...base, customId: 'record:lol:me' });
+    await mk().handleRecordButton({ ...base, customId: 'record:val:u:101' });
+    await mk({ canUseHere: () => false }).startRecordCommand(base);
+    const fields = values => ({ getTextInputValue: id => values[id] ?? '' });
+    await mk().handleRecordModal({ ...base, customId: 'record:link_modal', fields: fields({ lol: 'Mino#KR1', valorant: 'OωO#1116' }) });
+    await mk({ verifyValorant: async () => { throw new (req('handlers/전적/리오트.js').RiotError)('not_found', 404); } }).handleRecordModal({ ...base, customId: 'record:link_modal', fields: fields({ lol: 'Mino#KR1', valorant: 'Ghost#KR1' }) });
+    await mk({ getLinked: () => ({ lol: { name: 'Mino', tag: 'KR1', puuid: 'P' } }), lol: { lookup: async () => ({ ok: false, message: '요청이 몰려 있어요. 잠시 후 다시 해 주세요.' }) } }).handleRecordButton({ ...base, customId: 'record:lol:me' });
+    const [noMine, noOther, wrongCh, linkOk, linkBad, failNote] = grab;
+    add('전적 검색', '안내 — 내 계정이 연결 안 됨', '카드 안에 [계정 연결] 버튼 · 나에게만 보임', noMine);
+    add('전적 검색', '안내 — 다른 멤버가 연결 안 함', '멤버 멘션 + [닉네임으로 검색] 버튼', noOther);
+    add('전적 검색', '안내 — 쓸 수 없는 채널', '쓸 수 있는 채널이 링크로 나와요', wrongCh);
+    add('전적 검색', '계정 연결 — 성공', '롤·발로란트 로고와 함께 연결된 계정을 보여줘요', linkOk);
+    add('전적 검색', '계정 연결 — 실패', '하나라도 확인이 안 되면 아무것도 저장하지 않아요', linkBad);
+    add('전적 검색', '조회 실패 — 선택 카드로 돌아옴', '오류 안내가 맨 위(노란 띠)에 붙고 다시 고를 수 있어요', failNote);
     // 실제 아이콘이 든 그림(node tests/전적/샘플그림.js 로 만든 것)이 있으면 그걸 쓰고, 없으면 빈 아이콘으로 그린다
     const real = require('path').join(__dirname, '전적', 'out', 'lol-real.png');
     const sampleMatches = [0, 1, 2, 3, 4].map(i => ({ id: 'K' + i, ts: Date.now() - (i + 1) * 5400000, dur: 1500 + i * 90, queue: i % 2 ? 440 : 420, win: i % 3 !== 1, champ: ['Yone', 'Azir', 'Ahri', 'Viego', 'Syndra'][i], k: 8 - i, d: 3 + i, a: 6 + i, cs: 180 + i * 12, items: [3031, 3006, 3046, 3087, 0, 3036, 3363], spells: [4, 14], keystone: 8010, subStyle: 8100, vision: i, pos: 'MIDDLE', multi: i === 1 ? 2 : 0, teamKills: 28 }));
