@@ -355,6 +355,11 @@ async function buildScreens() {
     await rec.handleRecordSelect({ guildId: '1', values: ['101'], update: async p => captured.push(p) });
     add('전적 검색', '/전적 — 멤버를 고른 뒤', '고른 멤버가 메뉴에 표시되고 그 멤버용 버튼이 켜져요', captured[1]);
     const tabs = cur => new Row().addComponents([['all', '전체'], ['solo', '솔로랭크'], ['flex', '자유랭크']].map(([q, label]) => new Btn().setCustomId(`record:q:lol:${q}:P`).setLabel(label).setStyle(q === cur ? BtnStyle.Primary : BtnStyle.Secondary)));
+    // 롤/발로란트 버튼을 누르면 선택 카드가 이 "검색 중" 카드로 바뀌고, 이미지가 올라오면 자동으로 지워진다
+    const searchHandlers = createRecordHandlers({ canUse: () => true, canUseHere: () => true, getLinked: () => ({ lol: { name: 'Mino', tag: 'KR1', puuid: 'P' } }), setLinked() {}, save() {}, lol: { lookup: async () => ({ ok: true, png: null, text: 'x', puuid: 'P' }) }, valorant: {}, verifyLol: async () => ({}), verifyValorant: async () => ({}) });
+    const searchingShots = [];
+    await searchHandlers.handleRecordButton({ guildId: '1', channelId: '2', customId: 'record:lol:me', user: { id: '1' }, update: async p => searchingShots.push(p), channel: { send: async () => {} }, deleteReply: async () => {}, editReply: async () => {} });
+    add('전적 검색', '/전적 — 검색 중 (선택 카드가 바뀜)', '롤·발로란트를 누르면 선택 카드가 이 카드로 바뀌고, 이미지가 올라오면 자동으로 사라져요 · 실패하면 오류 안내와 함께 선택 카드로 돌아와요', searchingShots[0]);
     // 실제 아이콘이 든 그림(node tests/전적/샘플그림.js 로 만든 것)이 있으면 그걸 쓰고, 없으면 빈 아이콘으로 그린다
     const real = require('path').join(__dirname, '전적', 'out', 'lol-real.png');
     const sampleMatches = [0, 1, 2, 3, 4].map(i => ({ id: 'K' + i, ts: Date.now() - (i + 1) * 5400000, dur: 1500 + i * 90, queue: i % 2 ? 440 : 420, win: i % 3 !== 1, champ: ['Yone', 'Azir', 'Ahri', 'Viego', 'Syndra'][i], k: 8 - i, d: 3 + i, a: 6 + i, cs: 180 + i * 12, items: [3031, 3006, 3046, 3087, 0, 3036, 3363], spells: [4, 14], keystone: 8010, subStyle: 8100, vision: i, pos: 'MIDDLE', multi: i === 1 ? 2 : 0, teamKills: 28 }));

@@ -150,7 +150,11 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   ({ handlers, lookups } = setup({ linked }));
   i = fakeInteraction({ customId: 'record:lol:me' });
   await handlers.handleRecordButton(i);
-  assert.ok(first(i, 'deferUpdate'));
+  const order = i.calls.map(c => c[0]);
+  assert.deepStrictEqual(order, ['update', 'send', 'deleteReply'], '검색 중 카드로 교체 → 이미지 올림 → 선택 카드 삭제');
+  const searching = first(i, 'update')[1];
+  assert.ok(textOf(searching).includes('검색 중'), '검색 중 안내');
+  assert.deepStrictEqual(idsOf(searching), [], '검색 중에는 버튼이 없어 다시 누를 수 없다');
   const [, sent] = first(i, 'send');
   assert.strictEqual(sent.files.length, 1);
   assert.deepStrictEqual(idsOf(sent), ['record:q:lol:all:PUUID-1', 'record:q:lol:solo:PUUID-1', 'record:q:lol:flex:PUUID-1']);
@@ -161,19 +165,31 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   i = fakeInteraction({ customId: 'record:lol:me' });
   await handlers.handleRecordButton(i);
   assert.ok(!first(i, 'send'));
-  assert.ok(textOf(first(i, 'followUp')[1]).includes('찾을 수 없'));
-  assert.ok(isEph(first(i, 'followUp')[1]));
+  assert.ok(!first(i, 'deleteReply'), '실패하면 카드를 지우지 않는다');
+  const back = first(i, 'editReply')[1];
+  assert.ok(textOf(back).includes('찾을 수 없'), '오류 문구');
+  assert.ok(idsOf(back).includes('record:lol:me'), '다시 고를 수 있게 선택 카드로 돌아옴');
   // 그림이 null 이면 글자로
   ({ handlers } = setup({ linked, lolResult: { ok: true, png: null, text: '글자 전적', puuid: 'P', label: 'A' } }));
   i = fakeInteraction({ customId: 'record:lol:me' });
   await handlers.handleRecordButton(i);
   assert.ok(textOf(first(i, 'send')[1]).includes('글자 전적'));
+  assert.ok(first(i, 'deleteReply'));
   // 발로란트 버튼
   ({ handlers, lookups } = setup({ linked }));
   i = fakeInteraction({ customId: 'record:val:me' });
   await handlers.handleRecordButton(i);
   assert.deepStrictEqual(lookups.val[0], { name: 'Mino', tag: 'KR1' });
   assert.strictEqual(first(i, 'send')[1].files.length, 1);
+  assert.deepStrictEqual(i.calls.map(c => c[0]), ['update', 'send', 'deleteReply']);
+
+  // 채널에 이미지를 못 올리면 선택 카드로 돌아와 안내(삭제 안 함)
+  ({ handlers } = setup({ linked }));
+  i = fakeInteraction({ customId: 'record:lol:me', channel: { send: async () => { throw new Error('Missing Permissions'); } } });
+  await handlers.handleRecordButton(i);
+  assert.ok(!first(i, 'deleteReply'));
+  assert.ok(textOf(first(i, 'editReply')[1]).includes('올리지 못'));
+  ({ handlers, lookups } = setup({ linked }));
 
   // (e) 큐 탭: 같은 메시지를 새 이미지로 바꾼다
   i = fakeInteraction({ customId: 'record:q:lol:solo:PUUID-1' });
@@ -198,6 +214,8 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   assert.deepStrictEqual(lookups.lol[0][0], { name: 'Mino', tag: 'KR1' });
   assert.strictEqual(lookups.val.length, 0);
   assert.strictEqual(first(i, 'send')[1].files.length, 1);
+  assert.ok(first(i, 'editReply')[1].content.includes('검색 중'), '모달 제출 뒤에도 검색 중 안내');
+  assert.ok(first(i, 'deleteReply'), '이미지를 올린 뒤 안내 메시지는 삭제');
   // 둘 다 채우면 둘 다, 형식이 틀리거나 둘 다 비면 안내(조회 없음)
   i = fakeInteraction({ customId: 'record:find_modal', fieldValues: { lol: 'Mino#KR1', valorant: 'Mino#KR1' } });
   await handlers.handleRecordModal(i);
@@ -216,7 +234,8 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   i = fakeInteraction({ customId: 'record:find_modal', fieldValues: { lol: 'Mino#KR1' } });
   await handlers.handleRecordModal(i);
   assert.ok(!first(i, 'send'));
-  assert.ok(first(i, 'editReply')[1].content.includes('찾을 수 없'));
+  assert.ok(!first(i, 'deleteReply'));
+  assert.ok(i.calls.filter(c => c[0] === 'editReply').at(-1)[1].content.includes('찾을 수 없'));
 
   // [계정 연결] → 모달(입력칸 2개, 둘 다 선택)
   i = fakeInteraction({ customId: 'record:link' });

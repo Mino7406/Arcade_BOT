@@ -46,7 +46,7 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
     QUEUE_TABS.map(([q, label]) => button(`record:q:lol:${q}:${puuid}`, label, q === current ? ButtonStyle.Primary : ButtonStyle.Secondary)));
 
   // 선택 카드 한 장: 구분선으로 "내 전적 / 다른 사람 전적"을 나눈다. pickedId 가 있으면 그 멤버용 버튼이 켜진다.
-  function selectCard(pickedId, ephemeral) {
+  function selectCard(pickedId, ephemeral, note) {
     const mine = new ActionRowBuilder().addComponents(
       button('record:lol:me', '롤', ButtonStyle.Primary).setEmoji(EMOJI.lol),
       button('record:val:me', '발로란트', ButtonStyle.Danger).setEmoji(EMOJI.valorant),
@@ -59,7 +59,7 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
       button('record:find', '닉네임으로 검색').setEmoji('🔍'));
     return payload(card({
       color: 'info', header: '📊 전적 검색', sub: '롤 · 발로란트',
-      blocks: ['### 🙋 내 전적', { rows: [mine] }, '### 👥 다른 사람 전적', { rows: [new ActionRowBuilder().addComponents(pick), others] }],
+      blocks: [note, '### 🙋 내 전적', { rows: [mine] }, '### 👥 다른 사람 전적', { rows: [new ActionRowBuilder().addComponents(pick), others] }],
     }), { ephemeral });
   }
 
@@ -85,13 +85,18 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
     return { target: game === 'lol' ? { name: acc.name, tag: acc.tag, puuid: acc.puuid } : { name: acc.name, tag: acc.tag }, own: ownerId === userId };
   }
 
-  async function postResult(interaction, res, game, row) {
-    if (!res.ok) return interaction.followUp(eph(res.message));
+  // 누른 선택 카드를 바로 이 카드로 바꿔서(버튼이 없어 중복으로 누를 수 없다) 조회하는 동안 기다리게 한다.
+  const searchingCard = game => payload(card({ color: 'info', header: '🔎 전적 검색 중...', sub: `${game === 'lol' ? '롤' : '발로란트'} · 잠시만 기다려 주세요` }));
+
+  // 결과 이미지(또는 글자)를 채널에 올린다. 성공이면 null, 실패하면 안내 문구를 돌려준다.
+  async function upload(interaction, res, game, row) {
+    if (!res.ok) return res.message;
     try {
       await interaction.channel.send(resultPayload(res, game, row));
+      return null;
     } catch (err) {
       console.error('전적 이미지를 올리지 못함:', err);
-      await interaction.followUp(eph('이미지를 올리지 못했어요. 봇이 이 채널에 파일을 올릴 수 있는지 확인해 주세요.'));
+      return '이미지를 올리지 못했어요. 봇이 이 채널에 파일을 올릴 수 있는지 확인해 주세요.';
     }
   }
 
@@ -130,9 +135,11 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
         const name = game === 'lol' ? '롤' : '발로란트';
         return interaction.reply(eph(own ? `아직 ${name} 계정이 연결되지 않았어요. [계정 연결]을 눌러 먼저 연결해 주세요.` : `그 멤버는 아직 ${name} 계정을 연결하지 않았어요. [닉네임으로 검색]으로 직접 찾아보세요.`));
       }
-      await interaction.deferUpdate();
+      await interaction.update(searchingCard(game));
       const res = await (game === 'lol' ? lol : valorant).lookup(target, 'all');
-      return postResult(interaction, res, game, game === 'lol' && res.ok && res.png ? queueRow(res.puuid, 'all') : null);
+      const problem = await upload(interaction, res, game, game === 'lol' && res.ok && res.png ? queueRow(res.puuid, 'all') : null);
+      if (problem) return interaction.editReply(selectCard(null, false, `⚠️ ${problem}`)); // 선택 카드로 돌아와 다시 고를 수 있게
+      return interaction.deleteReply().catch(() => {}); // 이미지가 올라갔으니 선택 카드는 지운다
     }
   }
 
@@ -159,17 +166,14 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
       return id;
     });
     if (problems.length) return interaction.editReply({ content: problems.join('\n') });
+    await interaction.editReply({ content: '🔎 전적 검색 중...' });
     for (const [n, [label, game, , service]] of jobs.entries()) {
       const res = await service.lookup(ids[n], 'all');
-      if (!res.ok) { problems.push(`${label}: ${res.message}`); continue; }
-      try {
-        await interaction.channel.send(resultPayload(res, game, game === 'lol' && res.png ? queueRow(res.puuid, 'all') : null));
-      } catch (err) {
-        console.error('전적 이미지를 올리지 못함:', err);
-        problems.push(`${label}: 이미지를 올리지 못했어요. 봇이 이 채널에 파일을 올릴 수 있는지 확인해 주세요.`);
-      }
+      const problem = await upload(interaction, res, game, game === 'lol' && res.ok && res.png ? queueRow(res.puuid, 'all') : null);
+      if (problem) problems.push(`${label}: ${problem}`);
     }
-    return interaction.editReply({ content: problems.length ? problems.join('\n') : '✅ 채널에 올렸어요.' });
+    if (problems.length) return interaction.editReply({ content: problems.join('\n') });
+    return interaction.deleteReply().catch(() => {}); // 올라갔으니 안내 메시지는 지운다
   }
 
   // 계정 연결 모달 제출: 입력한 계정이 실제로 있는지 확인하고, 하나라도 틀리면 아무것도 저장하지 않는다.
