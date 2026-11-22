@@ -12,3 +12,7 @@ docs/
 
 # Koverwatch 글꼴은 라이선스상 저장소(공개)에 올리지 않는다 — 내 컴퓨터에서 이미지를 만들 때만 쓴다(완성된 이미지만 커밋)
 assets/fonts/koverwatch/
+
+# 전적 검색: 내려받은 아이콘 캐시와 확인용 그림
+assets/전적/
+tests/전적/out/
