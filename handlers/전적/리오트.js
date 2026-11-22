@@ -37,8 +37,8 @@ function createRiotClient({ key, fetchFn = fetch, limiter }) {
       let res;
       try {
         res = await limiter.schedule(() => fetchFn(url, { headers: { 'X-Riot-Token': key } }));
-      } catch {
-        throw new RiotError('unavailable', 0);
+      } catch (err) {
+        throw new RiotError(err?.queueFull ? 'rate' : 'unavailable', 0); // 대기열이 가득 차서 거절된 경우는 "요청이 몰려 있어요"
       }
       if (res.ok) return res.json();
       if (res.status === 429 && attempt === 0) {

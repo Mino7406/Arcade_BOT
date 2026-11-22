@@ -30,5 +30,10 @@ const { createLimiter } = require(path.join(__dirname, '..', '..', 'handlers', '
   const l3 = createLimiter({ now, sleep });
   await assert.rejects(l3.schedule(async () => { throw new Error('boom'); }), /boom/);
   assert.strictEqual(await l3.schedule(async () => 'ok'), 'ok');
+  // 줄이 너무 길어지면(maxQueue) 더 받지 않고 바로 거절한다 — 몰렸을 때 마지막 사람이 몇 분씩 기다리지 않게
+  const l4 = createLimiter({ perSecond: 1, perWindow: 1, windowMs: 1e9, maxQueue: 3, now: () => 0, sleep: () => new Promise(() => {}) });
+  const first4 = [1, 2, 3].map(() => { const p = l4.schedule(async () => 'x'); p.catch(() => {}); return p; });
+  await assert.rejects(l4.schedule(async () => 'late'), e => e.queueFull === true, '줄이 가득 차면 거절');
+  assert.strictEqual(first4.length, 3);
   console.log('대기열 테스트 통과');
 })();

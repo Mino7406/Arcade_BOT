@@ -60,6 +60,10 @@ const noLimit = () => { const penalties = []; return { schedule: f => f(), penal
   c = createRiotClient({ key: KEY, fetchFn: fake(res(429, {}, { 'retry-after': '1' })), limiter: noLimit() });
   await assert.rejects(c.accountByRiotId('a b c', 'KR1'), e => e.kind === 'rate');
 
+  // 대기열이 가득 차서 거절되면 '요청이 몰려 있어요'(rate)
+  c = createRiotClient({ key: KEY, fetchFn: fake(res(200, {})), limiter: { schedule: async () => { throw Object.assign(new Error('queue full'), { queueFull: true }); }, penalize() {} } });
+  await assert.rejects(c.accountByRiotId('a b c', 'KR1'), e => e.kind === 'rate');
+
   // 한국어 문구는 종류마다 다르다
   const msgs = ['not_found', 'denied', 'rate', 'unavailable'].map(kind => riotErrorMessage(new RiotError(kind, 0)));
   assert.strictEqual(new Set(msgs).size, 4);

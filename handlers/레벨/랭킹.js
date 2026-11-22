@@ -17,23 +17,32 @@ const memberNamesCache = new Map(); // guildId → { at, checked: Set<userId>, n
 // userIds가 100개를 넘으면 한 번에 조회가 안 되므로 100개씩 나눠 병렬로 조회한다.
 // 조회에 실패한 묶음은 checked에 넣지 않는다 — 일시적 오류로 그 유저들이 TTL 동안 "서버를
 // 나간 사람"처럼 랭킹에서 빠지지 않고, 다음 페이지 이동 때 다시 조회되게.
+// 같은 사람을 이미 조회 중이면(캐시가 비었을 때 여러 명이 동시에 /랭킹을 연 경우) 새로 조회하지 않고 그 조회가 끝나길 같이 기다린다.
 async function getMemberNames(guild, userIds) {
   let entry = memberNamesCache.get(guild.id);
   if (!entry || Date.now() - entry.at > MEMBER_NAMES_TTL_MS) {
-    entry = { at: Date.now(), checked: new Set(), names: new Map() };
+    entry = { at: Date.now(), checked: new Set(), names: new Map(), pending: new Map() };
     memberNamesCache.set(guild.id, entry);
   }
-  const missing = userIds.filter(id => !entry.checked.has(id));
-  const chunks = [];
-  for (let i = 0; i < missing.length; i += MEMBER_FETCH_CHUNK_SIZE) {
-    chunks.push(missing.slice(i, i + MEMBER_FETCH_CHUNK_SIZE));
+  const waits = new Set();
+  const missing = [];
+  for (const id of userIds) {
+    if (entry.checked.has(id)) continue;
+    const running = entry.pending.get(id);
+    if (running) waits.add(running); else missing.push(id);
   }
-  await Promise.all(chunks.map(async (chunk) => {
-    const members = await guild.members.fetch({ user: chunk }).catch(() => null);
-    if (!members) return;
-    for (const id of chunk) entry.checked.add(id);
-    for (const [id, member] of members) entry.names.set(id, member.displayName);
-  }));
+  for (let i = 0; i < missing.length; i += MEMBER_FETCH_CHUNK_SIZE) {
+    const chunk = missing.slice(i, i + MEMBER_FETCH_CHUNK_SIZE);
+    const job = (async () => {
+      const members = await guild.members.fetch({ user: chunk }).catch(() => null);
+      if (!members) return;
+      for (const id of chunk) entry.checked.add(id);
+      for (const [id, member] of members) entry.names.set(id, member.displayName);
+    })().finally(() => { for (const id of chunk) entry.pending.delete(id); });
+    for (const id of chunk) entry.pending.set(id, job);
+    waits.add(job);
+  }
+  await Promise.all(waits);
   return entry.names;
 }
 
@@ -193,6 +202,7 @@ async function handleRankingShareButton(interaction) {
   await interaction.deleteReply();
 }
 
+module.exports.getMemberNames = getMemberNames; // 테스트용
 module.exports.showRanking = showRanking;
 module.exports.buildRankingView = buildRankingView; // 화면 모음·테스트용
 module.exports.handleRankingPageButton = handleRankingPageButton;
