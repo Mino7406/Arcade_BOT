@@ -24,6 +24,7 @@ const MESSAGES = {
   denied: 'Riot API 키가 만료됐거나 거부됐어요. 관리자에게 알려 주세요.',
   rate: '요청이 몰려 있어요. 잠시 후 다시 해 주세요.',
   unavailable: 'Riot 서버가 응답하지 않아요. 잠시 후 다시 해 주세요.',
+  no_key: '발로란트 전적 키가 설정되지 않았어요. 관리자에게 알려 주세요.',
 };
 
 function riotErrorMessage(err) {

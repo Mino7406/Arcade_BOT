@@ -107,7 +107,21 @@ function createStatic({ fetchJson, fetchBuffer, dir }) {
     }
   }
 
-  return { load, version: getVersion, champName, iconFile };
+  // 주소가 정해진 아이콘(발로란트 티어 등)을 dir/<kind>/<key>.png 로 내려받아 둔다. 실패는 null.
+  async function urlIcon(kind, key, url) {
+    try {
+      const file = path.join(dir, kind, `${String(key).toLowerCase().replace(/[^a-z0-9]+/g, '-')}.png`);
+      if (fs.existsSync(file)) return file;
+      const data = await fetchBuffer(url);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, data);
+      return file;
+    } catch {
+      return null;
+    }
+  }
+
+  return { load, version: getVersion, champName, iconFile, urlIcon };
 }
 
 module.exports = { createStatic };

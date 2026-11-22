@@ -1,0 +1,80 @@
+{
+ "status": 200,
+ "data": {
+  "account": {
+   "name": "Mino",
+   "tag": "KR1",
+   "puuid": "v-puuid"
+  },
+  "current": {
+   "tier": {
+    "id": 12,
+    "name": "Gold 2"
+   },
+   "rr": 47
+  },
+  "peak": {
+   "tier": {
+    "id": 15,
+    "name": "Platinum 1"
+   }
+  },
+  "seasonal": [
+   {
+    "season": {
+     "id": "a",
+     "short": "e9a1"
+    },
+    "end_tier": {
+     "name": "Silver 3"
+    },
+    "wins": 30,
+    "games": 58
+   },
+   {
+    "season": {
+     "id": "b",
+     "short": "e9a2"
+    },
+    "end_tier": {
+     "name": "Gold 1"
+    },
+    "wins": 41,
+    "games": 80
+   },
+   {
+    "season": {
+     "id": "c",
+     "short": "e9a3"
+    },
+    "end_tier": {
+     "name": "Gold 2"
+    },
+    "wins": 0,
+    "games": 0
+   },
+   {
+    "season": {
+     "id": "d",
+     "short": "e10a1"
+    },
+    "end_tier": {
+     "name": "Gold 3"
+    },
+    "wins": 35,
+    "games": 70
+   },
+   {
+    "season": {
+     "id": "e",
+     "short": "e10a2"
+    },
+    "end_tier": {
+     "name": "Gold 2"
+    },
+    "wins": 18,
+    "games": 33
+   }
+  ]
+ }
+}
