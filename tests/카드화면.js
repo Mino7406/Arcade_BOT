@@ -351,7 +351,7 @@ async function buildScreens() {
     const { renderValorant } = req('handlers/전적/발로그림.js');
     const { summarize } = req('handlers/전적/집계.js');
     const captured = [];
-    const rec = createRecordHandlers({ canUse: () => true, canUseHere: () => true, getLinked: () => null, setLinked() {}, save() {}, lol: {}, valorant: {}, verifyLol: async () => ({}), verifyValorant: async () => ({}) });
+    const rec = createRecordHandlers({ owners: { get: () => undefined, set() {} }, canUse: () => true, canUseHere: () => true, getLinked: () => null, setLinked() {}, save() {}, lol: {}, valorant: {}, verifyLol: async () => ({}), verifyValorant: async () => ({}) });
     await rec.startRecordCommand({ guildId: '1', reply: async p => captured.push(p) });
     add('전적 검색', '/전적 — 선택 카드 (나에게만 보임)', '구분선으로 내 전적 / 다른 사람 전적 · 멤버를 고르기 전엔 다른 사람용 롤·발로란트가 회색', captured[0]);
     await rec.handleRecordSelect({ guildId: '1', values: ['101'], update: async p => captured.push(p) });
@@ -396,7 +396,7 @@ async function buildScreens() {
       lol: { lookup: async () => ({ ok: true, png: lolPng, text: 'x', puuid: 'P' }) },
       valorant: { lookup: async () => ({ ok: true, png: valPng, text: 'x', id: 'Mino#KR1' }) },
     });
-    const shotBase = { guildId: '1', channelId: '2', user: { id: '1' }, update: async () => {}, deleteReply: async () => {}, editReply: async () => {} };
+    const shotBase = { guildId: '1', channelId: '2', user: { id: '1' }, member: { displayName: '민호' }, update: async () => {}, deleteReply: async () => {}, editReply: async () => {} };
     await shotHandlers.handleRecordButton({ ...shotBase, customId: 'record:lol:me', channel: { send: async p => sentRoll.push(p) } });
     await shotHandlers.handleRecordButton({ ...shotBase, customId: 'record:val:me', channel: { send: async p => sentVal.push(p) } });
     add('전적 검색', '롤 전적 이미지 (유저 정보 · 최근 20판 통계 · 최근 5경기)', '채널에 공개로 올라가요 · 아래 두 줄 버튼으로 큐(전체·솔랭·자랭 / 일반·칼바람·아레나)를 바꿔요', sentRoll[0], { files: png(sentRoll[0].files) });

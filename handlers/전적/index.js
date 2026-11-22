@@ -21,6 +21,7 @@ const { createLolService } = require('./롤');
 const { createValorantService } = require('./발로');
 const { fetchValorant } = require('./헨릭');
 const { recordEmoji } = require('./이모지');
+const { createOwnerStore } = require('./소유자');
 const { warmLolRender } = require('./롤그림');
 const { warmValorantRender } = require('./발로그림');
 const { card, payload, menu } = require('../공통/카드');
@@ -46,18 +47,23 @@ const wrongChannelCard = () => info({
 const problemLine = (label, message) => `**${label}**
 ${message}`;
 const ZOOM_FOOTER = '🔍 사진을 눌러 확대해서 볼 수 있어요';
+const { escapeMarkdown } = require('discord.js');
+// 결과 카드 푸터: 확대 안내 + 요청자(둘째 줄도 작은 글씨)
+const footerOf = requester => `${ZOOM_FOOTER}\n-# 👤 요청자 : ${requester}`;
+// 요청자 이름: 서버 별명 → 계정 표시 이름 → 아이디. 이름 속 마크다운 기호(*, _ 등)는 그대로 보이게 막는다.
+const requesterOf = i => escapeMarkdown(String(i.member?.displayName ?? i.user?.globalName ?? i.user?.username ?? '알 수 없음'));
 const ACCENT = { lol: 0x3b82f6, valorant: 0xff4655 };
 // 앱 이모지(개발자 포털에 올려 둔 롤·발로란트 로고)
 const EMOJI = { lol: { id: '1510933684750913626', name: 'Lol' }, valorant: { id: '1510933698349109268', name: 'Val' } };
 
 // 전적 이미지 한 장(또는 그림을 못 그릴 때 글자)을 카드 메시지로 만든다. row 는 카드 안에 들어갈 버튼 줄.
-function resultPayload(res, game, row) {
+function resultPayload(res, game, row, requester) {
   const rows = [].concat(row ?? []); // 탭 버튼 줄(여러 줄일 수 있다)
   if (!res.png) return payload(card({ color: ACCENT[game], blocks: [res.text], rows }));
-  return { ...payload(card({ color: ACCENT[game], blocks: [{ image: 'attachment://record.png' }], footer: ZOOM_FOOTER, rows })), files: [new AttachmentBuilder(res.png, { name: 'record.png' })] };
+  return { ...payload(card({ color: ACCENT[game], blocks: [{ image: 'attachment://record.png' }], footer: footerOf(requester), rows })), files: [new AttachmentBuilder(res.png, { name: 'record.png' })] };
 }
 
-function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, lol, valorant, verifyLol, verifyValorant }) {
+function createRecordHandlers({ owners, canUse, canUseHere, getLinked, setLinked, save, lol, valorant, verifyLol, verifyValorant }) {
   // 쓸 수 없는 곳이면 안내 카드, 쓸 수 있으면 null(서버 한정 → 채널 제한 순서)
   const blockedCard = i => (!canUse(i.guildId) ? notReadyCard() : !canUseHere(i.guildId, i.channelId) ? wrongChannelCard() : null);
   const button = (id, label, style = ButtonStyle.Secondary) => new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(style);
@@ -70,7 +76,7 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
   const valRow = (id, current, locked = false) => tabRows(VAL_ROWS, VAL_TABS, (t, label) =>
     button(`record:q:val:${t}:${id}`, label, t === current ? ButtonStyle.Primary : ButtonStyle.Secondary).setEmoji(VAL_TAB_EMOJI[t]()).setDisabled(locked));
   // 탭을 누른 직후 곧바로 보여 주는 카드: 옛 그림은 그대로(attachments 를 건드리지 않음) 두고 눌린 탭만 파랗게, 버튼은 잠근다. 새 그림이 오면 교체된다.
-  const pendingCard = (game, rows) => payload(card({ color: ACCENT[game], blocks: [{ image: 'attachment://record.png' }], footer: ZOOM_FOOTER, rows }), { keepAttachments: true });
+  const pendingCard = (game, rows, requester) => payload(card({ color: ACCENT[game], blocks: [{ image: 'attachment://record.png' }], footer: footerOf(requester), rows }), { keepAttachments: true });
   const tabsFor = (game, res) => (!res.ok || !res.png ? null : game === 'lol' ? queueRow(res.puuid, 'all') : valRow(res.id, 'all'));
 
   // 선택 카드 한 장: 구분선으로 "내 전적 / 다른 사람 전적"을 나눈다. pickedId 가 있으면 그 멤버용 버튼이 켜진다.
@@ -121,7 +127,8 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
   async function upload(interaction, res, game, row) {
     if (!res.ok) return res.message;
     try {
-      await interaction.channel.send(resultPayload(res, game, row));
+      const sent = await interaction.channel.send(resultPayload(res, game, row, requesterOf(interaction)));
+      if (sent?.id) owners.set(sent.id, interaction.user.id); // 이 이미지 밑의 탭 버튼은 띄운 사람만 누를 수 있다
       return null;
     } catch (err) {
       console.error('전적 이미지를 올리지 못함:', err);
@@ -149,28 +156,33 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
         .addComponents(input('lol', '롤 Riot ID (비워두면 조회 안 함)'), input('valorant', '발로란트 Riot ID (비워두면 조회 안 함)')));
     }
 
-    if (action === 'q') { // 이미지의 탭 버튼: 누르는 즉시 눌린 탭을 표시하고, 새 이미지가 준비되면 같은 메시지를 교체한다
+    if (action === 'q') { // 이미지의 탭 버튼: 그 이미지를 띄운 사람만 누를 수 있다(주인을 모르는 옛 메시지는 누구나)
+      const owner = owners.get(interaction.message?.id);
+      if (owner && owner !== interaction.user.id) {
+        return interaction.reply(info({ header: '🙅 띄운 사람만 바꿀 수 있어요', sub: '전적 검색', lines: [`이 전적은 <@${owner}>님이 띄웠어요.`, '내 전적은 `/전적`으로 직접 조회해 보세요.'] }));
+      }
+      // 이미지의 탭 버튼: 누르는 즉시 눌린 탭을 표시하고, 새 이미지가 준비되면 같은 메시지를 교체한다
       if (parts[2] === 'val') {
         const tab = parts[3];
         const id = parseRiotId(parts.slice(4).join(':'));
         if (!id) return interaction.reply(info({ color: 'err', header: '❌ 전적을 불러오지 못했어요', sub: '발로란트 전적', lines: ['닉네임을 읽지 못했어요.'] }));
         const idText = `${id.name}#${id.tag}`;
-        await interaction.update(pendingCard('valorant', valRow(idText, tab, true)));
+        await interaction.update(pendingCard('valorant', valRow(idText, tab, true), requesterOf(interaction)));
         const res = await valorant.lookup(id, tab);
         if (!res.ok) { // 실패하면 잠근 버튼을 풀고 오류를 안내한다
-          await interaction.editReply(pendingCard('valorant', valRow(idText, null)));
+          await interaction.editReply(pendingCard('valorant', valRow(idText, null), requesterOf(interaction)));
           return interaction.followUp(info({ color: 'err', header: '❌ 전적을 불러오지 못했어요', sub: '발로란트 전적', lines: [res.message] }));
         }
-        return interaction.editReply(resultPayload(res, 'valorant', valRow(res.id, tab)));
+        return interaction.editReply(resultPayload(res, 'valorant', valRow(res.id, tab), requesterOf(interaction)));
       }
       const queue = parts[3], puuid = parts[4];
-      await interaction.update(pendingCard('lol', queueRow(puuid, queue, true)));
+      await interaction.update(pendingCard('lol', queueRow(puuid, queue, true), requesterOf(interaction)));
       const res = await lol.lookup({ puuid }, queue);
       if (!res.ok) {
-        await interaction.editReply(pendingCard('lol', queueRow(puuid, null)));
+        await interaction.editReply(pendingCard('lol', queueRow(puuid, null), requesterOf(interaction)));
         return interaction.followUp(info({ color: 'err', header: '❌ 전적을 불러오지 못했어요', sub: '롤 전적', lines: [res.message] }));
       }
-      return interaction.editReply(resultPayload(res, 'lol', queueRow(res.puuid ?? puuid, queue))); // 첨부를 비우고 새 그림으로 바꾼다
+      return interaction.editReply(resultPayload(res, 'lol', queueRow(res.puuid ?? puuid, queue), requesterOf(interaction))); // 첨부를 비우고 새 그림으로 바꾼다
     }
 
     if (action === 'lol' || action === 'val') {
@@ -253,6 +265,7 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
 }
 
 // ── 실제 연결(처음 쓸 때 만든다) ───────────────────────────────────────────
+const OWNERS_PATH = path.join(__dirname, '..', '..', 'DB', 'riot-owners.json');
 const MATCHES_PATH = path.join(__dirname, '..', '..', 'DB', 'riot-matches.json');
 const ICON_DIR = path.join(__dirname, '..', '..', 'assets', '전적');
 let live = null;
@@ -263,6 +276,7 @@ function getLive() {
   const henrikKey = process.env.HENRIK_API_KEY ?? '';
   const riot = createRiotClient({ key: riotKey, limiter: createLimiter() });
   const store = createMatchStore({ file: MATCHES_PATH });
+  const owners = createOwnerStore({ file: OWNERS_PATH });
   const statics = createStatic({
     fetchJson: async url => { const r = await fetch(url); if (!r.ok) throw new Error(`${url} ${r.status}`); return r.json(); },
     fetchBuffer: async url => { const r = await fetch(url); if (!r.ok) throw new Error(`${url} ${r.status}`); return Buffer.from(await r.arrayBuffer()); },
@@ -271,8 +285,9 @@ function getLive() {
   const lol = createLolService({ riot, store, statics });
   const valorant = createValorantService({ key: henrikKey, statics });
   live = {
-    store, lol, valorant,
+    store, owners, lol, valorant,
     handlers: createRecordHandlers({
+      owners,
       canUse: accounts.canUseRecordSearch, canUseHere: accounts.canUseRecordChannel, getLinked: accounts.getLinked, setLinked: accounts.setLinked, save: accounts.saveRecordAccounts,
       lol,
       valorant,
@@ -286,11 +301,12 @@ function getLive() {
 function loadRecordSearch() {
   accounts.loadRecordAccounts();
   getLive().store.load();
+  getLive().owners.load();
 }
 
 function saveRecordSearch() {
   accounts.saveRecordAccounts();
-  if (live) live.store.save();
+  if (live) { live.store.save(); live.owners.save(); }
 }
 
 // 봇이 켜진 뒤 한가할 때 미리 데운다(레이드 그림과 같은 방식): 그림 엔진·글자 모양은 잘게 나눠 한 조각씩, 정적 데이터는 네트워크로.

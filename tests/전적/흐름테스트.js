@@ -25,7 +25,9 @@ const idsOf = p => {
 function setup({ linked = {}, lolResult, valResult, verifyLol, verifyVal } = {}) {
   const lookups = { lol: [], val: [], valTabs: [] };
   const saved = { links: [], saves: 0 };
+  const ownerMap = new Map();
   const handlers = createRecordHandlers({
+    owners: { get: k => ownerMap.get(k), set: (k, v) => ownerMap.set(k, v) },
     canUse: g => g === TEST_GUILD || g === 'PUB',
     canUseHere: (g, c) => g === TEST_GUILD || ['MAIN', 'TTS', 'TEMPVC'].includes(c),
     getLinked: id => linked[id] ?? null,
@@ -36,15 +38,16 @@ function setup({ linked = {}, lolResult, valResult, verifyLol, verifyVal } = {})
     verifyLol: verifyLol ?? (async (name, tag) => ({ puuid: 'PUUID-' + name, name, tag })),
     verifyValorant: verifyVal ?? (async (name, tag) => ({ name, tag, region: 'kr' })),
   });
-  return { handlers, lookups, saved };
+  return { handlers, lookups, saved, owners: ownerMap };
 }
 
 function fakeInteraction(over = {}) {
   const calls = [];
   const i = {
-    calls, guildId: TEST_GUILD, user: { id: 'U1' }, customId: '',
+    calls, guildId: TEST_GUILD, user: { id: 'U1', username: 'user1', globalName: null }, member: { displayName: '닉네임1' }, customId: '',
     fields: { getTextInputValue: id => (over.fieldValues ?? {})[id] ?? '' },
-    channel: { send: async p => { calls.push(['send', p]); } },
+    channel: { send: async p => { calls.push(['send', p]); return { id: 'MSG' }; } },
+    message: { id: 'MSG' },
     reply: async p => { calls.push(['reply', p]); },
     deferReply: async p => { calls.push(['deferReply', p]); },
     deferUpdate: async () => { calls.push(['deferUpdate']); },
@@ -189,6 +192,7 @@ const tabButtons = (p, game) => { const out = []; (function walk(x) { if (x?.cus
   // 탭 버튼 배치: 롤은 3+3(랭크 / 모드), 발로란트는 4+3
   const rowSizes = payload => { const sizes = []; (function walk(x) { if (x?.type === 1 && (x.components ?? []).some(c => c.custom_id?.startsWith('record:q:'))) sizes.push(x.components.map(c => c.custom_id.split(':')[3])); (x?.components ?? []).forEach(walk); })({ components: payload.components.map(json) }); return sizes; };
   assert.ok(textOf(sent).includes('사진을 눌러 확대해서 볼 수 있어요'), '결과 카드 푸터(롤)');
+  assert.ok(textOf(sent).includes('요청자 : 닉네임1'), '푸터에 요청자 닉네임(서버 별명)');
   assert.deepStrictEqual(rowSizes(sent), [['all', 'solo', 'flex'], ['normal', 'aram', 'arena']], '롤 탭 두 줄(전체·솔로·자유 / 일반·칼바람·아레나)');
   assert.strictEqual(sent.files.length, 1);
   assert.deepStrictEqual(idsOf(sent), ['all', 'solo', 'flex', 'normal', 'aram', 'arena'].map(t => `record:q:lol:${t}:PUUID-1`), '롤 큐 탭 6개(두 줄)');
@@ -218,6 +222,7 @@ const tabButtons = (p, game) => { const out = []; (function walk(x) { if (x?.cus
   assert.deepStrictEqual(i.calls.map(c => c[0]), ['update', 'send', 'deleteReply']);
   assert.ok(textOf(first(i, 'update')[1]).includes('<:Val:1510933698349109268>'), '발로란트 검색 중에는 발로란트 로고 이모지');
   assert.ok(textOf(first(i, 'send')[1]).includes('사진을 눌러 확대해서 볼 수 있어요'), '결과 카드 푸터(발로란트)');
+  assert.ok(textOf(first(i, 'send')[1]).includes('요청자 : 닉네임1'), '발로란트 푸터에도 요청자');
   assert.strictEqual(lookups.valTabs[0], 'all', '처음에는 전체 탭');
   assert.deepStrictEqual(idsOf(first(i, 'send')[1]), ['all', 'comp', 'unrated', 'swift', 'spike', 'tdm', 'dm'].map(t => `record:q:val:${t}:Mino#KR1`), '모드 탭 버튼 7개(두 줄)');
 
@@ -317,6 +322,42 @@ const tabButtons = (p, game) => { const out = []; (function walk(x) { if (x?.cus
   i = fakeInteraction({ customId: 'record:q:val:dm:O:O#1116' });
   await handlers.handleRecordButton(i);
   assert.deepStrictEqual(lookups.val.at(-1), { name: 'O:O', tag: '1116' });
+
+  // 요청자 이름: 서버 별명 → 계정 표시 이름 → 아이디 순, 마크다운 기호는 그대로 보이게 막는다
+  const nameOf = async user => { const x = fakeInteraction({ customId: 'record:lol:me', ...user }); await setup({ linked }).handlers.handleRecordButton(x); return textOf(first(x, 'send')[1]); };
+  assert.ok((await nameOf({ member: null, user: { id: 'U1', username: 'user1', globalName: '표시이름' } })).includes('요청자 : 표시이름'));
+  assert.ok((await nameOf({ member: null, user: { id: 'U1', username: 'user1', globalName: null } })).includes('요청자 : user1'));
+  const escaped = await nameOf({ member: { displayName: 'a_b*c' } });
+  assert.ok(!escaped.includes('요청자 : a_b*c') && escaped.includes('a'), '마크다운 기호는 이스케이프');
+  // 탭을 바꿔도 요청자 푸터는 그대로, 누르는 즉시 보이는 카드에도 있다
+  i = fakeInteraction({ customId: 'record:q:lol:solo:PUUID-1' });
+  await setup({ linked }).handlers.handleRecordButton(i);
+  assert.ok(textOf(first(i, 'update')[1]).includes('요청자 : 닉네임1') && textOf(first(i, 'editReply')[1]).includes('요청자 : 닉네임1'));
+
+  // 전적 이미지 밑의 탭 버튼은 그 이미지를 띄운 사람만 누를 수 있다
+  const own = setup({ linked });
+  i = fakeInteraction({ customId: 'record:lol:me', user: { id: 'U1' } });
+  await own.handlers.handleRecordButton(i);
+  assert.strictEqual(own.owners.get('MSG'), 'U1', '이미지를 올릴 때 요청한 사람을 기억한다');
+  i = fakeInteraction({ customId: 'record:q:lol:solo:PUUID-1', user: { id: 'U2' }, message: { id: 'MSG' } });
+  await own.handlers.handleRecordButton(i);
+  const denied = first(i, 'reply')[1];
+  assert.ok(textOf(denied).includes('<@U1>') && isEph(denied), '다른 사람에게는 주인을 알려 주는 안내만(나에게만 보임)');
+  assert.ok(!first(i, 'update') && !first(i, 'editReply') && own.lookups.lol.length === 1, '조회도 그림 교체도 하지 않는다');
+  i = fakeInteraction({ customId: 'record:q:val:comp:Mino#KR1', user: { id: 'U2' }, message: { id: 'MSG' } });
+  await own.handlers.handleRecordButton(i);
+  assert.ok(first(i, 'reply') && !first(i, 'update') && own.lookups.val.length === 0, '발로란트 탭 버튼도 같다');
+  i = fakeInteraction({ customId: 'record:q:lol:solo:PUUID-1', user: { id: 'U1' }, message: { id: 'MSG' } });
+  await own.handlers.handleRecordButton(i);
+  assert.ok(first(i, 'update'), '주인은 누를 수 있다');
+  i = fakeInteraction({ customId: 'record:q:lol:solo:PUUID-1', user: { id: 'U9' }, message: { id: 'OLD' } });
+  await own.handlers.handleRecordButton(i);
+  assert.ok(first(i, 'update'), '주인을 모르는 옛 메시지는 누구나(기능 도입 전에 올라간 것)');
+  const ownFind = setup({ linked });
+  i = fakeInteraction({ customId: 'record:find_modal', user: { id: 'U3' }, fieldValues: { lol: 'Mino#KR1' } });
+  await ownFind.handlers.handleRecordModal(i);
+  assert.strictEqual(ownFind.owners.get('MSG'), 'U3', '닉네임 검색으로 올린 결과도 요청한 사람 것');
+  ({ handlers, lookups } = setup({ linked }));
 
   // [계정 연결] → 모달(입력칸 2개, 둘 다 선택)
   i = fakeInteraction({ customId: 'record:link' });
