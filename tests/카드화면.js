@@ -354,7 +354,6 @@ async function buildScreens() {
     add('전적 검색', '/전적 — 선택 카드 (나에게만 보임)', '구분선으로 내 전적 / 다른 사람 전적 · 멤버를 고르기 전엔 다른 사람용 롤·발로란트가 회색', captured[0]);
     await rec.handleRecordSelect({ guildId: '1', values: ['101'], update: async p => captured.push(p) });
     add('전적 검색', '/전적 — 멤버를 고른 뒤', '고른 멤버가 메뉴에 표시되고 그 멤버용 버튼이 켜져요', captured[1]);
-    const tabs = cur => new Row().addComponents([['all', '전체'], ['solo', '솔로랭크'], ['flex', '자유랭크']].map(([q, label]) => new Btn().setCustomId(`record:q:lol:${q}:P`).setLabel(label).setStyle(q === cur ? BtnStyle.Primary : BtnStyle.Secondary)));
     // 롤/발로란트 버튼을 누르면 선택 카드가 이 "검색 중" 카드로 바뀌고, 이미지가 올라오면 자동으로 지워진다
     const searchHandlers = createRecordHandlers({ canUse: () => true, canUseHere: () => true, getLinked: () => ({ lol: { name: 'Mino', tag: 'KR1', puuid: 'P' } }), setLinked() {}, save() {}, lol: { lookup: async () => ({ ok: true, png: null, text: 'x', puuid: 'P' }) }, valorant: {}, verifyLol: async () => ({}), verifyValorant: async () => ({}) });
     const searchingShots = [];
@@ -382,16 +381,24 @@ async function buildScreens() {
     const real = require('path').join(__dirname, '전적', 'out', 'lol-real.png');
     const sampleMatches = [0, 1, 2, 3, 4].map(i => ({ id: 'K' + i, ts: Date.now() - (i + 1) * 5400000, dur: 1500 + i * 90, queue: i % 2 ? 440 : 420, win: i % 3 !== 1, champ: ['Yone', 'Azir', 'Ahri', 'Viego', 'Syndra'][i], k: 8 - i, d: 3 + i, a: 6 + i, cs: 180 + i * 12, items: [3031, 3006, 3046, 3087, 0, 3036, 3363], spells: [4, 14], keystone: 8010, subStyle: 8100, vision: i, pos: 'MIDDLE', multi: i === 1 ? 2 : 0, teamKills: 28 }));
     const lolPng = fs2.existsSync(real) ? fs2.readFileSync(real) : renderLol({ name: 'Mino', tag: 'KR1', level: 742, queue: 'all', solo: { tier: 'MASTER', rank: 'I', lp: 606, wins: 448, losses: 371 }, flex: null, summary: summarize(sampleMatches), matches: sampleMatches, icons: {} });
-    const { card: cardOf, payload: payloadOf } = req('handlers/공통/카드.js');
-    const shot = (accent, rows) => payloadOf(cardOf({ color: accent, blocks: [{ image: 'attachment://record.png' }], rows }), { keepAttachments: true });
-    add('전적 검색', '롤 전적 이미지 (유저 정보 · 최근 20판 통계 · 최근 5경기)', '채널에 공개로 올라가요 · 아래 버튼으로 전체/솔로랭크/자유랭크를 바꿔요', shot(0x3b82f6, [tabs('all')]), { files: png([{ name: 'record.png', attachment: lolPng }]) });
+    const sentRoll = [], sentVal = [];  // 채널에 공개로 올라가는 메시지(이미지 + 탭 버튼)를 실제 핸들러로 만든다
     // 발로란트: 실제 응답 모양의 샘플(tests/전적/fixtures)로 그린다
     const { parseStoredMatches } = req('handlers/전적/헨릭.js');
     const { summarizeValorant } = req('handlers/전적/발로집계.js');
     const valMatches = parseStoredMatches(JSON.parse(fs2.readFileSync(require('path').join(__dirname, '전적', 'fixtures', 'henrik-stored.json'), 'utf8')));
     const valReal = require('path').join(__dirname, '전적', 'out', 'real-val.png');
     const valPng = fs2.existsSync(valReal) ? fs2.readFileSync(valReal) : renderValorant({ profile: { name: 'Mino#KR1', tier: 'Gold 2', rr: 47, peak: 'Platinum 1', seasons: [] }, summary: summarizeValorant(valMatches), matches: valMatches.slice(0, 5), icons: {}, names: {}, now: valMatches[0].ts + 3600e3 });
-    add('전적 검색', '발로란트 전적 이미지 (HenrikDev)', '유저 정보 · 최근 20판 통계 · 최근 5경기(모드·맵·요원·K/D/A) · 아래 버튼으로 전체/경쟁전/일반/빠른 대전/기타', shot(0xff4655, []), { files: png([{ name: 'record.png', attachment: valPng }]) });
+    const shotHandlers = createRecordHandlers({
+      canUse: () => true, canUseHere: () => true, setLinked() {}, save() {}, verifyLol: async () => ({}), verifyValorant: async () => ({}),
+      getLinked: () => ({ lol: { name: 'Mino', tag: 'KR1', puuid: 'P' }, valorant: { name: 'Mino', tag: 'KR1' } }),
+      lol: { lookup: async () => ({ ok: true, png: lolPng, text: 'x', puuid: 'P' }) },
+      valorant: { lookup: async () => ({ ok: true, png: valPng, text: 'x', id: 'Mino#KR1' }) },
+    });
+    const shotBase = { guildId: '1', channelId: '2', user: { id: '1' }, update: async () => {}, deleteReply: async () => {}, editReply: async () => {} };
+    await shotHandlers.handleRecordButton({ ...shotBase, customId: 'record:lol:me', channel: { send: async p => sentRoll.push(p) } });
+    await shotHandlers.handleRecordButton({ ...shotBase, customId: 'record:val:me', channel: { send: async p => sentVal.push(p) } });
+    add('전적 검색', '롤 전적 이미지 (유저 정보 · 최근 20판 통계 · 최근 5경기)', '채널에 공개로 올라가요 · 아래 버튼으로 전체/랭크/일반/칼바람/아레나를 바꿔요', sentRoll[0], { files: png(sentRoll[0].files) });
+    add('전적 검색', '발로란트 전적 이미지 (HenrikDev)', '유저 정보 · 최근 20판 통계 · 최근 5경기(모드·맵·요원·K/D/A) · 아래 버튼으로 전체/경쟁전/일반/빠른 대전/기타를 바꿔요', sentVal[0], { files: png(sentVal[0].files) });
   }
 
   // ── 레이드 (기존 디자인 유지 — 그림 + 글자 + 버튼) ───────────────────────
