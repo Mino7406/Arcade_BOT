@@ -18,11 +18,20 @@ const { createStatic } = require('./정적데이터');
 const { createLolService } = require('./롤');
 const { createValorantService } = require('./발로');
 const { fetchValorant } = require('./헨릭');
+const { card, payload, menu, notice } = require('../공통/카드');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const NOT_READY = '🚧 전적 검색은 아직 준비 중이에요.';
 const QUEUE_TABS = [['all', '전체'], ['solo', '솔로랭크'], ['flex', '자유랭크']];
-const eph = (content, extra = {}) => ({ content, flags: EPHEMERAL, ...extra });
+const eph = content => notice(content, { ephemeral: true }); // 나에게만 보이는 안내 카드(프로젝트의 v2 카드 형식)
+const ACCENT = { lol: 0x3b82f6, valorant: 0xff4655 };
+
+// 전적 이미지 한 장(또는 그림을 못 그릴 때 글자)을 카드 메시지로 만든다. row 는 카드 안에 들어갈 버튼 줄.
+function resultPayload(res, game, row) {
+  const rows = row ? [row] : [];
+  if (!res.png) return payload(card({ color: ACCENT[game], blocks: [res.text], rows }));
+  return { ...payload(card({ color: ACCENT[game], blocks: [{ image: 'attachment://record.png' }], rows })), files: [new AttachmentBuilder(res.png, { name: 'record.png' })] };
+}
 
 function createRecordHandlers({ canUse, getLinked, setLinked, save, lol, valorant, verifyLol, verifyValorant }) {
   const button = (id, label, style = ButtonStyle.Secondary) => new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(style);
@@ -46,7 +55,7 @@ function createRecordHandlers({ canUse, getLinked, setLinked, save, lol, valoran
     }
     const row = new ActionRowBuilder().addComponents(
       button(`record:lol:${key}`, '롤', ButtonStyle.Primary), button(`record:val:${key}`, '발로란트', ButtonStyle.Danger), button('record:link', '계정 연결'));
-    return interaction.reply(eph(`${who} 전적을 볼 게임을 골라 주세요.`, { components: [row] }));
+    return interaction.reply(menu({ header: '📊 전적 검색', color: 'info', blocks: [`${who} 전적을 볼 게임을 골라 주세요.`], rows: [row], ephemeral: true }));
   }
 
   // 대상 키 → 조회할 계정. 연결이 없으면 null.
@@ -61,12 +70,10 @@ function createRecordHandlers({ canUse, getLinked, setLinked, save, lol, valoran
     return { target: game === 'lol' ? { name: acc.name, tag: acc.tag, puuid: acc.puuid } : { name: acc.name, tag: acc.tag }, own: ownerId === userId };
   }
 
-  async function postResult(interaction, res, row) {
+  async function postResult(interaction, res, game, row) {
     if (!res.ok) return interaction.followUp(eph(res.message));
-    const payload = res.png ? { files: [new AttachmentBuilder(res.png, { name: 'record.png' })] } : { content: res.text };
-    if (row) payload.components = [row];
     try {
-      await interaction.channel.send(payload);
+      await interaction.channel.send(resultPayload(res, game, row));
     } catch (err) {
       console.error('전적 이미지를 올리지 못함:', err);
       await interaction.followUp(eph('이미지를 올리지 못했어요. 봇이 이 채널에 파일을 올릴 수 있는지 확인해 주세요.'));
@@ -90,8 +97,7 @@ function createRecordHandlers({ canUse, getLinked, setLinked, save, lol, valoran
       await interaction.deferUpdate();
       const res = await lol.lookup({ puuid }, queue);
       if (!res.ok) return interaction.followUp(eph(res.message));
-      const payload = res.png ? { files: [new AttachmentBuilder(res.png, { name: 'record.png' })], attachments: [], content: null } : { content: res.text, files: [], attachments: [] };
-      return interaction.editReply({ ...payload, components: [queueRow(res.puuid ?? puuid, queue)] });
+      return interaction.editReply(resultPayload(res, 'lol', queueRow(res.puuid ?? puuid, queue))); // 첨부를 비우고 새 그림으로 바꾼다
     }
 
     if (action === 'lol' || action === 'val') {
@@ -103,7 +109,7 @@ function createRecordHandlers({ canUse, getLinked, setLinked, save, lol, valoran
       }
       await interaction.deferUpdate();
       const res = await (game === 'lol' ? lol : valorant).lookup(target, 'all');
-      return postResult(interaction, res, game === 'lol' && res.ok && res.png ? queueRow(res.puuid, 'all') : null);
+      return postResult(interaction, res, game, game === 'lol' && res.ok && res.png ? queueRow(res.puuid, 'all') : null);
     }
   }
 

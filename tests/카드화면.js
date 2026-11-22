@@ -357,9 +357,11 @@ async function buildScreens() {
     const real = require('path').join(__dirname, '전적', 'out', 'lol-real.png');
     const sampleMatches = [0, 1, 2, 3, 4].map(i => ({ id: 'K' + i, ts: Date.now() - (i + 1) * 5400000, dur: 1500 + i * 90, queue: i % 2 ? 440 : 420, win: i % 3 !== 1, champ: ['Yone', 'Azir', 'Ahri', 'Viego', 'Syndra'][i], k: 8 - i, d: 3 + i, a: 6 + i, cs: 180 + i * 12, items: [3031, 3006, 3046, 3087, 0, 3036, 3363], spells: [4, 14], keystone: 8010, subStyle: 8100, vision: i, pos: 'MIDDLE', multi: i === 1 ? 2 : 0, teamKills: 28 }));
     const lolPng = fs2.existsSync(real) ? fs2.readFileSync(real) : renderLol({ name: 'Mino', tag: 'KR1', level: 742, queue: 'all', solo: { tier: 'MASTER', rank: 'I', lp: 606, wins: 448, losses: 371 }, flex: null, summary: summarize(sampleMatches), matches: sampleMatches, icons: {} });
-    add('전적 검색', '롤 전적 이미지 (유저 정보 · 최근 20판 통계 · 최근 5경기)', '채널에 공개로 올라가요 · 아래 버튼으로 전체/솔로랭크/자유랭크를 바꿔요', { components: [tabs('all')], flags: 0 }, { files: png([{ name: 'record.png', attachment: lolPng }]) });
+    const { card: cardOf, payload: payloadOf } = req('handlers/공통/카드.js');
+    const shot = (accent, rows) => payloadOf(cardOf({ color: accent, blocks: [{ image: 'attachment://record.png' }], rows }), { keepAttachments: true });
+    add('전적 검색', '롤 전적 이미지 (유저 정보 · 최근 20판 통계 · 최근 5경기)', '채널에 공개로 올라가요 · 아래 버튼으로 전체/솔로랭크/자유랭크를 바꿔요', shot(0x3b82f6, [tabs('all')]), { files: png([{ name: 'record.png', attachment: lolPng }]) });
     const valPng = renderValorant({ profile: { name: 'Mino#KR1', tier: 'Gold 2', rr: 47, peak: 'Platinum 1', seasons: [{ season: 'e9a1', endTier: 'Silver 3', wins: 30, games: 58 }, { season: 'e9a2', endTier: 'Gold 1', wins: 41, games: 80 }, { season: 'e10a1', endTier: 'Gold 3', wins: 35, games: 70 }, { season: 'e10a2', endTier: 'Gold 2', wins: 18, games: 33 }] }, tierIcons: {} });
-    add('전적 검색', '발로란트 전적 이미지 (HenrikDev)', '현재 티어 · RR · 최고 티어 · 시즌별 기록', { components: [], flags: 0 }, { files: png([{ name: 'record.png', attachment: valPng }]) });
+    add('전적 검색', '발로란트 전적 이미지 (HenrikDev)', '현재 티어 · RR · 최고 티어 · 시즌별 기록', shot(0xff4655, []), { files: png([{ name: 'record.png', attachment: valPng }]) });
   }
 
   // ── 레이드 (기존 디자인 유지 — 그림 + 글자 + 버튼) ───────────────────────

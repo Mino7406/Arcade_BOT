@@ -10,7 +10,16 @@ const command = require(path.join(root, 'commands', '전적', '전적.js'));
 
 const TEST_GUILD = TEST_GUILD_IDS[0];
 const EPHEMERAL = MessageFlags.Ephemeral;
-const idsOf = payload => payload.components.flatMap(r => r.toJSON().components.map(c => c.custom_id));
+const json = c => (c.toJSON ? c.toJSON() : c);
+const textOf = p => JSON.stringify((p.components ?? []).map(json)) + (p.content ?? '');
+const isEph = p => (p.flags & EPHEMERAL) !== 0;
+// 카드(컨테이너) 안에 있는 버튼들의 customId
+const idsOf = p => {
+  const ids = [];
+  const walk = x => { if (x?.custom_id) ids.push(x.custom_id); (x?.components ?? []).forEach(walk); };
+  (p.components ?? []).map(json).forEach(walk);
+  return ids;
+};
 
 function setup({ linked = {}, lolResult, valResult, verifyLol, verifyVal } = {}) {
   const lookups = { lol: [], val: [] };
@@ -58,17 +67,17 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   let i = fakeInteraction({ guildId: 'OTHER' });
   await handlers.startRecordCommand(i);
   let [, p] = first(i, 'reply');
-  assert.ok(p.content.includes('준비 중'));
-  assert.strictEqual(p.flags, EPHEMERAL);
-  assert.ok(!p.components);
+  assert.ok(textOf(p).includes('준비 중'));
+  assert.ok(isEph(p));
+  assert.ok(!idsOf(p).length, '선택 버튼 없음');
   for (const customId of ['record:lol:me', 'record:link', 'record:q:lol:all:PUUID-1']) {
     i = fakeInteraction({ guildId: 'OTHER', customId });
     await handlers.handleRecordButton(i);
-    assert.ok(first(i, 'reply')[1].content.includes('준비 중'), `${customId} 도 막힘`);
+    assert.ok(textOf(first(i, 'reply')[1]).includes('준비 중'), `${customId} 도 막힘`);
   }
   i = fakeInteraction({ guildId: 'OTHER', customId: 'record:link_modal' });
   await handlers.handleRecordModal(i);
-  assert.ok(first(i, 'reply')[1].content.includes('준비 중') || first(i, 'deferReply'), '모달도 막힘');
+  assert.ok(textOf(first(i, 'reply')[1]).includes('준비 중') || first(i, 'deferReply'), '모달도 막힘');
   assert.strictEqual(lookups.lol.length, 0);
 
   // (b) 옵션 → 대상 키, 선택창은 나에게만, 버튼 3개
@@ -78,12 +87,12 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
     return first(x, 'reply')[1];
   };
   p = await startWith(null, null);
-  assert.strictEqual(p.flags, EPHEMERAL);
+  assert.ok(isEph(p), '선택창은 나에게만');
   assert.deepStrictEqual(idsOf(p), ['record:lol:me', 'record:val:me', 'record:link']);
   assert.deepStrictEqual(idsOf(await startWith({ id: 'U9' }, null)), ['record:lol:u:U9', 'record:val:u:U9', 'record:link']);
   assert.deepStrictEqual(idsOf(await startWith(null, 'Mino#KR1')), ['record:lol:n:Mino#KR1', 'record:val:n:Mino#KR1', 'record:link']);
   p = await startWith(null, 'bad');
-  assert.ok(p.content.includes('이름#태그') && !p.components, '닉네임 형식 오류 안내');
+  assert.ok(textOf(p).includes('이름#태그') && !idsOf(p).length, '닉네임 형식 오류 안내');
   // (f) customId 는 100자를 넘지 않는다(가장 긴 닉네임, 가장 긴 큐 탭)
   const longId = idsOf(await startWith(null, 'abcdefghijklmnop#ABCDE'))[0];
   assert.ok(longId.length <= 100, `긴 닉네임 customId ${longId.length}자`);
@@ -93,13 +102,13 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   ({ handlers, lookups } = setup());
   i = fakeInteraction({ customId: 'record:lol:me' });
   await handlers.handleRecordButton(i);
-  assert.ok(first(i, 'reply')[1].content.includes('연결'));
-  assert.strictEqual(first(i, 'reply')[1].flags, EPHEMERAL);
+  assert.ok(textOf(first(i, 'reply')[1]).includes('연결'));
+  assert.ok(isEph(first(i, 'reply')[1]));
   assert.ok(!first(i, 'send'));
-  const mineMsg = first(i, 'reply')[1].content;
+  const mineMsg = textOf(first(i, 'reply')[1]);
   i = fakeInteraction({ customId: 'record:lol:u:U9' });
   await handlers.handleRecordButton(i);
-  assert.notStrictEqual(first(i, 'reply')[1].content, mineMsg, '다른 멤버일 때 문구가 다르다');
+  assert.notStrictEqual(textOf(first(i, 'reply')[1]), mineMsg, '다른 멤버일 때 문구가 다르다');
 
   // 연결 있으면: 채널에 이미지 한 장 + 큐 버튼 3개
   const linked = { U1: { lol: { puuid: 'PUUID-1', name: 'Mino', tag: 'KR1' }, valorant: { name: 'Mino', tag: 'KR1', region: 'kr' } } };
@@ -121,13 +130,13 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   i = fakeInteraction({ customId: 'record:lol:me' });
   await handlers.handleRecordButton(i);
   assert.ok(!first(i, 'send'));
-  assert.ok(first(i, 'followUp')[1].content.includes('찾을 수 없'));
-  assert.strictEqual(first(i, 'followUp')[1].flags, EPHEMERAL);
+  assert.ok(textOf(first(i, 'followUp')[1]).includes('찾을 수 없'));
+  assert.ok(isEph(first(i, 'followUp')[1]));
   // 그림이 null 이면 글자로
   ({ handlers } = setup({ linked, lolResult: { ok: true, png: null, text: '글자 전적', puuid: 'P', label: 'A' } }));
   i = fakeInteraction({ customId: 'record:lol:me' });
   await handlers.handleRecordButton(i);
-  assert.ok(first(i, 'send')[1].content.includes('글자 전적'));
+  assert.ok(textOf(first(i, 'send')[1]).includes('글자 전적'));
   // 발로란트 버튼
   ({ handlers, lookups } = setup({ linked }));
   i = fakeInteraction({ customId: 'record:val:me' });
