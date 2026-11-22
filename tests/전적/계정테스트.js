@@ -5,7 +5,7 @@ const root = path.join(__dirname, '..', '..');
 const { parseRiotId, getLinked, setLinked, canUseRecordSearch } = require(path.join(root, 'handlers', '전적', '계정.js'));
 const { TEST_GUILD_IDS } = require(path.join(root, 'config.js'));
 
-assert.deepStrictEqual(parseRiotId('Hide on bush#KR1'), { name: 'Hide on bush', tag: 'KR1' });
+assert.deepStrictEqual(parseRiotId('Mino#KR1'), { name: 'Mino', tag: 'KR1' });
 assert.deepStrictEqual(parseRiotId('  불꽃이#1234 '), { name: '불꽃이', tag: '1234' });
 for (const bad of ['abc', 'a#b', '', '이름#', '#KR1', 'ab#KR1', 'name#TOOLONG', null, undefined]) {
   assert.strictEqual(parseRiotId(bad), null, `잘못된 Riot ID: ${bad}`);

@@ -58,9 +58,9 @@ function createLolService({ riot, store, statics, render = renderLol }) {
   async function lookup({ name, tag, puuid }, queue = 'all') {
     try {
       let shownName = name, shownTag = tag;
-      if (!puuid) {
-        const acc = await riot.accountByRiotId(name, tag);
-        puuid = acc.puuid; shownName = acc.gameName ?? name; shownTag = acc.tagLine ?? tag;
+      if (!puuid || !name) { // 큐 탭 버튼은 puuid 만 들고 온다 → 이름은 계정 조회로 채운다
+        const acc = puuid ? await riot.accountByPuuid(puuid) : await riot.accountByRiotId(name, tag);
+        puuid = acc.puuid ?? puuid; shownName = acc.gameName ?? name; shownTag = acc.tagLine ?? tag;
       }
       const [summoner, entries] = await Promise.all([riot.summonerByPuuid(puuid), riot.leagueEntries(puuid), statics.load()]);
       await fetchNewMatches(puuid, queue);

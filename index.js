@@ -28,6 +28,7 @@ const { loadDmPrefs, saveDmPrefs, buildDmSettingPayload, handleDmSettingButton }
 const { loadRealmRoster, saveRealmRoster } = require('./forms/마크/명단');
 const { startQuizScheduler, handleQuizMessage } = require('./handlers/게임/퀴즈');
 const { startPatchNoteWatcher } = require('./handlers/관리/패치노트');
+const { handleRecordButton, handleRecordModal, loadRecordSearch, saveRecordSearch } = require('./handlers/전적');
 const { handleRaidButton, startRaidScheduler, isPlaygroundPaused, noteChannelMessage: noteRaidChannelMessage } = require('./handlers/레이드');
 // 레이드 중 막는 명령어 → 안내 문구의 "~수 없습니다" 앞부분(문구는 룰렛 안내와 같은 형식으로 통일)
 const RAID_PAUSED_COMMANDS = {
@@ -50,7 +51,7 @@ const { logInteraction, logAction, logSystem, logError, logErrorThrottled, setLo
 
 // 끝말잇기/틱택토/랭킹 명령어와 관련 버튼을 이 채널에서만 사용할 수 있게 제한한다.
 // ALLOWED_CHANNEL_IDS는 내전/모집/팀 상호작용을 허용할 채널 목록(비어 있으면 제한 없음).
-const { WORDCHAIN_RANKING_CHANNEL_ID, ALLOWED_CHANNEL_IDS: allowedChannels, isTestGuild, GUILD_ID, TEST_GUILD_IDS } = require('./config');
+const { WORDCHAIN_RANKING_CHANNEL_ID, ALLOWED_CHANNEL_IDS: allowedChannels, isTestGuild, GUILD_ID, TEST_GUILD_IDS, RECORD_SEARCH_TEST_ONLY } = require('./config');
 
 const client = new Client({
   intents: [
@@ -357,6 +358,7 @@ async function onReady(c) {
   loadLevels(); // ⬅️ 추가: 저장된 레벨/XP 복원
   loadXpState(); // XP 긴급정지/뉴비부스트 스위치 상태 복원
   loadRoulette(); // 룰렛 일일 플레이 기록 복원
+  loadRecordSearch(); // 전적 검색: 연결한 Riot ID와 받아 둔 경기 복원
   loadHackTools(); // 레이드 보상 해킹 툴 보유량 복원(바뀔 때마다 바로 저장)
   loadGateways(); // ??? 레이드 MVP 보상 블랙월 게이트웨이 보유량 복원
   loadBotMatchXp(); // 끝말잇기·틱택토 봇전 일일 XP 한도 기록 복원
@@ -391,12 +393,14 @@ client.once(Events.ClientReady, onReady);
 // 명령어 목록으로 길드 명령어를 통째로 덮어쓴다(deploy-commands.js와 같은 대상: GUILD_ID + TEST_GUILD_IDS).
 // 같은 목록이면 디스코드 쪽에서 바뀌는 것이 없고, 명령어를 추가·삭제한 뒤 재시작하면 바로 반영된다.
 async function syncGuildCommands(c) {
-  const body = [...c.commands.values()].map(cmd => cmd.data); // 빌더를 그대로 넘기면 discord.js가 toJSON()한다(deploy-commands.js와 동일한 결과)
+  const commands = [...c.commands.values()];
   const guildIds = [...new Set([...GUILD_ID.split(','), ...TEST_GUILD_IDS].map(id => id.trim()).filter(Boolean))];
   let synced = 0;
   for (const guildId of guildIds) {
     if (!c.guilds.cache.has(guildId)) continue; // 봇이 없는 길드는 등록할 수 없다
     try {
+      // 전적 검색은 테스트 한정 동안 테스트 서버에만 등록한다. 빌더를 그대로 넘기면 discord.js가 toJSON()한다(deploy-commands.js와 동일한 결과)
+      const body = commands.filter(cmd => !(cmd.data.name === '전적' && RECORD_SEARCH_TEST_ONLY && !isTestGuild(guildId))).map(cmd => cmd.data);
       await c.application.commands.set(body, guildId);
       synced++;
     } catch (err) {
@@ -404,7 +408,7 @@ async function syncGuildCommands(c) {
       logError('봇 상태', `슬래시 명령어 등록 실패 (길드 ${guildId})`, err);
     }
   }
-  console.log(`✅ 슬래시 명령어 ${body.length}개 등록 (길드 ${synced}곳)`);
+  console.log(`✅ 슬래시 명령어 ${commands.length}개 등록 (길드 ${synced}곳)`);
 }
 client.once(Events.ClientReady, (c) => { syncGuildCommands(c).catch(err => console.error('명령어 등록 중 오류:', err)); });
 
@@ -551,6 +555,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleRealmModal(interaction);
       } else if (interaction.customId.startsWith('realm:roster:')) {
         await handleRealmRosterModal(interaction);
+      } else if (interaction.customId === 'record:link_modal') {
+        await handleRecordModal(interaction);
       }
 
     } else if (interaction.isButton()) {
@@ -566,6 +572,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleTttButton(interaction);
       } else if (interaction.customId.startsWith('omok:')) {
         await handleOmokButton(interaction);
+      } else if (interaction.customId.startsWith('record:')) {
+        await handleRecordButton(interaction);
       } else if (interaction.customId.startsWith('roulette:')) {
         await handleRouletteButton(interaction);
       } else if (interaction.customId.startsWith('quiz:')) {
@@ -733,6 +741,7 @@ setInterval(() => {
   try { saveAll(client); } catch (e) { console.error('자동 저장 실패:', e); logErrorThrottled('save:matches', '저장 오류', '내전/모집 자동 저장 실패', e); }
   try { saveLevels(); } catch (e) { console.error('레벨 자동 저장 실패:', e); logErrorThrottled('save:levels', '저장 오류', 'levels.json 자동 저장 실패 — XP가 디스크에 반영되지 않는 중', e); }
   try { saveRoulette(); } catch (e) { console.error('룰렛 자동 저장 실패:', e); logErrorThrottled('save:roulette', '저장 오류', 'roulette.json 자동 저장 실패', e); }
+  try { saveRecordSearch(); } catch (e) { console.error('전적 검색 자동 저장 실패:', e); logErrorThrottled('save:record', '저장 오류', '전적 검색 자동 저장 실패', e); }
   try { saveDmPrefs(); } catch (e) { console.error('DM 알림 설정 자동 저장 실패:', e); }
   try { saveBotMatchXp(); } catch (e) { console.error('봇전 XP 한도 자동 저장 실패:', e); logErrorThrottled('save:botxp', '저장 오류', 'botMatchXp.json 자동 저장 실패', e); }
   try { saveRealmRoster(); } catch (e) { console.error('렐름 승인 명단 자동 저장 실패:', e); logErrorThrottled('save:roster', '저장 오류', 'realm_roster.json 자동 저장 실패', e); }
@@ -768,6 +777,7 @@ function shutdown(signal) {
     try { saveAll(client); } catch (e) { console.error('종료 저장 실패:', e); }
     try { saveLevels(); } catch (e) { console.error('레벨 종료 저장 실패:', e); }
     try { saveRoulette(); } catch (e) { console.error('룰렛 종료 저장 실패:', e); }
+    try { saveRecordSearch(); } catch (e) { console.error('전적 검색 종료 저장 실패:', e); }
     try { saveBotMatchXp(); } catch (e) { console.error('봇전 XP 한도 종료 저장 실패:', e); }
     try { saveDmPrefs(); } catch (e) { console.error('DM 알림 설정 종료 저장 실패:', e); }
     try { saveRealmRoster(); } catch (e) { console.error('렐름 승인 명단 종료 저장 실패:', e); }

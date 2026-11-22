@@ -3,7 +3,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, 'env') });
 const { REST, Routes } = require('discord.js');
 const fs = require('fs');
-const { GUILD_ID, TEST_GUILD_IDS } = require('./config');
+const { GUILD_ID, TEST_GUILD_IDS, RECORD_SEARCH_TEST_ONLY, isTestGuild } = require('./config');
 
 const commands = [];
 const commandsPath = path.join(__dirname, 'commands');
@@ -37,10 +37,12 @@ const rest = new REST().setToken(process.env.TOKEN);
       ].filter(Boolean)),
     ];
     for (const guildId of guildIds) {
-      console.log(`⏳ 길드(${guildId})에 ${commands.length}개 커맨드 등록 중...`);
+      // 전적 검색은 테스트 한정 동안 테스트 서버에만 등록한다.
+      const body = commands.filter(c => !(c.name === '전적' && RECORD_SEARCH_TEST_ONLY && !isTestGuild(guildId)));
+      console.log(`⏳ 길드(${guildId})에 ${body.length}개 커맨드 등록 중...`);
       await rest.put(
         Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId),
-        { body: commands },
+        { body },
       );
       console.log(`✅ 길드(${guildId}) 커맨드 등록 완료! (즉시 반영)`);
     }

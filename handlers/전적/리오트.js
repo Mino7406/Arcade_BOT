@@ -53,6 +53,7 @@ function createRiotClient({ key, fetchFn = fetch, limiter }) {
   const enc = encodeURIComponent;
   return {
     accountByRiotId: (name, tag) => get(`${ASIA}/riot/account/v1/accounts/by-riot-id/${enc(name)}/${enc(tag)}`),
+    accountByPuuid: puuid => get(`${ASIA}/riot/account/v1/accounts/by-puuid/${enc(puuid)}`),
     summonerByPuuid: puuid => get(`${KR}/lol/summoner/v4/summoners/by-puuid/${enc(puuid)}`),
     leagueEntries: puuid => get(`${KR}/lol/league/v4/entries/by-puuid/${enc(puuid)}`),
     matchIds: (puuid, { count = 20, queue } = {}) =>

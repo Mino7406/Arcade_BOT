@@ -14,10 +14,15 @@ const noLimit = () => { const penalties = []; return { schedule: f => f(), penal
 (async () => {
   let f = fake(res(200, fx('riot-account.json')));
   let c = createRiotClient({ key: KEY, fetchFn: f, limiter: noLimit() });
-  const acc = await c.accountByRiotId('Hide on bush', 'KR1');
+  const acc = await c.accountByRiotId('Mino', 'KR1');
   assert.strictEqual(acc.puuid, 'PUUID-ME');
-  assert.strictEqual(f.calls[0].url, 'https://asia.api.riotgames.com/riot/account/v1/accounts/by-riot-id/Hide%20on%20bush/KR1');
+  assert.strictEqual(f.calls[0].url, 'https://asia.api.riotgames.com/riot/account/v1/accounts/by-riot-id/Mino/KR1');
   assert.strictEqual(f.calls[0].opt.headers['X-Riot-Token'], KEY);
+
+  f = fake(res(200, fx('riot-account.json')));
+  c = createRiotClient({ key: KEY, fetchFn: f, limiter: noLimit() });
+  assert.strictEqual((await c.accountByPuuid('PUUID-ME')).gameName, 'Mino');
+  assert.strictEqual(f.calls[0].url, 'https://asia.api.riotgames.com/riot/account/v1/accounts/by-puuid/PUUID-ME');
 
   f = fake(res(200, fx('riot-league.json')));
   c = createRiotClient({ key: KEY, fetchFn: f, limiter: noLimit() });

@@ -15,7 +15,7 @@ const match = (i, over = {}) => ({
 });
 const five = [0, 1, 2, 3, 4].map(i => match(i));
 const view = (over = {}) => ({
-  name: 'Hide on bush', tag: 'KR1', level: 742, queue: 'all', now: NOW,
+  name: 'Mino', tag: 'KR1', level: 742, queue: 'all', now: NOW,
   solo: { tier: 'MASTER', rank: 'I', lp: 606, wins: 448, losses: 371 },
   flex: { tier: 'DIAMOND', rank: 'II', lp: 40, wins: 52, losses: 48 },
   summary: summarize(five), matches: five,

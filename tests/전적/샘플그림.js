@@ -23,7 +23,7 @@ const { summarize } = require(path.join(root, 'handlers', '전적', '집계.js')
   for (const c of champs) icons.champs[c] = await statics.iconFile('champion', c);
   for (const id of items) icons.items[id] = await statics.iconFile('item', id);
   const names = Object.fromEntries(champs.map(c => [c, statics.champName(c)]));
-  const png = renderLol({ name: 'Hide on bush', tag: 'KR1', level: 742, queue: 'all', solo: { tier: 'MASTER', rank: 'I', lp: 606, wins: 448, losses: 371 }, flex: { tier: 'DIAMOND', rank: 'II', lp: 40, wins: 52, losses: 48 }, summary: summarize(ms), matches: ms, icons, names });
+  const png = renderLol({ name: 'Mino', tag: 'KR1', level: 742, queue: 'all', solo: { tier: 'MASTER', rank: 'I', lp: 606, wins: 448, losses: 371 }, flex: { tier: 'DIAMOND', rank: 'II', lp: 40, wins: 52, losses: 48 }, summary: summarize(ms), matches: ms, icons, names });
   fs.mkdirSync(path.join(__dirname, 'out'), { recursive: true });
   fs.writeFileSync(path.join(__dirname, 'out', 'lol-real.png'), png);
   console.log('저장:', path.join(__dirname, 'out', 'lol-real.png'));
