@@ -18,6 +18,9 @@ const TEST_GUILD_IDS = ['1282694117255548960'];
 // 목적이 달라 별도 키로 둔다.
 const EXCLUDED_GUILD_IDS = ['1282694117255548960'];
 
+// 전적 검색(/전적)을 테스트 서버에서만 쓰게 한다. 전체 공개할 때는 false 로 바꾸면 된다.
+const RECORD_SEARCH_TEST_ONLY = true;
+
 function isTestGuild(guildId) {
   return !!guildId && TEST_GUILD_IDS.includes(guildId);
 }
@@ -30,6 +33,7 @@ function isExcludedGuild(guildId) {
 module.exports = {
   PLAYGROUND_CHANNEL_ID,
   TEST_GUILD_IDS,
+  RECORD_SEARCH_TEST_ONLY,
   isTestGuild,
   isExcludedGuild,
 
