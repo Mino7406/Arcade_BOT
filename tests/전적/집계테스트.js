@@ -29,6 +29,9 @@ assert.strictEqual(compactMatch(raw, 'PUUID-NOBODY'), null, '없는 puuid');
 const remake = JSON.parse(JSON.stringify(raw)); remake.info.gameDuration = 170;
 assert.strictEqual(compactMatch(remake, 'PUUID-ME'), null, '3분 미만(다시하기)');
 
+const early = JSON.parse(JSON.stringify(raw)); early.info.gameDuration = 200; early.info.participants.forEach(x => { x.gameEndedInEarlySurrender = true; });
+assert.strictEqual(compactMatch(early, 'PUUID-ME'), null, '3분 넘게 걸린 다시하기(조기 항복)도 기록하지 않음');
+
 // 평점·킬관여
 assert.ok(Math.abs(ratio(8, 3, 6) - 14 / 3) < 1e-9);
 assert.strictEqual(ratio(5, 0, 5), null, '데스 0 → 평점 없음(화면에서 Perfect)');
@@ -73,4 +76,8 @@ assert.deepStrictEqual(store.list('nobody'), []);
 store.save();
 const again = createMatchStore({ file, keep: 100 }); again.load();
 assert.strictEqual(again.list('P1').length, 100, '저장 후 다시 읽기');
+// 사람 수 상한: 가장 오래 안 쓴 사람부터 지운다
+const capped = createMatchStore({ file: path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'rec-')), 'c.json'), keep: 100, maxPlayers: 3 });
+for (let n = 1; n <= 5; n++) capped.add('P' + n, { id: 'M' + n, ts: n * 1000, queue: 420 });
+assert.deepStrictEqual([1, 2, 3, 4, 5].map(n => capped.list('P' + n).length), [0, 0, 1, 1, 1], '최근 3명만 남음');
 console.log('집계·저장소 테스트 통과');

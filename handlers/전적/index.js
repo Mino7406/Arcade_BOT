@@ -160,13 +160,14 @@ function getLive() {
     fetchBuffer: async url => { const r = await fetch(url); if (!r.ok) throw new Error(`${url} ${r.status}`); return Buffer.from(await r.arrayBuffer()); },
     dir: ICON_DIR,
   });
+  const lol = createLolService({ riot, store, statics });
   live = {
     store,
     handlers: createRecordHandlers({
       canUse: accounts.canUseRecordSearch, getLinked: accounts.getLinked, setLinked: accounts.setLinked, save: accounts.saveRecordAccounts,
-      lol: createLolService({ riot, store, statics }),
+      lol,
       valorant: createValorantService({ key: henrikKey, statics }),
-      verifyLol: async (name, tag) => { const a = await riot.accountByRiotId(name, tag); return { puuid: a.puuid, name: a.gameName ?? name, tag: a.tagLine ?? tag }; },
+      verifyLol: lol.verify,
       verifyValorant: async (name, tag) => { await fetchValorant({ name, tag, key: henrikKey }); return { name, tag }; },
     }),
   };

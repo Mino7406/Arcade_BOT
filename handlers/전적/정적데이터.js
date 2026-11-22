@@ -37,6 +37,15 @@ function shrinkEmblem(buf) {
 }
 
 function createStatic({ fetchJson, fetchBuffer, dir }) {
+  // 옛 버전 아이콘 폴더(예: 16.22.1)는 지운다 — 패치마다 쌓이면 디스크 512MB 를 먹는다. 엠블럼·발로란트 폴더는 버전과 무관해서 남긴다.
+  function removeOldVersions(current) {
+    try {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (e.isDirectory() && /^\d+\.\d+\.\d+$/.test(e.name) && e.name !== current) fs.rmSync(path.join(dir, e.name), { recursive: true, force: true });
+      }
+    } catch { /* 폴더가 아직 없으면 지울 것도 없다 */ }
+  }
+
   let version = null, versionAt = 0;
   let champNames = {}, spellFiles = {}, runeIcons = {}, styleIcons = {};
   let loadedFor = null;
@@ -45,6 +54,7 @@ function createStatic({ fetchJson, fetchBuffer, dir }) {
     if (!version || Date.now() - versionAt > VERSION_TTL_MS) {
       version = (await fetchJson(`${DD}/api/versions.json`))[0];
       versionAt = Date.now();
+      removeOldVersions(version);
     }
     return version;
   }

@@ -3,7 +3,7 @@
 const fs = require('fs');
 const { writeJsonIfChanged } = require('../공통/저장');
 
-function createMatchStore({ file, keep = 100 }) {
+function createMatchStore({ file, keep = 100, maxPlayers = 60 }) {
   let data = {}; // { [puuid]: { [matchId]: compact } }
 
   function load() {
@@ -29,6 +29,12 @@ function createMatchStore({ file, keep = 100 }) {
     const ids = Object.keys(mine);
     if (ids.length > keep) {
       ids.sort((x, y) => mine[y].ts - mine[x].ts).slice(keep).forEach(id => delete mine[id]);
+    }
+    // 사람 수에도 상한을 둔다(닉네임 조회가 쌓여 서버 메모리를 먹지 않게): 가장 오래 안 쓴 사람(가장 최근 경기가 제일 오래된 사람)부터 지운다
+    const players = Object.keys(data);
+    if (players.length > maxPlayers) {
+      const newest = id => Math.max(0, ...Object.values(data[id]).map(m => m.ts));
+      players.filter(id => id !== puuid).sort((x, y) => newest(x) - newest(y)).slice(0, players.length - maxPlayers).forEach(id => delete data[id]);
     }
   }
 

@@ -21,6 +21,8 @@ const fake = (...responses) => { const calls = []; let i = 0; const fn = async (
   assert.strictEqual(p.peak, 'Platinum 1');
   assert.strictEqual(p.seasons.length, 4, '게임 수 0인 시즌은 뺀다');
   assert.deepStrictEqual(p.seasons[0], { season: 'e9a1', endTier: 'Silver 3', wins: 30, games: 58 });
+  const unrated = parseValorant({ data: { account: { name: 'Mino', tag: 'KR1' }, current: {}, peak: {}, seasonal: [] } });
+  assert.strictEqual(unrated.name, 'Mino#KR1'); assert.strictEqual(unrated.tier, ''); assert.deepStrictEqual(unrated.seasons, []);
   for (const bad of [{}, { data: {} }, null, 'x']) assert.throws(() => parseValorant(bad), e => e instanceof RiotError && e.kind === 'not_found');
 
   // fetchValorant: kr 404 → ap, 키 없음, 401 은 재시도 없이 denied, 429 는 rate

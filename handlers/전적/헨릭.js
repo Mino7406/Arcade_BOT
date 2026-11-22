@@ -30,7 +30,8 @@ function parseValorant(data) {
       games: s.games,
     });
   }
-  if (!profile.tier && !profile.seasons.length && !profile.peak) throw new RiotError('not_found', 0);
+  // 계정은 있는데 경쟁전 기록이 없으면(언랭크) 오류가 아니라 빈 기록으로 보여 준다
+  if (!profile.tier && !profile.seasons.length && !profile.peak && !profile.name) throw new RiotError('not_found', 0);
   return profile;
 }
 

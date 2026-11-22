@@ -54,26 +54,35 @@ function createLolService({ riot, store, statics, render = renderLol }) {
     if (missing.length) store.save();
   }
 
-  // { name, tag, puuid? } → { ok: true, png, text, puuid, label } | { ok: false, message }
-  async function lookup({ name, tag, puuid }, queue = 'all') {
+  async function run({ name, tag, puuid }, queue) {
+    let shownName = name, shownTag = tag;
+    if (!puuid || !name) { // 큐 탭 버튼은 puuid 만 들고 온다 → 이름은 계정 조회로 채운다
+      const acc = puuid ? await riot.accountByPuuid(puuid) : await riot.accountByRiotId(name, tag);
+      puuid = acc.puuid ?? puuid; shownName = acc.gameName ?? name; shownTag = acc.tagLine ?? tag;
+    }
+    const [summoner, entries] = await Promise.all([riot.summonerByPuuid(puuid), riot.leagueEntries(puuid), statics.load()]);
+    await fetchNewMatches(puuid, queue);
+    const recent = store.list(puuid, QUEUE_ID[queue]).slice(0, STATS_GAMES);
+    const summary = summarize(recent);
+    const rows = recent.slice(0, LIST_GAMES);
+    const solo = rankOf(entries, 'RANKED_SOLO_5x5');
+    const flex = rankOf(entries, 'RANKED_FLEX_SR');
+    const champKeys = [...new Set([...rows.map(m => m.champ), ...summary.champs.map(c => c.champ)])];
+    const icons = await collectIcons(summoner.profileIconId, solo, flex, rows, champKeys);
+    const view = { name: shownName, tag: shownTag, level: summoner.summonerLevel, queue, solo, flex, summary, matches: rows, icons, names: Object.fromEntries(champKeys.map(c => [c, statics.champName(c)])) };
+    const png = render(view);
+    return { ok: true, png: png ?? null, text: plainText(view), puuid, label: `${shownName}#${shownTag}` };
+  }
+
+  async function lookupOnce(target, queue) {
     try {
-      let shownName = name, shownTag = tag;
-      if (!puuid || !name) { // 큐 탭 버튼은 puuid 만 들고 온다 → 이름은 계정 조회로 채운다
-        const acc = puuid ? await riot.accountByPuuid(puuid) : await riot.accountByRiotId(name, tag);
-        puuid = acc.puuid ?? puuid; shownName = acc.gameName ?? name; shownTag = acc.tagLine ?? tag;
+      try {
+        return await run(target, queue);
+      } catch (err) {
+        // 저장해 둔 puuid 가 무효(Riot puuid 는 API 키마다 달라서 키를 바꾸면 400)면 이름으로 다시 찾아 한 번 더 시도한다
+        if (err instanceof RiotError && err.status === 400 && target.puuid && target.name && target.tag) return await run({ name: target.name, tag: target.tag }, queue);
+        throw err;
       }
-      const [summoner, entries] = await Promise.all([riot.summonerByPuuid(puuid), riot.leagueEntries(puuid), statics.load()]);
-      await fetchNewMatches(puuid, queue);
-      const recent = store.list(puuid, QUEUE_ID[queue]).slice(0, STATS_GAMES);
-      const summary = summarize(recent);
-      const rows = recent.slice(0, LIST_GAMES);
-      const solo = rankOf(entries, 'RANKED_SOLO_5x5');
-      const flex = rankOf(entries, 'RANKED_FLEX_SR');
-      const champKeys = [...new Set([...rows.map(m => m.champ), ...summary.champs.map(c => c.champ)])];
-      const icons = await collectIcons(summoner.profileIconId, solo, flex, rows, champKeys);
-      const view = { name: shownName, tag: shownTag, level: summoner.summonerLevel, queue, solo, flex, summary, matches: rows, icons, names: Object.fromEntries(champKeys.map(c => [c, statics.champName(c)])) };
-      const png = render(view);
-      return { ok: true, png: png ?? null, text: plainText(view), puuid, label: `${shownName}#${shownTag}` };
     } catch (err) {
       if (err instanceof RiotError) return { ok: false, message: riotErrorMessage(err) };
       console.error('롤 전적 조회 실패:', err);
@@ -81,7 +90,23 @@ function createLolService({ riot, store, statics, render = renderLol }) {
     }
   }
 
-  return { lookup };
+  // { name, tag, puuid? } → { ok: true, png, text, puuid, label } | { ok: false, message }
+  // 같은 조회가 동시에 들어오면(큐 탭 연타) 한 번만 호출하고 결과를 나눠 쓴다.
+  const inflight = new Map();
+  function lookup(target, queue = 'all') {
+    const key = `${target.puuid ?? `${target.name}#${target.tag}`}|${queue}`;
+    if (!inflight.has(key)) inflight.set(key, lookupOnce(target, queue).finally(() => inflight.delete(key)));
+    return inflight.get(key);
+  }
+
+  // 계정 연결 확인: Riot ID 가 있고, 롤 소환사도 있어야 한다(발로란트만 하는 계정은 롤 연결에서 걸러낸다). 오류는 RiotError 로 던진다.
+  async function verify(name, tag) {
+    const acc = await riot.accountByRiotId(name, tag);
+    await riot.summonerByPuuid(acc.puuid);
+    return { puuid: acc.puuid, name: acc.gameName ?? name, tag: acc.tagLine ?? tag };
+  }
+
+  return { lookup, verify };
 }
 
 module.exports = { createLolService };

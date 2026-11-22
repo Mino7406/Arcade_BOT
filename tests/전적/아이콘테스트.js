@@ -67,6 +67,16 @@ const solid = (w, h, rgba) => { const b = Buffer.alloc(w * h * 4); for (let i = 
   await statics.iconFile('style', 8000);
   assert.ok(urls.at(-1).endsWith('/cdn/img/perk-images/Styles/7201_Precision.png'));
 
+  // 옛 버전 아이콘 폴더는 지워지고, 엠블럼·발로란트 아이콘 폴더는 남는다
+  const cdir = tmp();
+  for (const sub of ['15.0.1/item', 'emblem', 'valorant-tier']) { fs.mkdirSync(path.join(cdir, sub), { recursive: true }); fs.writeFileSync(path.join(cdir, sub, 'x.png'), 'x'); }
+  const cleaner = createStatic({ fetchJson, fetchBuffer, dir: cdir });
+  await cleaner.load();
+  await cleaner.iconFile('item', 3031);
+  assert.ok(!fs.existsSync(path.join(cdir, '15.0.1')), '옛 버전 폴더 삭제');
+  assert.ok(fs.existsSync(path.join(cdir, 'emblem', 'x.png')) && fs.existsSync(path.join(cdir, 'valorant-tier', 'x.png')), '버전과 무관한 폴더는 남김');
+  assert.ok(fs.existsSync(path.join(cdir, '16.23.1', 'item', '3031.png')));
+
   const broken = createStatic({ fetchJson, fetchBuffer: async () => { throw new Error('network'); }, dir: tmp() });
   await broken.load();
   assert.strictEqual(await broken.iconFile('item', 1), null, '내려받기 실패는 null');

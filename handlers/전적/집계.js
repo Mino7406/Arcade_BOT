@@ -10,7 +10,7 @@ function queueLabel(id) {
 function compactMatch(raw, puuid) {
   const info = raw?.info;
   const p = info?.participants?.find(x => x.puuid === puuid);
-  if (!p || !(info.gameDuration >= MIN_DURATION_SEC)) return null;
+  if (!p || !(info.gameDuration >= MIN_DURATION_SEC) || p.gameEndedInEarlySurrender) return null; // 다시하기(조기 항복 투표)는 3분을 넘겨도 기록하지 않는다
   const multi = p.pentaKills ? 5 : p.quadraKills ? 4 : p.tripleKills ? 3 : p.doubleKills ? 2 : 0;
   const teamKills = info.participants.filter(x => x.teamId === p.teamId).reduce((sum, x) => sum + (x.kills || 0), 0);
   return {

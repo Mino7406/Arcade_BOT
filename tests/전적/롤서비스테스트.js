@@ -70,6 +70,28 @@ const twenty = Array.from({ length: 20 }, (_, i) => 'KR_' + i);
   r = await svc.lookup({ puuid: 'PUUID-ME' }, 'all');
   assert.strictEqual(r.label, 'Mino#KR1');
 
+  // 저장된 puuid 가 무효(키가 바뀜 → 400)면 이름으로 다시 찾아 성공한다
+  riot = fakeRiot({ ids: [] });
+  const realSummoner = riot.summonerByPuuid;
+  riot.summonerByPuuid = async p => { if (p === 'STALE') throw new RiotError('unavailable', 400); return realSummoner(p); };
+  const stale = await createLolService({ riot, store: newStore(), statics, render: () => Buffer.from('png') }).lookup({ name: 'Mino', tag: 'KR1', puuid: 'STALE' }, 'all');
+  assert.strictEqual(stale.ok, true);
+  assert.strictEqual(stale.puuid, 'PUUID-ME', '새 puuid 로 바뀜');
+
+  // 같은 조회가 동시에 들어오면 한 번만 호출한다(큐 탭 연타)
+  riot = fakeRiot({ ids: twenty });
+  const svcC = createLolService({ riot, store: newStore(), statics, render: () => Buffer.from('png') });
+  await Promise.all([1, 2, 3].map(() => svcC.lookup({ name: 'Mino', tag: 'KR1', puuid: 'PUUID-ME' }, 'solo')));
+  assert.strictEqual(riot.calls.ids, 1, '동시에 같은 조회는 한 번만');
+  assert.strictEqual(riot.calls.match, 20);
+
+  // 계정 연결 확인: 롤 소환사가 없는(발로란트만 하는) Riot 계정은 연결 확인에서 걸러진다
+  riot = fakeRiot({ ids: [] });
+  const svcV = createLolService({ riot, store: newStore(), statics, render: () => null });
+  assert.deepStrictEqual(await svcV.verify('Mino', 'KR1'), { puuid: 'PUUID-ME', name: 'Mino', tag: 'KR1' });
+  riot.summonerByPuuid = async () => { throw new RiotError('not_found', 404); };
+  await assert.rejects(svcV.verify('Mino', 'KR1'), e => e.kind === 'not_found');
+
   // (c) 경기가 0개인 계정도 ok
   riot = fakeRiot({ ids: [] });
   r = await createLolService({ riot, store: newStore(), statics, render: () => Buffer.from('png') }).lookup({ name: 'Mino', tag: 'KR1' }, 'all');
