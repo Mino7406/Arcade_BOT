@@ -79,6 +79,8 @@ async function buildScreens() {
   req('handlers/게임/해킹툴.js').setHackToolEmojiId('0');
   req('handlers/게임/블랙월게이트웨이.js').setGatewayEmojiId('0');
   req('handlers/매치/티어.js').usePreviewPositionEmojis(); // 포지션 아이콘도 같은 방식(LOCAL_EMOJI 의 pos_… 그림)
+  // 전적 탭 버튼의 앱 이모지(rec_…)도 자리표시 ID 로 "등록된 것처럼" 만들고, 그림은 로컬 파일로 보여 준다
+  await req('handlers/전적/이모지.js').ensureRecordEmojis({ application: { emojis: { fetch: async () => [], create: async ({ name }) => ({ id: '0', name }) } } });
   const xp = req('handlers/관리/XP.js').views;
   const panel = req('handlers/관리/패널.js');
   const rank = req('handlers/레벨/랭킹.js');
@@ -564,6 +566,8 @@ function localEmojiScript() {
   for (const f of fs.readdirSync(tier.EMOJI_DIR).filter(f => f.startsWith('pos_') && f.endsWith('.png'))) {
     map[f.slice(0, -4)] = 'data:image/png;base64,' + fs.readFileSync(path.join(tier.EMOJI_DIR, f)).toString('base64');
   }
+  const rec = require(path.join(ROOT, 'handlers/전적/이모지.js'));
+  for (const key of rec.EMOJI_FILES) map[`rec_${key}`] = 'data:image/png;base64,' + fs.readFileSync(path.join(ROOT, 'assets/이모지', `rec_${key}.png`)).toString('base64');
   return 'window.LOCAL_EMOJI = ' + JSON.stringify(map) + ';window.LOCAL_THUMB = ' + JSON.stringify(thumbs) + ';';
 }
 
