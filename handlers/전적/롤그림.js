@@ -23,7 +23,7 @@ const TIER_KO = { IRON: '아이언', BRONZE: '브론즈', SILVER: '실버', GOLD
 const APEX = new Set(['MASTER', 'GRANDMASTER', 'CHALLENGER']);
 const DIVISION = { I: 1, II: 2, III: 3, IV: 4 };
 const LANE_KO = { TOP: '탑', JUNGLE: '정글', MIDDLE: '미드', BOTTOM: '원딜', UTILITY: '서폿' };
-const QUEUE_TAB = { all: '전체', solo: '솔로랭크', flex: '자유랭크' };
+const QUEUE_TAB = { all: '전체', ranked: '랭크', normal: '일반', aram: '칼바람', arena: '아레나' };
 const MULTI_KO = { 2: '더블킬', 3: '트리플킬', 4: '쿼드라킬', 5: '펜타킬' };
 
 function tierText(rank) {
@@ -77,7 +77,7 @@ function createLolRenderer({ fontDir = FONT_DIR } = {}) {
     const rankBox = (x, w, label, rank, emblem, big) => {
       p.roundRect(x, 36, w, 102, 10, C.panel2);
       holder(x + 38, 87, big ? 64 : 56, true);
-      icon(emblem, x + 38, 87, big ? 64 : 56);
+      icon(emblem ?? (rank ? null : icons.unranked), x + 38, 87, big ? 64 : 56); // 랭크가 없으면 언랭크 엠블럼
       T(label, x + 76, 55, { color: C.muted, maxWidth: w - 84 });
       T(tierText(rank), x + 76, 80, { size: 24, bold: true, maxWidth: w - 84 });
       if (rank) {

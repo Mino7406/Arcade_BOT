@@ -1,10 +1,14 @@
 // 롤.js — 롤 전적 조회 한 번의 흐름: 계정 확인 → 랭크·레벨 → 경기 목록 → 새 경기만 받아 저장 → 통계 → 그림.
 // 호출 수를 아끼는 것이 핵심이다: 끝난 경기는 저장소에 있으면 다시 받지 않는다(같은 계정 재조회는 경기 호출 0번).
+const fs = require('fs');
+const path = require('path');
 const { RiotError, riotErrorMessage } = require('./리오트');
 const { compactMatch, summarize, ratio, queueLabel } = require('./집계');
 const { renderLol, tierText } = require('./롤그림');
 
-const QUEUE_ID = { solo: 420, flex: 440 }; // 'all' 은 큐 제한 없음
+// 탭 → 큐 번호들('all' 은 제한 없음). 랭크는 솔로랭크(420)+자유랭크(440), 일반은 일반 선택(400)·팀 선택(430)·빠른 대전(490), 아레나는 1700.
+const QUEUES = { ranked: [420, 440], normal: [400, 430, 490], aram: [450], arena: [1700] };
+const UNRANKED_EMBLEM = path.join(__dirname, '..', '..', 'assets', '이모지', 'rec_lol_unranked.png');
 const STATS_GAMES = 20;
 const LIST_GAMES = 5;
 const LAST_RESORT_MESSAGE = '전적을 불러오지 못했어요. 잠시 후 다시 해 주세요.';
@@ -45,7 +49,11 @@ function createLolService({ riot, store, statics, render = renderLol }) {
   }
 
   async function fetchNewMatches(puuid, queue) {
-    const ids = await riot.matchIds(puuid, { count: STATS_GAMES, queue: QUEUE_ID[queue] });
+    const qs = QUEUES[queue] ?? [];
+    const lists = qs.length
+      ? await Promise.all(qs.map(q => riot.matchIds(puuid, { count: qs.length > 1 ? 10 : STATS_GAMES, queue: q })))
+      : [await riot.matchIds(puuid, { count: STATS_GAMES })];
+    const ids = [...new Set(lists.flat())];
     const missing = ids.filter(id => !store.has(puuid, id));
     await Promise.all(missing.map(async id => {
       const compact = compactMatch(await riot.match(id), puuid);
@@ -62,13 +70,14 @@ function createLolService({ riot, store, statics, render = renderLol }) {
     }
     const [summoner, entries] = await Promise.all([riot.summonerByPuuid(puuid), riot.leagueEntries(puuid), statics.load()]);
     await fetchNewMatches(puuid, queue);
-    const recent = store.list(puuid, QUEUE_ID[queue]).slice(0, STATS_GAMES);
+    const recent = store.list(puuid, QUEUES[queue]).slice(0, STATS_GAMES);
     const summary = summarize(recent);
     const rows = recent.slice(0, LIST_GAMES);
     const solo = rankOf(entries, 'RANKED_SOLO_5x5');
     const flex = rankOf(entries, 'RANKED_FLEX_SR');
     const champKeys = [...new Set([...rows.map(m => m.champ), ...summary.champs.map(c => c.champ)])];
     const icons = await collectIcons(summoner.profileIconId, solo, flex, rows, champKeys);
+    if (fs.existsSync(UNRANKED_EMBLEM)) icons.unranked = UNRANKED_EMBLEM; // 랭크 기록이 없으면 이 엠블럼을 그린다
     const view = { name: shownName, tag: shownTag, level: summoner.summonerLevel, queue, solo, flex, summary, matches: rows, icons, names: Object.fromEntries(champKeys.map(c => [c, statics.champName(c)])) };
     const png = render(view);
     return { ok: true, png: png ?? null, text: plainText(view), puuid, label: `${shownName}#${shownTag}` };

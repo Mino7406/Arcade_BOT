@@ -6,7 +6,8 @@ const { logSystem, logError } = require('../공통/로그');
 
 const DIR = path.join(__dirname, '..', '..', 'assets', '이모지');
 // val_rank 경쟁전(불멸 티어 배지) · val_standard 일반(기본 모드) · val_swift 빠른 대전(신속플레이) · val_spike 기타(스파이크 돌격)
-const EMOJI_FILES = ['val_rank', 'val_standard', 'val_swift', 'val_spike'];
+// lol_rift 롤 일반(소환사의 협곡) · lol_aram 칼바람
+const EMOJI_FILES = ['val_rank', 'val_standard', 'val_swift', 'val_spike', 'lol_rift', 'lol_aram'];
 
 const emojis = new Map(); // 'val_rank' → { id, name }
 

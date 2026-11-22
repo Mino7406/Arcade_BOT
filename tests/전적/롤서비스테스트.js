@@ -61,10 +61,13 @@ const twenty = Array.from({ length: 20 }, (_, i) => 'KR_' + i);
   assert.strictEqual(riot.calls.match, 1);
 
   // 큐 탭은 큐 id 로 목록을 요청한다
-  await svc.lookup({ name: 'Mino', tag: 'KR1', puuid: 'PUUID-ME' }, 'solo');
-  await svc.lookup({ name: 'Mino', tag: 'KR1', puuid: 'PUUID-ME' }, 'flex');
-  assert.strictEqual(riot.calls.idsArgs.at(-2).queue, 420);
-  assert.strictEqual(riot.calls.idsArgs.at(-1).queue, 440);
+  const queuesOf = async tab => { const n = riot.calls.idsArgs.length; await svc.lookup({ name: 'Mino', tag: 'KR1', puuid: 'PUUID-ME' }, tab); return riot.calls.idsArgs.slice(n).map(a => a.queue).sort(); };
+  assert.deepStrictEqual(await queuesOf('ranked'), [420, 440], '랭크 탭: 솔로랭크 + 자유랭크');
+  assert.deepStrictEqual(await queuesOf('arena'), [1700], '아레나 탭');
+  assert.deepStrictEqual(await queuesOf('normal'), [400, 430, 490], '일반 탭: 일반 큐들');
+  assert.deepStrictEqual(await queuesOf('aram'), [450], '칼바람 탭');
+  assert.deepStrictEqual(await queuesOf('bogus'), [undefined], '모르는 탭은 전체');
+  assert.ok(seen.icons.unranked && seen.icons.unranked.endsWith('rec_lol_unranked.png'), '언랭크 엠블럼 파일');
 
   // puuid 만 줘도(큐 탭 버튼) 이름은 계정 조회로 채워진다
   r = await svc.lookup({ puuid: 'PUUID-ME' }, 'all');
@@ -81,8 +84,8 @@ const twenty = Array.from({ length: 20 }, (_, i) => 'KR_' + i);
   // 같은 조회가 동시에 들어오면 한 번만 호출한다(큐 탭 연타)
   riot = fakeRiot({ ids: twenty });
   const svcC = createLolService({ riot, store: newStore(), statics, render: () => Buffer.from('png') });
-  await Promise.all([1, 2, 3].map(() => svcC.lookup({ name: 'Mino', tag: 'KR1', puuid: 'PUUID-ME' }, 'solo')));
-  assert.strictEqual(riot.calls.ids, 1, '동시에 같은 조회는 한 번만');
+  await Promise.all([1, 2, 3].map(() => svcC.lookup({ name: 'Mino', tag: 'KR1', puuid: 'PUUID-ME' }, 'aram')));
+  assert.strictEqual(riot.calls.ids, 1, '동시에 같은 조회는 한 번만(칼바람 큐 1개)');
   assert.strictEqual(riot.calls.match, 20);
 
   // 계정 연결 확인: 롤 소환사가 없는(발로란트만 하는) Riot 계정은 연결 확인에서 걸러진다

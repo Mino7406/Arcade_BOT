@@ -176,7 +176,7 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   assert.deepStrictEqual(idsOf(searching), [], '검색 중에는 버튼이 없어 다시 누를 수 없다');
   const [, sent] = first(i, 'send');
   assert.strictEqual(sent.files.length, 1);
-  assert.deepStrictEqual(idsOf(sent), ['record:q:lol:all:PUUID-1', 'record:q:lol:solo:PUUID-1', 'record:q:lol:flex:PUUID-1']);
+  assert.deepStrictEqual(idsOf(sent), ['all', 'ranked', 'normal', 'aram', 'arena'].map(t => `record:q:lol:${t}:PUUID-1`), '롤 큐 탭 5개(솔랭·자랭은 랭크 하나로)');
   assert.deepStrictEqual(lookups.lol[0][0], { name: 'Mino', tag: 'KR1', puuid: 'PUUID-1' });
   assert.strictEqual(lookups.lol[0][1], 'all');
   // 조회 실패는 나에게만 보이는 문구, 채널엔 아무것도 안 올린다
@@ -213,12 +213,12 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   ({ handlers, lookups } = setup({ linked }));
 
   // (e) 큐 탭: 같은 메시지를 새 이미지로 바꾼다
-  i = fakeInteraction({ customId: 'record:q:lol:solo:PUUID-1' });
+  i = fakeInteraction({ customId: 'record:q:lol:ranked:PUUID-1' });
   await handlers.handleRecordButton(i);
   assert.ok(first(i, 'deferUpdate'));
   const [, edited] = first(i, 'editReply');
   assert.strictEqual(edited.files.length, 1);
-  assert.strictEqual(lookups.lol.at(-1)[1], 'solo');
+  assert.strictEqual(lookups.lol.at(-1)[1], 'ranked');
   assert.strictEqual(lookups.lol.at(-1)[0].puuid, 'PUUID-1');
 
   // [닉네임으로 검색] → 모달(입력칸 2개, 둘 다 선택)

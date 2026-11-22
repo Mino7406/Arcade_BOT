@@ -6,6 +6,7 @@ const root = path.join(__dirname, '..', '..');
 const { ensureRecordEmojis, recordEmoji, EMOJI_FILES } = require(path.join(root, 'handlers', '전적', '이모지.js'));
 const { decodePng } = require(path.join(root, 'handlers', '공통', '이모지그림.js'));
 
+assert.ok(EMOJI_FILES.includes('lol_rift') && EMOJI_FILES.includes('lol_aram'), '롤 일반(협곡)·칼바람 이모지');
 // 그림 파일: 앱 이모지는 PNG, 128px 이하
 for (const key of EMOJI_FILES) {
   const file = path.join(root, 'assets', '이모지', `rec_${key}.png`);

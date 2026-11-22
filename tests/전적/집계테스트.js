@@ -72,6 +72,8 @@ assert.strictEqual(store.list('P1')[0].id, 'KR_104', '최근순');
 store.add('P1', { id: 'KR_104', ts: 1104, queue: 440 });
 assert.strictEqual(store.list('P1').length, 100, '같은 id 두 번 → 한 개');
 assert.ok(store.list('P1', 420).every(x => x.queue === 420));
+assert.ok(store.list('P1', [420, 440]).length === store.list('P1').length, '큐 여러 개로 거르기');
+assert.ok(store.list('P1', [420]).every(x => x.queue === 420) && store.list('P1', [999]).length === 0);
 assert.deepStrictEqual(store.list('nobody'), []);
 store.save();
 const again = createMatchStore({ file, keep: 100 }); again.load();
