@@ -350,6 +350,7 @@ async function onReady(c) {
   await require('./handlers/게임/블랙월게이트웨이').ensureGatewayEmoji(c); // 블랙월 게이트웨이 앱 이모지(없으면 등록, 실패하면 🌐)
   await require('./handlers/공통/썸네일').ensureThumbEmojis(c).catch(err => console.error('썸네일 이모지 준비 실패(원래 그림으로 표시):', err));
   await require('./handlers/매치/티어').ensureTierEmojis(c).catch(err => console.error('티어 이모지 준비 실패(글자로 표시):', err));
+  await require('./handlers/전적/이모지').ensureRecordEmojis(c).catch(err => console.error('전적 탭 이모지 준비 실패(기본 이모지로 표시):', err));
   require('./handlers/매치/티어').refreshFileNames(c).catch(err => console.error('티어 파일 이름 채우기 실패:', err)); // 기다리지 않음: tier.json 을 이름·보기가 붙은 모양으로 다시 씀
   await restoreMatches(c); // ⬅️ 추가: 저장된 내전/모집 복원
   require('./handlers/매치/팀').refreshAllBoards(c).catch(err => console.error('팀 설정 카드 최신화 실패:', err)); // 기다리지 않음: 올라가 있는 팀 설정 카드를 지금 티어 DB·디자인으로 다시 그림

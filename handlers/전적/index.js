@@ -20,12 +20,16 @@ const { createStatic } = require('./정적데이터');
 const { createLolService } = require('./롤');
 const { createValorantService } = require('./발로');
 const { fetchValorant } = require('./헨릭');
+const { recordEmoji } = require('./이모지');
 const { card, payload, menu } = require('../공통/카드');
 const { RECORD_SEARCH_CHANNEL_IDS } = require('../../config');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const QUEUE_TABS = [['all', '전체'], ['solo', '솔로랭크'], ['flex', '자유랭크']];
 const VAL_TABS = [['all', '전체'], ['comp', '경쟁전'], ['unrated', '일반'], ['swift', '빠른 대전'], ['etc', '기타']];
+// 탭 버튼 이모지: 발로란트는 게임 모드 로고(앱 이모지, 아직 준비 전이면 기본 이모지). 롤은 큐별 로고가 따로 없어 기본 이모지.
+const VAL_TAB_EMOJI = { all: () => EMOJI.valorant, comp: () => recordEmoji('val_rank') ?? '🏆', unrated: () => recordEmoji('val_standard') ?? '🎮', swift: () => recordEmoji('val_swift') ?? '⚡', etc: () => recordEmoji('val_spike') ?? '💣' };
+const QUEUE_TAB_EMOJI = { all: () => EMOJI.lol, solo: () => '👤', flex: () => '👥' };
 // 안내 메시지는 전부 카드(제목·부제·본문·버튼)로 보낸다. ephemeral 이면 나에게만 보이고, 모달 응답처럼 이미 대기 중인 메시지를 고칠 때는 false.
 const info = ({ color = 'warn', header, sub, lines = [], rows, footer }, ephemeral = true) => payload(card({ color, header, sub, blocks: lines, rows, footer }), { ephemeral });
 const notReadyCard = () => info({ color: 'muted', header: '🚧 준비 중이에요', sub: '전적 검색', lines: ['전적 검색은 지금 테스트 서버에서만 쓸 수 있어요.'] });
@@ -49,11 +53,11 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
   const blockedCard = i => (!canUse(i.guildId) ? notReadyCard() : !canUseHere(i.guildId, i.channelId) ? wrongChannelCard() : null);
   const button = (id, label, style = ButtonStyle.Secondary) => new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(style);
   const queueRow = (puuid, current) => new ActionRowBuilder().addComponents(
-    QUEUE_TABS.map(([q, label]) => button(`record:q:lol:${q}:${puuid}`, label, q === current ? ButtonStyle.Primary : ButtonStyle.Secondary)));
+    QUEUE_TABS.map(([q, label]) => button(`record:q:lol:${q}:${puuid}`, label, q === current ? ButtonStyle.Primary : ButtonStyle.Secondary).setEmoji(QUEUE_TAB_EMOJI[q]())));
 
   // 발로란트 모드 탭(customId 에 이름#태그를 담는다). 결과 이미지가 있을 때만 붙는다.
   const valRow = (id, current) => new ActionRowBuilder().addComponents(
-    VAL_TABS.map(([t, label]) => button(`record:q:val:${t}:${id}`, label, t === current ? ButtonStyle.Primary : ButtonStyle.Secondary)));
+    VAL_TABS.map(([t, label]) => button(`record:q:val:${t}:${id}`, label, t === current ? ButtonStyle.Primary : ButtonStyle.Secondary).setEmoji(VAL_TAB_EMOJI[t]())));
   const tabsFor = (game, res) => (!res.ok || !res.png ? null : game === 'lol' ? queueRow(res.puuid, 'all') : valRow(res.id, 'all'));
 
   // 선택 카드 한 장: 구분선으로 "내 전적 / 다른 사람 전적"을 나눈다. pickedId 가 있으면 그 멤버용 버튼이 켜진다.

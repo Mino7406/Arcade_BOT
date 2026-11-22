@@ -273,6 +273,10 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   (function walk(x) { if (x?.custom_id?.startsWith('record:q:val:')) tabStyles.push([x.custom_id.split(':')[3], x.style]); (x?.components ?? []).forEach(walk); })({ components: valEdited.components.map(json) });
   assert.deepStrictEqual(tabStyles.map(t => t[0]), ['all', 'comp', 'unrated', 'swift', 'etc']);
   assert.strictEqual(tabStyles.find(t => t[0] === 'comp')[1], 1, '현재 탭은 파란 버튼(Primary)');
+  const tabEmoji = [];
+  (function walk(x) { if (x?.custom_id?.startsWith('record:q:val:')) tabEmoji.push(x.emoji); (x?.components ?? []).forEach(walk); })({ components: valEdited.components.map(json) });
+  assert.strictEqual(tabEmoji.length, 5); assert.ok(tabEmoji.every(e => e && (e.id || e.name)), '발로란트 탭마다 이모지');
+  assert.strictEqual(tabEmoji[0].id, '1510933698349109268', '전체 탭은 발로란트 로고');
   assert.strictEqual(tabStyles.find(t => t[0] === 'all')[1], 2);
   // 이름에 : 가 들어 있어도 이름#태그를 그대로 읽는다
   i = fakeInteraction({ customId: 'record:q:val:etc:O:O#1116' });
