@@ -350,8 +350,10 @@ async function buildScreens() {
     const { summarize } = req('handlers/전적/집계.js');
     const captured = [];
     const rec = createRecordHandlers({ canUse: () => true, getLinked: () => null, setLinked() {}, save() {}, lol: {}, valorant: {}, verifyLol: async () => ({}), verifyValorant: async () => ({}) });
-    await rec.startRecordCommand({ guildId: '1', options: { getUser: () => null, getString: () => null }, reply: async p => captured.push(p) });
-    add('전적 검색', '/전적 — 게임 고르기 (나에게만 보임)', '[롤] [발로란트] [계정 연결] · 멤버/닉네임 옵션으로 다른 사람도 조회', captured[0]);
+    await rec.startRecordCommand({ guildId: '1', reply: async p => captured.push(p) });
+    add('전적 검색', '/전적 — 선택 카드 (나에게만 보임)', '구분선으로 내 전적 / 다른 사람 전적 · 멤버를 고르기 전엔 다른 사람용 롤·발로란트가 회색', captured[0]);
+    await rec.handleRecordSelect({ guildId: '1', values: ['101'], update: async p => captured.push(p) });
+    add('전적 검색', '/전적 — 멤버를 고른 뒤', '고른 멤버가 메뉴에 표시되고 그 멤버용 버튼이 켜져요', captured[1]);
     const tabs = cur => new Row().addComponents([['all', '전체'], ['solo', '솔로랭크'], ['flex', '자유랭크']].map(([q, label]) => new Btn().setCustomId(`record:q:lol:${q}:P`).setLabel(label).setStyle(q === cur ? BtnStyle.Primary : BtnStyle.Secondary)));
     // 실제 아이콘이 든 그림(node tests/전적/샘플그림.js 로 만든 것)이 있으면 그걸 쓰고, 없으면 빈 아이콘으로 그린다
     const real = require('path').join(__dirname, '전적', 'out', 'lol-real.png');

@@ -2,12 +2,14 @@
 // 지금은 테스트 서버에서만 쓸 수 있다(config.js 의 RECORD_SEARCH_TEST_ONLY). 외부 서비스는 createRecordHandlers 로 주입해서 테스트한다.
 //
 // customId 규칙(100자 이하):
-//   record:lol:<대상>   record:val:<대상>   — 대상: me | u:<디스코드 유저 id> | n:<이름#태그>
-//   record:link         — 계정 연결 모달 열기      record:link_modal — 모달 제출
+//   record:lol:<대상>   record:val:<대상>   — 대상: me | u:<디스코드 유저 id> (none 은 멤버를 고르기 전의 회색 버튼)
+//   record:pick         — 다른 사람 전적의 멤버 선택 메뉴
+//   record:link / record:link_modal — 계정 연결 모달 열기 / 제출
+//   record:find / record:find_modal — 닉네임으로 검색 모달 열기 / 제출
 //   record:q:lol:<all|solo|flex>:<puuid> — 롤 이미지의 큐 탭
 const path = require('path');
 const {
-  ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, AttachmentBuilder, MessageFlags,
+  ActionRowBuilder, ButtonBuilder, ButtonStyle, UserSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, AttachmentBuilder, MessageFlags,
 } = require('discord.js');
 const accounts = require('./계정');
 const { parseRiotId } = accounts;
@@ -25,6 +27,8 @@ const NOT_READY = '🚧 전적 검색은 아직 준비 중이에요.';
 const QUEUE_TABS = [['all', '전체'], ['solo', '솔로랭크'], ['flex', '자유랭크']];
 const eph = content => notice(content, { ephemeral: true }); // 나에게만 보이는 안내 카드(프로젝트의 v2 카드 형식)
 const ACCENT = { lol: 0x3b82f6, valorant: 0xff4655 };
+// 앱 이모지(개발자 포털에 올려 둔 롤·발로란트 로고)
+const EMOJI = { lol: { id: '1510933684750913626', name: 'Lol' }, valorant: { id: '1510933698349109268', name: 'Val' } };
 
 // 전적 이미지 한 장(또는 그림을 못 그릴 때 글자)을 카드 메시지로 만든다. row 는 카드 안에 들어갈 버튼 줄.
 function resultPayload(res, game, row) {
@@ -38,32 +42,38 @@ function createRecordHandlers({ canUse, getLinked, setLinked, save, lol, valoran
   const queueRow = (puuid, current) => new ActionRowBuilder().addComponents(
     QUEUE_TABS.map(([q, label]) => button(`record:q:lol:${q}:${puuid}`, label, q === current ? ButtonStyle.Primary : ButtonStyle.Secondary)));
 
-  // /전적 [멤버] [닉네임] → 나에게만 보이는 선택창
-  async function startRecordCommand(interaction) {
-    if (!canUse(interaction.guildId)) return interaction.reply(eph(NOT_READY));
-    const member = interaction.options.getUser('멤버');
-    const nick = interaction.options.getString('닉네임');
-    let key = 'me', who = '내';
-    if (nick) {
-      const id = parseRiotId(nick);
-      if (!id) return interaction.reply(eph('닉네임은 이름#태그 형식으로 적어 주세요. (예: Mino#KR1)'));
-      key = `n:${id.name}#${id.tag}`;
-      who = `**${id.name}#${id.tag}**의`;
-    } else if (member) {
-      key = `u:${member.id}`;
-      who = `<@${member.id}>님의`;
-    }
-    const row = new ActionRowBuilder().addComponents(
-      button(`record:lol:${key}`, '롤', ButtonStyle.Primary), button(`record:val:${key}`, '발로란트', ButtonStyle.Danger), button('record:link', '계정 연결'));
-    return interaction.reply(menu({ header: '📊 전적 검색', color: 'info', blocks: [`${who} 전적을 볼 게임을 골라 주세요.`], rows: [row], ephemeral: true }));
+  // 선택 카드 한 장: 구분선으로 "내 전적 / 다른 사람 전적"을 나눈다. pickedId 가 있으면 그 멤버용 버튼이 켜진다.
+  function selectCard(pickedId, ephemeral) {
+    const mine = new ActionRowBuilder().addComponents(
+      button('record:lol:me', '롤', ButtonStyle.Primary).setEmoji(EMOJI.lol),
+      button('record:val:me', '발로란트', ButtonStyle.Danger).setEmoji(EMOJI.valorant),
+      button('record:link', '계정 연결').setEmoji('🔗'));
+    const pick = new UserSelectMenuBuilder().setCustomId('record:pick').setPlaceholder('👤 멤버를 골라 주세요').setMinValues(1).setMaxValues(1);
+    if (pickedId) pick.setDefaultUsers(pickedId);
+    const others = new ActionRowBuilder().addComponents(
+      button(pickedId ? `record:lol:u:${pickedId}` : 'record:lol:none', '롤', ButtonStyle.Primary).setEmoji(EMOJI.lol).setDisabled(!pickedId),
+      button(pickedId ? `record:val:u:${pickedId}` : 'record:val:none', '발로란트', ButtonStyle.Danger).setEmoji(EMOJI.valorant).setDisabled(!pickedId),
+      button('record:find', '닉네임으로 검색').setEmoji('🔍'));
+    return payload(card({
+      color: 'info', header: '📊 전적 검색', sub: '롤 · 발로란트',
+      blocks: ['### 🙋 내 전적', { rows: [mine] }, '### 👥 다른 사람 전적', { rows: [new ActionRowBuilder().addComponents(pick), others] }],
+    }), { ephemeral });
   }
 
-  // 대상 키 → 조회할 계정. 연결이 없으면 null.
+  // /전적 → 나에게만 보이는 선택 카드
+  async function startRecordCommand(interaction) {
+    if (!canUse(interaction.guildId)) return interaction.reply(eph(NOT_READY));
+    return interaction.reply(selectCard(null, true));
+  }
+
+  // 멤버 선택 메뉴: 같은 카드를 그 멤버용 버튼이 켜진 모습으로 바꾼다
+  async function handleRecordSelect(interaction) {
+    if (!canUse(interaction.guildId)) return interaction.reply(eph(NOT_READY));
+    return interaction.update(selectCard(interaction.values[0], false));
+  }
+
+  // 대상 키(me | u:<id>) → 조회할 계정. 연결이 없으면 target 이 null.
   function resolveTarget(key, userId, game) {
-    if (key.startsWith('n:')) {
-      const id = parseRiotId(key.slice(2));
-      return id ? { target: id, own: false } : { target: null, own: false };
-    }
     const ownerId = key.startsWith('u:') ? key.slice(2) : userId;
     const acc = getLinked(ownerId)?.[game];
     if (!acc) return { target: null, own: ownerId === userId };
@@ -92,6 +102,13 @@ function createRecordHandlers({ canUse, getLinked, setLinked, save, lol, valoran
         .addComponents(input('lol', '롤 Riot ID (비워두면 연결 안 함)'), input('valorant', '발로란트 Riot ID (비워두면 연결 안 함)')));
     }
 
+    if (action === 'find') {
+      const input = (id, label) => new ActionRowBuilder().addComponents(
+        new TextInputBuilder().setCustomId(id).setLabel(label).setStyle(TextInputStyle.Short).setPlaceholder('이름#태그 (예: Mino#KR1)').setRequired(false).setMaxLength(30));
+      return interaction.showModal(new ModalBuilder().setCustomId('record:find_modal').setTitle('닉네임으로 전적 검색')
+        .addComponents(input('lol', '롤 Riot ID (비워두면 조회 안 함)'), input('valorant', '발로란트 Riot ID (비워두면 조회 안 함)')));
+    }
+
     if (action === 'q') { // 롤 이미지의 큐 탭: 같은 메시지를 새 이미지로 바꾼다
       const queue = parts[3], puuid = parts[4];
       await interaction.deferUpdate();
@@ -105,7 +122,7 @@ function createRecordHandlers({ canUse, getLinked, setLinked, save, lol, valoran
       const { target, own } = resolveTarget(parts.slice(2).join(':'), interaction.user.id, game);
       if (!target) {
         const name = game === 'lol' ? '롤' : '발로란트';
-        return interaction.reply(eph(own ? `아직 ${name} 계정이 연결되지 않았어요. [계정 연결]을 눌러 먼저 연결해 주세요.` : `그 멤버는 아직 ${name} 계정을 연결하지 않았어요. 닉네임을 직접 넣어서 조회해 보세요.`));
+        return interaction.reply(eph(own ? `아직 ${name} 계정이 연결되지 않았어요. [계정 연결]을 눌러 먼저 연결해 주세요.` : `그 멤버는 아직 ${name} 계정을 연결하지 않았어요. [닉네임으로 검색]으로 직접 찾아보세요.`));
       }
       await interaction.deferUpdate();
       const res = await (game === 'lol' ? lol : valorant).lookup(target, 'all');
@@ -123,10 +140,37 @@ function createRecordHandlers({ canUse, getLinked, setLinked, save, lol, valoran
     }
   }
 
+  // 닉네임으로 검색 모달 제출: 채운 게임의 전적을 이름으로 조회해 채널에 올린다(연결 불필요).
+  async function handleFind(interaction) {
+    const lolText = interaction.fields.getTextInputValue('lol').trim();
+    const valText = interaction.fields.getTextInputValue('valorant').trim();
+    if (!lolText && !valText) return interaction.editReply({ content: '롤이나 발로란트 중 하나 이상 입력해 주세요.' });
+    const jobs = [['롤', 'lol', lolText, lol], ['발로란트', 'valorant', valText, valorant]].filter(j => j[2]);
+    const problems = [];
+    const ids = jobs.map(([label, , text]) => {
+      const id = parseRiotId(text);
+      if (!id) problems.push(`${label}: 이름#태그 형식으로 적어 주세요. (예: Mino#KR1)`);
+      return id;
+    });
+    if (problems.length) return interaction.editReply({ content: problems.join('\n') });
+    for (const [n, [label, game, , service]] of jobs.entries()) {
+      const res = await service.lookup(ids[n], 'all');
+      if (!res.ok) { problems.push(`${label}: ${res.message}`); continue; }
+      try {
+        await interaction.channel.send(resultPayload(res, game, game === 'lol' && res.png ? queueRow(res.puuid, 'all') : null));
+      } catch (err) {
+        console.error('전적 이미지를 올리지 못함:', err);
+        problems.push(`${label}: 이미지를 올리지 못했어요. 봇이 이 채널에 파일을 올릴 수 있는지 확인해 주세요.`);
+      }
+    }
+    return interaction.editReply({ content: problems.length ? problems.join('\n') : '✅ 채널에 올렸어요.' });
+  }
+
   // 계정 연결 모달 제출: 입력한 계정이 실제로 있는지 확인하고, 하나라도 틀리면 아무것도 저장하지 않는다.
   async function handleRecordModal(interaction) {
     if (!canUse(interaction.guildId)) return interaction.reply(eph(NOT_READY));
     await interaction.deferReply({ flags: EPHEMERAL });
+    if (interaction.customId === 'record:find_modal') return handleFind(interaction);
     const lolText = interaction.fields.getTextInputValue('lol').trim();
     const valText = interaction.fields.getTextInputValue('valorant').trim();
     if (!lolText && !valText) return interaction.editReply({ content: '롤이나 발로란트 중 하나 이상 입력해 주세요.' });
@@ -147,7 +191,7 @@ function createRecordHandlers({ canUse, getLinked, setLinked, save, lol, valoran
     return interaction.editReply({ content: lines.join('\n') });
   }
 
-  return { startRecordCommand, handleRecordButton, handleRecordModal };
+  return { startRecordCommand, handleRecordSelect, handleRecordButton, handleRecordModal };
 }
 
 // ── 실제 연결(처음 쓸 때 만든다) ───────────────────────────────────────────
@@ -194,5 +238,6 @@ module.exports = {
   createRecordHandlers, loadRecordSearch, saveRecordSearch,
   startRecordCommand: i => getLive().handlers.startRecordCommand(i),
   handleRecordButton: i => getLive().handlers.handleRecordButton(i),
+  handleRecordSelect: i => getLive().handlers.handleRecordSelect(i),
   handleRecordModal: i => getLive().handlers.handleRecordModal(i),
 };

@@ -28,7 +28,7 @@ const { loadDmPrefs, saveDmPrefs, buildDmSettingPayload, handleDmSettingButton }
 const { loadRealmRoster, saveRealmRoster } = require('./forms/마크/명단');
 const { startQuizScheduler, handleQuizMessage } = require('./handlers/게임/퀴즈');
 const { startPatchNoteWatcher } = require('./handlers/관리/패치노트');
-const { handleRecordButton, handleRecordModal, loadRecordSearch, saveRecordSearch } = require('./handlers/전적');
+const { handleRecordButton, handleRecordSelect, handleRecordModal, loadRecordSearch, saveRecordSearch } = require('./handlers/전적');
 const { handleRaidButton, startRaidScheduler, isPlaygroundPaused, noteChannelMessage: noteRaidChannelMessage } = require('./handlers/레이드');
 // 레이드 중 막는 명령어 → 안내 문구의 "~수 없습니다" 앞부분(문구는 룰렛 안내와 같은 형식으로 통일)
 const RAID_PAUSED_COMMANDS = {
@@ -501,6 +501,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleMojipMemberAdd(interaction);
       } else if (interaction.customId === 'xp:pick') {
         await handleXpUserSelect(interaction);
+      } else if (interaction.customId === 'record:pick') {
+        await handleRecordSelect(interaction);
       }
 
     } else if (interaction.isStringSelectMenu()) {
@@ -555,7 +557,7 @@ client.on('interactionCreate', async (interaction) => {
         await handleRealmModal(interaction);
       } else if (interaction.customId.startsWith('realm:roster:')) {
         await handleRealmRosterModal(interaction);
-      } else if (interaction.customId === 'record:link_modal') {
+      } else if (interaction.customId === 'record:link_modal' || interaction.customId === 'record:find_modal') {
         await handleRecordModal(interaction);
       }
 

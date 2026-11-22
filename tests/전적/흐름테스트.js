@@ -41,13 +41,14 @@ function fakeInteraction(over = {}) {
   const calls = [];
   const i = {
     calls, guildId: TEST_GUILD, user: { id: 'U1' }, customId: '',
-    options: { getUser: () => null, getString: () => null },
     fields: { getTextInputValue: id => (over.fieldValues ?? {})[id] ?? '' },
     channel: { send: async p => { calls.push(['send', p]); } },
     reply: async p => { calls.push(['reply', p]); },
     deferReply: async p => { calls.push(['deferReply', p]); },
     deferUpdate: async () => { calls.push(['deferUpdate']); },
     editReply: async p => { calls.push(['editReply', p]); },
+    update: async p => { calls.push(['update', p]); },
+    deleteReply: async () => { calls.push(['deleteReply']); },
     followUp: async p => { calls.push(['followUp', p]); },
     showModal: async m => { calls.push(['showModal', m]); },
     ...over,
@@ -59,8 +60,7 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
 (async () => {
   // 명령 정의
   assert.strictEqual(command.data.name, '전적');
-  const opts = command.data.toJSON().options.map(o => [o.name, o.required ?? false]);
-  assert.deepStrictEqual(opts, [['멤버', false], ['닉네임', false]]);
+  assert.deepStrictEqual(command.data.toJSON().options ?? [], [], '옵션 없이 카드 안 버튼·메뉴로 해결');
 
   // (a) 테스트 서버가 아니면 선택창 없이 "준비 중"(나에게만), 서비스는 불리지 않는다
   let { handlers, lookups } = setup();
@@ -80,23 +80,36 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   assert.ok(textOf(first(i, 'reply')[1]).includes('준비 중') || first(i, 'deferReply'), '모달도 막힘');
   assert.strictEqual(lookups.lol.length, 0);
 
-  // (b) 옵션 → 대상 키, 선택창은 나에게만, 버튼 3개
-  const startWith = async (user, nick) => {
-    const x = fakeInteraction({ options: { getUser: () => user, getString: () => nick } });
-    await handlers.startRecordCommand(x);
-    return first(x, 'reply')[1];
-  };
-  p = await startWith(null, null);
+  // (b) 선택 카드: 내 전적 / 다른 사람 전적 구역, 나에게만 보임
+  const startCard = async () => { const x = fakeInteraction(); await handlers.startRecordCommand(x); return first(x, 'reply')[1]; };
+  p = await startCard();
   assert.ok(isEph(p), '선택창은 나에게만');
-  assert.deepStrictEqual(idsOf(p), ['record:lol:me', 'record:val:me', 'record:link']);
-  assert.deepStrictEqual(idsOf(await startWith({ id: 'U9' }, null)), ['record:lol:u:U9', 'record:val:u:U9', 'record:link']);
-  assert.deepStrictEqual(idsOf(await startWith(null, 'Mino#KR1')), ['record:lol:n:Mino#KR1', 'record:val:n:Mino#KR1', 'record:link']);
-  p = await startWith(null, 'bad');
-  assert.ok(textOf(p).includes('이름#태그') && !idsOf(p).length, '닉네임 형식 오류 안내');
-  // (f) customId 는 100자를 넘지 않는다(가장 긴 닉네임, 가장 긴 큐 탭)
-  const longId = idsOf(await startWith(null, 'abcdefghijklmnop#ABCDE'))[0];
-  assert.ok(longId.length <= 100, `긴 닉네임 customId ${longId.length}자`);
+  assert.deepStrictEqual(idsOf(p), ['record:lol:me', 'record:val:me', 'record:link', 'record:pick', 'record:lol:none', 'record:val:none', 'record:find']);
+  const text = textOf(p);
+  assert.ok(text.includes('내 전적') && text.includes('다른 사람 전적'), '두 구역 제목');
+  const comps = [];
+  const collect = x => { comps.push(x); (x?.components ?? []).forEach(collect); };
+  p.components.map(json).forEach(collect);
+  const by = id => comps.find(c => c.custom_id === id);
+  assert.strictEqual(by('record:lol:me').emoji.id, '1510933684750913626', '롤 로고 이모지');
+  assert.strictEqual(by('record:val:me').emoji.id, '1510933698349109268', '발로란트 로고 이모지');
+  assert.strictEqual(by('record:lol:none').disabled, true, '멤버를 고르기 전에는 회색');
+  assert.strictEqual(by('record:val:none').disabled, true);
+  assert.ok(!by('record:lol:me').disabled);
+  // customId 는 100자를 넘지 않는다(가장 긴 큐 탭)
   assert.ok(`record:q:lol:solo:${'x'.repeat(78)}`.length <= 100);
+
+  // 멤버 고르기 → 같은 카드가 업데이트돼 그 멤버용 버튼이 켜진다
+  i = fakeInteraction({ customId: 'record:pick', values: ['U9'] });
+  await handlers.handleRecordSelect(i);
+  const [, upd] = first(i, 'update');
+  assert.deepStrictEqual(idsOf(upd), ['record:lol:me', 'record:val:me', 'record:link', 'record:pick', 'record:lol:u:U9', 'record:val:u:U9', 'record:find']);
+  const comps2 = []; (function walk(x) { comps2.push(x); (x?.components ?? []).forEach(walk); })({ components: upd.components.map(json) });
+  assert.ok(!comps2.find(c => c.custom_id === 'record:lol:u:U9').disabled, '고른 뒤엔 켜짐');
+  assert.deepStrictEqual(comps2.find(c => c.custom_id === 'record:pick').default_values, [{ id: 'U9', type: 'user' }], '고른 멤버가 메뉴에 표시됨');
+  i = fakeInteraction({ guildId: 'OTHER', customId: 'record:pick', values: ['U9'] });
+  await handlers.handleRecordSelect(i);
+  assert.ok(textOf(first(i, 'reply')[1]).includes('준비 중'), '선택 메뉴도 막힘');
 
   // (d) 연결 없이 [롤] → 연결 안내(채널 메시지 없음). 내 계정 / 다른 멤버 문구가 다르다
   ({ handlers, lookups } = setup());
@@ -121,10 +134,6 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   assert.deepStrictEqual(idsOf(sent), ['record:q:lol:all:PUUID-1', 'record:q:lol:solo:PUUID-1', 'record:q:lol:flex:PUUID-1']);
   assert.deepStrictEqual(lookups.lol[0][0], { name: 'Mino', tag: 'KR1', puuid: 'PUUID-1' });
   assert.strictEqual(lookups.lol[0][1], 'all');
-  // 닉네임 대상은 puuid 없이 이름으로 조회
-  i = fakeInteraction({ customId: 'record:lol:n:Mino#KR1' });
-  await handlers.handleRecordButton(i);
-  assert.deepStrictEqual(lookups.lol[1][0], { name: 'Mino', tag: 'KR1' });
   // 조회 실패는 나에게만 보이는 문구, 채널엔 아무것도 안 올린다
   ({ handlers } = setup({ linked, lolResult: { ok: false, message: '그 닉네임의 계정을 찾을 수 없어요.' } }));
   i = fakeInteraction({ customId: 'record:lol:me' });
@@ -152,6 +161,40 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   assert.strictEqual(edited.files.length, 1);
   assert.strictEqual(lookups.lol.at(-1)[1], 'solo');
   assert.strictEqual(lookups.lol.at(-1)[0].puuid, 'PUUID-1');
+
+  // [닉네임으로 검색] → 모달(입력칸 2개, 둘 다 선택)
+  i = fakeInteraction({ customId: 'record:find' });
+  await handlers.handleRecordButton(i);
+  const fmodal = first(i, 'showModal')[1].toJSON();
+  assert.strictEqual(fmodal.custom_id, 'record:find_modal');
+  assert.deepStrictEqual(fmodal.components.map(r => r.components[0].custom_id), ['lol', 'valorant']);
+  assert.ok(fmodal.components.every(r => r.components[0].required === false));
+  // 제출: 채운 게임만 puuid 없이 이름으로 조회해 채널에 올린다
+  ({ handlers, lookups } = setup({ linked }));
+  i = fakeInteraction({ customId: 'record:find_modal', fieldValues: { lol: 'Mino#KR1' } });
+  await handlers.handleRecordModal(i);
+  assert.deepStrictEqual(lookups.lol[0][0], { name: 'Mino', tag: 'KR1' });
+  assert.strictEqual(lookups.val.length, 0);
+  assert.strictEqual(first(i, 'send')[1].files.length, 1);
+  // 둘 다 채우면 둘 다, 형식이 틀리거나 둘 다 비면 안내(조회 없음)
+  i = fakeInteraction({ customId: 'record:find_modal', fieldValues: { lol: 'Mino#KR1', valorant: 'Mino#KR1' } });
+  await handlers.handleRecordModal(i);
+  assert.strictEqual(lookups.lol.length, 2); assert.strictEqual(lookups.val.length, 1);
+  assert.strictEqual(i.calls.filter(c => c[0] === 'send').length, 2);
+  const before = lookups.lol.length;
+  i = fakeInteraction({ customId: 'record:find_modal', fieldValues: {} });
+  await handlers.handleRecordModal(i);
+  assert.ok(first(i, 'editReply')[1].content.includes('하나 이상'));
+  i = fakeInteraction({ customId: 'record:find_modal', fieldValues: { lol: 'nohash' } });
+  await handlers.handleRecordModal(i);
+  assert.ok(first(i, 'editReply')[1].content.includes('이름#태그'));
+  assert.strictEqual(lookups.lol.length, before);
+  // 조회 실패는 나에게만 보이는 문구
+  ({ handlers } = setup({ lolResult: { ok: false, message: '그 닉네임의 계정을 찾을 수 없어요.' } }));
+  i = fakeInteraction({ customId: 'record:find_modal', fieldValues: { lol: 'Mino#KR1' } });
+  await handlers.handleRecordModal(i);
+  assert.ok(!first(i, 'send'));
+  assert.ok(first(i, 'editReply')[1].content.includes('찾을 수 없'));
 
   // [계정 연결] → 모달(입력칸 2개, 둘 다 선택)
   i = fakeInteraction({ customId: 'record:link' });
