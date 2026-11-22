@@ -9,7 +9,7 @@ const { createLimiter } = require(path.join(__dirname, '..', '..', 'handlers', '
   const sleep = ms => { t += ms; return Promise.resolve(); };
 
   // 200번을 한꺼번에 걸어도 어느 1초 구간에 18회, 어느 120초 구간에 90회를 넘지 않고 순서가 유지된다
-  const limiter = createLimiter({ now, sleep });
+  const limiter = createLimiter({ now, sleep, maxQueue: 1000 }); // 200번 몰려도 한도를 지키는지 보려고 줄 상한을 크게
   const started = [];
   const results = await Promise.all(Array.from({ length: 200 }, (_, i) => limiter.schedule(async () => { started.push(t); return i; })));
   assert.deepStrictEqual(results, Array.from({ length: 200 }, (_, i) => i), '호출 순서대로 끝나야 함');

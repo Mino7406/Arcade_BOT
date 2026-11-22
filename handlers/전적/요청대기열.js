@@ -1,6 +1,6 @@
 // 요청대기열.js — Riot API 한도(1초 20회·2분 100회)를 넘지 않게 호출 순서와 간격을 맞춘다.
 // 여유를 두고 기본은 1초 18회·2분 90회. 호출은 들어온 순서대로 나간다.
-function createLimiter({ perSecond = 18, perWindow = 90, windowMs = 120000, maxQueue = 60, now = Date.now, sleep = ms => new Promise(r => setTimeout(r, ms)) } = {}) {
+function createLimiter({ perSecond = 18, perWindow = 90, windowMs = 120000, maxQueue = 120, now = Date.now, sleep = ms => new Promise(r => setTimeout(r, ms)) } = {}) {
   let times = []; // 최근에 나간 호출 시각
   let pausedUntil = 0;
   let chain = Promise.resolve();
