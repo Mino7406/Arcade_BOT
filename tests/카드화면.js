@@ -340,6 +340,28 @@ async function buildScreens() {
   add('관리 · 안내 패널', '렐름 멤버 명단', '', mark.buildRealmRosterMessagePayload([{ discordName: '지수', nickname: 'Steve_7406' }, { discordName: '하늘', nickname: 'Alex_sky' }, { discordName: '도윤', nickname: 'Dream_Yoon' }]));
   add('관리 · 안내 패널', '코블몬 안내 패널', '', cob.buildCobblemonPanelPayload());
 
+  // ── 전적 검색 (롤 · 발로란트) ──────────────────────────────
+  {
+    const fs2 = require('fs');
+    const { ActionRowBuilder: Row, ButtonBuilder: Btn, ButtonStyle: BtnStyle } = require('discord.js');
+    const { createRecordHandlers } = req('handlers/전적/index.js');
+    const { renderLol } = req('handlers/전적/롤그림.js');
+    const { renderValorant } = req('handlers/전적/발로그림.js');
+    const { summarize } = req('handlers/전적/집계.js');
+    const captured = [];
+    const rec = createRecordHandlers({ canUse: () => true, getLinked: () => null, setLinked() {}, save() {}, lol: {}, valorant: {}, verifyLol: async () => ({}), verifyValorant: async () => ({}) });
+    await rec.startRecordCommand({ guildId: '1', options: { getUser: () => null, getString: () => null }, reply: async p => captured.push(p) });
+    add('전적 검색', '/전적 — 게임 고르기 (나에게만 보임)', '[롤] [발로란트] [계정 연결] · 멤버/닉네임 옵션으로 다른 사람도 조회', captured[0]);
+    const tabs = cur => new Row().addComponents([['all', '전체'], ['solo', '솔로랭크'], ['flex', '자유랭크']].map(([q, label]) => new Btn().setCustomId(`record:q:lol:${q}:P`).setLabel(label).setStyle(q === cur ? BtnStyle.Primary : BtnStyle.Secondary)));
+    // 실제 아이콘이 든 그림(node tests/전적/샘플그림.js 로 만든 것)이 있으면 그걸 쓰고, 없으면 빈 아이콘으로 그린다
+    const real = require('path').join(__dirname, '전적', 'out', 'lol-real.png');
+    const sampleMatches = [0, 1, 2, 3, 4].map(i => ({ id: 'K' + i, ts: Date.now() - (i + 1) * 5400000, dur: 1500 + i * 90, queue: i % 2 ? 440 : 420, win: i % 3 !== 1, champ: ['Yone', 'Azir', 'Ahri', 'Viego', 'Syndra'][i], k: 8 - i, d: 3 + i, a: 6 + i, cs: 180 + i * 12, items: [3031, 3006, 3046, 3087, 0, 3036, 3363], spells: [4, 14], keystone: 8010, subStyle: 8100, vision: i, pos: 'MIDDLE', multi: i === 1 ? 2 : 0, teamKills: 28 }));
+    const lolPng = fs2.existsSync(real) ? fs2.readFileSync(real) : renderLol({ name: 'Mino', tag: 'KR1', level: 742, queue: 'all', solo: { tier: 'MASTER', rank: 'I', lp: 606, wins: 448, losses: 371 }, flex: null, summary: summarize(sampleMatches), matches: sampleMatches, icons: {} });
+    add('전적 검색', '롤 전적 이미지 (유저 정보 · 최근 20판 통계 · 최근 5경기)', '채널에 공개로 올라가요 · 아래 버튼으로 전체/솔로랭크/자유랭크를 바꿔요', { components: [tabs('all')], flags: 0 }, { files: png([{ name: 'record.png', attachment: lolPng }]) });
+    const valPng = renderValorant({ profile: { name: 'Mino#KR1', tier: 'Gold 2', rr: 47, peak: 'Platinum 1', seasons: [{ season: 'e9a1', endTier: 'Silver 3', wins: 30, games: 58 }, { season: 'e9a2', endTier: 'Gold 1', wins: 41, games: 80 }, { season: 'e10a1', endTier: 'Gold 3', wins: 35, games: 70 }, { season: 'e10a2', endTier: 'Gold 2', wins: 18, games: 33 }] }, tierIcons: {} });
+    add('전적 검색', '발로란트 전적 이미지 (HenrikDev)', '현재 티어 · RR · 최고 티어 · 시즌별 기록', { components: [], flags: 0 }, { files: png([{ name: 'record.png', attachment: valPng }]) });
+  }
+
   // ── 레이드 (기존 디자인 유지 — 그림 + 글자 + 버튼) ───────────────────────
   const raidMod = req('handlers/레이드/index.js');
   const raidBattle = req('handlers/레이드/전투.js');
