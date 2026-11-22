@@ -8,6 +8,7 @@ const { decodePng } = require(path.join(root, 'handlers', '공통', '이모지�
 
 assert.ok(EMOJI_FILES.includes('lol_rift') && EMOJI_FILES.includes('lol_aram'), '롤 일반(협곡)·칼바람 이모지');
 assert.ok(EMOJI_FILES.includes('lol_arena'), '롤 아레나 이모지');
+assert.ok(EMOJI_FILES.includes('lol_solo') && EMOJI_FILES.includes('lol_flex'), '롤 솔랭·자랭 이모지');
 assert.ok(EMOJI_FILES.includes('val_tdm') && EMOJI_FILES.includes('val_dm'), '발로란트 팀 데스매치·데스매치 이모지');
 // 그림 파일: 앱 이모지는 PNG, 128px 이하
 for (const key of EMOJI_FILES) {

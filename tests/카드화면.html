@@ -60,7 +60,7 @@
 
 <script src="data.js"></script>
 <script>
-const ORDER = ['내전 · 모집', '나만 보이는 메시지', 'DM 알림', '패치노트 알림', '경고·안내 메시지', '틱택토', '오목', '끝말잇기', '룰렛', '레이드', '레벨 · 랭킹 · 퀴즈', '관리 · 안내 패널'];
+const ORDER = ['내전 · 모집', '나만 보이는 메시지', 'DM 알림', '패치노트 알림', '경고·안내 메시지', '틱택토', '오목', '끝말잇기', '룰렛', '레이드', '레벨 · 랭킹 · 퀴즈', '전적 검색', '관리 · 안내 패널'];
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 // 봇이 시작할 때 등록하는 앱 이모지는 ID 대신 로컬 그림(window.LOCAL_EMOJI)으로 보여 준다
@@ -71,6 +71,7 @@ function inline(s) {
   s = s.replace(/&lt;a?:(\w+):(\d+)&gt;/g, (_, n, id) => `<img class="emoji" src="${emojiSrc(n, id)}" alt=":${n}:" onerror="this.replaceWith(document.createTextNode(':${n}:'))">`);
   s = s.replace(/&lt;@&amp;(\d+)&gt;/g, '<span class="mention">@역할</span>');
   s = s.replace(/&lt;@!?(\d+)&gt;/g, '<span class="mention">@유저</span>');
+  s = s.replace(/&lt;#(\d+)&gt;/g, '<span class="mention">#채널</span>');
   s = s.replace(/&lt;t:(\d+):[a-zA-Z]&gt;/g, (_, t) => new Date(Number(t) * 1000).toLocaleString('ko-KR', { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }));
   s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
   s = s.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');

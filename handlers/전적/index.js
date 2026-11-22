@@ -25,18 +25,24 @@ const { card, payload, menu } = require('../공통/카드');
 const { RECORD_SEARCH_CHANNEL_IDS } = require('../../config');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
-const QUEUE_TABS = [['all', '전체'], ['solo', '솔로랭크'], ['flex', '자유랭크'], ['normal', '일반'], ['aram', '칼바람'], ['arena', '아레나']];
+const QUEUE_TABS = [['all', '전체'], ['solo', '솔랭'], ['flex', '자랭'], ['normal', '일반'], ['aram', '칼바람'], ['arena', '아레나']];
+// 탭 버튼 줄 배치(한 줄 최대 5개): 롤은 랭크 / 모드 3+3, 발로란트는 4+3
+const QUEUE_ROWS = [['all', 'solo', 'flex'], ['normal', 'aram', 'arena']];
+const VAL_ROWS = [['all', 'comp', 'unrated', 'swift'], ['spike', 'tdm', 'dm']];
 const VAL_TABS = [['all', '전체'], ['comp', '경쟁전'], ['unrated', '일반전'], ['swift', '신속 플레이'], ['spike', '스파이크 돌격'], ['tdm', '팀 데스매치'], ['dm', '데스매치']];
 // 탭 버튼 이모지: 발로란트는 게임 모드 로고(앱 이모지, 아직 준비 전이면 기본 이모지). 롤은 큐별 로고가 따로 없어 기본 이모지.
 const VAL_TAB_EMOJI = { all: () => EMOJI.valorant, comp: () => recordEmoji('val_rank') ?? '🏆', unrated: () => recordEmoji('val_standard') ?? '🎮', swift: () => recordEmoji('val_swift') ?? '⚡', spike: () => recordEmoji('val_spike') ?? '💣', tdm: () => recordEmoji('val_tdm') ?? '🔫', dm: () => recordEmoji('val_dm') ?? '🎯' };
-const QUEUE_TAB_EMOJI = { all: () => EMOJI.lol, solo: () => recordEmoji('lol_rift') ?? '👤', flex: () => recordEmoji('lol_rift') ?? '👥', arena: () => recordEmoji('lol_arena') ?? '⚔️', normal: () => recordEmoji('lol_rift') ?? '🎮', aram: () => recordEmoji('lol_aram') ?? '❄️' };
+const QUEUE_TAB_EMOJI = { all: () => EMOJI.lol, solo: () => recordEmoji('lol_solo') ?? '👤', flex: () => recordEmoji('lol_flex') ?? '👥', arena: () => recordEmoji('lol_arena') ?? '⚔️', normal: () => recordEmoji('lol_rift') ?? '🎮', aram: () => recordEmoji('lol_aram') ?? '❄️' };
 // 안내 메시지는 전부 카드(제목·부제·본문·버튼)로 보낸다. ephemeral 이면 나에게만 보이고, 모달 응답처럼 이미 대기 중인 메시지를 고칠 때는 false.
 const info = ({ color = 'warn', header, sub, lines = [], rows, footer }, ephemeral = true) => payload(card({ color, header, sub, blocks: lines, rows, footer }), { ephemeral });
 const notReadyCard = () => info({ color: 'muted', header: '🚧 준비 중이에요', sub: '전적 검색', lines: ['전적 검색은 지금 테스트 서버에서만 쓸 수 있어요.'] });
 const wrongChannelCard = () => info({
   header: '📍 이 채널에서는 쓸 수 없어요', sub: '전적 검색',
-  lines: ['`/전적`은 아래 채널에서 쓸 수 있어요.', `${RECORD_SEARCH_CHANNEL_IDS.map(id => `<#${id}>`).join('\n')}\n🔊 임시 음성채널 채팅방`],
+  lines: ['`/전적`은 아래 채널에서 쓸 수 있어요.', `${RECORD_SEARCH_CHANNEL_IDS.map(id => `<#${id}>`).join('\n')}\n🔊 음성채널 채팅방`],
 });
+// 안내 카드의 문제 줄: 게임 이름(굵게)을 한 줄로 쓰고 줄을 바꿔 문구를 쓴다(긴 문구가 이름 옆에서 어색하게 꺾이지 않게)
+const problemLine = (label, message) => `**${label}**
+${message}`;
 const ACCENT = { lol: 0x3b82f6, valorant: 0xff4655 };
 // 앱 이모지(개발자 포털에 올려 둔 롤·발로란트 로고)
 const EMOJI = { lol: { id: '1510933684750913626', name: 'Lol' }, valorant: { id: '1510933698349109268', name: 'Val' } };
@@ -52,14 +58,14 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
   // 쓸 수 없는 곳이면 안내 카드, 쓸 수 있으면 null(서버 한정 → 채널 제한 순서)
   const blockedCard = i => (!canUse(i.guildId) ? notReadyCard() : !canUseHere(i.guildId, i.channelId) ? wrongChannelCard() : null);
   const button = (id, label, style = ButtonStyle.Secondary) => new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(style);
-  // 탭 버튼은 한 줄에 5개까지라 넘으면 다음 줄로 나눈다(롤 6개 → 5+1, 발로란트 7개 → 5+2).
-  const chunkRows = buttons => { const rows = []; for (let k = 0; k < buttons.length; k += 5) rows.push(new ActionRowBuilder().addComponents(buttons.slice(k, k + 5))); return rows; };
-  const queueRow = (puuid, current) => chunkRows(
-    QUEUE_TABS.map(([q, label]) => button(`record:q:lol:${q}:${puuid}`, label, q === current ? ButtonStyle.Primary : ButtonStyle.Secondary).setEmoji(QUEUE_TAB_EMOJI[q]())));
+  // 탭 버튼들을 정해 둔 줄 배치(QUEUE_ROWS·VAL_ROWS)대로 ActionRow 로 만든다.
+  const tabRows = (layout, tabs, build) => layout.map(keys => new ActionRowBuilder().addComponents(keys.map(k => build(k, tabs.find(([t]) => t === k)[1]))));
+  const queueRow = (puuid, current) => tabRows(QUEUE_ROWS, QUEUE_TABS, (q, label) =>
+    button(`record:q:lol:${q}:${puuid}`, label, q === current ? ButtonStyle.Primary : ButtonStyle.Secondary).setEmoji(QUEUE_TAB_EMOJI[q]()));
 
   // 발로란트 모드 탭(customId 에 이름#태그를 담는다). 결과 이미지가 있을 때만 붙는다.
-  const valRow = (id, current) => chunkRows(
-    VAL_TABS.map(([t, label]) => button(`record:q:val:${t}:${id}`, label, t === current ? ButtonStyle.Primary : ButtonStyle.Secondary).setEmoji(VAL_TAB_EMOJI[t]())));
+  const valRow = (id, current) => tabRows(VAL_ROWS, VAL_TABS, (t, label) =>
+    button(`record:q:val:${t}:${id}`, label, t === current ? ButtonStyle.Primary : ButtonStyle.Secondary).setEmoji(VAL_TAB_EMOJI[t]()));
   const tabsFor = (game, res) => (!res.ok || !res.png ? null : game === 'lol' ? queueRow(res.puuid, 'all') : valRow(res.id, 'all'));
 
   // 선택 카드 한 장: 구분선으로 "내 전적 / 다른 사람 전적"을 나눈다. pickedId 가 있으면 그 멤버용 버튼이 켜진다.
@@ -173,11 +179,11 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
 
   async function checkOne(label, text, verify) {
     const id = parseRiotId(text);
-    if (!id) return { error: `${label}: 이름#태그 형식으로 적어 주세요. (예: Mino#KR1)` };
+    if (!id) return { error: problemLine(label, '이름#태그 형식으로 적어 주세요. (예: Mino#KR1)') };
     try {
       return { account: await verify(id.name, id.tag) };
     } catch (err) {
-      return { error: `${label}: ${err instanceof RiotError ? riotErrorMessage(err) : '확인하지 못했어요. 잠시 후 다시 해 주세요.'}` };
+      return { error: problemLine(label, err instanceof RiotError ? riotErrorMessage(err) : '확인하지 못했어요. 잠시 후 다시 해 주세요.') };
     }
   }
 
@@ -190,7 +196,7 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
     const problems = [];
     const ids = jobs.map(([label, , text]) => {
       const id = parseRiotId(text);
-      if (!id) problems.push(`${label}: 이름#태그 형식으로 적어 주세요. (예: Mino#KR1)`);
+      if (!id) problems.push(problemLine(label, '이름#태그 형식으로 적어 주세요. (예: Mino#KR1)'));
       return id;
     });
     if (problems.length) return interaction.editReply(info({ header: '✏️ 형식을 확인해 주세요', sub: '닉네임으로 검색', lines: problems }, false));
@@ -198,7 +204,7 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
     for (const [n, [label, game, , service]] of jobs.entries()) {
       const res = await service.lookup(ids[n], 'all');
       const problem = await upload(interaction, res, game, tabsFor(game, res));
-      if (problem) problems.push(`${label}: ${problem}`);
+      if (problem) problems.push(problemLine(label, problem));
     }
     if (problems.length) return interaction.editReply(info({ color: 'err', header: '❌ 전적을 불러오지 못했어요', sub: '닉네임으로 검색', lines: problems }, false));
     return interaction.deleteReply().catch(() => {}); // 올라갔으니 안내 메시지는 지운다

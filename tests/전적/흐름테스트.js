@@ -92,7 +92,7 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   ]) {
     i = fakeInteraction({ guildId: 'PUB', channelId: 'ELSEWHERE', customId: 'record:lol:me', values: ['U9'] });
     await run(i);
-    assert.ok(textOf(first(i, 'reply')[1]).includes('임시 음성채널'), `${label}: 허용 채널 안내`);
+    assert.ok(textOf(first(i, 'reply')[1]).includes('음성채널 채팅방'), `${label}: 허용 채널 안내`);
     assert.ok(isEph(first(i, 'reply')[1]), `${label}: 안내는 나에게만`);
     assert.ok(!first(i, 'deferUpdate') && !first(i, 'deferReply') && !first(i, 'showModal'), `${label}: 아무 동작도 안 함`);
   }
@@ -163,7 +163,7 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   await handlers.startRecordCommand(i);
   const wrongText = textOf(first(i, 'reply')[1]);
   for (const id of ['1340523443413844048', '1374679502394884178', '1522575222589620254']) assert.ok(wrongText.includes(`<#${id}>`), `${id} 채널 링크`);
-  assert.ok(wrongText.includes('임시 음성채널'));
+  assert.ok(wrongText.includes('음성채널 채팅방'));
 
   // 연결 있으면: 채널에 이미지 한 장 + 큐 버튼 3개
   const linked = { U1: { lol: { puuid: 'PUUID-1', name: 'Mino', tag: 'KR1' }, valorant: { name: 'Mino', tag: 'KR1', region: 'kr' } } };
@@ -176,13 +176,16 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   assert.ok(textOf(searching).includes('검색 중'), '검색 중 안내');
   assert.deepStrictEqual(idsOf(searching), [], '검색 중에는 버튼이 없어 다시 누를 수 없다');
   const [, sent] = first(i, 'send');
-  // 롤 탭 이모지: 솔랭·자랭·일반은 소환사의 협곡, 칼바람·아레나는 각자 로고(앱 이모지가 준비된 경우)
+  // 롤 탭 이모지: 솔랭은 랭크 엠블럼 하나, 자랭은 엠블럼 둘, 일반은 소환사의 협곡, 칼바람·아레나는 각자 로고(앱 이모지가 준비된 경우)
   await ensureRecordEmojis({ application: { emojis: { fetch: async () => [], create: async ({ name }) => ({ id: `ID_${name}`, name }) } } });
   i = fakeInteraction({ customId: 'record:lol:me' });
   await handlers.handleRecordButton(i);
   const lolEmoji = {};
   (function walk(x) { if (x?.custom_id?.startsWith('record:q:lol:')) lolEmoji[x.custom_id.split(':')[3]] = x.emoji?.id; (x?.components ?? []).forEach(walk); })({ components: first(i, 'send')[1].components.map(json) });
-  assert.deepStrictEqual(lolEmoji, { all: '1510933684750913626', solo: 'ID_rec_lol_rift', flex: 'ID_rec_lol_rift', normal: 'ID_rec_lol_rift', aram: 'ID_rec_lol_aram', arena: 'ID_rec_lol_arena' });
+  assert.deepStrictEqual(lolEmoji, { all: '1510933684750913626', solo: 'ID_rec_lol_solo', flex: 'ID_rec_lol_flex', normal: 'ID_rec_lol_rift', aram: 'ID_rec_lol_aram', arena: 'ID_rec_lol_arena' });
+  // 탭 버튼 배치: 롤은 3+3(랭크 / 모드), 발로란트는 4+3
+  const rowSizes = payload => { const sizes = []; (function walk(x) { if (x?.type === 1 && (x.components ?? []).some(c => c.custom_id?.startsWith('record:q:'))) sizes.push(x.components.map(c => c.custom_id.split(':')[3])); (x?.components ?? []).forEach(walk); })({ components: payload.components.map(json) }); return sizes; };
+  assert.deepStrictEqual(rowSizes(sent), [['all', 'solo', 'flex'], ['normal', 'aram', 'arena']], '롤 탭 두 줄(전체·솔로·자유 / 일반·칼바람·아레나)');
   assert.strictEqual(sent.files.length, 1);
   assert.deepStrictEqual(idsOf(sent), ['all', 'solo', 'flex', 'normal', 'aram', 'arena'].map(t => `record:q:lol:${t}:PUUID-1`), '롤 큐 탭 6개(두 줄)');
   assert.deepStrictEqual(lookups.lol[0][0], { name: 'Mino', tag: 'KR1', puuid: 'PUUID-1' });
@@ -275,6 +278,7 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   assert.ok(first(i, 'deferUpdate'));
   assert.deepStrictEqual(lookups.val.at(-1), { name: 'Mino', tag: 'KR1' });
   assert.strictEqual(lookups.valTabs.at(-1), 'comp');
+  assert.deepStrictEqual(rowSizes(first(i, 'editReply')[1]), [['all', 'comp', 'unrated', 'swift'], ['spike', 'tdm', 'dm']], '발로란트 탭 두 줄(전체·경쟁전·일반전·신속 플레이 / 스파이크·팀 데스·데스매치)');
   const valEdited = first(i, 'editReply')[1];
   assert.strictEqual(valEdited.files.length, 1);
   const tabStyles = [];
@@ -317,6 +321,7 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   assert.deepStrictEqual(ctx.saved.links, []);
   const failText = textOf(first(i, 'editReply')[1]);
   assert.ok(failText.includes('발로란트') && failText.includes('찾을 수 없'), failText);
+  assert.ok(failText.includes('**발로란트**' + String.fromCharCode(92) + 'n'), '게임 이름 다음에 줄바꿈(카드 JSON 에서는 줄바꿈이 백슬래시 n 으로 보인다): ' + failText);
   // 둘 다 빔 / 형식 오류
   ctx = setup();
   i = fakeInteraction({ customId: 'record:link_modal', fieldValues: {} });

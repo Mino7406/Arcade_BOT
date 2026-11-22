@@ -9,7 +9,8 @@ const DIR = path.join(__dirname, '..', '..', 'assets', '이모지');
 // lol_rift 롤 일반(소환사의 협곡) · lol_aram 칼바람
 // val_tdm 팀 데스매치 · val_dm 데스매치
 // lol_arena 아레나
-const EMOJI_FILES = ['val_rank', 'val_standard', 'val_swift', 'val_spike', 'lol_rift', 'lol_aram', 'val_tdm', 'val_dm', 'lol_arena'];
+// lol_solo 솔랭(랭크 엠블럼 하나) · lol_flex 자랭(엠블럼 둘이 겹침)
+const EMOJI_FILES = ['val_rank', 'val_standard', 'val_swift', 'val_spike', 'lol_rift', 'lol_aram', 'val_tdm', 'val_dm', 'lol_arena', 'lol_solo', 'lol_flex'];
 
 const emojis = new Map(); // 'val_rank' → { id, name }
 

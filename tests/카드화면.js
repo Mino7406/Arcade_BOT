@@ -399,8 +399,8 @@ async function buildScreens() {
     const shotBase = { guildId: '1', channelId: '2', user: { id: '1' }, update: async () => {}, deleteReply: async () => {}, editReply: async () => {} };
     await shotHandlers.handleRecordButton({ ...shotBase, customId: 'record:lol:me', channel: { send: async p => sentRoll.push(p) } });
     await shotHandlers.handleRecordButton({ ...shotBase, customId: 'record:val:me', channel: { send: async p => sentVal.push(p) } });
-    add('전적 검색', '롤 전적 이미지 (유저 정보 · 최근 20판 통계 · 최근 5경기)', '채널에 공개로 올라가요 · 아래 버튼으로 전체/랭크/일반/칼바람/아레나를 바꿔요', sentRoll[0], { files: png(sentRoll[0].files) });
-    add('전적 검색', '발로란트 전적 이미지 (HenrikDev)', '유저 정보 · 최근 20판 통계 · 최근 5경기(모드·맵·요원·K/D/A) · 아래 버튼으로 전체/경쟁전/일반/빠른 대전/기타를 바꿔요', sentVal[0], { files: png(sentVal[0].files) });
+    add('전적 검색', '롤 전적 이미지 (유저 정보 · 최근 20판 통계 · 최근 5경기)', '채널에 공개로 올라가요 · 아래 두 줄 버튼으로 큐(전체·솔랭·자랭 / 일반·칼바람·아레나)를 바꿔요', sentRoll[0], { files: png(sentRoll[0].files) });
+    add('전적 검색', '발로란트 전적 이미지 (HenrikDev)', '유저 정보 · 최근 20판 통계 · 최근 5경기(모드·맵·요원·K/D/A) · 아래 버튼으로 전체/경쟁전/일반전/신속 플레이/스파이크 돌격/팀 데스매치/데스매치를 바꿔요', sentVal[0], { files: png(sentVal[0].files) });
   }
 
   // ── 레이드 (기존 디자인 유지 — 그림 + 글자 + 버튼) ───────────────────────
