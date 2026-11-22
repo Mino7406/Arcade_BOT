@@ -48,8 +48,8 @@ const problemLine = (label, message) => `**${label}**
 ${message}`;
 const ZOOM_FOOTER = '🔍 사진을 눌러 확대해서 볼 수 있어요';
 const { escapeMarkdown } = require('discord.js');
-// 결과 카드 푸터: 확대 안내 + 요청자(둘째 줄도 작은 글씨)
-const footerOf = requester => `${ZOOM_FOOTER}\n-# 👤 요청자 : ${requester}`;
+// 결과 카드 맨 위 줄: 요청자(작은 글씨). 이 줄 밑에 구분선을 긋고 이미지를 둔다(이미지 블록의 divider: true).
+const requesterLine = requester => `-# 요청자 : ${requester}`;
 // 요청자 이름: 서버 별명 → 계정 표시 이름 → 아이디. 이름 속 마크다운 기호(*, _ 등)는 그대로 보이게 막는다.
 const requesterOf = i => escapeMarkdown(String(i.member?.displayName ?? i.user?.globalName ?? i.user?.username ?? '알 수 없음'));
 const ACCENT = { lol: 0x3b82f6, valorant: 0xff4655 };
@@ -60,7 +60,7 @@ const EMOJI = { lol: { id: '1510933684750913626', name: 'Lol' }, valorant: { id:
 function resultPayload(res, game, row, requester) {
   const rows = [].concat(row ?? []); // 탭 버튼 줄(여러 줄일 수 있다)
   if (!res.png) return payload(card({ color: ACCENT[game], blocks: [res.text], rows }));
-  return { ...payload(card({ color: ACCENT[game], blocks: [{ image: 'attachment://record.png' }], footer: footerOf(requester), rows })), files: [new AttachmentBuilder(res.png, { name: 'record.png' })] };
+  return { ...payload(card({ color: ACCENT[game], top: requesterLine(requester), blocks: [{ image: 'attachment://record.png', divider: true }], footer: ZOOM_FOOTER, rows })), files: [new AttachmentBuilder(res.png, { name: 'record.png' })] };
 }
 
 function createRecordHandlers({ owners, canUse, canUseHere, getLinked, setLinked, save, lol, valorant, verifyLol, verifyValorant }) {
@@ -76,7 +76,7 @@ function createRecordHandlers({ owners, canUse, canUseHere, getLinked, setLinked
   const valRow = (id, current, locked = false) => tabRows(VAL_ROWS, VAL_TABS, (t, label) =>
     button(`record:q:val:${t}:${id}`, label, t === current ? ButtonStyle.Primary : ButtonStyle.Secondary).setEmoji(VAL_TAB_EMOJI[t]()).setDisabled(locked));
   // 탭을 누른 직후 곧바로 보여 주는 카드: 옛 그림은 그대로(attachments 를 건드리지 않음) 두고 눌린 탭만 파랗게, 버튼은 잠근다. 새 그림이 오면 교체된다.
-  const pendingCard = (game, rows, requester) => payload(card({ color: ACCENT[game], blocks: [{ image: 'attachment://record.png' }], footer: footerOf(requester), rows }), { keepAttachments: true });
+  const pendingCard = (game, rows, requester) => payload(card({ color: ACCENT[game], top: requesterLine(requester), blocks: [{ image: 'attachment://record.png', divider: true }], footer: ZOOM_FOOTER, rows }), { keepAttachments: true });
   const tabsFor = (game, res) => (!res.ok || !res.png ? null : game === 'lol' ? queueRow(res.puuid, 'all') : valRow(res.id, 'all'));
 
   // 선택 카드 한 장: 구분선으로 "내 전적 / 다른 사람 전적"을 나눈다. pickedId 가 있으면 그 멤버용 버튼이 켜진다.

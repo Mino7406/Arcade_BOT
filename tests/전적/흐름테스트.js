@@ -192,7 +192,15 @@ const tabButtons = (p, game) => { const out = []; (function walk(x) { if (x?.cus
   // 탭 버튼 배치: 롤은 3+3(랭크 / 모드), 발로란트는 4+3
   const rowSizes = payload => { const sizes = []; (function walk(x) { if (x?.type === 1 && (x.components ?? []).some(c => c.custom_id?.startsWith('record:q:'))) sizes.push(x.components.map(c => c.custom_id.split(':')[3])); (x?.components ?? []).forEach(walk); })({ components: payload.components.map(json) }); return sizes; };
   assert.ok(textOf(sent).includes('사진을 눌러 확대해서 볼 수 있어요'), '결과 카드 푸터(롤)');
-  assert.ok(textOf(sent).includes('요청자 : 닉네임1'), '푸터에 요청자 닉네임(서버 별명)');
+  assert.ok(textOf(sent).includes('요청자 : 닉네임1'), '요청자 닉네임(서버 별명)');
+  // 배치: 맨 위 요청자 → 구분선 → 이미지 → (확대 안내 푸터) → 탭 버튼
+  const parts = json(sent.components[0]).components;
+  assert.ok(parts[0].type === 10 && parts[0].content.includes('요청자 : 닉네임1'), '맨 위에 요청자');
+  assert.ok(!parts[0].content.includes('👤'), '요청자 줄에는 이모지가 없다');
+  assert.ok(parts[1].type === 14 && parts[1].divider === true, '그 밑에 구분선');
+  assert.ok(parts[2].type === 12, '그 다음이 이미지');
+  assert.ok(parts.filter(x => x.type === 10).length === 2 && parts.find((x, k) => k > 2 && x.type === 10).content.includes('사진을 눌러 확대'), '확대 안내는 이미지 아래 푸터에 그대로');
+  assert.ok(!parts.find((x, k) => k > 2 && x.type === 10).content.includes('요청자'), '푸터에는 요청자가 없다');
   assert.deepStrictEqual(rowSizes(sent), [['all', 'solo', 'flex'], ['normal', 'aram', 'arena']], '롤 탭 두 줄(전체·솔로·자유 / 일반·칼바람·아레나)');
   assert.strictEqual(sent.files.length, 1);
   assert.deepStrictEqual(idsOf(sent), ['all', 'solo', 'flex', 'normal', 'aram', 'arena'].map(t => `record:q:lol:${t}:PUUID-1`), '롤 큐 탭 6개(두 줄)');
