@@ -34,7 +34,7 @@ function createMatchStore({ file, keep = 100 }) {
 
   // 최근 경기부터. queue 를 주면 그 큐만.
   function list(puuid, queue) {
-    const all = Object.values(data[puuid] ?? {}).sort((x, y) => y.ts - x.ts);
+    const all = Object.values(data[puuid] ?? {}).filter(m => !m.skip).sort((x, y) => y.ts - x.ts); // skip: 기록하지 않는 경기(다시하기)의 표시
     return queue ? all.filter(m => m.queue === queue) : all;
   }
 
