@@ -25,11 +25,11 @@ const { card, payload, menu } = require('../공통/카드');
 const { RECORD_SEARCH_CHANNEL_IDS } = require('../../config');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
-const QUEUE_TABS = [['all', '전체'], ['ranked', '랭크'], ['normal', '일반'], ['aram', '칼바람'], ['arena', '아레나']];
-const VAL_TABS = [['all', '전체'], ['comp', '경쟁전'], ['unrated', '일반'], ['swift', '빠른 대전'], ['etc', '기타']];
+const QUEUE_TABS = [['all', '전체'], ['solo', '솔로랭크'], ['flex', '자유랭크'], ['normal', '일반'], ['aram', '칼바람'], ['arena', '아레나']];
+const VAL_TABS = [['all', '전체'], ['comp', '경쟁전'], ['unrated', '일반전'], ['swift', '신속 플레이'], ['spike', '스파이크 돌격'], ['tdm', '팀 데스매치'], ['dm', '데스매치']];
 // 탭 버튼 이모지: 발로란트는 게임 모드 로고(앱 이모지, 아직 준비 전이면 기본 이모지). 롤은 큐별 로고가 따로 없어 기본 이모지.
-const VAL_TAB_EMOJI = { all: () => EMOJI.valorant, comp: () => recordEmoji('val_rank') ?? '🏆', unrated: () => recordEmoji('val_standard') ?? '🎮', swift: () => recordEmoji('val_swift') ?? '⚡', etc: () => recordEmoji('val_spike') ?? '💣' };
-const QUEUE_TAB_EMOJI = { all: () => EMOJI.lol, ranked: () => '🏆', arena: () => '⚔️', normal: () => recordEmoji('lol_rift') ?? '🎮', aram: () => recordEmoji('lol_aram') ?? '❄️' };
+const VAL_TAB_EMOJI = { all: () => EMOJI.valorant, comp: () => recordEmoji('val_rank') ?? '🏆', unrated: () => recordEmoji('val_standard') ?? '🎮', swift: () => recordEmoji('val_swift') ?? '⚡', spike: () => recordEmoji('val_spike') ?? '💣', tdm: () => recordEmoji('val_tdm') ?? '🔫', dm: () => recordEmoji('val_dm') ?? '🎯' };
+const QUEUE_TAB_EMOJI = { all: () => EMOJI.lol, solo: () => '👤', flex: () => '👥', arena: () => '⚔️', normal: () => recordEmoji('lol_rift') ?? '🎮', aram: () => recordEmoji('lol_aram') ?? '❄️' };
 // 안내 메시지는 전부 카드(제목·부제·본문·버튼)로 보낸다. ephemeral 이면 나에게만 보이고, 모달 응답처럼 이미 대기 중인 메시지를 고칠 때는 false.
 const info = ({ color = 'warn', header, sub, lines = [], rows, footer }, ephemeral = true) => payload(card({ color, header, sub, blocks: lines, rows, footer }), { ephemeral });
 const notReadyCard = () => info({ color: 'muted', header: '🚧 준비 중이에요', sub: '전적 검색', lines: ['전적 검색은 지금 테스트 서버에서만 쓸 수 있어요.'] });
@@ -43,7 +43,7 @@ const EMOJI = { lol: { id: '1510933684750913626', name: 'Lol' }, valorant: { id:
 
 // 전적 이미지 한 장(또는 그림을 못 그릴 때 글자)을 카드 메시지로 만든다. row 는 카드 안에 들어갈 버튼 줄.
 function resultPayload(res, game, row) {
-  const rows = row ? [row] : [];
+  const rows = [].concat(row ?? []); // 탭 버튼 줄(여러 줄일 수 있다)
   if (!res.png) return payload(card({ color: ACCENT[game], blocks: [res.text], rows }));
   return { ...payload(card({ color: ACCENT[game], blocks: [{ image: 'attachment://record.png' }], rows })), files: [new AttachmentBuilder(res.png, { name: 'record.png' })] };
 }
@@ -52,11 +52,13 @@ function createRecordHandlers({ canUse, canUseHere, getLinked, setLinked, save, 
   // 쓸 수 없는 곳이면 안내 카드, 쓸 수 있으면 null(서버 한정 → 채널 제한 순서)
   const blockedCard = i => (!canUse(i.guildId) ? notReadyCard() : !canUseHere(i.guildId, i.channelId) ? wrongChannelCard() : null);
   const button = (id, label, style = ButtonStyle.Secondary) => new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(style);
-  const queueRow = (puuid, current) => new ActionRowBuilder().addComponents(
+  // 탭 버튼은 한 줄에 5개까지라 넘으면 다음 줄로 나눈다(롤 6개 → 5+1, 발로란트 7개 → 5+2).
+  const chunkRows = buttons => { const rows = []; for (let k = 0; k < buttons.length; k += 5) rows.push(new ActionRowBuilder().addComponents(buttons.slice(k, k + 5))); return rows; };
+  const queueRow = (puuid, current) => chunkRows(
     QUEUE_TABS.map(([q, label]) => button(`record:q:lol:${q}:${puuid}`, label, q === current ? ButtonStyle.Primary : ButtonStyle.Secondary).setEmoji(QUEUE_TAB_EMOJI[q]())));
 
   // 발로란트 모드 탭(customId 에 이름#태그를 담는다). 결과 이미지가 있을 때만 붙는다.
-  const valRow = (id, current) => new ActionRowBuilder().addComponents(
+  const valRow = (id, current) => chunkRows(
     VAL_TABS.map(([t, label]) => button(`record:q:val:${t}:${id}`, label, t === current ? ButtonStyle.Primary : ButtonStyle.Secondary).setEmoji(VAL_TAB_EMOJI[t]())));
   const tabsFor = (game, res) => (!res.ok || !res.png ? null : game === 'lol' ? queueRow(res.puuid, 'all') : valRow(res.id, 'all'));
 

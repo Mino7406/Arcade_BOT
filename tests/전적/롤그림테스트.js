@@ -44,13 +44,18 @@ keep('lol-perfect.png', renderLol(view({ matches: perfect, summary: summarize(pe
 // Review Focus 5: 모르는 큐 id
 const odd = [match(0, { queue: 999 }), match(1, { queue: 1700, pos: '' })];
 assert.ok(isPng(renderLol(view({ matches: odd, summary: summarize(odd) }))), '모르는 큐도');
-for (const q of ['ranked', 'normal', 'aram', 'arena']) assert.ok(isPng(renderLol(view({ queue: q }))), `${q} 탭`);
+for (const q of ['solo', 'flex', 'normal', 'aram', 'arena']) assert.ok(isPng(renderLol(view({ queue: q }))), `${q} 탭`);
 const unrankedFile = path.join(root, 'assets', '이모지', 'rec_lol_unranked.png');
 assert.ok(isPng(renderLol(view({ solo: null, flex: null, icons: { ...view().icons, unranked: unrankedFile } }))), '언랭크 엠블럼');
 keep('lol-unranked.png', renderLol(view({ solo: null, flex: null, icons: { ...view().icons, unranked: unrankedFile } })));
+const posIcons = Object.fromEntries([['MIDDLE', 'mid'], ['JUNGLE', 'jungle']].map(([k, f]) => [k, path.join(root, 'assets', '티어', `pos_lol_${f}.png`)]));
+const withPos = renderLol(view({ icons: { ...view().icons, positions: posIcons } }));
+assert.ok(isPng(withPos), '포지션 로고가 있어도');
+assert.ok(!withPos.equals(renderLol(view())), '포지션 로고가 그림에 반영됨');
+keep('lol-positions.png', withPos);
 // 아주 긴 이름·큐 탭 표시
-assert.ok(isPng(renderLol(view({ name: '가나다라마바사아자차카타파하가나', queue: 'ranked' }))), '긴 이름');
-keep('lol-ranked.png', renderLol(view({ queue: 'ranked' })));
+assert.ok(isPng(renderLol(view({ name: '가나다라마바사아자차카타파하가나', queue: 'solo' }))), '긴 이름');
+keep('lol-solo.png', renderLol(view({ queue: 'solo' })));
 
 // 폰트를 못 찾으면 null(호출부가 글자 화면으로 대신함)
 assert.strictEqual(createLolRenderer({ fontDir: path.join(__dirname, 'no-such-dir') }).render(view()), null);

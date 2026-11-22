@@ -23,7 +23,7 @@ const TIER_KO = { IRON: '아이언', BRONZE: '브론즈', SILVER: '실버', GOLD
 const APEX = new Set(['MASTER', 'GRANDMASTER', 'CHALLENGER']);
 const DIVISION = { I: 1, II: 2, III: 3, IV: 4 };
 const LANE_KO = { TOP: '탑', JUNGLE: '정글', MIDDLE: '미드', BOTTOM: '원딜', UTILITY: '서폿' };
-const QUEUE_TAB = { all: '전체', ranked: '랭크', normal: '일반', aram: '칼바람', arena: '아레나' };
+const QUEUE_TAB = { all: '전체', solo: '솔로랭크', flex: '자유랭크', normal: '일반', aram: '칼바람', arena: '아레나' };
 const MULTI_KO = { 2: '더블킬', 3: '트리플킬', 4: '쿼드라킬', 5: '펜타킬' };
 
 function tierText(rank) {
@@ -117,8 +117,9 @@ function createLolRenderer({ fontDir = FONT_DIR } = {}) {
     T('선호 포지션', 644, 222, { color: C.muted });
     sum.positions.forEach((pos, i) => {
       const cy = 270 + i * 50;
-      T(`${LANE_KO[pos.pos] ?? pos.pos} ${Math.round(100 * pos.games / sum.games)}%`, 644, cy, { size: 22, bold: true, maxWidth: 110 });
-      T(`승률 ${Math.round(100 * pos.wins / pos.games)}%`, 856, cy, { align: 'right', color: C.muted, maxWidth: 100 });
+      icon(icons.positions?.[pos.pos], 650, cy, 36); // 포지션 로고
+      T(`${LANE_KO[pos.pos] ?? pos.pos} ${Math.round(100 * pos.games / sum.games)}%`, 676, cy, { size: 22, bold: true, maxWidth: 92 });
+      T(`승률 ${Math.round(100 * pos.wins / pos.games)}%`, 862, cy, { align: 'right', color: C.muted, maxWidth: 84 });
     });
 
     // ③ 경기 목록

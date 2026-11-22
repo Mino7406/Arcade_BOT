@@ -6,11 +6,11 @@ const { RiotError } = require('./리오트');
 const BASE = 'https://api.henrikdev.xyz';
 const MATCH_COUNT = 100; // 한 번에 100판(약 65KB)을 받아 모드 탭은 화면에서 거른다 → 탭을 바꿔도 호출이 늘지 않는다
 
-// HenrikDev 의 모드 이름 → [탭 분류, 한글 이름, 라운드가 있는 모드인가]. 탭: comp 경쟁전 · unrated 일반 · swift 빠른 대전 · etc 나머지.
+// HenrikDev 의 모드 이름 → [탭 분류, 한글 이름, 라운드가 있는 모드인가]. 탭: comp 경쟁전 · unrated 일반전 · swift 신속 플레이 · spike 스파이크 돌격 · tdm 팀 데스매치 · dm 데스매치 (나머지 모드는 etc — 전체 탭에만 나온다).
 const MODES = {
-  Competitive: ['comp', '경쟁전', true], Unrated: ['unrated', '일반', true], Swiftplay: ['swift', '빠른 대전', true],
-  'Spike Rush': ['etc', '스파이크 러시', true], Premier: ['etc', '프리미어', true], 'Custom Game': ['etc', '사용자 지정', true], 'All Random One Site': ['etc', '랜덤 원 사이트', true],
-  Deathmatch: ['etc', '데스매치', false], 'Team Deathmatch': ['etc', '팀 데스매치', false], Escalation: ['etc', '에스컬레이션', false], Replication: ['etc', '복제', false], 'Snowball Fight': ['etc', '눈싸움', false],
+  Competitive: ['comp', '경쟁전', true], Unrated: ['unrated', '일반전', true], Swiftplay: ['swift', '신속 플레이', true],
+  'Spike Rush': ['spike', '스파이크 돌격', true], Premier: ['etc', '프리미어', true], 'Custom Game': ['etc', '사용자 지정', true], 'All Random One Site': ['etc', '랜덤 원 사이트', true],
+  Deathmatch: ['dm', '데스매치', false], 'Team Deathmatch': ['tdm', '팀 데스매치', false], Escalation: ['etc', '에스컬레이션', false], Replication: ['etc', '복제', false], 'Snowball Fight': ['etc', '눈싸움', false],
 };
 function modeInfo(raw) {
   return MODES[raw] ?? ['etc', !raw || raw === 'unknown' ? '기타 모드' : raw, true];

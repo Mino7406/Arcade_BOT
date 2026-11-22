@@ -176,7 +176,7 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   assert.deepStrictEqual(idsOf(searching), [], '검색 중에는 버튼이 없어 다시 누를 수 없다');
   const [, sent] = first(i, 'send');
   assert.strictEqual(sent.files.length, 1);
-  assert.deepStrictEqual(idsOf(sent), ['all', 'ranked', 'normal', 'aram', 'arena'].map(t => `record:q:lol:${t}:PUUID-1`), '롤 큐 탭 5개(솔랭·자랭은 랭크 하나로)');
+  assert.deepStrictEqual(idsOf(sent), ['all', 'solo', 'flex', 'normal', 'aram', 'arena'].map(t => `record:q:lol:${t}:PUUID-1`), '롤 큐 탭 6개(두 줄)');
   assert.deepStrictEqual(lookups.lol[0][0], { name: 'Mino', tag: 'KR1', puuid: 'PUUID-1' });
   assert.strictEqual(lookups.lol[0][1], 'all');
   // 조회 실패는 나에게만 보이는 문구, 채널엔 아무것도 안 올린다
@@ -202,7 +202,7 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   assert.strictEqual(first(i, 'send')[1].files.length, 1);
   assert.deepStrictEqual(i.calls.map(c => c[0]), ['update', 'send', 'deleteReply']);
   assert.strictEqual(lookups.valTabs[0], 'all', '처음에는 전체 탭');
-  assert.deepStrictEqual(idsOf(first(i, 'send')[1]), ['all', 'comp', 'unrated', 'swift', 'etc'].map(t => `record:q:val:${t}:Mino#KR1`), '모드 탭 버튼 5개');
+  assert.deepStrictEqual(idsOf(first(i, 'send')[1]), ['all', 'comp', 'unrated', 'swift', 'spike', 'tdm', 'dm'].map(t => `record:q:val:${t}:Mino#KR1`), '모드 탭 버튼 7개(두 줄)');
 
   // 채널에 이미지를 못 올리면 선택 카드로 돌아와 안내(삭제 안 함)
   ({ handlers } = setup({ linked }));
@@ -213,12 +213,12 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   ({ handlers, lookups } = setup({ linked }));
 
   // (e) 큐 탭: 같은 메시지를 새 이미지로 바꾼다
-  i = fakeInteraction({ customId: 'record:q:lol:ranked:PUUID-1' });
+  i = fakeInteraction({ customId: 'record:q:lol:solo:PUUID-1' });
   await handlers.handleRecordButton(i);
   assert.ok(first(i, 'deferUpdate'));
   const [, edited] = first(i, 'editReply');
   assert.strictEqual(edited.files.length, 1);
-  assert.strictEqual(lookups.lol.at(-1)[1], 'ranked');
+  assert.strictEqual(lookups.lol.at(-1)[1], 'solo');
   assert.strictEqual(lookups.lol.at(-1)[0].puuid, 'PUUID-1');
 
   // [닉네임으로 검색] → 모달(입력칸 2개, 둘 다 선택)
@@ -271,15 +271,15 @@ const first = (i, name) => i.calls.find(c => c[0] === name);
   assert.strictEqual(valEdited.files.length, 1);
   const tabStyles = [];
   (function walk(x) { if (x?.custom_id?.startsWith('record:q:val:')) tabStyles.push([x.custom_id.split(':')[3], x.style]); (x?.components ?? []).forEach(walk); })({ components: valEdited.components.map(json) });
-  assert.deepStrictEqual(tabStyles.map(t => t[0]), ['all', 'comp', 'unrated', 'swift', 'etc']);
+  assert.deepStrictEqual(tabStyles.map(t => t[0]), ['all', 'comp', 'unrated', 'swift', 'spike', 'tdm', 'dm']);
   assert.strictEqual(tabStyles.find(t => t[0] === 'comp')[1], 1, '현재 탭은 파란 버튼(Primary)');
   const tabEmoji = [];
   (function walk(x) { if (x?.custom_id?.startsWith('record:q:val:')) tabEmoji.push(x.emoji); (x?.components ?? []).forEach(walk); })({ components: valEdited.components.map(json) });
-  assert.strictEqual(tabEmoji.length, 5); assert.ok(tabEmoji.every(e => e && (e.id || e.name)), '발로란트 탭마다 이모지');
+  assert.strictEqual(tabEmoji.length, 7); assert.ok(tabEmoji.every(e => e && (e.id || e.name)), '발로란트 탭마다 이모지');
   assert.strictEqual(tabEmoji[0].id, '1510933698349109268', '전체 탭은 발로란트 로고');
   assert.strictEqual(tabStyles.find(t => t[0] === 'all')[1], 2);
   // 이름에 : 가 들어 있어도 이름#태그를 그대로 읽는다
-  i = fakeInteraction({ customId: 'record:q:val:etc:O:O#1116' });
+  i = fakeInteraction({ customId: 'record:q:val:dm:O:O#1116' });
   await handlers.handleRecordButton(i);
   assert.deepStrictEqual(lookups.val.at(-1), { name: 'O:O', tag: '1116' });
 

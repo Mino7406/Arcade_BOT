@@ -61,13 +61,13 @@ const fake = (...responses) => { const calls = []; let i = 0; const fn = async (
   const mm = parseStoredMatches(modes);
   const byMode = Object.fromEntries(mm.map(m => [m.mode, m]));
   assert.deepStrictEqual(['Unrated', 'Competitive', 'Deathmatch', 'unknown', 'Swiftplay', 'Spike Rush'].map(k => [byMode[k].modeKey, byMode[k].modeLabel, byMode[k].hasRounds, byMode[k].result]), [
-    ['unrated', '일반', true, 'win'], ['comp', '경쟁전', true, 'loss'], ['etc', '데스매치', false, 'none'],
-    ['etc', '기타 모드', true, 'loss'], ['swift', '빠른 대전', true, 'loss'], ['etc', '스파이크 러시', true, 'loss'],
+    ['unrated', '일반전', true, 'win'], ['comp', '경쟁전', true, 'loss'], ['dm', '데스매치', false, 'none'],
+    ['etc', '기타 모드', true, 'loss'], ['swift', '신속 플레이', true, 'loss'], ['spike', '스파이크 돌격', true, 'loss'],
   ], '모드 이름·탭 분류·승패(개인전은 승패 없음)');
   assert.deepStrictEqual(byMode.Deathmatch.rounds, [0, 0], '개인전은 라운드 스코어가 없다');
   const tdm = JSON.parse(JSON.stringify(modes.data.find(m => m.meta.mode === 'Deathmatch'))); tdm.meta.mode = 'Team Deathmatch'; tdm.stats.team = 'Blue'; tdm.teams = { red: 89, blue: 100 };
   const tdmParsed = parseStoredMatches({ data: [tdm] })[0];
-  assert.deepStrictEqual([tdmParsed.modeLabel, tdmParsed.hasRounds, tdmParsed.result, tdmParsed.rounds], ['팀 데스매치', false, 'win', [100, 89]], '팀 데스매치는 킬 수 스코어, 라운드 개념 없음');
+  assert.deepStrictEqual([tdmParsed.modeKey, tdmParsed.modeLabel, tdmParsed.hasRounds, tdmParsed.result, tdmParsed.rounds], ['tdm', '팀 데스매치', false, 'win', [100, 89]], '팀 데스매치는 킬 수 스코어, 라운드 개념 없음');
 
   f = fake(res(404, {}), res(200, stored));
   const fetched = await fetchValorantMatches({ name: 'Mino', tag: 'KR1', key: 'k', fetchFn: f });
@@ -184,11 +184,14 @@ const fake = (...responses) => { const calls = []; let i = 0; const fn = async (
   assert.strictEqual(sees[0].matches.length, 5); assert.strictEqual(sees[0].summary.games, 6);
   const gamesOf = async tab => { await shown.lookup({ name: 'Mino', tag: 'KR1' }, tab); return sees.at(-1); };
   assert.deepStrictEqual((await gamesOf('comp')).matches.map(m => m.modeLabel), ['경쟁전'], '경쟁전 탭');
-  assert.deepStrictEqual((await gamesOf('unrated')).matches.map(m => m.modeLabel), ['일반']);
-  assert.deepStrictEqual((await gamesOf('swift')).matches.map(m => m.modeLabel), ['빠른 대전']);
-  assert.deepStrictEqual((await gamesOf('etc')).matches.map(m => m.modeLabel).sort(), ['기타 모드', '데스매치', '스파이크 러시'].sort(), '기타 탭');
+  assert.deepStrictEqual((await gamesOf('unrated')).matches.map(m => m.modeLabel), ['일반전']);
+  assert.deepStrictEqual((await gamesOf('swift')).matches.map(m => m.modeLabel), ['신속 플레이']);
+  assert.deepStrictEqual((await gamesOf('spike')).matches.map(m => m.modeLabel), ['스파이크 돌격']);
+  assert.deepStrictEqual((await gamesOf('dm')).matches.map(m => m.modeLabel), ['데스매치']);
+  assert.deepStrictEqual((await gamesOf('tdm')).matches, [], '해당 모드 경기가 없으면 빈 목록');
+  assert.strictEqual((await gamesOf('etc')).tab, '전체', '모르는 탭(기타 탭은 없어짐)은 전체');
   assert.strictEqual(urls.length, 2, '탭을 바꿔도 호출은 늘지 않는다');
-  assert.strictEqual(sees.at(-1).tab, '기타', '화면에 탭 이름');
+  assert.strictEqual((await gamesOf('dm')).tab, '데스매치', '화면에 탭 이름');
   clock += 121000;
   await shown.lookup({ name: 'Mino', tag: 'KR1' }, 'all');
   assert.strictEqual(urls.length, 4, '시간이 지나면 새로 받는다');

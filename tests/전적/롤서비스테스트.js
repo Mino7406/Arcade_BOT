@@ -62,12 +62,14 @@ const twenty = Array.from({ length: 20 }, (_, i) => 'KR_' + i);
 
   // 큐 탭은 큐 id 로 목록을 요청한다
   const queuesOf = async tab => { const n = riot.calls.idsArgs.length; await svc.lookup({ name: 'Mino', tag: 'KR1', puuid: 'PUUID-ME' }, tab); return riot.calls.idsArgs.slice(n).map(a => a.queue).sort(); };
-  assert.deepStrictEqual(await queuesOf('ranked'), [420, 440], '랭크 탭: 솔로랭크 + 자유랭크');
+  assert.deepStrictEqual(await queuesOf('solo'), [420], '솔로랭크 탭');
+  assert.deepStrictEqual(await queuesOf('flex'), [440], '자유랭크 탭');
   assert.deepStrictEqual(await queuesOf('arena'), [1700], '아레나 탭');
   assert.deepStrictEqual(await queuesOf('normal'), [400, 430, 490], '일반 탭: 일반 큐들');
   assert.deepStrictEqual(await queuesOf('aram'), [450], '칼바람 탭');
   assert.deepStrictEqual(await queuesOf('bogus'), [undefined], '모르는 탭은 전체');
   assert.ok(seen.icons.unranked && seen.icons.unranked.endsWith('rec_lol_unranked.png'), '언랭크 엠블럼 파일');
+  assert.ok(seen.icons.positions?.MIDDLE?.endsWith('pos_lol_mid.png'), '선호 포지션 로고(미드)');
 
   // puuid 만 줘도(큐 탭 버튼) 이름은 계정 조회로 채워진다
   r = await svc.lookup({ puuid: 'PUUID-ME' }, 'all');

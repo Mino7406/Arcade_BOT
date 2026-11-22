@@ -14,7 +14,7 @@ const CACHE_PLAYERS = 50;
 const STATS_GAMES = 20;
 const LIST_GAMES = 5;
 const ICON_SIZE = 128; // 요원 아이콘 원본이 1024×1024 라 줄여서 저장한다
-const TAB_LABEL = { all: '전체', comp: '경쟁전', unrated: '일반', swift: '빠른 대전', etc: '기타' };
+const TAB_LABEL = { all: '전체', comp: '경쟁전', unrated: '일반전', swift: '신속 플레이', spike: '스파이크 돌격', tdm: '팀 데스매치', dm: '데스매치' };
 const LAST_RESORT_MESSAGE = '전적을 불러오지 못했어요. 잠시 후 다시 해 주세요.';
 
 function plainText(profile, summary, rows, names, tab) {

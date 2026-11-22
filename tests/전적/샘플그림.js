@@ -20,6 +20,7 @@ const { summarize } = require(path.join(root, 'handlers', '전적', '집계.js')
     id: 'KR_' + i, ts: Date.now() - (i + 1) * 5400000, dur: 1500 + i * 90, queue: i % 2 ? 440 : 420, win: i % 3 !== 1, champ, k: 8 - i, d: 3 + i, a: 6 + i, cs: 180 + i * 12,
     items: [items[i], items[1], items[2], items[3], i === 2 ? 0 : items[4], items[5], 3363], spells: [4, 14], keystone: 8010, subStyle: 8100, vision: i, pos: 'MIDDLE', multi: i === 1 ? 2 : 0, teamKills: 28 }));
   const icons = { profile: await statics.iconFile('profile', 29), solo: await statics.iconFile('emblem', 'master'), flex: await statics.iconFile('emblem', 'diamond'), champs: {}, items: {}, spells: { 4: await statics.iconFile('spell', 4), 14: await statics.iconFile('spell', 14) }, runes: { 8010: await statics.iconFile('rune', 8010) }, styles: { 8100: await statics.iconFile('style', 8100) } };
+  icons.positions = { MIDDLE: path.join(root, 'assets', '티어', 'pos_lol_mid.png') };
   for (const c of champs) icons.champs[c] = await statics.iconFile('champion', c);
   for (const id of items) icons.items[id] = await statics.iconFile('item', id);
   const names = Object.fromEntries(champs.map(c => [c, statics.champName(c)]));

@@ -6,9 +6,12 @@ const { RiotError, riotErrorMessage } = require('./리오트');
 const { compactMatch, summarize, ratio, queueLabel } = require('./집계');
 const { renderLol, tierText } = require('./롤그림');
 
-// 탭 → 큐 번호들('all' 은 제한 없음). 랭크는 솔로랭크(420)+자유랭크(440), 일반은 일반 선택(400)·팀 선택(430)·빠른 대전(490), 아레나는 1700.
-const QUEUES = { ranked: [420, 440], normal: [400, 430, 490], aram: [450], arena: [1700] };
+// 탭 → 큐 번호들('all' 은 제한 없음). 솔로랭크 420, 자유랭크 440, 일반은 일반 선택(400)·팀 선택(430)·빠른 대전(490), 아레나는 1700.
+const QUEUES = { solo: [420], flex: [440], normal: [400, 430, 490], aram: [450], arena: [1700] };
 const UNRANKED_EMBLEM = path.join(__dirname, '..', '..', 'assets', '이모지', 'rec_lol_unranked.png');
+// 선호 포지션 로고(팀 설정에서 쓰는 롤 포지션 아이콘): 라이엇 포지션 이름 → 파일
+const POSITION_FILES = { TOP: 'top', JUNGLE: 'jungle', MIDDLE: 'mid', BOTTOM: 'adc', UTILITY: 'support' };
+const POSITION_DIR = path.join(__dirname, '..', '..', 'assets', '티어');
 const STATS_GAMES = 20;
 const LIST_GAMES = 5;
 const LAST_RESORT_MESSAGE = '전적을 불러오지 못했어요. 잠시 후 다시 해 주세요.';
@@ -78,6 +81,11 @@ function createLolService({ riot, store, statics, render = renderLol }) {
     const champKeys = [...new Set([...rows.map(m => m.champ), ...summary.champs.map(c => c.champ)])];
     const icons = await collectIcons(summoner.profileIconId, solo, flex, rows, champKeys);
     if (fs.existsSync(UNRANKED_EMBLEM)) icons.unranked = UNRANKED_EMBLEM; // 랭크 기록이 없으면 이 엠블럼을 그린다
+    icons.positions = {};
+    for (const p of summary.positions) {
+      const file = POSITION_FILES[p.pos] && path.join(POSITION_DIR, `pos_lol_${POSITION_FILES[p.pos]}.png`);
+      if (file && fs.existsSync(file)) icons.positions[p.pos] = file;
+    }
     const view = { name: shownName, tag: shownTag, level: summoner.summonerLevel, queue, solo, flex, summary, matches: rows, icons, names: Object.fromEntries(champKeys.map(c => [c, statics.champName(c)])) };
     const png = render(view);
     return { ok: true, png: png ?? null, text: plainText(view), puuid, label: `${shownName}#${shownTag}` };
