@@ -159,7 +159,7 @@ function createRecordHandlers({ owners, canUse, canUseHere, getLinked, setLinked
     if (action === 'q') { // 이미지의 탭 버튼: 그 이미지를 띄운 사람만 누를 수 있다(주인을 모르는 옛 메시지는 누구나)
       const owner = owners.get(interaction.message?.id);
       if (owner && owner !== interaction.user.id) {
-        return interaction.reply(info({ header: '🙅 띄운 사람만 바꿀 수 있어요', sub: '전적 검색', lines: [`이 전적은 <@${owner}>님이 띄웠어요.`, '내 전적은 `/전적`으로 직접 조회해 보세요.'] }));
+        return interaction.reply(info({ header: '🙅 요청자만 조작할 수 있어요', sub: '전적 검색', lines: [`이 전적은 <@${owner}>님이 요청했어요.`, '내 전적은 `/전적`으로 직접 조회해 보세요.'] }));
       }
       // 이미지의 탭 버튼: 누르는 즉시 눌린 탭을 표시하고, 새 이미지가 준비되면 같은 메시지를 교체한다
       if (parts[2] === 'val') {
