@@ -6,7 +6,6 @@
   "scripts": {
     "start": "MALLOC_ARENA_MAX=2 node --max-old-space-size=160 --max-semi-space-size=8 index.js",
     "deploy": "node deploy-commands.js",
-    "시뮬": "node tools/디스코드시뮬/실행.js",
     "prepare": "node scripts/훅설치.js"
   },
   "dependencies": {
