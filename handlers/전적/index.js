@@ -150,11 +150,13 @@ function createRecordHandlers({ owners, canUse, canUseHere, getLinked, setLinked
   }
 
   // 대상 키(me | u:<id>) → 조회할 계정. 연결이 없으면 target 이 null.
+  // own("내 계정을 연결하세요" 안내를 쓸지)은 내 전적 버튼(me)일 때만 참이다. '다른 사람 전적'에서 멤버를 골랐다면 그게 나 자신이어도 "그 사람" 안내를 쓴다(고른 사람 전적을 보려던 것이라 뜬금없이 내 연결을 권하면 어색하다).
   function resolveTarget(key, userId, game) {
     const ownerId = key.startsWith('u:') ? key.slice(2) : userId;
     const acc = getLinked(ownerId)?.[game];
-    if (!acc) return { target: null, own: ownerId === userId, ownerId };
-    return { target: game === 'lol' ? { name: acc.name, tag: acc.tag, puuid: acc.puuid } : { name: acc.name, tag: acc.tag }, own: ownerId === userId };
+    const own = key === 'me';
+    if (!acc) return { target: null, own, ownerId };
+    return { target: game === 'lol' ? { name: acc.name, tag: acc.tag, puuid: acc.puuid } : { name: acc.name, tag: acc.tag }, own };
   }
 
   // 누른 선택 카드를 바로 이 카드로 바꿔서(버튼이 없어 중복으로 누를 수 없다) 조회하는 동안 기다리게 한다.

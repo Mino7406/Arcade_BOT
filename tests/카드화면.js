@@ -401,6 +401,72 @@ async function buildScreens() {
     await shotHandlers.handleRecordButton({ ...shotBase, customId: 'record:val:me', channel: { send: async p => sentVal.push(p) } });
     add('전적 검색', '롤 전적 이미지 (유저 정보 · 최근 20판 통계 · 최근 5경기)', '채널에 공개로 올라가요 · 아래 두 줄 버튼으로 큐(전체·솔랭·자랭 / 일반·칼바람·아레나)를 바꿔요', sentRoll[0], { files: png(sentRoll[0].files) });
     add('전적 검색', '발로란트 전적 이미지 (HenrikDev)', '유저 정보 · 최근 20판 통계 · 최근 5경기(모드·맵·요원·K/D/A) · 아래 버튼으로 전체/경쟁전/일반전/신속 플레이/스파이크 돌격/팀 데스매치/데스매치를 바꿔요', sentVal[0], { files: png(sentVal[0].files) });
+
+    // ── 전적 검색의 나머지 모든 안내·경고 카드(작은 것까지) — 실제 핸들러에 가짜 상호작용을 넣어 그대로 만든다 ──
+    {
+      const { RiotError, riotErrorMessage } = req('handlers/전적/리오트.js');
+      const G = '전적 검색 · 안내/경고';
+      const ownerMap = { M: 'U1' };
+      const owners2 = { get: k => ownerMap[k], set: (k, v) => { ownerMap[k] = v; }, del: k => { delete ownerMap[k]; } };
+      const mk2 = (over = {}) => createRecordHandlers({
+        owners: owners2, canUse: () => true, canUseHere: () => true, getLinked: () => null, setLinked() {}, save() {},
+        lol: { lookup: async () => ({ ok: true, png: lolPng, text: '롤 전적 글자판', puuid: 'P' }) },
+        valorant: { lookup: async () => ({ ok: true, png: valPng, text: '발로란트 전적 글자판', id: 'Mino#KR1' }) },
+        verifyLol: async (name, tag) => ({ puuid: 'P', name, tag }), verifyValorant: async (name, tag) => ({ name, tag }), ...over,
+      });
+      const fi = (over = {}) => {
+        const o = { replies: [], edits: [], updates: [], follows: [], sends: [] };
+        const i = {
+          guildId: '1', channelId: '2', user: { id: 'U1' }, member: { displayName: '민호' }, message: { id: 'M', components: [] }, customId: '',
+          fields: { getTextInputValue: id => (over.values ?? {})[id] ?? '' },
+          reply: async p => o.replies.push(p), editReply: async p => o.edits.push(p), update: async p => o.updates.push(p), followUp: async p => o.follows.push(p),
+          deferReply: async () => {}, deleteReply: async () => {}, showModal: async () => {}, channel: { send: async p => { o.sends.push(p); return { id: 'S' }; } }, ...over,
+        };
+        return { i, o };
+      };
+      const linkedAll = { lol: { name: 'Mino', tag: 'KR1', puuid: 'P' }, valorant: { name: 'Mino', tag: 'KR1' } };
+      const run = async (handlers, method, over) => { const x = fi(over); await handlers[method](x.i); return x.o; };
+
+      // 1) 막힘: 서버
+      add(G, '막힘 — 아직 쓸 수 없는 서버', '테스트 서버 한정일 때 다른 서버에서 누르면(지금은 본서버 공개라 안 뜸)', (await run(mk2({ canUse: () => false }), 'startRecordCommand', {})).replies[0]);
+      // 2) 연결이 없을 때
+      add(G, '안내 — 내 발로란트 계정이 연결 안 됨', '내 전적 버튼에서 발로란트를 눌렀을 때', (await run(mk2(), 'handleRecordButton', { customId: 'record:val:me' })).replies[0]);
+      add(G, '안내 — 다른 사람 전적에서 나 자신을 골랐는데 연결 없음', '"내 계정 연결"이 아니라 그 사람(나) 안내가 나와요', (await run(mk2(), 'handleRecordButton', { customId: 'record:lol:u:U1' })).replies[0]);
+      // 3) 탭·잠금 권한
+      add(G, '경고 — 요청자만 탭을 조작할 수 있어요', '잠긴 카드의 탭을 남이 눌렀을 때(나에게만 보임)', (await run(mk2(), 'handleRecordButton', { customId: 'record:q:lol:solo:P', user: { id: 'U2' } })).replies[0]);
+      add(G, '경고 — 요청자와 관리자만 잠글 수 있어요', '남이 잠금 버튼을 눌렀을 때', (await run(mk2(), 'handleRecordButton', { customId: 'record:lock', user: { id: 'U2' } })).replies[0]);
+      add(G, '경고 — 잠글 수 없는 옛 메시지', '요청자를 모르는 옛 카드의 잠금 버튼을 일반 유저가 눌렀을 때', (await run(mk2(), 'handleRecordButton', { customId: 'record:lock', user: { id: 'U2' }, message: { id: 'OLD', components: [] } })).replies[0]);
+      // 4) 잠금 해제된 카드 / 탭을 누른 직후 카드
+      const unlockedRun = await run(mk2(), 'handleRecordButton', { customId: 'record:lock', message: { id: 'M', components: sentRoll[0].components } });
+      add(G, '롤 전적 이미지 — 잠금 해제 상태(🔓)', '요청자·관리자가 🔒를 누르면 🔓로 바뀌고 누구나 탭을 바꿀 수 있어요', { ...unlockedRun.updates[0], flags: 1 << 15 }, { files: png(sentRoll[0].files) });
+      Object.keys(ownerMap).filter(k => k.startsWith('U')).forEach(k => delete ownerMap[k]); // 해제 기록을 지워 다시 잠긴 상태로
+      const pendingRun = await run(mk2(), 'handleRecordButton', { customId: 'record:q:lol:solo:P' });
+      add(G, '탭을 누른 직후 카드(롤)', '눌린 탭만 파랗게 · 버튼은 잠깐 잠기고 새 그림이 오면 교체돼요', pendingRun.updates[0], { files: png(sentRoll[0].files) });
+      // 5) 조회 실패 안내 — 오류 종류별
+      const kindName = { not_found: '계정을 못 찾음', denied: 'API 키 만료·거부', rate: '요청이 몰림', unavailable: 'Riot 서버 응답 없음' };
+      for (const kind of Object.keys(kindName)) {
+        const failing = mk2({ lol: { lookup: async () => ({ ok: false, message: riotErrorMessage(new RiotError(kind, 0)) }) } });
+        add(G, `조회 실패(롤 탭) — ${kindName[kind]}`, '탭을 눌렀는데 조회가 실패했을 때 따로 뜨는 안내(나에게만 보임) · 그림은 그대로 남고 버튼은 다시 풀려요', (await run(failing, 'handleRecordButton', { customId: 'record:q:lol:solo:P' })).follows[0]);
+      }
+      add(G, '조회 실패(발로란트 탭) — 키 미설정', '발로란트 전적 키가 서버에 없을 때', (await run(mk2({ valorant: { lookup: async () => ({ ok: false, message: riotErrorMessage({ kind: 'no_key' }) }) } }), 'handleRecordButton', { customId: 'record:q:val:comp:Mino#KR1' })).follows[0]);
+      add(G, '조회 실패(발로란트 탭) — 닉네임을 읽지 못함', '버튼에 든 닉네임이 깨졌을 때', (await run(mk2(), 'handleRecordButton', { customId: 'record:q:val:comp:' })).replies[0]);
+      // 6) 이미지 대신 글자 / 이미지를 못 올림
+      const textRun = await run(mk2({ getLinked: () => linkedAll, lol: { lookup: async () => ({ ok: true, png: null, text: '**Mino#KR1** · 솔로랭크 마스터 606LP\n최근 20판 · 11승 9패', puuid: 'P' }) } }), 'handleRecordButton', { customId: 'record:lol:me' });
+      add(G, '결과 — 그림을 못 그릴 때 글자로 대신', '폰트·그림 엔진을 못 쓰면 글자 카드로 올라와요', textRun.sends[0]);
+      const sendFail = await run(mk2({ getLinked: () => linkedAll }), 'handleRecordButton', { customId: 'record:lol:me', channel: { send: async () => { throw new Error('Missing Permissions'); } } });
+      add(G, '조회 실패 — 이미지를 못 올림(권한 없음)', '봇이 그 채널에 파일을 못 올릴 때 선택 카드로 돌아와 안내해요', sendFail.edits[sendFail.edits.length - 1]);
+      // 7) 닉네임으로 검색 모달 제출
+      add(G, '닉네임 검색 — 아무것도 안 적음', '모달(입력창)은 디스코드가 그리는 팝업이라 카드가 아니에요 · 제출 뒤 결과만 카드', (await run(mk2(), 'handleRecordModal', { customId: 'record:find_modal' })).edits[0]);
+      add(G, '닉네임 검색 — 형식이 틀림', '이름#태그가 아니면 아무것도 조회하지 않아요', (await run(mk2(), 'handleRecordModal', { customId: 'record:find_modal', values: { lol: 'Mino', valorant: '#KR1' } })).edits.at(-1));
+      const both = await run(mk2(), 'handleRecordModal', { customId: 'record:find_modal', values: { lol: 'Mino#KR1', valorant: 'Mino#KR1' } });
+      add(G, '닉네임 검색 — 롤+발로란트 동시 검색 중', '로고 두 개 · 두 닉네임이 한 줄로 · 다 올라가면 이 카드는 사라져요', both.edits[0]);
+      const partial = await run(mk2({ valorant: { lookup: async () => ({ ok: false, message: riotErrorMessage(new RiotError('not_found', 404)) }) } }), 'handleRecordModal', { customId: 'record:find_modal', values: { lol: 'Mino#KR1', valorant: 'Ghost#KR1' } });
+      add(G, '닉네임 검색 — 한쪽만 실패', '롤은 올라가고 발로란트만 실패하면 실패한 쪽 이유만 이 카드에 남아요', partial.edits.at(-1));
+      // 8) 계정 연결 모달 제출
+      add(G, '계정 연결 — 아무것도 안 적음', '', (await run(mk2(), 'handleRecordModal', { customId: 'record:link_modal' })).edits[0]);
+      add(G, '계정 연결 — 형식이 틀림', '', (await run(mk2(), 'handleRecordModal', { customId: 'record:link_modal', values: { lol: 'Mino' } })).edits[0]);
+      add(G, '계정 연결 — 확인 중 서버 오류', 'Riot 서버 문제로 계정을 확인하지 못했을 때', (await run(mk2({ verifyLol: async () => { throw new Error('boom'); } }), 'handleRecordModal', { customId: 'record:link_modal', values: { lol: 'Mino#KR1' } })).edits[0]);
+    }
   }
 
   // ── 레이드 (기존 디자인 유지 — 그림 + 글자 + 버튼) ───────────────────────

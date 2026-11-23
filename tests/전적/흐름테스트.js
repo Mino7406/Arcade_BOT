@@ -163,6 +163,12 @@ const tabButtons = (p, game) => { const out = []; (function walk(x) { if (x?.cus
   assert.ok(textOf(noLinkOther).includes('<@U9>'), '멤버 멘션');
   assert.deepStrictEqual(idsOf(noLinkOther), ['record:find'], '[닉네임으로 검색] 버튼');
   assert.ok(textOf(noLinkOther).includes('발로란트'));
+  // 다른 사람 전적에서 나 자신을 골랐는데 연결이 없어도, 내 계정 연결 안내가 아니라 그 사람(나) 안내가 나온다
+  i = fakeInteraction({ customId: 'record:lol:u:U1' });
+  await handlers.handleRecordButton(i);
+  const pickSelf = first(i, 'reply')[1];
+  assert.ok(textOf(pickSelf).includes('<@U1>') && !textOf(pickSelf).includes('계정 연결이 필요해요'), '멤버 선택에서 나를 골라도 "내 계정 연결" 안내로 바뀌지 않는다');
+  assert.deepStrictEqual(idsOf(pickSelf), ['record:find'], '[닉네임으로 검색] 버튼');
   // 잘못된 채널 안내에는 쓸 수 있는 채널이 링크로 나온다
   i = fakeInteraction({ guildId: 'PUB', channelId: 'ELSEWHERE' });
   await handlers.startRecordCommand(i);
