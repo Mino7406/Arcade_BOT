@@ -14,6 +14,7 @@ const { spawn } = require('child_process');
 const repo = path.join(__dirname, '..', '..');
 const args = process.argv.slice(2);
 const manual = args.includes('--수동');
+const noOpen = args.includes('--열지않음') || !!process.env.SIM_NO_OPEN;
 const port = args.find(a => /^[0-9]+$/.test(a)) || process.env.SIM_PORT || '5173';
 const RESTART_CODE = 75;
 let tmp = null, child = null, stopping = false;
@@ -70,3 +71,16 @@ if (!manual) {
 }
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, stop);
 start();
+
+// 서버가 뜨면 브라우저를 자동으로 연다(처음 한 번만)
+if (!noOpen) {
+  const url = `http://localhost:${port}`;
+  (async () => {
+    for (let i = 0; i < 80; i++) {
+      await new Promise(r => setTimeout(r, 500));
+      try { await fetch(`${url}/api/presets`); break; } catch { if (i === 79) return; }
+    }
+    const [cmd, cmdArgs] = process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url]] : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]];
+    try { spawn(cmd, cmdArgs, { stdio: 'ignore', detached: true }).unref(); } catch {}
+  })();
+}

@@ -134,7 +134,7 @@
 </aside>
 <div id="ov"><div id="modal"></div></div>
 <div id="toast"></div>
-<div id="conn" style="display:none;position:fixed;top:0;left:0;right:0;background:#7a2528;text-align:center;padding:6px;z-index:300">시뮬레이터 서버에 연결할 수 없어요 — <code>node tools/디스코드시뮬/실행.js</code> 로 켜 주세요 (자동 재연결 중)</div>
+<div id="conn" style="display:none;position:fixed;top:0;left:0;right:0;background:#7a2528;text-align:center;padding:6px;z-index:300">시뮬레이터 서버가 꺼져 있어요 — <b>시뮬레이터 켜기.bat</b> 을 더블클릭하거나 <code>npm run 시뮬</code> 로 켜 주세요 (켜지면 자동으로 연결돼요)</div>
 
 <script>
 const BASE = new URLSearchParams(location.search).get('server') || (location.protocol === 'file:' ? 'http://localhost:5173' : '');
