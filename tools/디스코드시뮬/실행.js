@@ -4,14 +4,17 @@
 //
 // 고친 것을 바로 확인하는 법
 //  - 화면(화면.html)·서버 화면 코드: 저장만 하면 열려 있는 브라우저가 자동 새로고침된다(원본 파일을 직접 읽음).
-//  - 봇 코드(handlers/ 등): 화면 왼쪽 아래 "🔄 봇 코드 다시 불러오기" 버튼 → 새로 복사해서 재시작(환경 설정은 상황 저장으로 보존).
+//  - 봇 코드(index.js·handlers/·commands/·forms/·config.js·assets/): 저장하면 자동으로 새로 복사해 재시작한다(환경 설정은 유지).
+//    커밋·푸시 전의 작업 폴더를 그대로 복사하므로, 고친 직후 바로 확인할 수 있다. 자동 재시작이 싫으면 --수동 (화면의 🔄 버튼으로만).
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 
 const repo = path.join(__dirname, '..', '..');
-const port = process.argv[2] || process.env.SIM_PORT || '5173';
+const args = process.argv.slice(2);
+const manual = args.includes('--수동');
+const port = args.find(a => /^[0-9]+$/.test(a)) || process.env.SIM_PORT || '5173';
 const RESTART_CODE = 75;
 let tmp = null, child = null, stopping = false;
 
@@ -46,5 +49,24 @@ function start() {
 }
 function cleanup() { try { if (tmp) fs.rmSync(tmp, { recursive: true, force: true }); } catch {} }
 function stop() { stopping = true; try { child?.kill(); } catch {} cleanup(); process.exit(0); }
+// 봇 코드 저장 감시 → 서버에 재시작 요청(서버가 환경 설정을 보존한 채 75로 종료 → 위에서 새로 복사해 다시 띄움)
+if (!manual) {
+  let timer = null;
+  const WATCH = ['handlers', 'commands', 'forms', 'assets', 'Monster', 'index.js', 'config.js'];
+  const onChange = (_ev, name) => {
+    if (name && /(^|[\/])(\.git|node_modules)([\/]|$)|\.(tmp|swp)$|~$/.test(String(name))) return;
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      console.log(`
+✏️  봇 코드 변경 감지${name ? ` (${name})` : ''} — 다시 불러옵니다`);
+      fetch(`http://127.0.0.1:${port}/api/restart`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).catch(() => {});
+    }, 700);
+  };
+  for (const w of WATCH) {
+    const p = path.join(repo, w);
+    if (!fs.existsSync(p)) continue;
+    try { fs.watch(p, { recursive: fs.statSync(p).isDirectory() }, onChange); } catch (e) { console.warn(`변경 감시 실패(${w}):`, e.message); }
+  }
+}
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, stop);
 start();
