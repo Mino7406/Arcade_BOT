@@ -532,6 +532,9 @@ async function ensureReady() {
   await Promise.all(listeners(D.Events.ClientReady).map(f => f(client)));
 }
 
+// 켜자마자 "로그인 완료" 처리 — 안 하면 index.js 의 로그인 대기 진단이 진짜 디스코드 API 에 접속을 시도하며 로그를 계속 찍는다
+ensureReady().catch(e => origErr('준비 처리 실패:', e));
+
 // ───────────────────────── 환경 적용 ─────────────────────────
 function applyEnv() {
   timeOffset = Math.round((env.timeOffsetHours || 0) * 3600e3);
