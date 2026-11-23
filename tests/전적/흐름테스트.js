@@ -197,7 +197,7 @@ const tabButtons = (p, game) => { const out = []; (function walk(x) { if (x?.cus
   const parts = json(sent.components[0]).components;
   assert.ok(parts[0].type === 9 && parts[0].components[0].content.includes('요청자 : 닉네임1'), '맨 위에 요청자');
   assert.ok(!parts[0].components[0].content.includes('👤'), '요청자 줄에는 이모지가 없다');
-  assert.ok(parts[0].accessory?.custom_id === 'record:lock' && parts[0].accessory.style === 4 && parts[0].accessory.label === '잠금 중', '요청자 줄 오른쪽에 잠금 버튼(기본은 잠금 중)');
+  assert.ok(parts[0].accessory?.custom_id === 'record:lock' && parts[0].accessory.style === 4 && !parts[0].accessory.label && parts[0].accessory.emoji.name === '🔒', '요청자 줄 오른쪽에 자물쇠 이모지만 있는 잠금 버튼(기본은 잠금)');
   assert.ok(parts[1].type === 14 && parts[1].divider === true, '그 밑에 구분선');
   assert.ok(parts[2].type === 12, '그 다음이 이미지');
   assert.ok(parts.filter(x => x.type === 10).length === 1 && parts.find((x, k) => k > 2 && x.type === 10).content.includes('사진을 눌러 확대'), '확대 안내는 이미지 아래 푸터에 그대로');
@@ -371,13 +371,14 @@ const tabButtons = (p, game) => { const out = []; (function walk(x) { if (x?.cus
   assert.ok(first(i, 'reply') && !first(i, 'update'), '남은 잠금을 못 바꾼다');
   i = await lockTry({ id: 'U2' }, { memberPermissions: { has: p => p === 'Administrator' } });
   const unlocked = JSON.stringify(first(i, 'update')[1].components);
-  assert.ok(unlocked.includes('"label":"잠금"') && unlocked.includes('record:q:lol:') && !unlocked.includes('잠금 중'), '관리자는 풀 수 있고 탭 줄은 그대로');
-  i = fakeInteraction({ customId: 'record:q:lol:solo:PUUID-1', user: { id: 'U2' }, message: { id: 'MSG' } });
+  assert.ok(unlocked.includes('🔓') && !unlocked.includes('🔒') && unlocked.includes('record:q:lol:'), '관리자는 풀 수 있고 탭 줄은 그대로');
+  i = fakeInteraction({ customId: 'record:q:lol:solo:PUUID-1', user: { id: 'U2' }, member: { displayName: '관리자님' }, message: { id: 'MSG', components: msgComponents } });
   await own.handlers.handleRecordButton(i);
   assert.ok(first(i, 'update'), '풀리면 누구나 탭을 바꾼다');
-  assert.ok(JSON.stringify(first(i, 'update')[1].components).includes('"label":"잠금"'), '탭을 바꿔도 풀린 상태 유지');
+  assert.ok(textOf(first(i, 'update')[1]).includes('요청자 : 닉네임1') && !textOf(first(i, 'update')[1]).includes('관리자님') && textOf(first(i, 'editReply')[1]).includes('요청자 : 닉네임1'), '다른 사람(관리자)이 탭을 바꿔도 요청자는 원래 사람 그대로');
+  assert.ok(JSON.stringify(first(i, 'update')[1].components).includes('🔓'), '탭을 바꿔도 풀린 상태 유지');
   i = await lockTry({ id: 'U1' });
-  assert.ok(JSON.stringify(first(i, 'update')[1].components).includes('잠금 중'), '요청자는 다시 잠글 수 있다');
+  assert.ok(JSON.stringify(first(i, 'update')[1].components).includes('🔒'), '요청자는 다시 잠글 수 있다');
   i = fakeInteraction({ customId: 'record:q:lol:solo:PUUID-1', user: { id: 'U2' }, message: { id: 'MSG' } });
   await own.handlers.handleRecordButton(i);
   assert.ok(first(i, 'reply') && !first(i, 'update'), '다시 잠기면 남은 못 누른다');
