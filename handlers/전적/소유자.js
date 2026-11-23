@@ -4,7 +4,7 @@
 const fs = require('fs');
 const { writeJsonIfChanged } = require('../공통/저장');
 
-function createOwnerStore({ file, keep = 500 }) {
+function createOwnerStore({ file, keep = 1000 }) {
   let data = {}; // { [messageId]: userId }
   let dirty = false;
 
@@ -33,7 +33,13 @@ function createOwnerStore({ file, keep = 500 }) {
     dirty = true;
   }
 
-  return { load, save, get, set };
+  function del(messageId) {
+    if (!(messageId in data)) return;
+    delete data[messageId];
+    dirty = true;
+  }
+
+  return { load, save, get, set, del };
 }
 
 module.exports = { createOwnerStore };

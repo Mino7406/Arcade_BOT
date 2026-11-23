@@ -25,7 +25,7 @@ const { createOwnerStore } = require('./소유자');
 const { warmLolRender } = require('./롤그림');
 const { warmValorantRender } = require('./발로그림');
 const { card, payload, menu } = require('../공통/카드');
-const { RECORD_SEARCH_CHANNEL_IDS } = require('../../config');
+const { RECORD_SEARCH_CHANNEL_IDS, ADMIN_IDS } = require('../../config');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const QUEUE_TABS = [['all', '전체'], ['solo', '솔랭'], ['flex', '자랭'], ['normal', '일반'], ['aram', '칼바람'], ['arena', '아레나']];
@@ -52,15 +52,30 @@ const { escapeMarkdown } = require('discord.js');
 const requesterLine = requester => `-# 요청자 : ${requester}`;
 // 요청자 이름: 서버 별명 → 계정 표시 이름 → 아이디. 이름 속 마크다운 기호(*, _ 등)는 그대로 보이게 막는다.
 const requesterOf = i => escapeMarkdown(String(i.member?.displayName ?? i.user?.globalName ?? i.user?.username ?? '알 수 없음'));
+// 🔒 잠금 버튼(요청자 줄 오른쪽). 잠그면 요청자와 관리자만 탭 버튼을 누를 수 있다. 기본은 잠금이고, 푼 카드만 owners 에 기억한다.
+const LOCK_ID = 'record:lock';
+const lockButton = locked => new ButtonBuilder().setCustomId(LOCK_ID).setLabel(locked ? '잠금 중' : '잠금').setEmoji(locked ? '🔒' : '🔓').setStyle(locked ? ButtonStyle.Danger : ButtonStyle.Secondary);
+// 기본은 잠금 상태다. 요청자·관리자가 풀면 owners 에 'U<메시지 id>' 가 남는다.
+const unlockKey = messageId => `U${messageId}`;
+const isAdmin = i => ADMIN_IDS.includes(i.user.id) || !!i.memberPermissions?.has('Administrator');
+// 메시지 카드(JSON)에서 잠금 버튼만 새 모양으로 바꾼다(탭 줄·그림은 그대로 둔다).
+function withLockButton(node, button) {
+  if (Array.isArray(node)) return node.map(n => withLockButton(n, button));
+  if (!node || typeof node !== 'object') return node;
+  if (node.custom_id === LOCK_ID) return button;
+  const out = {};
+  for (const [k, v] of Object.entries(node)) out[k] = withLockButton(v, button);
+  return out;
+}
 const ACCENT = { lol: 0x3b82f6, valorant: 0xff4655 };
 // 앱 이모지(개발자 포털에 올려 둔 롤·발로란트 로고)
 const EMOJI = { lol: { id: '1510933684750913626', name: 'Lol' }, valorant: { id: '1510933698349109268', name: 'Val' } };
 
 // 전적 이미지 한 장(또는 그림을 못 그릴 때 글자)을 카드 메시지로 만든다. row 는 카드 안에 들어갈 버튼 줄.
-function resultPayload(res, game, row, requester) {
+function resultPayload(res, game, row, requester, locked = true) {
   const rows = [].concat(row ?? []); // 탭 버튼 줄(여러 줄일 수 있다)
   if (!res.png) return payload(card({ color: ACCENT[game], blocks: [res.text], rows }));
-  return { ...payload(card({ color: ACCENT[game], top: requesterLine(requester), blocks: [{ image: 'attachment://record.png', divider: true }], footer: ZOOM_FOOTER, rows })), files: [new AttachmentBuilder(res.png, { name: 'record.png' })] };
+  return { ...payload(card({ color: ACCENT[game], top: requesterLine(requester), topButton: lockButton(locked), blocks: [{ image: 'attachment://record.png', divider: true }], footer: ZOOM_FOOTER, rows })), files: [new AttachmentBuilder(res.png, { name: 'record.png' })] };
 }
 
 function createRecordHandlers({ owners, canUse, canUseHere, getLinked, setLinked, save, lol, valorant, verifyLol, verifyValorant }) {
@@ -76,7 +91,7 @@ function createRecordHandlers({ owners, canUse, canUseHere, getLinked, setLinked
   const valRow = (id, current, locked = false) => tabRows(VAL_ROWS, VAL_TABS, (t, label) =>
     button(`record:q:val:${t}:${id}`, label, t === current ? ButtonStyle.Primary : ButtonStyle.Secondary).setEmoji(VAL_TAB_EMOJI[t]()).setDisabled(locked));
   // 탭을 누른 직후 곧바로 보여 주는 카드: 옛 그림은 그대로(attachments 를 건드리지 않음) 두고 눌린 탭만 파랗게, 버튼은 잠근다. 새 그림이 오면 교체된다.
-  const pendingCard = (game, rows, requester) => payload(card({ color: ACCENT[game], top: requesterLine(requester), blocks: [{ image: 'attachment://record.png', divider: true }], footer: ZOOM_FOOTER, rows }), { keepAttachments: true });
+  const pendingCard = (game, rows, requester, locked = true) => payload(card({ color: ACCENT[game], top: requesterLine(requester), topButton: lockButton(locked), blocks: [{ image: 'attachment://record.png', divider: true }], footer: ZOOM_FOOTER, rows }), { keepAttachments: true });
   const tabsFor = (game, res) => (!res.ok || !res.png ? null : game === 'lol' ? queueRow(res.puuid, 'all') : valRow(res.id, 'all'));
 
   // 선택 카드 한 장: 구분선으로 "내 전적 / 다른 사람 전적"을 나눈다. pickedId 가 있으면 그 멤버용 버튼이 켜진다.
@@ -128,7 +143,7 @@ function createRecordHandlers({ owners, canUse, canUseHere, getLinked, setLinked
     if (!res.ok) return res.message;
     try {
       const sent = await interaction.channel.send(resultPayload(res, game, row, requesterOf(interaction)));
-      if (sent?.id) owners.set(sent.id, interaction.user.id); // 이 이미지 밑의 탭 버튼은 띄운 사람만 누를 수 있다
+      if (sent?.id) owners.set(sent.id, interaction.user.id); // 이 이미지의 잠금 버튼·탭 버튼 권한 기준(요청자)
       return null;
     } catch (err) {
       console.error('전적 이미지를 올리지 못함:', err);
@@ -156,9 +171,23 @@ function createRecordHandlers({ owners, canUse, canUseHere, getLinked, setLinked
         .addComponents(input('lol', '롤 Riot ID (비워두면 조회 안 함)'), input('valorant', '발로란트 Riot ID (비워두면 조회 안 함)')));
     }
 
-    if (action === 'q') { // 이미지의 탭 버튼: 그 이미지를 띄운 사람만 누를 수 있다(주인을 모르는 옛 메시지는 누구나)
+    // 🔒 잠금 버튼: 요청자와 관리자만 켜고 끌 수 있다(주인을 모르는 옛 메시지는 관리자만). 같은 카드의 버튼 모양만 바꾼다.
+    if (action === 'lock') {
+      const msgId = interaction.message?.id;
+      const owner = owners.get(msgId);
+      if (!(owner === interaction.user.id || isAdmin(interaction))) {
+        return interaction.reply(info({ header: '🙅 요청자와 관리자만 잠글 수 있어요', sub: '전적 검색', lines: [owner ? `이 전적은 <@${owner}>님이 요청했어요.` : '이 메시지는 주인을 알 수 없어요.', '내 전적은 `/전적`으로 직접 조회해 보세요.'] }));
+      }
+      const nowLocked = !!owners.get(unlockKey(msgId)); // 풀려 있었으면 잠그고, 잠겨 있었으면 푼다
+      if (nowLocked) owners.del(unlockKey(msgId)); else owners.set(unlockKey(msgId), '1');
+      const components = withLockButton(interaction.message.components.map(c => c.toJSON()), lockButton(nowLocked).toJSON());
+      return interaction.update({ components });
+    }
+
+    if (action === 'q') { // 이미지의 탭 버튼: 잠겨 있으면(기본) 요청자와 관리자만 누를 수 있다(주인을 모르는 옛 메시지는 누구나)
       const owner = owners.get(interaction.message?.id);
-      if (owner && owner !== interaction.user.id) {
+      const locked = !owners.get(unlockKey(interaction.message?.id));
+      if (owner && locked && owner !== interaction.user.id && !isAdmin(interaction)) {
         return interaction.reply(info({ header: '🙅 요청자만 조작할 수 있어요', sub: '전적 검색', lines: [`이 전적은 <@${owner}>님이 요청했어요.`, '내 전적은 `/전적`으로 직접 조회해 보세요.'] }));
       }
       // 이미지의 탭 버튼: 누르는 즉시 눌린 탭을 표시하고, 새 이미지가 준비되면 같은 메시지를 교체한다
@@ -167,22 +196,22 @@ function createRecordHandlers({ owners, canUse, canUseHere, getLinked, setLinked
         const id = parseRiotId(parts.slice(4).join(':'));
         if (!id) return interaction.reply(info({ color: 'err', header: '❌ 전적을 불러오지 못했어요', sub: '발로란트 전적', lines: ['닉네임을 읽지 못했어요.'] }));
         const idText = `${id.name}#${id.tag}`;
-        await interaction.update(pendingCard('valorant', valRow(idText, tab, true), requesterOf(interaction)));
+        await interaction.update(pendingCard('valorant', valRow(idText, tab, true), requesterOf(interaction), locked));
         const res = await valorant.lookup(id, tab);
         if (!res.ok) { // 실패하면 잠근 버튼을 풀고 오류를 안내한다
-          await interaction.editReply(pendingCard('valorant', valRow(idText, null), requesterOf(interaction)));
+          await interaction.editReply(pendingCard('valorant', valRow(idText, null), requesterOf(interaction), locked));
           return interaction.followUp(info({ color: 'err', header: '❌ 전적을 불러오지 못했어요', sub: '발로란트 전적', lines: [res.message] }));
         }
-        return interaction.editReply(resultPayload(res, 'valorant', valRow(res.id, tab), requesterOf(interaction)));
+        return interaction.editReply(resultPayload(res, 'valorant', valRow(res.id, tab), requesterOf(interaction), locked));
       }
       const queue = parts[3], puuid = parts[4];
-      await interaction.update(pendingCard('lol', queueRow(puuid, queue, true), requesterOf(interaction)));
+      await interaction.update(pendingCard('lol', queueRow(puuid, queue, true), requesterOf(interaction), locked));
       const res = await lol.lookup({ puuid }, queue);
       if (!res.ok) {
-        await interaction.editReply(pendingCard('lol', queueRow(puuid, null), requesterOf(interaction)));
+        await interaction.editReply(pendingCard('lol', queueRow(puuid, null), requesterOf(interaction), locked));
         return interaction.followUp(info({ color: 'err', header: '❌ 전적을 불러오지 못했어요', sub: '롤 전적', lines: [res.message] }));
       }
-      return interaction.editReply(resultPayload(res, 'lol', queueRow(res.puuid ?? puuid, queue), requesterOf(interaction))); // 첨부를 비우고 새 그림으로 바꾼다
+      return interaction.editReply(resultPayload(res, 'lol', queueRow(res.puuid ?? puuid, queue), requesterOf(interaction), locked)); // 첨부를 비우고 새 그림으로 바꾼다
     }
 
     if (action === 'lol' || action === 'val') {
@@ -326,7 +355,41 @@ function warmUpRecordSearch() {
   setImmediate(next);
 }
 
+// 이미 올라가 있는 전적 메시지에 잠금 버튼을 붙인다(봇이 켜질 때 한 번).
+// 요청자를 기록해 둔 메시지만 대상이고, 요청자 줄(맨 위 글자)을 오른쪽에 버튼이 있는 줄로 바꾼다. 잠금 버튼이 이미 있으면 건너뛴다.
+const hasId = (node, test) => Array.isArray(node) ? node.some(n => hasId(n, test)) : !!node && typeof node === 'object' && (test(node.custom_id) || Object.values(node).some(v => v && typeof v === 'object' && hasId(v, test)));
+function addLockToJson(components, button) {
+  const box = components?.[0];
+  const top = box?.components?.[0];
+  if (box?.type !== 17 || top?.type !== 10 || !String(top.content).startsWith('-# 요청자')) return null;
+  const { id: _id, ...text } = top;
+  const next = { ...box, components: [{ type: 9, components: [text], accessory: button }, ...box.components.slice(1)] };
+  return [next, ...components.slice(1)];
+}
+async function addLockToOldMessages(client) {
+  const { owners } = getLive();
+  let done = 0;
+  for (const guild of client.guilds.cache.values()) {
+    const channels = guild.channels.cache.filter(c => c.isTextBased?.() && !c.isThread?.() && accounts.canUseRecordSearch(guild.id) && accounts.canUseRecordChannel(guild.id, c.id));
+    for (const channel of channels.values()) {
+      let messages;
+      try { messages = await channel.messages.fetch({ limit: 100 }); } catch { continue; } // 못 읽는 채널은 건너뛴다
+      for (const m of messages.values()) {
+        if (m.author?.id !== client.user.id || !owners.get(m.id)) continue;
+        const json = m.components.map(c => c.toJSON());
+        if (!hasId(json, id => String(id ?? '').startsWith('record:q:')) || hasId(json, id => id === LOCK_ID)) continue;
+        const next = addLockToJson(json, lockButton(!owners.get(unlockKey(m.id))).toJSON());
+        if (!next) continue;
+        try { await m.edit({ components: next }); done++; } catch (err) { console.error('옛 전적 메시지에 잠금 버튼을 붙이지 못함:', err.message); }
+      }
+    }
+  }
+  if (done) console.warn(`🔒 옛 전적 메시지 ${done}개에 잠금 버튼을 붙였어요`);
+  return done;
+}
+
 module.exports = {
+  addLockToOldMessages, addLockToJson,
   createRecordHandlers, loadRecordSearch, saveRecordSearch, warmUpRecordSearch,
   startRecordCommand: i => getLive().handlers.startRecordCommand(i),
   handleRecordButton: i => getLive().handlers.handleRecordButton(i),

@@ -126,7 +126,11 @@ function card(o = {}) {
   // 카드 맨 위 글자(역할 멘션 등). 제목 위에 한 줄로 놓는다. 오른쪽 썸네일이 있으면 같은 칸(섹션)에 넣어
   // 맨 위 글자·제목·상태 3줄 옆에 썸네일이 맞춰 붙게 한다(따로 두면 제목 2줄보다 썸네일이 커서 아래로 처져 보임).
   const topInHead = !!(o.top && o.thumb && (o.header || o.sub));
-  if (o.top && !topInHead) container.addTextDisplayComponents(text(o.top));
+  if (o.top && !topInHead) {
+    // topButton: 맨 위 글자 줄 오른쪽에 붙는 버튼(예: 전적 카드의 잠금 버튼)
+    if (o.topButton) container.addSectionComponents(new SectionBuilder().addTextDisplayComponents(text(o.top)).setButtonAccessory(o.topButton));
+    else container.addTextDisplayComponents(text(o.top));
+  }
 
   const head = [];
   if (topInHead) head.push(text(o.top));

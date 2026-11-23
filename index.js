@@ -377,6 +377,7 @@ async function onReady(c) {
   refreshPostedMessages(c, { includeMatches: false })
     .then(r => logSystem({ 유형: '봇 상태', 내용: `게시물 최신화 — ${r.summary}` }))
     .catch(err => console.error('게시물 최신화 실패:', err));
+  require('./handlers/전적').addLockToOldMessages(c).catch(err => console.error('옛 전적 메시지 잠금 버튼 붙이기 실패:', err)); // 이미 올라가 있는 전적 메시지에도 잠금 버튼
   try { require('./handlers/전적').warmUpRecordSearch(); } catch (err) { console.error('전적 미리 데우기 실패(첫 조회가 조금 느릴 수 있음):', err); } // 전적 그림 엔진·정적 데이터를 미리 준비
   try { require('./handlers/게임/룰렛그림').warmUp(); } catch (err) { console.error('룰렛 그림 준비 실패(첫 판이 조금 느릴 수 있음):', err); } // 슬롯머신 배경·글자를 미리 준비
   startPatchNoteWatcher(c); // 롤·발로란트·오버워치·배그 공식 홈페이지의 새 패치노트·점검 공지를 지정 채널에 알림
