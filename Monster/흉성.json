@@ -6,7 +6,7 @@
   "rageName": "흉성(폭주)",
   "lore": "붉은 용뢰를 두른 불길한 별. (임시 설명)",
   "baseHp": 6000,
-  "damageRate": 0.72,
+  "damageRate": 0.78,
   "rage": {
     "hpRatio": 0.5,
     "damageRate": 1.5

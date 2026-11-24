@@ -16,7 +16,7 @@
   "rageName": "블랙월 AI",
   "lore": "방화벽 너머에서 스며 나온 정체불명의 무언가. 이 녀석이 나타난 뒤로 서버의 XP가 서서히 새어 나간다...",
   "theme": "corrupt",
-  "baseHp": 8500,
+  "baseHp": 9000,
   "damageRate": 0.45,
   "soloDamageRate": 1.6,
   "rage": {
