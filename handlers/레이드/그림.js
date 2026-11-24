@@ -1834,12 +1834,13 @@ function renderBattle(r) {
         p.line(W / 2 + dx, monsterY + dy - 7, W / 2 + dx, monsterY + dy + 7, 3, '#cfe8ff');
       }
     }
-    if (b.rage) rageFx(m, W / 2, monsterY, 112, pose, 'aura');
-    const shaking = !usedMove && isWarnIntent(b); // 필살기·대폭발 예고 중(선택 화면)
-    // 흉성(용뢰 테마): 착지한 턴의 결과 화면과 그다음 쉬는 턴(용뢰를 모으는 중)엔 용뢰가 빠진 돌덩이 모습
     const dormantNow = m.theme === 'energy' && (r.showingResult ? !!(last?.ambushLanded || last?.cometLanded) : b.intent === 'recharge');
     // 필살 혜성 낙하 준비 중(선택 화면): 몬스터는 하늘로 떠올라 보이지 않고, 칸 한가운데에 붉은 점만 떠 있다
     const skyDotNow = !r.showingResult && !isIntentHidden(b) && !!m.moves[b.intent]?.skyDot;
+    const hideBody = dormantNow || skyDotNow; // 돌덩이·하늘로 솟은 점일 때는 몸 모양 분노 기운(붉은 덩어리)을 그리지 않는다
+    if (b.rage && !hideBody) rageFx(m, W / 2, monsterY, 112, pose, 'aura');
+    const shaking = !usedMove && isWarnIntent(b); // 필살기·대폭발 예고 중(선택 화면)
+    // 흉성(용뢰 테마): 착지한 턴의 결과 화면과 그다음 쉬는 턴(용뢰를 모으는 중)엔 용뢰가 빠진 돌덩이 모습
     if (!r.showingResult && b.intent === 'ambush') ambushSky(W / 2, monsterY); // 습격 예고: 하늘에서 내려오는 붉은 혜성
     if (r.showingResult && (last?.ambushLanded || last?.cometLanded)) ambushImpact(W / 2, monsterY, 'back');
     if (skyDotNow) cometDot(W / 2, monsterY - 20);
@@ -1860,7 +1861,7 @@ function renderBattle(r) {
       flame(tx + 1, ty - 4, 0.75, [['#4a1206', 1.25], ['#ff6a2c', 1], ['#ffe066', 0.6], ['#ffffff', 0.25]]);
       for (const [dx, dy] of [[-11, -10], [12, -14], [14, 4], [-10, 6]]) dot(tx + dx, ty + dy, 3, '#ffe066');
     }
-    if (b.rage && !m.ui?.noRageMark) rageFx(m, W / 2, monsterY, 112, pose, 'mark'); // ui.noRageMark 몬스터(???)는 붉은 핏줄 분노 마크를 그리지 않는다
+    if (b.rage && !m.ui?.noRageMark && !hideBody) rageFx(m, W / 2, monsterY, 112, pose, 'mark'); // ui.noRageMark 몬스터(???)는 붉은 핏줄 분노 마크를 그리지 않는다
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'front', sporeColor, accentColor);
     const minionsShown = drawMinions(b, last, r.showingResult);
     // 몬스터 오른쪽: 이번 턴 받은 피해(빨강) · 재생 회복량(초록, 피해 아래). 결과 화면에서만.
