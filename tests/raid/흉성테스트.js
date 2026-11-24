@@ -80,7 +80,7 @@ function fakeInteraction(userId, customId) {
       assert(desc().includes('TURN ' + turn + ' 종료'), '습격 착지 결과 화면');
       if (process.env.DUMP_DIR) { // 단계별 그림을 하나씩 저장(눈으로 확인용)
         require('fs').writeFileSync(process.env.DUMP_DIR + '/st0.png', images[images.length - 1]);
-        const st = timers.filter(t => !t.cancelled && [4000].includes(t.ms)).sort((a, b) => a.ms - b.ms);
+        const st = timers.filter(t => !t.cancelled && [5500].includes(t.ms)).sort((a, b) => a.ms - b.ms);
         let n = 1; for (const t of st) { timers.splice(timers.indexOf(t), 1); await t.fn(); await flushRender(); require('fs').writeFileSync(process.env.DUMP_DIR + '/st' + (n++) + '.png', images[images.length - 1]); }
       }
       await runTimers(); // 단계 타이머(2·3단계)와 결과 타이머 실행 → 다음 턴(쉬는 턴) 선택 화면

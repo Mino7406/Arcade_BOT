@@ -281,8 +281,8 @@ function drawMonster(monster, cx, cy, maxH, { rage = false, gray = false, pose =
   // 용뢰 테마(흉성): 몸 뒤에 붉은 후광과 무작위 번개를 그린다. 그릴 때마다 시드가 달라 화면마다 모양이 바뀐다. 흑백(결과·쓰러짐)엔 그리지 않는다.
   let tint = null;
   if (monster.theme === 'energy' && !gray && !isDormant) {
-    const intensity = drawEnergy((x, y, w, h, c) => p.rect(x, y, w, h, c), cx, cy, rows[0].length / 2, cell, ++energyTick);
-    tint = bodyTint({ ...sp.palette, ...colors }, ['a', 'h', 'o', 'b', 'd'], intensity); // 번개가 많이 퍼진 화면일수록 몸이 아주 조금 붉어진다
+    const intensity = drawEnergy((x, y, w, h, c) => p.rect(x, y, w, h, c), cx, cy, rows[0].length / 2, cell, ++energyTick, rage);
+    tint = bodyTint({ ...sp.palette, ...colors }, ['a', 'h', 'o', 'b', 'd'], intensity, rage ? 1.6 : 1); // 번개가 많이 퍼진 화면일수록 몸이 아주 조금 붉어진다
   }
   if (isDormant && !gray) { // 땅에 박힌 돌덩이 뒤에서 용뢰를 은은하게 모으는 연출(몸 중심은 sprite.dormantCenter 칸 오프셋)
     const [ox, oy] = sp.dormantCenter ?? [0, 0];
@@ -604,13 +604,13 @@ function statusBadges(b, mem, x, y) {
   if (isFeared(b, mem)) items.push({ draw: fearBadge, step: 34, label: '' });
   // 점액(slow)도 독처럼 배지로: 몬스터 겉면 색 방울 + 남은 턴
   const slowLeft = slowTurnsLeft(b, mem);
-  if (slowLeft > 0) items.push({ draw: (cx, cy) => slowBadge(cx, cy, slowLeft, b.monster.sprite?.palette?.o || '#7fdc8c'), step: 44, label: String(slowLeft) });
+  if (slowLeft > 0) items.push({ draw: (cx, cy) => mem.slowStatus?.fx === 'lightning' ? shockBadge(cx, cy, slowLeft) : slowBadge(cx, cy, slowLeft, b.monster.sprite?.palette?.o || '#7fdc8c'), step: 44, label: String(slowLeft) });
   const chill = chillStacks(b, mem);
   if (chill) items.push({ draw: (cx, cy) => chillBadge(cx, cy, chill), step: 44, label: `×${chill}` });
   const stench = stenchTurnsLeft(b, mem);
   if (stench) items.push({ draw: (cx, cy) => stenchBadge(cx, cy, stench), step: 44, label: String(stench) });
   if (isErrored(b, mem)) { const t = errorTurnsLeft(b, mem); items.push({ draw: (cx, cy) => errorBadge(cx, cy, t), step: 44, label: String(t) }); }
-  if (isVulnerable(b, mem)) { const t = vulnTurnsLeft(b, mem); items.push({ draw: (cx, cy) => vulnBadge(cx, cy, t), step: 44, label: String(t) }); }
+  if (isVulnerable(b, mem)) { const t = vulnTurnsLeft(b, mem); items.push({ draw: (cx, cy) => mem.vulnStatus?.fx === 'dragon' ? dragonBadge(cx, cy, t) : vulnBadge(cx, cy, t), step: 44, label: String(t) }); }
   if (isDoomed(b, mem)) items.push({ draw: doomBadge, step: 34, label: mem.doomStacks ? `${mem.doomStacks + 1}` : '' });
   if (items.length < 3) { // 둘 이하면 예전처럼 세로로 쌓는다
     let by = y;
@@ -859,6 +859,7 @@ function gooBlob(x, y, r, color) {
 function haze(x, y, r, color, alpha) { p.roundRect(x - r, y - r, r * 2, r * 2, r, color, alpha); }
 function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
   if (!move) return;
+  if (HEUNG_FX.includes(move)) { heungMonsterFx(move, cx, cy, layer); return; }
   if (move === 'fart' && layer === 'front') {
     // 구린 방귀: 뒤돌아선 엉덩이에서 뿜어진 커다란 가스 덩어리 하나가 파티 쪽(아래·양옆)으로 뭉게뭉게 부풀어 퍼진다.
     // 겹친 원들의 합집합을 8px 도트로 칠하고(외곽선·그늘·밝은 면), 엉덩이 쪽엔 '뿌웅' 충격선.
@@ -1129,8 +1130,180 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
     }
   }
 }
+
+// ── 흉성(용뢰) 기술 연출·피격 이펙트·상태 배지 ──
+// 기존 몬스터처럼 기술마다 몬스터 쪽 연출(monsterFx), 맞은 카드 이펙트(hitFx), 상태 배지를 따로 둔다. 색은 용뢰(검붉은 심 · 붉은 줄기 · 하얀 속).
+const HEUNG_FX = ['thump', 'chain', 'erode', 'lightning', 'release', 'comet'];
+const ALL_BOX = { x0: 0, y0: 0, x1: W, y1: H };
+const RED3 = ['#3a0a10', '#e8203a', '#fff0e8']; // 심(어두운) · 줄기 · 속
+function redBolt(x0, y0, x1, y1, rnd, w = 5) { skyBolt(x0, y0, x1, y1, rnd, w, ALL_BOX); }
+function slash(x0, y0, x1, y1, w) { for (const [k, c] of [[w + 6, RED3[0]], [w, RED3[1]], [Math.max(2, w - 5), RED3[2]]]) p.line(x0, y0, x1, y1, k, c); }
+function cometAt(hx, hy, dx, dy, K = 1) { // 머리(hx,hy)에서 (dx,dy) 방향으로 길게 이어지는 혜성: 어두운 연기 → 붉은 줄기 → 밝은 속, 머리는 하얀 핵
+  const L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
+  for (let i = 0; i < 20; i++) { const t = i / 20, r = (22 - 16 * t) * K; dot(hx + ux * L * t, hy + uy * L * t, r * 2.2, t > 0.55 ? '#4a3430' : '#8a1a22'); }
+  for (let i = 0; i < 18; i++) { const t = i / 18, r = (15 - 11 * t) * K; dot(hx + ux * L * t * 0.8, hy + uy * L * t * 0.8, r * 2, t > 0.5 ? '#e8203a' : '#ff6a4a'); }
+  for (let i = 0; i < 10; i++) { const t = i / 10, r = (8 - 5 * t) * K; dot(hx + ux * L * t * 0.45, hy + uy * L * t * 0.45, r * 2, '#fff0e8'); }
+  p.circle(hx, hy, 17 * K, '#ffb090'); p.circle(hx, hy, 12 * K, '#fff6e0'); p.circle(hx, hy, 6 * K, '#ffffff');
+}
+function ringDots(cx, cy, rx, ry, n, size, c) { for (let a = 0; a < n; a++) { const t = a / n * Math.PI * 2; dot(cx + Math.cos(t) * rx, cy + Math.sin(t) * ry, size, c); } }
+// ── 도트 덩어리 그리기 도구(기존 몬스터 연출처럼 6~8px 칸 + 어두운 테두리 → 본색 → 밝은 속) ──
+const HG = 6;
+const HKEY = (i, j) => i * 10000 + j;
+function pxBolt(x0, y0, x1, y1, rnd, w = 1, jag = 26, whiteCore = false, g = HG) { // 칸 단위로 굳힌 지그재그 번개(검붉은 테두리 · 붉은 몸 · 하얀 속). g: 칸 크기(작을수록 가늘고 정교). 지나간 꺾임점을 돌려준다
+  const L = Math.hypot(x1 - x0, y1 - y0) || 1, n = Math.max(4, Math.round(L / (g * 5.5))), nx = -(y1 - y0) / L, ny = (x1 - x0) / L;
+  const pts = [[x0, y0]];
+  for (let k = 1; k < n; k++) { const t = k / n, o = (rnd() - 0.5) * jag; pts.push([x0 + (x1 - x0) * t + nx * o, y0 + (y1 - y0) * t + ny * o]); }
+  pts.push([x1, y1]);
+  const core = new Map();
+  for (let k = 0; k < pts.length - 1; k++) {
+    const [ax, ay] = pts[k], [bx, by] = pts[k + 1], m = Math.ceil(Math.hypot(bx - ax, by - ay) / 2);
+    for (let q = 0; q <= m; q++) { const x = ax + (bx - ax) * q / m, y = ay + (by - ay) * q / m; core.set(HKEY(Math.floor(x / g), Math.floor(y / g)), [Math.floor(x / g), Math.floor(y / g)]); }
+  }
+  const thick = new Map(core);
+  if (w >= 2) for (const [i, j] of core.values()) for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) thick.set(HKEY(i + di, j + dj), [i + di, j + dj]);
+  const out = new Map();
+  for (const [i, j] of thick.values()) for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) { const k2 = HKEY(i + di, j + dj); if (!thick.has(k2)) out.set(k2, [i + di, j + dj]); }
+  const ok = (i, j) => i >= 0 && j >= 0 && i * g < W && j * g < H;
+  for (const [i, j] of out.values()) if (ok(i, j)) p.rect(i * g, j * g, g, g, RED3[0]);
+  for (const [i, j] of thick.values()) if (ok(i, j)) p.rect(i * g, j * g, g, g, RED3[1]);
+  for (const [i, j] of core.values()) if (ok(i, j)) { if (whiteCore) p.rect(i * g, j * g, g, g, RED3[2]); else p.rect(i * g + 1, j * g + 1, g - 2, g - 2, RED3[2]); }
+  return pts;
+}
+// 번개 둘레의 은은한 붉은 번짐: 줄기 점들 주변을 성긴 점으로(바깥일수록 더 성김) 어둡게 물들인다
+function pxGlow(pts, r, rnd, g = 4) {
+  const seen = new Set();
+  for (const [px, py] of pts) for (let y = py - r; y <= py + r; y += g) for (let x = px - r; x <= px + r; x += g) {
+    const d = Math.hypot(x - px, y - py) / r; if (d > 1) continue;
+    const key = HKEY(Math.floor(x / g), Math.floor(y / g)); if (seen.has(key)) continue; seen.add(key);
+    if (hash2(Math.floor(x / g), Math.floor(y / g), 3) < 0.55 * (1 - d) && x > 0 && y > 0 && x < W && y < H) p.rect(Math.floor(x / g) * g, Math.floor(y / g) * g, g, g, d < 0.5 ? '#5a1a2a' : '#3a121c');
+  }
+}
+function pxSmoke(cx, cy, r, tones, rnd, nPuff = 5) { // 겹친 덩이를 칸으로 칠한 연기(가장자리 어둡게, 위쪽 밝게)
+  const puffs = Array.from({ length: nPuff }, (_, i) => ({ x: cx + (i - (nPuff - 1) / 2) * r * 0.55 + (rnd() - 0.5) * r * 0.3, y: cy + (rnd() - 0.5) * r * 0.5, r: r * (0.5 + rnd() * 0.35) }));
+  const inside = (x, y) => puffs.some(q => (x - q.x) ** 2 + (y - q.y) ** 2 <= q.r * q.r);
+  for (let y = cy - r * 1.4; y < cy + r * 1.4; y += HG) for (let x = cx - r * 2; x < cx + r * 2; x += HG) {
+    if (!inside(x, y)) continue;
+    const edge = !inside(x - HG, y) || !inside(x + HG, y) || !inside(x, y - HG) || !inside(x, y + HG);
+    const lit = !inside(x, y - HG * 1.5) ? 2 : !inside(x - HG * 1.5, y) ? 1 : 0, n = hash2(Math.floor(x / HG), Math.floor(y / HG), 5);
+    p.rect(Math.floor(x / HG) * HG, Math.floor(y / HG) * HG, HG, HG, edge ? tones[0] : lit === 2 ? tones[3] : lit === 1 ? tones[2] : n < 0.5 ? tones[1] : tones[2]);
+  }
+}
+function pxStar(cx, cy, R, rnd, squash = 0.7) { // 뾰족한 별 모양 폭발(하얀 핵 → 붉은 가장자리)
+  const N = 12, lens = Array.from({ length: N }, () => 0.6 + rnd() * 0.55);
+  for (let y = cy - R * squash; y < cy + R * squash; y += HG / 1.5) for (let x = cx - R; x < cx + R; x += HG) {
+    const dx = x - cx, dy = (y - cy) / squash, r = Math.hypot(dx, dy); let th = Math.atan2(dy, dx); if (th < 0) th += Math.PI * 2;
+    const seg = th / (Math.PI * 2) * N, i0 = Math.floor(seg) % N, f = seg - Math.floor(seg), spike = (lens[i0] * (1 - f) + lens[(i0 + 1) % N] * f) * (0.5 + 0.5 * Math.abs(Math.cos(f * Math.PI))), L = R * spike;
+    if (r > L) continue;
+    const k = r / L, n = hash2(Math.floor(x / HG), Math.floor(y / HG), 9);
+    p.rect(Math.floor(x / HG) * HG, Math.floor(y / HG) * HG, HG, HG, k < 0.2 ? '#ffffff' : k < 0.4 ? '#fff0e8' : k < 0.62 ? (n < 0.7 ? '#ff8a6a' : '#ff6a4a') : k < 0.85 ? '#e8203a' : '#7a0c1c');
+  }
+}
+function pxRing(cx, cy, rx, ry, c, n = 40, sz = HG) { for (let a = 0; a < n; a++) { const t = a / n * Math.PI * 2; p.rect(Math.round((cx + Math.cos(t) * rx) / sz) * sz - sz / 2, Math.round((cy + Math.sin(t) * ry) / sz) * sz - sz / 2, sz, sz, c); } }
+const CARD_X = [121, 340, 559, 777]; // 파티 카드 가운데(설계 좌표). 위쪽 y 는 몬스터 칸 아래 바로 밑
+const SMOKE_RED = ['#2a0a14', '#5a1a30', '#8a2a44', '#c0485a'];
+let heungTargets = []; // 이번 기술에 맞은 파티원 카드 가운데 x(낙뢰가 그 자리를 내려친다)
+function heungMonsterFx(move, cx, cy, layer) {
+  const rnd = seedRng(++energyTick * 3 + 7), front = layer === 'front', back = layer === 'back';
+  if (move === 'thump' && front) { // 용뢰 치기: 용뢰를 온몸에 두르고 파티 쪽으로 몸통 박치기, 앞에 충격 별
+    for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2 + 0.3; pxBolt(cx + Math.cos(a) * 66, cy + Math.sin(a) * 58, cx + Math.cos(a) * 112, cy + Math.sin(a) * 100, rnd, 1, 18); }
+    for (const dx of [-60, -30, 30, 60]) pxBolt(cx + dx, cy - 70, cx + dx * 0.8, cy - 130, rnd, 1, 8); // 뒤로 흐르는 속도선
+    pxStar(cx, cy + 128, 70, rnd); pxRing(cx, cy + 134, 110, 26, '#ffb090');
+  } else if (move === 'chain' && front) { // 용뢰 연쇄: 바닥을 타고 좌우로 퍼지는 전류(가는 칸 · 곁가지 · 번짐 · 그을음 · 불똥) + 퍼져 나가는 고리
+    for (let x = cx - 360; x < cx + 360; x += 14) if (hash2(x, 7, 2) < 0.7) p.rect(x, 322 + Math.floor(hash2(x, 3, 4) * 14), 8 + Math.floor(hash2(x, 5, 6) * 10), 3, '#1a0a0e'); // 바닥 그을음
+    for (const sd of [-1, 1]) {
+      const main = [
+        [cx + sd * 40, 302, cx + sd * 150, 312 + (rnd() - 0.5) * 8],
+        [cx + sd * 150, 312, cx + sd * 262, 304 + (rnd() - 0.5) * 8],
+        [cx + sd * 262, 304, cx + sd * 392, 320 + (rnd() - 0.5) * 8],
+      ];
+      const path = [];
+      for (const [ax, ay, bx, by] of main) path.push(...pxBolt(ax, ay, bx, by, rnd, 1, 14, true, 4));
+      pxGlow(path, 14, rnd);
+      for (const [ax, ay, bx, by] of main) pxBolt(ax, ay, bx, by, rnd, 1, 14, true, 4); // 번짐 위에 다시 또렷하게
+      for (const [fx, fy, ex, ey] of [[cx + sd * 100, 308, cx + sd * 150, 268], [cx + sd * 190, 310, cx + sd * 250, 262], [cx + sd * 262, 304, cx + sd * 292, 280], [cx + sd * 330, 312, cx + sd * 372, 284], [cx + sd * 130, 310, cx + sd * 176, 334]]) {
+        const sub = pxBolt(fx, fy, ex, ey + (rnd() - 0.5) * 6, rnd, 1, 10, false, 4);
+        if (rnd() < 0.7) pxBolt(sub[1][0], sub[1][1], sub[1][0] + sd * (16 + rnd() * 14), sub[1][1] - 14 - rnd() * 12, rnd, 1, 6, false, 3);
+      }
+      pxStar(cx + sd * 392, 320, 14, rnd, 0.9);
+    }
+    pxRing(cx, 306, 130, 22, '#fff0e8', 52, 4); pxRing(cx, 306, 230, 34, '#e8203a', 72, 4); pxRing(cx, 306, 340, 46, '#7a0c1c', 84, 4);
+    for (let i2 = 0; i2 < 34; i2++) { const x = cx + (rnd() - 0.5) * 760, y = 252 + rnd() * 80; p.rect(Math.round(x / 4) * 4, Math.round(y / 4) * 4, 4, 4, rnd() < 0.5 ? '#ff6a4a' : '#fff0e8'); } // 튀는 불똥
+  } else if (move === 'erode' && front) { // 용기 침식: 땅 위로 어두운 붉은 구름이 번져 파티를 덮음(번개 없이 구름만)
+    pxSmoke(cx - 170, cy + 96, 70, SMOKE_RED, rnd, 6); pxSmoke(cx + 170, cy + 96, 70, SMOKE_RED, rnd, 6);
+    pxSmoke(cx - 330, cy + 104, 56, SMOKE_RED, rnd, 5); pxSmoke(cx + 330, cy + 104, 56, SMOKE_RED, rnd, 5);
+    pxSmoke(cx, cy + 128, 92, SMOKE_RED, rnd, 8);
+    for (let i = 0; i < 22; i++) { const x = cx + (rnd() - 0.5) * 640, y = cy + 40 + rnd() * 100; p.rect(x, y - rnd() * 30, 6, 6, rnd() < 0.5 ? '#ff6a4a' : '#e8203a'); }
+  } else if (move === 'lightning' && front) { // 낙뢰: 먼저 가는 붉은 줄이 내려와 표시하고, 곧이어 굵은 번개가 맞은 사람 위로 내려침(분노엔 두 명)
+    const xs = heungTargets.length ? heungTargets : [cx], endY = 470; // 충격파는 맞은 사람 아이콘 아래까지 내려온다
+    for (const tx of xs) {
+      // 내려오는 표시 줄(번개 줄기는 없음): 은은한 붉은 번짐 기둥 + 하얀 속의 붉은 일직선 빔 + 하늘 끝의 충전 불꽃 + 땅의 조준 고리
+      for (let y = 140; y < endY; y += 4) for (let dx = -10; dx <= 10; dx += 4) if (hash2(Math.floor((tx + dx) / 4), Math.floor(y / 4), 8) < 0.5 * (1 - Math.abs(dx) / 12)) p.rect(Math.round((tx + dx) / 4) * 4 - 2, y, 4, 4, '#3a121c');
+      p.rect(tx - 5, 150, 10, endY - 150 - 8, '#3a0a10'); p.rect(tx - 3, 150, 6, endY - 150 - 8, '#e8203a'); p.rect(tx - 1, 150, 2, endY - 150 - 8, '#fff0e8'); // 끊김 없는 일직선 빔
+      pxStar(tx, 146, 16, rnd, 1); for (const [dx, dy] of [[-22, 6], [24, 12], [-12, 22], [14, 26]]) p.rect(tx + dx - 2, 140 + dy, 4, 4, rnd() < 0.5 ? '#fff0e8' : '#ff6a4a');
+      pxRing(tx, endY - 2, 40, 10, '#fff0e8', 28, 4); p.rect(tx - 56, endY - 4, 14, 4, '#e8203a'); p.rect(tx + 42, endY - 4, 14, 4, '#e8203a'); p.rect(tx - 2, endY - 22, 4, 12, '#e8203a');
+      // 땅: 충격 별 + 갈라진 틈 + 그을음 + 튀는 파편
+      pxStar(tx, endY - 6, 40, rnd, 0.8);
+      for (const [dx, dy] of [[-70, 8], [-46, 18], [52, 14], [78, 4], [-20, 24], [26, 22]]) pxBolt(tx + dx * 0.3, endY + 2, tx + dx, endY + dy, rnd, 1, 6, false, 3);
+      pxRing(tx, endY + 2, 64, 14, '#fff0e8', 40, 4); pxRing(tx, endY + 2, 96, 22, '#e8203a', 56, 4);
+      for (let i2 = 0; i2 < 14; i2++) { const a = rnd() * Math.PI * 2, d = 24 + rnd() * 60; p.rect(Math.round((tx + Math.cos(a) * d) / 4) * 4, Math.round((endY - 6 + Math.sin(a) * d * 0.5) / 4) * 4, 4, 4, i2 % 3 ? '#ff8a4a' : '#fff0e8'); }
+    }
+  } else if (move === 'release' && front) { // 용기 해방: 몸을 가둔 껍질이 깨지듯 사방으로 에너지 파편과 별 모양 폭발
+    pxStar(cx, cy, 150, rnd, 0.62);
+    for (let i = 0; i < 16; i++) { const a = rnd() * Math.PI * 2, d = 100 + rnd() * 120; p.rect(cx + Math.cos(a) * d, cy + Math.sin(a) * d * 0.7, 8, 8, i % 2 ? '#e8203a' : '#2a0a14'); }
+    pxRing(cx, cy, 200, 100, '#fff0e8', 60);
+  }
+}
+// 맞은 카드 아이콘 위 이펙트
+function heungHitFx(move, cx, cy) {
+  const rnd = seedRng(Math.floor(cx * 3 + cy) + ++energyTick);
+  if (move === 'thump') { // 맞은 카드: 하얀 핵의 도트 별 + 둘레로 튀는 짧은 용뢰 + 납작한 충격 고리
+    pxStar(cx, cy, 24, rnd, 0.9);
+    for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2 + 0.5; pxBolt(cx + Math.cos(a) * 22, cy + Math.sin(a) * 20, cx + Math.cos(a) * 46, cy + Math.sin(a) * 40, rnd, 1, 8); }
+    pxRing(cx, cy + 16, 38, 11, '#ffb090', 20, 4);
+  } else if (move === 'chain') {
+    redBolt(cx - 30, cy - 26, cx + 28, cy + 24, rnd, 4); redBolt(cx + 30, cy - 24, cx - 28, cy + 26, rnd, 4);
+    for (const [dx, dy] of [[-24, 20], [26, -22], [0, -32], [2, 32]]) dot(cx + dx, cy + dy, 4, '#fff0e8');
+  } else if (move === 'erode') {
+    haze(cx, cy, 30, '#5a1a3a', 0.4); haze(cx - 6, cy + 4, 20, '#8a1a3a', 0.35);
+    for (let i = 0; i < 12; i++) { const a = i * 0.55, r = 34 - i * 1.5; dot(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.8, 4, i % 2 ? '#e8203a' : '#8a2a4a'); }
+  } else if (move === 'lightning') {
+    // 낙뢰는 맞은 카드 위에 따로 이펙트를 그리지 않는다(몬스터 쪽 연출만)
+  } else if (move === 'comet') { // 맞은 카드: 도트 충격파 — 칸으로 굳힌 두 겹 고리와 하얀 핵의 작은 별
+    // 불덩이가 떨어져 터짐: 주황·붉은 도트 폭발 + 사방으로 날아가는 돌 파편
+    pxStar(cx, cy + 4, 34, rnd, 0.85);
+    for (let i = 0; i < 9; i++) { const a2 = i / 9 * Math.PI * 2 + 0.3, d = 34 + rnd() * 16; p.rect(cx + Math.cos(a2) * d - 4, cy + Math.sin(a2) * d * 0.8 - 4, 8, 8, i % 3 ? '#3a1a14' : '#ff8a4a'); }
+  } else if (false) {
+    // 간단한 충격파: 아이콘 둘레로 퍼지는 붉은·밝은 고리 두 겹과 옅은 번쩍임
+    haze(cx, cy, 24, '#ffe0d8', 0.2);
+    ringDots(cx, cy, 24, 21, 24, 4, '#fff0e8'); ringDots(cx, cy, 36, 31, 32, 4, '#ff6a4a');
+  }
+}
+// 필살 혜성 낙하 준비 중: 몬스터는 하늘로 올라가 보이지 않고 칸 한가운데에 붉은 점이 맥동하며 떠 있다(꼬리 없음)
+function cometDot(cx, cy) {
+  const pulse = 0.5 + 0.5 * Math.sin(energyTick * 0.9);
+  haze(cx, cy, 70 + 8 * pulse, '#ff2a1a', 0.16); haze(cx, cy, 46, '#ff4a3a', 0.2);
+  ringDots(cx, cy, 52 + 5 * pulse, 52 + 5 * pulse, 40, 3, '#ff6a4a');
+  p.rect(cx - 11, cy - 11, 22, 22, '#ff3a3a'); p.rect(cx - 7, cy - 7, 14, 14, '#ff8a7a'); p.rect(cx - 4, cy - 4, 8, 8, '#ffffff');
+  for (const [dx, dy] of [[-30, -16], [26, 20], [-18, 30], [34, -26]]) dot(cx + dx, cy + dy, 3, '#ffd0c8');
+}
+// 감전(감속) 배지: 어두운 칸 + 붉은 번개 + 남은 턴
+function shockBadge(cx, cy, turns) {
+  p.rect(cx - 13, cy - 13, 26, 26, '#1a0608'); p.strokeRoundRect(cx - 13, cy - 13, 26, 26, 2, 2, '#e8203a');
+  const pts = [[cx + 4, cy - 11], [cx - 4, cy - 1], [cx + 2, cy - 1], [cx - 5, cy + 11]];
+  for (let i = 0; i < 3; i++) { p.line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], 6, '#e8203a'); p.line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], 2.5, '#fff0e8'); }
+  btext(`${turns}턴`, cx, cy + 26, 15, '#ffb0b8');
+}
+// 용기 침식(받는 피해 증가) 배지: 붉은 고리 + 갈라진 틈 + 아래 화살표 + 남은 턴
+function dragonBadge(cx, cy, turns) {
+  p.circle(cx, cy, 13, '#8a1a3a'); p.circle(cx, cy, 10, '#1a0608');
+  p.line(cx - 6, cy - 8, cx + 1, cy - 1, 3, '#e8203a'); p.line(cx + 1, cy - 1, cx - 2, cy + 3, 3, '#e8203a');
+  p.poly([cx + 3, cy, cx + 9, cy, cx + 6, cy + 7], '#ff6a4a');
+  btext(`${turns}턴`, cx, cy + 26, 15, '#ffb4bc');
+}
 // 맞은 파티원 카드 아이콘 위 타격 표시: 박치기는 할퀸 자국, 흩뿌리기는 점액 얼룩, 짓누르기는 충격 별.
 function hitFx(move, cx, cy, color, spore = color, accent = spore) {
+  if (move === 'ambush') move = 'comet'; // 습격도 필살 흉성 낙하와 같은 맞은 카드 이펙트(불덩이 폭발)
+  if (HEUNG_FX.includes(move)) { heungHitFx(move, cx, cy); return; }
   if (move === 'fart') {
     return; // 구린 방귀 피격·악취는 카드에서 stenchBehind·stenchFront로(아이콘 뒤·앞에 나눠 그림)
   }
@@ -1605,8 +1778,8 @@ function renderBattle(r) {
     const m = b.monster;
     const last = b.lastTurn;
     // 습격 착지 결과는 4단계(r.ambushStage): 0 충돌(연기가 헤더를 덮음, 아직 위장 몬스터 이름·HP) → 1 폭발이 잦아듦(헤더는 연기 속에서 흉성으로 바뀜) → 2 연기가 흩어짐 → 3 잔잔
-    const ambushStage = r.showingResult && last?.ambushLanded ? (r.ambushStage ?? 3) : -1;
-    const smokeFrame = ambushStage === 0; // 헤더가 아직 위장 몬스터 값인 단계
+    const ambushStage = r.showingResult && (last?.ambushLanded || last?.cometLanded) ? (r.ambushStage ?? 3) : -1;
+    const smokeFrame = ambushStage === 0 && !!last?.ambushLanded; // 헤더가 아직 위장 몬스터 값인 단계(습격 착지만)
     background('battle', 120, 224);
     if (b.rage && isCorrupt(m)) rageGlitch = Math.max(1, b.turn | 0);
     if (b.rage) rageFx(m, W / 2, 196, 112, null, 'box'); // 분노: 바닥 불빛·불씨
@@ -1629,7 +1802,7 @@ function renderBattle(r) {
     bar(50, 74, W - 100, 32, hpShown / hpMaxShown, b.rage && !smokeFrame ? '#e5383b' : '#d94a2b');
     p.strokeRoundRect(50, 74, W - 100, 32, 16, 2, C.gold);
     text(`${hpShown.toLocaleString()} / ${hpMaxShown.toLocaleString()}`, W / 2, 90, 22, '#ffffff');
-    if (ambushStage >= 0) ambushSmoke(ambushStage); // 착지 연기: 0·1단계는 헤더를 완전히 덮고, 2단계에 흩어지고, 3단계엔 옅게 남는다
+    if (ambushStage >= 0 && last?.ambushLanded) ambushSmoke(ambushStage); // 착지 연기: 0·1단계는 헤더를 완전히 덮고, 2단계에 흩어지고, 3단계엔 옅게 남는다
 
     // 몬스터 + 지난 턴 결과: 게임처럼 몬스터가 쓴 기술을 머리 왼쪽 위 말풍선으로 띄운다
     // (파티가 입힌 총피해 숫자는 일단 빼 둠 — 카드마다 행동 수치가 있어 중복이라)
@@ -1664,15 +1837,19 @@ function renderBattle(r) {
     if (b.rage) rageFx(m, W / 2, monsterY, 112, pose, 'aura');
     const shaking = !usedMove && isWarnIntent(b); // 필살기·대폭발 예고 중(선택 화면)
     // 흉성(용뢰 테마): 착지한 턴의 결과 화면과 그다음 쉬는 턴(용뢰를 모으는 중)엔 용뢰가 빠진 돌덩이 모습
-    const dormantNow = m.theme === 'energy' && (r.showingResult ? !!last?.ambushLanded : b.intent === 'recharge');
+    const dormantNow = m.theme === 'energy' && (r.showingResult ? !!(last?.ambushLanded || last?.cometLanded) : b.intent === 'recharge');
+    // 필살 혜성 낙하 준비 중(선택 화면): 몬스터는 하늘로 떠올라 보이지 않고, 칸 한가운데에 붉은 점만 떠 있다
+    const skyDotNow = !r.showingResult && !isIntentHidden(b) && !!m.moves[b.intent]?.skyDot;
     if (!r.showingResult && b.intent === 'ambush') ambushSky(W / 2, monsterY); // 습격 예고: 하늘에서 내려오는 붉은 혜성
-    if (r.showingResult && last?.ambushLanded) ambushImpact(W / 2, monsterY, 'back');
+    if (r.showingResult && (last?.ambushLanded || last?.cometLanded)) ambushImpact(W / 2, monsterY, 'back');
+    if (skyDotNow) cometDot(W / 2, monsterY - 20);
     if (usedFx && SKILL_FX.includes(usedFx)) skillCtx = { fx: usedFx, mx: W / 2, my: monsterY, targets: [] };
+    heungTargets = usedFx === 'lightning' ? b.members.filter(mm => last?.hits?.[mm.userId]).map(mm => 121.5 + ROLE_ORDER.indexOf(mm.role) * 219) : []; // 낙뢰가 내려칠 카드 위치
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'back', sporeColor, accentColor);
     // 투명화(유령): 다음 턴 동안 몸을 흐리게(회색)
-    drawMonster(m, W / 2, monsterY, 112, { rage: b.rage, pose, outline: shielded ? '#cfe8ff' : null, gray: isPhased(b), dormant: dormantNow });
-    if (r.showingResult && last?.ambushLanded) ambushImpact(W / 2, monsterY, 'front');
-    if (shaking && !m.ui?.noShake) shakeFx(m, W / 2, monsterY, 112, pose); // ui.noShake 몬스터(???)는 떨림 대신 준비 자세(readyPose)만
+    if (!skyDotNow) drawMonster(m, W / 2, monsterY, 112, { rage: b.rage, pose, outline: shielded ? '#cfe8ff' : null, gray: isPhased(b), dormant: dormantNow });
+    if (r.showingResult && (last?.ambushLanded || last?.cometLanded)) ambushImpact(W / 2, monsterY, 'front');
+    if (shaking && !skyDotNow && !m.ui?.noShake) shakeFx(m, W / 2, monsterY, 112, pose); // ui.noShake 몬스터(???)는 떨림 대신 준비 자세(readyPose)만
     // 점화 카운트다운 중엔 어떤 자세·기술이든 도화선 끝에 불꽃 + 열기(sprite.fuseTip = [칸, 줄])
     if (b.fuse && m.sprite?.fuseTip) {
       const rowsNow = (pose && m.sprite.poses?.[pose]) || m.sprite.rows;

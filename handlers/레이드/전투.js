@@ -97,7 +97,7 @@ const MONSTER_DIR = path.join(__dirname, '..', '..', 'Monster');
 const REQUIRED_MOVES = ['attack', 'smash'];
 // 그림(레이드그림.js)이 아는 연출 종류. 새 연출은 레이드그림.js의 monsterFx·hitFx에 그리고 여기에 이름을 더한다.
 const MOVE_FX = ['attack', 'sweep', 'charge', 'smash', 'heal', 'spore', 'hypno', 'absorb', 'burst', 'frost', 'icefall',
-  'curse', 'wail', 'phase', 'storm', 'dust', 'smoke', 'ignite', 'boom', 'summon', 'peel', 'fart', 'overclock', 'deadeye', 'vuln', 'killnine', 'crash', 'gateway', 'ambush', 'recharge'];
+  'curse', 'wail', 'phase', 'storm', 'dust', 'smoke', 'ignite', 'boom', 'summon', 'peel', 'fart', 'overclock', 'deadeye', 'vuln', 'killnine', 'crash', 'gateway', 'ambush', 'recharge', 'thump', 'chain', 'erode', 'lightning', 'release', 'comet'];
 const EFFECTS = ['slow', 'stun', 'shield', 'poison', 'confuse', 'chill', 'fear', 'phase', 'smoke', 'summon', 'stench', 'error', 'vuln', 'doom'];
 // stench(악취 — 원숭이 대장 구린 방귀): 맞은 사람(guardBlocks면 방어한 사람 제외)은 effectTurns턴 동안 회복약을 못 쓰고,
 //   치유사 스킬 회복량 × effectRate(씻어내지 못함). followUp: 이 기술을 쓴 다음 턴엔 반드시 그 기술(바나나 껍질 → 구린 방귀).
@@ -302,6 +302,9 @@ function pickNextIntent(battle, rng) {
   const am = battle.ambush;
   if (am && am.phase === 'pending' && battle.turn + 1 >= am.turn) return 'ambush';
   if (am && am.phase === 'landed' && !am.rested && battle.monster.moves.recharge) { am.rested = true; return 'recharge'; }
+  // 큰 기술 뒤 쉬는 턴(monster.restAfter — 흉성: 필살 혜성 낙하 뒤 돌덩이가 되어 용뢰를 모은다)
+  const ra = battle.monster.restAfter;
+  if (ra && battle.lastTurn?.monsterMoveKey === ra && battle.monster.moves.recharge) return 'recharge';
   battle.sinceSmash = (battle.sinceSmash || 0) + 1;
   // 분노 연계(rage.afterPoison): 분노 중 이번 턴에 독을 걸었으면 다음 행동은 반드시 그 기술(독버섯: 독기 흡수).
   // 필살기 보장(7턴)보다 먼저 — 필살기는 그다음 턴으로 밀린다.
@@ -669,7 +672,9 @@ function resolveTurn(battle, rng = Math.random) {
   // 실제로 들어간 피해를 돌려준다(기여도·화면 숫자).
   const hadMinions = minionsAlive(battle).length > 0;
   last.minionHits = {};   // 부하 칸 번호 → 이번 턴 받은 피해
+  const untouchable = !!battle.monster.moves[battle.intent]?.untouchable; // 필살 혜성 낙하 준비 중(공중)엔 어떤 공격도 닿지 않는다
   const land = (dmg) => {
+    if (untouchable) return { dmg: 0, minion: false };
     const i = (battle.minions ?? []).findIndex(x => x.hp > 0);
     if (i < 0) { battle.hp -= dmg; last.monsterDamage += dmg; return { dmg, minion: false }; }
     const mn = battle.minions[i];
@@ -898,6 +903,7 @@ function resolveTurn(battle, rng = Math.random) {
     last.monsterMove = move.name;
     last.monsterMoveKey = battle.intent; // 그림이 기술별 자세(sprite.poses)를 고를 때 쓴다
     last.monsterFx = moveFx(battle.intent, move); // 그림이 연출(monsterFx·hitFx)을 고를 때 쓴다
+    if (move.skyDot) last.cometLanded = true; // 하늘에서 내려와 착지(습격과 같은 폭발·돌덩이 연출)
     if (move.target === 'self') {
       const before = battle.hp;
       const stacks = absorbStacks;

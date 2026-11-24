@@ -47,8 +47,8 @@ const SPAWN_WINDOW_WEEKEND = [12, 29]; // 주말(토·일) 12:00 ~ 다음 날 05
 const MAX_MANUAL_SPAWN_AHEAD_DAYS = 30; // 관리자가 출현 시각을 직접 정할 때 최대 며칠 뒤까지(오타로 몇 년 뒤가 되는 것만 막음)
 const RECRUIT_MS = 60 * 60 * 1000;  // 출현 후 모집 대기 시간 — 그동안 아무도 참가하지 않으면 몬스터 자동 도주
 const TURN_MS = 60 * 1000;          // 턴당 행동 선택 시간(못 고르면 자동 공격)
-const AMBUSH_EXPLODE_MS = 4000;     // 습격 착지 폭발 장면 시간
-const AMBUSH_CALM_MS = 3000;        // 폭발 뒤 마지막(잔잔한) 장면 시간 — 습격 착지 턴의 결과 화면은 둘을 합쳐 보여 준다
+const AMBUSH_EXPLODE_MS = 5500;     // 습격 착지 폭발 장면 시간
+const AMBUSH_CALM_MS = 4500;        // 폭발 뒤 마지막(잔잔한) 장면 시간 — 습격 착지 턴의 결과 화면은 둘을 합쳐 보여 준다
 const AMBUSH_STAGE_MS = 1000;       // (미사용 상수 유지)
 const RESULT_MS = 4500;             // 턴 결과 화면을 보여주는 시간 — 그동안 버튼이 꺼지고, 끝나면 다음 턴 선택 화면으로(3.5초는 짧다는 사용자 요청으로 4.5초)
 const BATTLE_LIMIT_MS = 20 * 60 * 1000; // 전투 제한 시간 — 넘기면 몬스터 도주
@@ -126,7 +126,8 @@ function randomTimeInWindow(dayStartUtc) {
   return start + Math.floor(Math.random() * (end - start));
 }
 // 다음 자동 출현 몬스터는 일정을 잡을 때 등록된 몬스터 중 무작위로 미리 정한다(/xp에 '다음 몬스터'로 보이고 바꿀 수 있게).
-const randomMonsterId = () => (MONSTERS.length ? MONSTERS[Math.floor(Math.random() * MONSTERS.length)].id : null);
+const randomPool = () => MONSTERS.filter(m => !m.testOnly); // 시험 중(testOnly)인 몬스터는 무작위·자동 출현에서 뺀다(관리자가 직접 고를 때만)
+const randomMonsterId = () => { const pool = randomPool(); return pool.length ? pool[Math.floor(Math.random() * pool.length)].id : null; };
 const validMonsterId = (id) => ([...MONSTERS, ...HARD_MONSTERS].some(m => m.id === id) ? id : null); // 고난이도도 관리자가 직접 고르면 유효
 function scheduleNextSpawn(fromMs = Date.now()) {
   const [minDays, maxDays] = SPAWN_INTERVAL_DAYS;
@@ -818,12 +819,13 @@ async function spawnRaid(client, channel, { forced = false, monsterId = null } =
   // 고난이도(???)는 관리자가 직접 고를 때만 소환된다(서버 무관 · 무작위·자동 출현은 제외)
   const monster = monsterId
     ? (MONSTERS.find(m => m.id === monsterId) ?? ALL_MONSTERS.find(m => m.id === monsterId))
-    : MONSTERS[Math.floor(Math.random() * MONSTERS.length)];
+    : randomPool()[Math.floor(Math.random() * randomPool().length)];
   if (!monster) return '그 몬스터를 찾을 수 없어요. 다시 골라 주세요.';
   if (monster.testOnly && !isExcludedGuild(channel.guildId)) return '이 몬스터는 아직 테스트 서버에서만 소환할 수 있어요.'; // 시험 중인 몬스터(Monster 파일의 testOnly)
   // 조커 몬스터(ambush — 흉성): 모집 로비엔 고난이도를 뺀 일반 몬스터 하나가 위장으로 나오고, 전투 중 습격한다.
   const boss = monster.ambush ? monster : null;
-  const shown = boss ? MONSTERS[Math.floor(Math.random() * MONSTERS.length)] : monster;
+  const disguises = MONSTERS.filter(m => !m.ambush); // 위장은 습격 몬스터(흉성 자신)를 뺀 일반 몬스터 중에서
+  const shown = boss ? disguises[Math.floor(Math.random() * disguises.length)] : monster;
   const now = Date.now();
   const r = {
     client,
@@ -946,7 +948,7 @@ function advanceTurn(r) {
   if (outcome) { finishRaid(r, outcome); return; }
   if (Date.now() >= r.battleEndsAt) { finishRaid(r, 'timeout'); return; }
   r.showingResult = true;
-  r.ambushStage = r.battle.lastTurn?.ambushLanded ? 0 : 3; // 습격 착지 턴이면 충돌 장면(0)부터
+  r.ambushStage = (r.battle.lastTurn?.ambushLanded || r.battle.lastTurn?.cometLanded) ? 0 : 3; // 습격 착지 턴이면 충돌 장면(0)부터
   requestRender(r, { image: true, immediate: true });
   const turn = r.battle.turn;
   if (r.ambushStage === 0) { // 폭발이 잦아들고 연기가 흩어지는 과정을 단계마다 한 번씩 더 그린다(갑자기 바뀌어 부자연스럽지 않게)

@@ -20,7 +20,7 @@ function subdivide(a, b, d, out, rnd) {
 
 // 한 장면의 에너지를 만든다. 후광은 몸 픽셀 칸(coarse), 번개는 그 절반 칸(fine)이라 번개가 몸 픽셀보다 가늘게 보인다.
 // 좌표는 몸 중심 기준: 후광 칸 단위는 {x,y}, 번개 칸 단위는 fine(= coarse × 2).
-function buildEnergy(bodyR, seed, pulseK = 0, style = process.env.ENERGY_STYLE || 'radial') {
+function buildEnergy(bodyR, seed, pulseK = 0, style = process.env.ENERGY_STYLE || 'radial', rage = false) {
   const rnd = makeRng(seed * 7919 + 13), glow = new Map(), bolts = new Map();
   const R2 = bodyR * 2; // fine 단위 몸 반지름
   const putB = (x, y, c) => { x = Math.round(x); y = Math.round(y); if (Math.hypot(x + 0.5, y + 0.5) < R2 + 0.5) return; bolts.set(x + ',' + y, c); };
@@ -77,12 +77,12 @@ function buildEnergy(bodyR, seed, pulseK = 0, style = process.env.ENERGY_STYLE |
   if (style === 'radial') {
     // 몸 둘레에 튀는 번개(사용자가 이상적이라고 고른 모양): 굵고 긴 줄기 몇 가닥이 한두 쪽으로 몰리고, 빈 쪽 몸 가장자리는 후광만 두른다.
     // 기세는 조금만 달라진다(잔잔 0.85 / 보통 1 / 폭주 1.2). 곧게 방사하지 않게 각도를 흔들고, 길이는 줄기마다 다르다.
-    const k = mood < 0.25 ? 0.85 : mood < 0.8 ? 1 : 1.2;
+    const k = (mood < 0.25 ? 0.85 : mood < 0.8 ? 1 : 1.2) * (rage ? 1.35 : 1); // 분노: 용뢰가 더 많이, 더 고르게 퍼져 튄다
     const lenR = (base, spread) => { const m = rnd() < 0.2 ? 1.5 : rnd() < 0.25 ? 0.65 : 0.85 + rnd() * 0.4; return (base + rnd() * spread) * m; };
-    const pick = (gap) => { let t, tries = 0; do { t = rnd() < 0.75 ? hot[Math.floor(rnd() * hot.length)] + gauss() * 0.75 : rnd() * Math.PI * 2; tries++; } while (tries < 40 && used.some(u => Math.abs(Math.atan2(Math.sin(t - u), Math.cos(t - u))) < gap)); used.push(t); return t; };
-    const nMain = Math.max(3, Math.round((4 + Math.floor(rnd() * 3)) * k));
+    const pick = (gap) => { let t, tries = 0; do { t = rnd() < (rage ? 0.5 : 0.75) ? hot[Math.floor(rnd() * hot.length)] + gauss() * 0.75 : rnd() * Math.PI * 2; tries++; } while (tries < 40 && used.some(u => Math.abs(Math.atan2(Math.sin(t - u), Math.cos(t - u))) < (rage ? gap * 0.7 : gap))); used.push(t); return t; };
+    const nMain = Math.max(3, Math.round((4 + Math.floor(rnd() * 3)) * k) + (rage ? 2 : 0));
     for (let i = 0; i < nMain; i++) { const t = pick(0.55); const [x, y] = at(t, R2 + 0.5); bolt(x, y, t + (rnd() - 0.5) * 1.0, lenR(16, 10) * squash(t), 0); }
-    const nMid = Math.max(2, Math.round((3 + Math.floor(rnd() * 3)) * k));
+    const nMid = Math.max(2, Math.round((3 + Math.floor(rnd() * 3)) * k) + (rage ? 3 : 0));
     for (let i = 0; i < nMid; i++) { const t = pick(0.35); const [x, y] = at(t, R2 + 0.5); bolt(x, y, t + (rnd() - 0.5) * 1.2, lenR(7, 6) * squash(t), 1); }
     const nArc = rnd() < 0.5 ? 0 : 1;
     for (let i = 0; i < nArc; i++) { const t = hot[0] + gauss() * 0.8, dir = rnd() < 0.5 ? 1 : -1; const [x, y] = at(t, R2 + 2); bolt(x, y, t + dir * (Math.PI / 2 - 0.25), 7 + rnd() * 6, 1); }
@@ -107,8 +107,8 @@ function buildEnergy(bodyR, seed, pulseK = 0, style = process.env.ENERGY_STYLE |
   return { glow, bolts, intensity: Math.min(1, Math.max(0, (scaleN - 0.6) / 1.0)) }; // 0(잔잔) ~ 1(폭주): 몸 색 변화에 쓴다
 }
 
-function drawEnergy(rect, cx, cy, bodyR, cell, seed) {
-  const { glow, bolts, intensity } = buildEnergy(bodyR, seed, seed), half = cell / 2;
+function drawEnergy(rect, cx, cy, bodyR, cell, seed, rage = false) {
+  const { glow, bolts, intensity } = buildEnergy(bodyR, seed, seed, undefined, rage), half = cell / 2;
   const paint = (cells, size, keys) => { for (const key of keys) for (const [k, c] of cells) { if (c !== key) continue; const [x, y] = k.split(',').map(Number); const x0 = Math.round(cx + x * size), y0 = Math.round(cy + y * size); rect(x0, y0, Math.round(cx + (x + 1) * size) - x0, Math.round(cy + (y + 1) * size) - y0, COLORS[c]); } };
   paint(glow, cell, ['p', 'q', 't']);       // 후광 먼저
   paint(bolts, half, ['g', 'f', 'y', 's']); // 그 위에 번개(번짐 → 심 → 속 → 번쩍)
@@ -116,8 +116,8 @@ function drawEnergy(rect, cx, cy, bodyR, cell, seed) {
 }
 
 // 번개가 퍼질 때 몸 색이 아주 조금 붉게 달아오른다: 몸 팔레트 글자(base)를 붉은빛과 섞은 색으로 돌려준다(약 12~20%, 밝아지지 않게 어두운 자줏빛과 섞음).
-function bodyTint(palette, keys, intensity) {
-  const k = 0.2 * (0.6 + 0.4 * intensity), red = [150, 30, 70], out = {};
+function bodyTint(palette, keys, intensity, boost = 1) {
+  const k = Math.min(0.5, 0.2 * (0.6 + 0.4 * intensity) * boost), red = [150, 30, 70], out = {};
   for (const ch of keys) {
     const hex = palette[ch]; if (!hex) continue;
     const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));

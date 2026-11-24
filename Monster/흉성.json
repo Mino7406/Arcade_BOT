@@ -5,8 +5,8 @@
   "emoji": "⚡",
   "rageName": "흉성(폭주)",
   "lore": "붉은 용뢰를 두른 불길한 별. (임시 설명)",
-  "baseHp": 4880,
-  "damageRate": 1.2,
+  "baseHp": 6000,
+  "damageRate": 0.72,
   "rage": {
     "hpRatio": 0.5,
     "damageRate": 1.5
@@ -120,40 +120,74 @@
   },
   "moves": {
     "attack": {
-      "name": "몸통 박치기",
-      "telegraph": "몸을 납작하게 웅크린다...",
+      "name": "용뢰 치기",
+      "telegraph": "붉은 용뢰를 두르고 내려칠 자세를 잡는다...",
       "target": "single",
       "damage": [
-        8,
-        10
-      ]
+        9,
+        11
+      ],
+      "fx": "thump"
     },
     "sweep": {
-      "name": "점액 흩뿌리기",
-      "telegraph": "몸이 부르르 떨리기 시작한다...",
+      "name": "용뢰 연쇄",
+      "telegraph": "용뢰가 사방으로 튀기 시작한다...",
       "target": "all",
       "damage": [
-        5,
-        7
+        6,
+        8
       ],
       "effect": "slow",
       "effectRate": 0.75,
       "effectTurns": 2,
       "status": {
-        "name": "점액",
-        "emoji": "💧"
-      }
+        "name": "감전",
+        "emoji": "⚡",
+        "fx": "lightning"
+      },
+      "fx": "chain"
     },
-    "charge": {
-      "name": "단단해지기",
-      "telegraph": "주변 점액을 빨아들여 부풀어 오른다...",
+    "erode": {
+      "name": "용기 침식",
+      "telegraph": "몸속으로 용기가 스며든다...",
+      "target": "all",
+      "damage": [
+        5,
+        7
+      ],
+      "effect": "vuln",
+      "effectTurns": 2,
+      "effectRate": 1.3,
+      "status": {
+        "name": "용기 침식",
+        "emoji": "🐉",
+        "fx": "dragon"
+      },
+      "fx": "erode"
+    },
+    "strike": {
+      "name": "낙뢰",
+      "telegraph": "하늘이 번쩍인다... {target}을(를) 노린다!",
+      "target": "single",
+      "mark": true,
+      "rageTargets": 2,
+      "damage": [
+        22,
+        26
+      ],
+      "guardRate": 0.6,
+      "fx": "lightning"
+    },
+    "release": {
+      "name": "용기 해방",
+      "telegraph": "용뢰가 거세게 요동친다...",
       "target": "none",
-      "effect": "shield",
-      "effectRate": 0.5
+      "buffRate": 1.5,
+      "fx": "release"
     },
     "smash": {
-      "name": "필살 짓누르기",
-      "telegraph": "💥 필살기를 준비 중입니다! 방어하세요!",
+      "name": "필살 흉성 낙하",
+      "telegraph": "☄️ 흉성이 하늘 높이 솟구쳤다! 방어하세요!",
       "target": "all",
       "readyPose": "charge",
       "damage": [
@@ -164,14 +198,25 @@
       "status": {
         "name": "기절",
         "emoji": "💫"
-      }
-    },
-    "heal": {
-      "name": "재생",
-      "telegraph": "몸에서 초록 거품이 보글거린다...",
-      "target": "self",
-      "healRate": 0.06,
-      "useBelowHp": 0.85
+      },
+      "fx": "comet",
+      "skyDot": true,
+      "untouchable": true,
+      "guardBlocks": true,
+      "also": [
+        {
+          "effect": "poison",
+          "effectTurns": 2,
+          "tickDamage": 3,
+          "stacks": 1,
+          "maxStacks": 3,
+          "status": {
+            "name": "화상",
+            "emoji": "🔥",
+            "color": "#ff9a3c"
+          }
+        }
+      ]
     },
     "recharge": {
       "name": "용뢰 충전",
@@ -183,21 +228,22 @@
   "intentWeights": {
     "normal": {
       "attack": 4,
-      "sweep": 2,
-      "charge": 2,
-      "smash": 1,
-      "heal": 2
+      "sweep": 2.5,
+      "erode": 2,
+      "strike": 2,
+      "release": 1.5,
+      "smash": 1
     },
     "rage": {
-      "attack": 3.5,
+      "attack": 3,
       "sweep": 2,
-      "charge": 2,
-      "smash": 1.5,
-      "heal": 2.5
+      "erode": 2,
+      "strike": 3.5,
+      "release": 2,
+      "smash": 2
     }
   },
   "theme": "energy",
-  "hard": true,
   "ambush": {
     "minTurn": 4,
     "maxTurn": 6,
@@ -233,5 +279,6 @@
       ]
     }
   },
-  "testOnly": true
+  "testOnly": true,
+  "restAfter": "smash"
 }
