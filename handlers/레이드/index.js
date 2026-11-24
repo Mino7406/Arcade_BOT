@@ -33,7 +33,7 @@ const { GATEWAY_NAME, gatewayEmoji, grantGateway } = require('../게임/블랙�
 const { displayNameFromInteraction } = require('../공통/이름');
 const {
   PLAYER_MAX_HP, POTIONS_PER_BATTLE, POTION_HEAL, GUARD_DAMAGE_RATE, ROLES, ROLE_ORDER, ACTIONS, MONSTERS, HARD_MONSTERS, ALL_MONSTERS,
-  createBattle, checkChoice, choose, allChosen, resolveTurn,
+  createBattle, rebindAmbush, checkChoice, choose, allChosen, resolveTurn,
   isErrored, errorTurnsLeft, isVulnerable, vulnTurnsLeft, isDoomed,
   isStunned, slowTurnsLeft, isShielded, isPowered, poisonTurnsLeft, poisonStacks, poisonDamage, isConfused, chillStacks, isFeared, isPhased, isStenched, stenchTurnsLeft, minionsAlive, isWeak, weakTurnsLeft, telegraphText, isWarnIntent, minusPct, contribution,
 } = require('./전투');
@@ -47,6 +47,7 @@ const SPAWN_WINDOW_WEEKEND = [12, 29]; // 주말(토·일) 12:00 ~ 다음 날 05
 const MAX_MANUAL_SPAWN_AHEAD_DAYS = 30; // 관리자가 출현 시각을 직접 정할 때 최대 며칠 뒤까지(오타로 몇 년 뒤가 되는 것만 막음)
 const RECRUIT_MS = 60 * 60 * 1000;  // 출현 후 모집 대기 시간 — 그동안 아무도 참가하지 않으면 몬스터 자동 도주
 const TURN_MS = 60 * 1000;          // 턴당 행동 선택 시간(못 고르면 자동 공격)
+const AMBUSH_STAGE_MS = 1000;       // 습격 착지 결과를 4단계(0 충돌 → 1 폭발이 잦아듦·연기 속에서 헤더가 바뀜 → 2 연기가 흩어짐 → 3 잔잔)로 보여 줄 때 단계 사이 간격
 const RESULT_MS = 4500;             // 턴 결과 화면을 보여주는 시간 — 그동안 버튼이 꺼지고, 끝나면 다음 턴 선택 화면으로(3.5초는 짧다는 사용자 요청으로 4.5초)
 const BATTLE_LIMIT_MS = 20 * 60 * 1000; // 전투 제한 시간 — 넘기면 몬스터 도주
 const PARTY_MAX = 4;
@@ -771,6 +772,7 @@ function saveActive(r) {
     channelId: r.channelId,
     messageId: r.message.id,
     monsterId: r.monster.id,
+    ...(r.boss ? { bossId: r.boss.id } : {}), // 습격 몬스터는 위장 중에도 누구인지 남긴다
     phase: r.phase,
     recruitEndsAt: r.recruitEndsAt,
     party: r.party,
@@ -816,19 +818,24 @@ async function spawnRaid(client, channel, { forced = false, monsterId = null } =
     ? (MONSTERS.find(m => m.id === monsterId) ?? ALL_MONSTERS.find(m => m.id === monsterId))
     : MONSTERS[Math.floor(Math.random() * MONSTERS.length)];
   if (!monster) return '그 몬스터를 찾을 수 없어요. 다시 골라 주세요.';
+  if (monster.testOnly && !isExcludedGuild(channel.guildId)) return '이 몬스터는 아직 테스트 서버에서만 소환할 수 있어요.'; // 시험 중인 몬스터(Monster 파일의 testOnly)
+  // 조커 몬스터(ambush — 흉성): 모집 로비엔 고난이도를 뺀 일반 몬스터 하나가 위장으로 나오고, 전투 중 습격한다.
+  const boss = monster.ambush ? monster : null;
+  const shown = boss ? MONSTERS[Math.floor(Math.random() * MONSTERS.length)] : monster;
   const now = Date.now();
   const r = {
     client,
-    monster,
+    monster: shown,
+    boss, // 위장 뒤에 숨은 진짜 몬스터(없으면 null)
     guildId: channel.guildId,
     channelId: channel.id,
     message: null,
     imageUrl: null,
     phase: 'recruit',
     party: [], // { userId, name, role }
-    recruitEndsAt: monster.raid?.persistent ? null : now + RECRUIT_MS,
+    recruitEndsAt: shown.raid?.persistent ? null : now + RECRUIT_MS,
     waitedMs: 0,       // 남아 있는 몬스터: 모집(대기) 상태로 지낸 누적 시간(전투 시간은 뺌)
-    waitSince: monster.raid?.persistent ? now : null,
+    waitSince: shown.raid?.persistent ? now : null,
     drainedMs: 0,      // 그중 XP 차감이 끝난 시간
     lostPerUser: 0,    // 지금까지 1인당 잃은 XP(대기 차감 + 패배 차감) — 대기창에 표시
     defeatStacks: 0,
@@ -855,7 +862,7 @@ async function spawnRaid(client, channel, { forced = false, monsterId = null } =
   saveActive(r);
   if (!isPersistent(r)) r.timer = setTimeout(() => onRecruitEnd(r).catch(err => console.error('레이드 모집 마감 처리 실패:', err)), RECRUIT_MS);
   startCountdown(r);
-  logSystem({ 유형: '레이드', 채널: `#${channel.name ?? channel.id}`, 내용: `레이드 출현 — ${monster.name}${forced ? ' (관리자 소환)' : ''}${r.freezesXp ? ', XP 정지' : ''}` });
+  logSystem({ 유형: '레이드', 채널: `#${channel.name ?? channel.id}`, 내용: `레이드 출현 — ${monster.name}${boss ? ` (위장: ${shown.name})` : ''}${forced ? ' (관리자 소환)' : ''}${r.freezesXp ? ', XP 정지' : ''}` });
   return null;
 }
 
@@ -907,7 +914,7 @@ function startBattle(r, { by = null } = {}) {
   const mention = r.party.map(p => p.userId).filter(id => id !== by);
   r.startMention = mention.length ? mention : null;
   // 본서버는 혼자여도 2인 HP(HP_MIN_PARTY), 테스트 서버는 혼자 끝까지 시험할 수 있게 1인 HP부터
-  r.battle = createBattle(r.monster, r.party, Math.random, { minParty: isExcludedGuild(r.guildId) ? 1 : undefined });
+  r.battle = createBattle(r.monster, r.party, Math.random, { minParty: isExcludedGuild(r.guildId) ? 1 : undefined, boss: r.boss });
   r.battleStartedAt = Date.now(); // 종료 화면의 '걸린 시간'용
   r.battleEndsAt = r.battleStartedAt + BATTLE_LIMIT_MS;
   armTurnTimer(r);
@@ -933,11 +940,22 @@ function advanceTurn(r) {
   clearTimer(r);
   deleteStartMention(r); // 시작 멘션은 1턴이 끝나면 지운다
   const outcome = resolveTurn(r.battle);
+  if (r.battle.ambush?.phase === 'landed') r.monster = r.battle.monster; // 습격 착지 — 이제부터 진짜 몬스터
   if (outcome) { finishRaid(r, outcome); return; }
   if (Date.now() >= r.battleEndsAt) { finishRaid(r, 'timeout'); return; }
   r.showingResult = true;
+  r.ambushStage = r.battle.lastTurn?.ambushLanded ? 0 : 3; // 습격 착지 턴이면 충돌 장면(0)부터
   requestRender(r, { image: true, immediate: true });
   const turn = r.battle.turn;
+  if (r.ambushStage === 0) { // 폭발이 잦아들고 연기가 흩어지는 과정을 단계마다 한 번씩 더 그린다(갑자기 바뀌어 부자연스럽지 않게)
+    for (const stage of [1, 2, 3]) {
+      setTimeout(() => {
+        if (!isCurrent(r) || r.phase !== 'battle' || r.battle.turn !== turn || !r.showingResult) return;
+        r.ambushStage = stage;
+        requestRender(r, { image: true, immediate: true });
+      }, AMBUSH_STAGE_MS * stage);
+    }
+  }
   r.timer = setTimeout(() => {
     if (!isCurrent(r) || r.phase !== 'battle' || r.battle.turn !== turn) return;
     r.showingResult = false;
@@ -1217,6 +1235,7 @@ async function resumeRaid(client, message, saved) {
   const r = {
     client,
     monster,
+    boss: info.bossId ? ALL_MONSTERS.find(x => x.id === info.bossId) ?? null : null,
     guildId,
     channelId: message.channelId,
     message,
@@ -1240,7 +1259,7 @@ async function resumeRaid(client, message, saved) {
   rememberImageUrl(r, message);
   r.hasImage = !!r.imageUrl;
   if (info.phase === 'battle') {
-    r.battle = { ...info.battle, monster };
+    r.battle = { ...info.battle, monster: rebindAmbush(info.battle, monster) }; // 습격 중이던 전투는 위장·진짜 몬스터를 다시 맞춘다
     r.battleStartedAt = info.battleStartedAt || now;
     // 봇이 꺼져 있던 동안 전투 시간이 다 지나갔어도 한 턴은 고를 수 있게 한다.
     r.battleEndsAt = Math.max(info.battleEndsAt || 0, now + TURN_MS);
