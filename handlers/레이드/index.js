@@ -47,7 +47,7 @@ const SPAWN_WINDOW_WEEKEND = [12, 29]; // 주말(토·일) 12:00 ~ 다음 날 05
 const MAX_MANUAL_SPAWN_AHEAD_DAYS = 30; // 관리자가 출현 시각을 직접 정할 때 최대 며칠 뒤까지(오타로 몇 년 뒤가 되는 것만 막음)
 const RECRUIT_MS = 60 * 60 * 1000;  // 출현 후 모집 대기 시간 — 그동안 아무도 참가하지 않으면 몬스터 자동 도주
 const TURN_MS = 60 * 1000;          // 턴당 행동 선택 시간(못 고르면 자동 공격)
-const AMBUSH_STAGE_MS = 1000;       // 습격 착지 결과를 4단계(0 충돌 → 1 폭발이 잦아듦·연기 속에서 헤더가 바뀜 → 2 연기가 흩어짐 → 3 잔잔)로 보여 줄 때 단계 사이 간격
+const AMBUSH_STAGE_MS = 1000;       // (미사용 상수 유지)
 const RESULT_MS = 4500;             // 턴 결과 화면을 보여주는 시간 — 그동안 버튼이 꺼지고, 끝나면 다음 턴 선택 화면으로(3.5초는 짧다는 사용자 요청으로 4.5초)
 const BATTLE_LIMIT_MS = 20 * 60 * 1000; // 전투 제한 시간 — 넘기면 몬스터 도주
 const PARTY_MAX = 4;
@@ -948,12 +948,12 @@ function advanceTurn(r) {
   requestRender(r, { image: true, immediate: true });
   const turn = r.battle.turn;
   if (r.ambushStage === 0) { // 폭발이 잦아들고 연기가 흩어지는 과정을 단계마다 한 번씩 더 그린다(갑자기 바뀌어 부자연스럽지 않게)
-    for (const stage of [1, 2, 3]) {
+    for (const stage of [3]) { // 사용자 요청: 충돌 장면(0)과 잔잔한 마지막(3)만 보여 준다
       setTimeout(() => {
         if (!isCurrent(r) || r.phase !== 'battle' || r.battle.turn !== turn || !r.showingResult) return;
         r.ambushStage = stage;
         requestRender(r, { image: true, immediate: true });
-      }, AMBUSH_STAGE_MS * stage);
+      }, 3000); // 폭발 장면을 3초간 보여 준 뒤 마지막 장면으로
     }
   }
   r.timer = setTimeout(() => {

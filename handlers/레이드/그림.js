@@ -361,7 +361,7 @@ function ambushSmoke(stage) {
   layer(18, 26, 54, 34, 150, 2);    // 앞: 작은 덩이(아래쪽 가장자리가 울퉁불퉁하게 말림)
   for (let x = 0; x <= W; x += 60) puffs.push({ x, y: 56, r: 64, L: 0, k: 0.5 }); // 빈틈 방지용 바탕
   if (stage >= 3) { // 잔잔: 몇 군데에만 옅게
-    for (const q of puffs.filter(q => q.L === 1).slice(0, 7)) haze(q.x, q.y * 0.7, q.r * 0.8, '#6a5a4c', 0.12);
+    // 잔잔 단계: 헤더 쪽엔 연기를 남기지 않는다(이름·HP가 깨끗이 보이게)
     return;
   }
   const lift = stage === 2 ? 24 : 0;     // 2단계: 연기가 위로 말려 올라가며
@@ -387,7 +387,48 @@ function ambushSmoke(stage) {
 // 습격 착지(턴 결과 화면) — 참고 영상(발파루크 습격)처럼: 화면 전체가 붉게 번쩍이고 충돌 지점에 하얀 핵의 뾰족한 폭발이 터진다.
 // 몬스터 뒤(back)에는 옅은 열기만, 번쩍임은 그림을 다 그린 뒤 맨 위에 덮는다(ambushFlash).
 function ambushImpact(cx, cy, layer) {
-  if (layer === 'back') haze(cx, cy + 30, 120, '#ff7a3a', 0.12);
+  if (layer === 'back' && (process.env.CALM_STYLE ?? 'BC') === '0') heatGlow(cx, cy + 30, 124);
+}
+function calmStyle(st, cx, cy, stage) {
+  const gy = cy + 66;
+  if (st === '0') { for (const [dx, k] of [[-210, 1], [-120, 2], [120, 3], [210, 4]]) wisp(cx + dx, gy - 4, 52, k); return; }
+  if (st === 'BC') { calmStyle('B', cx, cy, stage); calmStyle('C', cx, cy, stage); return; } // 붉은 안개 띠·불씨 + 피어오르는 연기 기둥
+  const rnd = seedRng(energyTick + 11);
+  if (st === 'A') { // 바닥 먼지 구름만: 양옆으로 낮게 퍼지는 겹겹의 먼지, 후광 없음
+    for (const side of [-1, 1]) for (let i = 0; i < 6; i++) { const x = cx + side * (70 + i * 42 + rnd() * 20), r = 54 - i * 5; wisp(x, gy - 2 - rnd() * 6, r, i + (side > 0 ? 9 : 0)); }
+  } else if (st === 'B') { // 먼지 구름 없이, 돌 둘레 흩어지는 불씨와 바닥에서 기어오르는 옅은 붉은 안개 띠
+    for (let i = 0; i < 5; i++) p.roundRect(cx - 330 + i * 18, gy - 8 - i * 7, 660 - i * 36, 16 + i * 6, 12, '#7a2a1a', 0.05);
+    for (let i = 0; i < 40; i++) dot(cx + (rnd() - 0.5) * 520, gy - rnd() * 130, 2 + Math.floor(rnd() * 3), rnd() < 0.5 ? '#ff8a3a' : '#ffd080');
+  } else if (st === 'C') { // 크레이터에서 가늘게 피어오르는 연기 기둥 3줄(각각 위로 퍼지며 흐려짐)
+    for (const [dx, k] of [[-40, 0], [6, 1], [48, 2]]) for (let t = 0; t < 9; t++) { const r = 8 + t * 5, x = cx + dx + Math.sin(t * 0.8 + k * 2) * (4 + t * 1.8), y = gy - 20 - t * 17; p.roundRect(x - r, y - r * 0.8, r * 2, r * 1.6, r * 0.8, t < 3 ? '#6a4a38' : '#5a463a', Math.max(0.05, 0.26 - t * 0.026)); p.roundRect(x - r * 0.6, y - r * 0.55 - 3, r * 1.1, r * 0.8, r * 0.4, '#9a7a62', Math.max(0.03, 0.14 - t * 0.014)); }
+    for (let i = 0; i < 24; i++) dot(cx + (rnd() - 0.5) * 360, gy - rnd() * 150, 2 + Math.floor(rnd() * 2), '#ff9a4a');
+  } else if (st === 'D') { // 충격으로 갈라진 땅에서 가라앉는 붉은 열기 + 땅을 따라 흐르는 낮은 연기 한 줄
+    for (let x = -300; x <= 300; x += 26) { const h = 16 + 10 * Math.sin(x * 0.04 + 1) + rnd() * 6; p.roundRect(cx + x - 22, gy - h, 44, h + 8, 18, '#5a463a', 0.22); p.roundRect(cx + x - 16, gy - h - 4, 30, h * 0.6, 12, '#8a6a52', 0.14); }
+    for (let i = 0; i < 18; i++) dot(cx + (rnd() - 0.5) * 420, gy - 6 - rnd() * 60, 2 + Math.floor(rnd() * 3), '#ff8a3a');
+  }
+}
+// 열기 후광: 매끈한 한 장 대신 겹겹의 띠(포스터화된 그라데이션) + 바깥 얇은 고리 + 안쪽 따뜻한 중심으로 깊이를 낸다
+function heatGlow(cx, cy, R) {
+  const ring = (r, c, a) => haze(cx, cy, r, c, a);
+  ring(R, '#ff7a3a', 0.035);
+  ring(R * 0.9, '#ff6a30', 0.03);
+  ring(R * 0.76, '#ff6a30', 0.03);
+  ring(R * 0.6, '#ff8a40', 0.03);
+  ring(R * 0.44, '#ffa050', 0.03);
+  ring(R * 0.28, '#ffb060', 0.03);
+  const rim = (r, a) => { for (let t = 0; t < 120; t++) { const th = t / 120 * Math.PI * 2; dot(cx + Math.cos(th) * r, cy + Math.sin(th) * r, 3, '#ff8a4a'); } };
+  rim(R * 1.02, 0);
+}
+// 바닥에 깔리는 먼지 연기: 납작한 덩이 여러 개가 겹겹이(뒤 어둡게 → 앞 밝게), 아래쪽은 불빛을 받아 따뜻하고 위쪽 가장자리는 옅게 풀린다. 위로 가느다란 먼지 줄기와 떠다니는 알갱이.
+function wisp(cx, cy, r, k = 0) {
+  const rnd = seedRng(Math.floor(cx * 7 + cy * 3 + k * 101));
+  const n = 5, blobs = Array.from({ length: n }, (_, i) => ({ x: cx + (i - (n - 1) / 2) * r * 0.42 + (rnd() - 0.5) * r * 0.2, w: r * (0.5 + rnd() * 0.4), h: r * (0.2 + rnd() * 0.16), y: cy - rnd() * r * 0.2 }));
+  for (const b of blobs) p.roundRect(b.x - b.w, b.y - b.h * 0.9, b.w * 2, b.h * 2, b.h, '#2a1a16', 0.30);          // 뒤: 어두운 그림자 덩이
+  for (const b of blobs) p.roundRect(b.x - b.w * 0.88, b.y - b.h * 1.0 - b.h * 0.15, b.w * 1.76, b.h * 1.7, b.h * 0.85, '#5a4034', 0.28); // 중간: 먼지색
+  for (const b of blobs) p.roundRect(b.x - b.w * 0.7, b.y - b.h * 1.2, b.w * 1.3, b.h * 1.0, b.h * 0.5, '#8a6a52', 0.2);                  // 위쪽 왼쪽 밝은 면
+  for (const b of blobs) p.roundRect(b.x - b.w * 0.6, b.y + b.h * 0.1, b.w * 1.2, b.h * 0.6, b.h * 0.3, '#c0703a', 0.14);                 // 아래쪽 땅 불빛
+  for (let i = 0; i < 4; i++) { const px = cx + (rnd() - 0.5) * r * 1.8, py = cy - r * (0.25 + rnd() * 0.6); dot(px, py, 3 + Math.floor(rnd() * 2) * 2, i % 2 ? '#8a6a52' : '#b0805a'); } // 떠다니는 먼지 알갱이
+  for (let i = 0; i < 2; i++) { const px = cx + (rnd() - 0.5) * r * 1.2; for (let t = 0; t < 4; t++) p.roundRect(px + Math.sin(t + k + i) * 4 - 7 + t, cy - r * 0.3 - t * 12, 14 - t * 2, 14, 7, '#6a5444', 0.2 - t * 0.04); } // 위로 피어오르는 가는 먼지 줄기
 }
 // stage 0: 충돌 순간(화면 전체가 붉고 폭발이 가장 크다) → 1: 폭발이 작아지고 식음 → 2: 폭발은 사라지고 불씨만 → 3: 붉은 기운이 옅게 남음
 function ambushFlash(stage, cx, cy) {
@@ -440,8 +481,8 @@ function ambushFlash(stage, cx, cy) {
     }
   } else {
     // 2·3단계: 폭발은 사라지고 열기와 가라앉는 불씨만 남는다
-    for (const dx of [-210, -120, 120, 210]) haze(cx + dx, cy + 40, 46, '#ff7a3a', stage === 2 ? 0.16 : 0.1);
-    if (stage === 2) haze(ex, ey, 150, '#ff7a3a', 0.1);
+    calmStyle(process.env.CALM_STYLE ?? 'BC', cx, cy, stage); // 땅 위로 잔잔히 깔리는 연기
+    if (stage === 2) heatGlow(ex, ey, 130);
     const embers = stage === 2 ? 34 : 18;
     for (let i = 0; i < embers; i++) { const px = ex + (rnd() - 0.5) * 560, py = ey + 20 - rnd() * (stage === 2 ? 170 : 120); dot(px, py, 3 + rnd() * 3, i % 2 ? '#ff7a3a' : '#ffd080'); }
   }
@@ -1704,7 +1745,7 @@ function renderBattle(r) {
       text(`피해 +${Math.round((b.powerRate - 1) * 100)}%`, W - 108, by + 40, 15, '#ff9a7a');
     }
     // 몬스터 기술 말풍선은 그 기술을 쓴 턴의 결과 화면에서만(다음 턴 선택 화면에는 남기지 않는다)
-    if (r.showingResult && (last?.monsterMove || last?.defused)) {
+    if (r.showingResult && (last?.monsterMove || last?.defused) && ambushStage !== 0) { // 습격 폭발 장면(0단계)에는 말풍선을 숨긴다
       const label = last.defused ? '불이 꺼졌다!' : `${last.monsterMove}!`; // 불끄기 성공 턴은 기술 대신
       if (m.ui?.moveBanner === 'terminal' && !last.defused) {
         // 터미널 명령줄 띠: 검은 바탕 + 붉은 테두리, 왼쪽 '>' 프롬프트, 가운데 기술 이름(밝은 붉은색), 오른쪽 위 깜빡이는 커서 블록.

@@ -78,8 +78,14 @@ function fakeInteraction(userId, customId) {
       landedAt = turn;
       assert(turn >= 4 && turn <= 6, `습격 착지는 4~6턴 중(${turn}턴, 위장 몬스터: ${before})`);
       assert(desc().includes('TURN ' + turn + ' 종료'), '습격 착지 결과 화면');
+      if (process.env.DUMP_DIR) { // 단계별 그림을 하나씩 저장(눈으로 확인용)
+        require('fs').writeFileSync(process.env.DUMP_DIR + '/st0.png', images[images.length - 1]);
+        const st = timers.filter(t => !t.cancelled && [3000].includes(t.ms)).sort((a, b) => a.ms - b.ms);
+        let n = 1; for (const t of st) { timers.splice(timers.indexOf(t), 1); await t.fn(); await flushRender(); require('fs').writeFileSync(process.env.DUMP_DIR + '/st' + (n++) + '.png', images[images.length - 1]); }
+      }
       await runTimers(); // 단계 타이머(2·3단계)와 결과 타이머 실행 → 다음 턴(쉬는 턴) 선택 화면
-      assert(images.length - imagesBefore >= 5, `착지 결과가 단계별로 다시 그려짐(그림 ${images.length - imagesBefore}장: 선택 화면 갱신들·결과·1·2·3단계·다음 턴)`);
+      assert(images.length - imagesBefore >= 4, `착지 결과가 단계별로 다시 그려짐(그림 ${images.length - imagesBefore}장)`);
+      if (process.env.DUMP_DIR) { require('fs').writeFileSync(process.env.DUMP_DIR + '/stage_last.png', images[images.length - 1]); require('fs').writeFileSync(process.env.DUMP_DIR + '/stage_first.png', images[imagesBefore + 1] ?? images[images.length - 1]); }
       const burnLine = desc().split('\n').find(l => l.includes('화상:')) ?? '';
       assert(burnLine.includes('유저2') && burnLine.includes('유저3') && !burnLine.includes('유저1'), '방어하지 못한 사람(유저2·3)에게만 화상, 방어한 유저1은 없음');
       const stunned = fakeInteraction('2', 'raid:act:attack'); await raidMod.handleRaidButton(stunned);
