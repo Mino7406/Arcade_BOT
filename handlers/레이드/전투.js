@@ -258,7 +258,9 @@ function loadMonsters(dir = MONSTER_DIR) {
 // enabled: false 인 몬스터(아직 공개 전)는 레이드 후보에서 뺀다 — 자동 출현·관리자 선택 모두. 켜려면 몬스터 파일에서 "enabled": false 를 지운다.
 // loadMonsters()는 전부 돌려주므로 테스트·시뮬레이션·예시 페이지는 꺼진 몬스터도 loadMonsters()로 볼 수 있다.
 const ALL_MONSTERS = loadMonsters(); // 꺼 둔 몬스터 포함(테스트 서버에서만 소환 가능)
-const MONSTERS = ALL_MONSTERS.filter(m => m.enabled !== false);
+// hard: true 인 고난이도 몬스터는 무작위·자동 출현 후보(MONSTERS)에서 빠지고, 관리자가 직접 고를 때만 나온다(HARD_MONSTERS).
+const MONSTERS = ALL_MONSTERS.filter(m => m.enabled !== false && !m.hard);
+const HARD_MONSTERS = ALL_MONSTERS.filter(m => m.enabled !== false && m.hard);
 
 // 몬스터 데이터에 intentWeights가 없을 때 쓰는 기본 가중치.
 const INTENT_WEIGHTS = {
@@ -1010,6 +1012,7 @@ module.exports = {
   ROLE_ORDER,
   ACTIONS,
   MONSTERS,
+  HARD_MONSTERS,
   ALL_MONSTERS,
   loadMonsters,
   createBattle,

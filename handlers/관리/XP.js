@@ -29,7 +29,7 @@ const { logAction } = require('../공통/로그');
 const { HACK_TOOL_NAME, HACK_TOOL_MAX, getHackTools, grantHackTool, useHackTool, hackToolEmoji, hackToolButtonEmoji } = require('../게임/해킹툴');
 const { GATEWAY_NAME, GATEWAY_MAX, getGateways, grantGateway, useGateway, gatewayEmoji, gatewayButtonEmoji } = require('../게임/블랙월게이트웨이');
 const { getRaidStatus, setAutoSpawn, setNextSpawnAt, setNextMonster, forceSpawnRaid, forceEndRaid } = require('../레이드');
-const { MONSTERS, ALL_MONSTERS } = require('../레이드/전투');
+const { MONSTERS, HARD_MONSTERS } = require('../레이드/전투');
 const { kstDateTimeString, parseKstDateTime } = require('../공통/시간');
 const { displayNameFromMember } = require('../공통/이름');
 
@@ -161,7 +161,7 @@ function buildManageView(notice, guildId) {
 // 레이드 상태 두 줄(진행 여부 / 다음 자동 출현 시각) — XP 관리 패널과 테스트 서버 화면이 공유.
 function raidStatusText(raid) {
   const next = raid.nextSpawnAt ? Math.floor(raid.nextSpawnAt / 1000) : null;
-  const waiting = raid.nextMonster ? `⚪ 대기 · 다음 몬스터 ${raid.nextMonster.emoji} **${raid.nextMonster.name}**` : '⚪ 대기';
+  const waiting = raid.nextMonster ? `⚪ 대기 · 다음 몬스터 ${monsterEmoji(raid.nextMonster)} **${raid.nextMonster.name}**` : '⚪ 대기';
   return `**레이드** ${raid.active ? `👾 ${raid.monsterName} 진행 중 (${raid.phase === 'recruit' ? '모집' : '전투'})` : waiting}\n` +
     `-# ${next ? `다음 자동 출현 <t:${next}:f> (<t:${next}:R>)` : raid.autoSpawn ? '다음 출현 일정 없음' : '자동 출현 중지 — 소환 버튼으로만 띄울 수 있어요'}`;
 }
@@ -172,50 +172,66 @@ function raidButton(raid) {
     : new ButtonBuilder().setCustomId('xp:mng:raid').setEmoji('👾').setLabel('레이드 소환').setStyle(ButtonStyle.Danger);
 }
 
-// 👾 레이드 소환 → 몬스터 고르기: 🎲 무작위 + 등록된 몬스터마다 버튼 하나(한 줄에 5개씩), 맨 아래 돌아가기.
-function buildRaidPickView(guildId, notice) {
-  const buttons = [
-    new ButtonBuilder().setCustomId('xp:summon:random').setEmoji('🎲').setLabel('무작위').setStyle(ButtonStyle.Primary),
-    ...ALL_MONSTERS.map(m => new ButtonBuilder().setCustomId(`xp:summon:${m.id}`) // 꺼 둔 몬스터(???)도 관리자 선택 소환은 가능
-    .setEmoji(m.emoji).setLabel(m.name).setStyle(ButtonStyle.Danger)),
-  ];
+// ??? 몬스터는 블랙월 앱 이모지로 보여 준다(봇이 켜지기 전·등록 실패면 🌐).
+const monsterEmoji = (m) => (m.id === 'void' ? gatewayEmoji() : m.emoji);
+const monsterButtonEmoji = (m) => (m.id === 'void' ? gatewayButtonEmoji() : m.emoji);
+
+// 버튼 목록을 한 줄 5개씩 ActionRow로 묶는다.
+function chunkRows(buttons) {
   const rows = [];
-  for (let i = 0; i < buttons.length && rows.length < 4; i += 5) rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
-  rows.push(new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('xp:mng:raidback').setEmoji('↩️').setLabel('돌아가기').setStyle(ButtonStyle.Secondary),
-  ));
+  for (let i = 0; i < buttons.length; i += 5) rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
+  return rows;
+}
+
+const HARD_NOTE = '**🔥 고난이도**\n-# 무작위·자동 출현에는 나오지 않고, 직접 고를 때만 나와요.';
+
+// 👾 레이드 소환 → 몬스터 고르기: 🎲 무작위 + 일반 몬스터 버튼(한 줄에 5개씩), 구분선 아래 고난이도, 맨 아래 돌아가기.
+function buildRaidPickView(guildId, notice) {
+  const normal = [
+    new ButtonBuilder().setCustomId('xp:summon:random').setEmoji('🎲').setLabel('무작위').setStyle(ButtonStyle.Primary),
+    ...MONSTERS.map(m => new ButtonBuilder().setCustomId(`xp:summon:${m.id}`).setEmoji(monsterButtonEmoji(m)).setLabel(m.name).setStyle(ButtonStyle.Danger)),
+  ];
+  const hard = HARD_MONSTERS.map(m => new ButtonBuilder().setCustomId(`xp:summon:${m.id}`).setEmoji(monsterButtonEmoji(m)).setLabel(m.name).setStyle(ButtonStyle.Danger));
   return payload(card({
     color: COLORS.err,
     header: '👾 레이드 소환',
     blocks: [
       notice || null,
       '어떤 몬스터를 소환할까요?\n-# 🎲 무작위는 등록된 몬스터 중 하나를 골라요(자동 출현과 같음).',
+      { rows: chunkRows(normal).slice(0, 3) },
+      hard.length ? HARD_NOTE : null,
+      hard.length ? { rows: chunkRows(hard).slice(0, 1) } : null,
     ],
-    rows,
+    rows: [new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('xp:mng:raidback').setEmoji('↩️').setLabel('돌아가기').setStyle(ButtonStyle.Secondary),
+    )],
   }));
 }
 
-// 🔄 몬스터 변경 → 다음 자동 출현 몬스터 고르기: 🎲 무작위(다시 뽑기) + 몬스터마다 버튼(지금 정해진 몬스터는 초록), 돌아가기.
+// 🔄 몬스터 변경 → 다음 자동 출현 몬스터 고르기: 🎲 무작위(다시 뽑기) + 몬스터마다 버튼(지금 정해진 몬스터는 초록),
+// 구분선 아래 고난이도(직접 고르면 적용됨), 돌아가기.
 function buildNextMonsterView(guildId) {
   const raid = getRaidStatus(guildId);
   const next = raid.nextMonster;
-  const buttons = [
+  const monBtn = (m) => new ButtonBuilder().setCustomId(`xp:nextmon:${m.id}`).setEmoji(monsterButtonEmoji(m)).setLabel(m.name)
+    .setStyle(next?.id === m.id ? ButtonStyle.Success : ButtonStyle.Secondary);
+  const normal = [
     new ButtonBuilder().setCustomId('xp:nextmon:random').setEmoji('🎲').setLabel('무작위').setStyle(ButtonStyle.Primary),
-    ...MONSTERS.map(m => new ButtonBuilder().setCustomId(`xp:nextmon:${m.id}`).setEmoji(m.emoji).setLabel(m.name)
-      .setStyle(next?.id === m.id ? ButtonStyle.Success : ButtonStyle.Secondary)),
+    ...MONSTERS.map(monBtn),
   ];
-  const rows = [];
-  for (let i = 0; i < buttons.length && rows.length < 4; i += 5) rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
-  rows.push(new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('xp:menu:manage').setEmoji('↩️').setLabel('돌아가기').setStyle(ButtonStyle.Secondary),
-  ));
+  const hard = HARD_MONSTERS.map(monBtn);
   return payload(card({
     color: COLORS.info,
     header: '🔄 다음 출현 몬스터 변경',
     blocks: [
-      `지금 정해진 몬스터: ${next ? `${next.emoji} **${next.name}**` : '없음'}\n-# 🎲 무작위는 등록된 몬스터 중에서 다시 뽑아요. 출현한 뒤 그다음 몬스터는 다시 무작위로 정해져요.`,
+      `지금 정해진 몬스터: ${next ? `${monsterEmoji(next)} **${next.name}**` : '없음'}\n-# 🎲 무작위는 등록된 몬스터 중에서 다시 뽑아요. 출현한 뒤 그다음 몬스터는 다시 무작위로 정해져요.`,
+      { rows: chunkRows(normal).slice(0, 3) },
+      hard.length ? HARD_NOTE : null,
+      hard.length ? { rows: chunkRows(hard).slice(0, 1) } : null,
     ],
-    rows,
+    rows: [new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('xp:menu:manage').setEmoji('↩️').setLabel('돌아가기').setStyle(ButtonStyle.Secondary),
+    )],
   }));
 }
 
@@ -401,7 +417,7 @@ async function handleXpButton(interaction) {
     const error = setNextMonster(targetId);
     const next = getRaidStatus(interaction.guildId).nextMonster;
     if (!error) logAction(interaction, 'XP 관리', `레이드 다음 출현 몬스터 변경 — ${next?.name}${targetId === 'random' ? ' (무작위)' : ''}`);
-    await interaction.update(buildManageView(error ? `⚠️ ${error}` : `🔄 **다음 출현 몬스터를 ${next.emoji} ${next.name}(으)로 정했습니다.**${targetId === 'random' ? ' (무작위)' : ''}`, interaction.guildId));
+    await interaction.update(buildManageView(error ? `⚠️ ${error}` : `🔄 **다음 출현 몬스터를 ${monsterEmoji(next)} ${next.name}(으)로 정했습니다.**${targetId === 'random' ? ' (무작위)' : ''}`, interaction.guildId));
     return;
   }
 

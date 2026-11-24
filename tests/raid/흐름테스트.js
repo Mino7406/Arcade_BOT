@@ -1134,7 +1134,7 @@ let ok4;
         assert(!errV && lv.isRaidXpFrozen(), '??? 출현 → XP 정지');
         assert(/ERR_0x/.test(t0) && t0.includes('지금까지 잃은 XP :** ' + '`-0.0 XP`') && !/## ⏳ \d\d:\d\d:\d\d/.test(t0) && t0.includes('패배 0회') && t0.includes('보상** : +1000 XP') && !t0.includes('MVP는 여기에'), '??? 모집 화면: 전용 문구 · 잃은 XP · 깨진 시계(남은 시간 없음) · 보상은 +1000 XP · 해킹 툴 1개');
         await runTimers(); await settle();
-        assert(mod.getRaidStatus('gMain').active && mod.getRaidStatus('gMain').monsterName === '???', '모집 시간이 지나도 도주하지 않음(마감 타이머 없음)');
+        assert(mod.getRaidStatus('gMain').active && mod.getRaidStatus('gMain').monsterName === '블랙월 바이러스', '모집 시간이 지나도 도주하지 않음(마감 타이머 없음)');
         // 대기 차감: 10분 흐른 것으로 하고 틱 → 분당 12~18 XP × 10분 = -120~-180(소수점은 이월되므로 119 이상)
         const v1a = lv.getXp('gMain', 'v1'), v2a = lv.getXp('gMain', 'v2');
         await at(10 * 60_000, async () => { await runTimers(); await settle(); });

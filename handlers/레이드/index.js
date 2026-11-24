@@ -32,7 +32,7 @@ const { grantHackTool, HACK_TOOL_NAME, hackToolWith, hackToolEmoji } = require('
 const { GATEWAY_NAME, gatewayEmoji, grantGateway } = require('../게임/블랙월게이트웨이');
 const { displayNameFromInteraction } = require('../공통/이름');
 const {
-  PLAYER_MAX_HP, POTIONS_PER_BATTLE, POTION_HEAL, GUARD_DAMAGE_RATE, ROLES, ROLE_ORDER, ACTIONS, MONSTERS, ALL_MONSTERS,
+  PLAYER_MAX_HP, POTIONS_PER_BATTLE, POTION_HEAL, GUARD_DAMAGE_RATE, ROLES, ROLE_ORDER, ACTIONS, MONSTERS, HARD_MONSTERS, ALL_MONSTERS,
   createBattle, checkChoice, choose, allChosen, resolveTurn,
   isErrored, errorTurnsLeft, isVulnerable, vulnTurnsLeft, isDoomed,
   isStunned, slowTurnsLeft, isShielded, isPowered, poisonTurnsLeft, poisonStacks, poisonDamage, isConfused, chillStacks, isFeared, isPhased, isStenched, stenchTurnsLeft, minionsAlive, isWeak, weakTurnsLeft, telegraphText, isWarnIntent, minusPct, contribution,
@@ -124,7 +124,7 @@ function randomTimeInWindow(dayStartUtc) {
 }
 // 다음 자동 출현 몬스터는 일정을 잡을 때 등록된 몬스터 중 무작위로 미리 정한다(/xp에 '다음 몬스터'로 보이고 바꿀 수 있게).
 const randomMonsterId = () => (MONSTERS.length ? MONSTERS[Math.floor(Math.random() * MONSTERS.length)].id : null);
-const validMonsterId = (id) => (MONSTERS.some(m => m.id === id) ? id : null);
+const validMonsterId = (id) => ([...MONSTERS, ...HARD_MONSTERS].some(m => m.id === id) ? id : null); // 고난이도도 관리자가 직접 고르면 유효
 function scheduleNextSpawn(fromMs = Date.now()) {
   const [minDays, maxDays] = SPAWN_INTERVAL_DAYS;
   const days = minDays + Math.floor(Math.random() * (maxDays - minDays + 1));
@@ -811,7 +811,7 @@ function startCountdown(r) {
 async function spawnRaid(client, channel, { forced = false, monsterId = null } = {}) {
   if (raids.has(channel.guildId)) return '이 서버에 이미 진행 중인 레이드가 있어요.';
   if (!MONSTERS.length) return '등록된 몬스터가 없어요. Monster 폴더의 JSON 파일과 콘솔 오류를 확인하세요.';
-  // 꺼 둔 몬스터(???)는 관리자가 직접 고를 때만 소환된다(서버 무관 · 무작위·자동 출현은 제외)
+  // 고난이도(???)는 관리자가 직접 고를 때만 소환된다(서버 무관 · 무작위·자동 출현은 제외)
   const monster = monsterId
     ? (MONSTERS.find(m => m.id === monsterId) ?? ALL_MONSTERS.find(m => m.id === monsterId))
     : MONSTERS[Math.floor(Math.random() * MONSTERS.length)];
@@ -1389,7 +1389,7 @@ function getRaidStatus(guildId) {
     monsterName: r?.monster.name ?? null,
     autoSpawn: !!state.autoSpawn,
     nextSpawnAt: state.nextSpawnAt,
-    nextMonster: state.autoSpawn ? (MONSTERS.find(m => m.id === state.nextMonsterId) ?? null) : null, // 다음 자동 출현 몬스터
+    nextMonster: state.autoSpawn ? ([...MONSTERS, ...HARD_MONSTERS].find(m => m.id === state.nextMonsterId) ?? null) : null, // 다음 자동 출현 몬스터
   };
 }
 
