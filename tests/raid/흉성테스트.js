@@ -97,5 +97,31 @@ function fakeInteraction(userId, customId) {
   assert(landedAt >= 4, '습격이 전투 중에 한 번 일어남');
   console.log('--- 결과 글자 ---\n' + desc().split('\n').slice(0, 3).join('\n'));
   assert(!buttons().length, '전투가 끝까지 진행되어 종료');
+
+  // ── 시나리오 2: 파티원이 모두 기절한 채로 습격 예고 턴을 맞는 경우 — 예고 화면이 건너뛰어지지 않고, 5초 뒤 착지해야 한다 ──
+  await raidMod.forceSpawnRaid({ guildId: 'other', channel, client }, 'heungseong');
+  for (const [uid, role] of [['1', 'sword'], ['2', 'archer'], ['3', 'healer']]) await raidMod.handleRaidButton(fakeInteraction(uid, 'raid:role:' + role));
+  await runTimers();
+  let stunTested = false;
+  for (let guard = 0; guard < 80 && !stunTested; guard++) {
+    const rr = raidMod.raidForTest(channel.guildId);
+    if (!rr || rr.phase !== 'battle') break;
+    if (rr.showingResult) {
+      if (rr.battle.intent === 'ambush') {
+        for (const m of rr.battle.members) { m.stunTurn = rr.battle.turn; m.stunStatus = { name: '기절', emoji: '💫' }; } // 이번(다음) 턴에 모두 기절
+        await runTimers(); // 결과 화면이 끝나고 선택 화면으로 넘어가는 순간
+        const name1 = raidMod.getRaidStatus(channel.guildId).monsterName;
+        assert(name1 !== '흉성', `모두 기절이어도 습격 예고 화면부터 보임(아직 위장: ${name1})`);
+        assert(timers.some(t => !t.cancelled && t.ms === 5000), '예고 화면을 5초 보여 준 뒤 진행하는 타이머가 걸림');
+        await runTimers(); // 예고 화면 끝 → 턴 진행
+        const name2 = raidMod.getRaidStatus(channel.guildId).monsterName;
+        assert(name2 === '흉성', `예고가 끝나면 습격이 착지함(${name2})`);
+        stunTested = true;
+      } else await runTimers();
+    } else if (buttons().length) {
+      for (const uid of ['1', '2', '3']) { const t = fakeInteraction(uid, 'raid:act:guard'); await raidMod.handleRaidButton(t); }
+    } else await runTimers();
+  }
+  assert(stunTested, '모두 기절 시나리오까지 도달함');
   process.exit(process.exitCode || 0);
 })().catch(e => { console.error('❌ 예외', e); process.exit(1); });

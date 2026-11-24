@@ -49,6 +49,7 @@ const RECRUIT_MS = 60 * 60 * 1000;  // 출현 후 모집 대기 시간 — 그�
 const TURN_MS = 60 * 1000;          // 턴당 행동 선택 시간(못 고르면 자동 공격)
 const AMBUSH_EXPLODE_MS = 5500;     // 습격 착지 폭발 장면 시간
 const AMBUSH_CALM_MS = 4500;        // 폭발 뒤 마지막(잔잔한) 장면 시간 — 습격 착지 턴의 결과 화면은 둘을 합쳐 보여 준다
+const WARN_HOLD_MS = 5000;           // 모두 행동 불가(기절·빙결)여도 '방어하세요' 예고(습격·필살기) 화면은 이 시간만큼 보여 준 뒤 진행
 const AMBUSH_STAGE_MS = 1000;       // (미사용 상수 유지)
 const RESULT_MS = 4500;             // 턴 결과 화면을 보여주는 시간 — 그동안 버튼이 꺼지고, 끝나면 다음 턴 선택 화면으로(3.5초는 짧다는 사용자 요청으로 4.5초)
 const BATTLE_LIMIT_MS = 20 * 60 * 1000; // 전투 제한 시간 — 넘기면 몬스터 도주
@@ -927,6 +928,20 @@ function startBattle(r, { by = null } = {}) {
   startCountdown(r); // 전투는 5초 주기로
 }
 
+// 고를 사람이 없어도(모두 기절·빙결) 예고가 있는 턴(습격·필살기 등 '방어하세요')은 선택 화면을 잠깐 보여 준다. 예고 없이 바로 폭발부터 나오는 걸 막는다.
+// 보여 줬으면 true(타이머가 걸림), 예고가 없는 턴이면 false.
+function holdWarning(r) {
+  if (!(isWarnIntent(r.battle) || r.battle.intent === 'ambush')) return false;
+  clearTimer(r);
+  r.turnEndsAt = Math.min(Date.now() + WARN_HOLD_MS, r.battleEndsAt);
+  const turn = r.battle.turn;
+  r.timer = setTimeout(() => {
+    if (!isCurrent(r) || r.phase !== 'battle' || r.battle.turn !== turn) return;
+    advanceTurn(r);
+  }, Math.max(0, r.turnEndsAt - Date.now()));
+  return true;
+}
+
 function armTurnTimer(r) {
   clearTimer(r);
   r.turnEndsAt = Math.min(Date.now() + TURN_MS, r.battleEndsAt);
@@ -964,7 +979,10 @@ function advanceTurn(r) {
     if (!isCurrent(r) || r.phase !== 'battle' || r.battle.turn !== turn) return;
     r.showingResult = false;
     // 살아 있는 파티원이 전부 기절이면 고를 사람이 없으니 기다리지 않고 바로 이 턴을 진행한다.
-    if (allChosen(r.battle)) { advanceTurn(r); return; }
+    if (allChosen(r.battle)) {
+      if (holdWarning(r)) { requestRender(r, { image: true, immediate: true }); return; } // 예고(습격 등)는 보여 주고 진행
+      advanceTurn(r); return;
+    }
     armTurnTimer(r);
     requestRender(r, { image: true, immediate: true });
   }, r.ambushStage === 0 ? AMBUSH_EXPLODE_MS + AMBUSH_CALM_MS : (r.battle.monster.ui?.resultMs ?? RESULT_MS)); // 몬스터가 ui.resultMs 를 정하면 그 시간(??? 는 글리치 연출이 잘 보이게 더 길게)
@@ -1293,7 +1311,10 @@ async function resumeRaid(client, message, saved) {
   } else {
     // 결과 화면 도중이었으면 다음 턴 선택 화면부터. 이미 고른 행동은 그대로 두고, 고를 시간은 새로 준다.
     r.showingResult = false;
-    if (allChosen(r.battle)) { advanceTurn(r); startCountdown(r); return true; }
+    if (allChosen(r.battle)) {
+      if (holdWarning(r)) { startCountdown(r); return true; }
+      advanceTurn(r); startCountdown(r); return true;
+    }
     armTurnTimer(r);
   }
   requestRender(r, { image: true, immediate: true });
@@ -1473,6 +1494,7 @@ module.exports = {
   noteChannelMessage,
   forceSpawnRaid,
   forceEndRaid,
+  raidForTest: (guildId) => raids.get(guildId), // 테스트용(진행 중인 레이드 상태를 직접 만져 보려고)
   effectLines, // 테스트용(전투 화면 상태 줄)
   recruitView, battleView, endView, buildHelpView, buildEndNoticePayload, // 테스트용(예시 페이지가 화면을 그릴 때)
 };
