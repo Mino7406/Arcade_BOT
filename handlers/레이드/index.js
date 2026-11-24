@@ -47,6 +47,8 @@ const SPAWN_WINDOW_WEEKEND = [12, 29]; // 주말(토·일) 12:00 ~ 다음 날 05
 const MAX_MANUAL_SPAWN_AHEAD_DAYS = 30; // 관리자가 출현 시각을 직접 정할 때 최대 며칠 뒤까지(오타로 몇 년 뒤가 되는 것만 막음)
 const RECRUIT_MS = 60 * 60 * 1000;  // 출현 후 모집 대기 시간 — 그동안 아무도 참가하지 않으면 몬스터 자동 도주
 const TURN_MS = 60 * 1000;          // 턴당 행동 선택 시간(못 고르면 자동 공격)
+const AMBUSH_EXPLODE_MS = 4000;     // 습격 착지 폭발 장면 시간
+const AMBUSH_CALM_MS = 3000;        // 폭발 뒤 마지막(잔잔한) 장면 시간 — 습격 착지 턴의 결과 화면은 둘을 합쳐 보여 준다
 const AMBUSH_STAGE_MS = 1000;       // (미사용 상수 유지)
 const RESULT_MS = 4500;             // 턴 결과 화면을 보여주는 시간 — 그동안 버튼이 꺼지고, 끝나면 다음 턴 선택 화면으로(3.5초는 짧다는 사용자 요청으로 4.5초)
 const BATTLE_LIMIT_MS = 20 * 60 * 1000; // 전투 제한 시간 — 넘기면 몬스터 도주
@@ -953,7 +955,7 @@ function advanceTurn(r) {
         if (!isCurrent(r) || r.phase !== 'battle' || r.battle.turn !== turn || !r.showingResult) return;
         r.ambushStage = stage;
         requestRender(r, { image: true, immediate: true });
-      }, 3000); // 폭발 장면을 3초간 보여 준 뒤 마지막 장면으로
+      }, AMBUSH_EXPLODE_MS); // 폭발 장면을 보여 준 뒤 마지막 장면으로
     }
   }
   r.timer = setTimeout(() => {
@@ -963,7 +965,7 @@ function advanceTurn(r) {
     if (allChosen(r.battle)) { advanceTurn(r); return; }
     armTurnTimer(r);
     requestRender(r, { image: true, immediate: true });
-  }, r.battle.monster.ui?.resultMs ?? RESULT_MS); // 몬스터가 ui.resultMs 를 정하면 그 시간(??? 는 글리치 연출이 잘 보이게 더 길게)
+  }, r.ambushStage === 0 ? AMBUSH_EXPLODE_MS + AMBUSH_CALM_MS : (r.battle.monster.ui?.resultMs ?? RESULT_MS)); // 몬스터가 ui.resultMs 를 정하면 그 시간(??? 는 글리치 연출이 잘 보이게 더 길게)
 }
 
 // 레이드를 끝낸다. XP 정지 해제 · 보상 지급 · 상태 저장 · 복구 안내 후 결과 화면을 바로 보내게 한다.
