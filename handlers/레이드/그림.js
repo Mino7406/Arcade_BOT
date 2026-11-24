@@ -1782,7 +1782,8 @@ function renderBattle(r) {
     const smokeFrame = ambushStage === 0 && !!last?.ambushLanded; // 헤더가 아직 위장 몬스터 값인 단계(습격 착지만)
     background('battle', 120, 224);
     if (b.rage && isCorrupt(m)) rageGlitch = Math.max(1, b.turn | 0);
-    if (b.rage) rageFx(m, W / 2, 196, 112, null, 'box'); // 분노: 바닥 불빛·불씨
+    const bodyGone = (m.theme === 'energy' && (r.showingResult ? !!(last?.ambushLanded || last?.cometLanded) : b.intent === 'recharge')) || (!r.showingResult && !isIntentHidden(b) && !!m.moves[b.intent]?.skyDot); // 돌덩이·하늘로 솟은 점(몸 없음)
+    if (b.rage && !bodyGone) rageFx(m, W / 2, 196, 112, null, 'box'); // 분노: 바닥 불빛·불씨(몸이 없을 땐 둘 다 그리지 않는다)
 
     // 상단: TURN 배지 · 몬스터 이름(분노) · HP 바
     p.roundRect(30, 20, 118, 42, 10, '#2a2119');
