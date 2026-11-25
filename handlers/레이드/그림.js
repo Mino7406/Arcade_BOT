@@ -2018,20 +2018,20 @@ const CORRUPT_C = {
 };
 // ── 알바트리온 전용 테마(블랙월의 붉은 오염 테마를 참고): 폭풍을 두른 보랏빛 어둠의 화면 틀 + 지금 속성 색으로 번지는 가장자리 빛과 모서리 균열 ──
 const ALAT_C = {
-  bg: '#0c0706', frame: '#7a5a46', gold: '#f0d8b0', box: '#070403', card: '#1a1310', cardEmpty: '#33271f',
-  orange: '#e8923a', sub: '#f2e6d6', dim: '#76645a', muted: '#b4a08e', hpBack: '#2a1c16',
+  bg: '#1c120b', frame: '#b07a40', gold: '#f6e0b8', box: '#0d0805', card: '#2c1f14', cardEmpty: '#4c3724',
+  orange: '#e8a050', sub: '#f4e8d8', dim: '#8a7260', muted: '#c4ac94', hpBack: '#33241a',
 };
 let alatThemeEl = null, alatThemeRage = false;
 const ALAT_EDGE = { fire: [255, 124, 36], water: [70, 190, 255], thunder: [255, 236, 70], ice: [150, 220, 255], dragon: [232, 64, 122] };
 // 테두리 전체에 은은하게 흐르는 속성 이펙트(모서리 이펙트와 이어짐): 폭 30px 안쪽으로 옅게, 바깥일수록 짙게. 불=아른거리는 열기 줄 · 물=흐르는 물결 줄 · 번개=깜빡이는 전기 선 · 얼음=서리 결 · 용=번지는 어둠과 붉은 맥
 function alatEdges(el, heavy, scene) {
   el = el || 'fire'; // 모집·결과 화면엔 지금 속성이 없다 — 불꽃빛으로
-  const RM = ALAT_RAMP[el] ?? ALAT_RAMP.dragon, B = heavy ? 36 : 28, k = el.length * 5 + 3, buf = pixBuf();
+  const RM = ALAT_RAMP[el] ?? ALAT_RAMP.dragon, B = heavy ? 20 : 14, k = el.length * 5 + 3, buf = pixBuf();
   const dens = (d) => Math.pow(1 - d / B, 1.7); // 테두리에 가까울수록 짙게
   for (const [x0, y0, x1, y1, horiz] of [[0, 0, W, B, true], [0, H - B, W, H, true], [0, B, B, H - B, false], [W - B, B, W, H - B, false]]) {
     buf.paint(x0, y0, x1, y1, (x, y, i, j) => {
       const d = Math.min(x, W - x, y, H - y); if (d >= B) return null;
-      const t = horiz ? x : y, dn = dens(d) * 0.5; // 최대 50%만 채움
+      const t = horiz ? x : y, dn = dens(d) * 0.28; // 최대 28%만 채움
       if (el === 'fire') { const n = fbm(t / 22, d / 9 - (horiz ? 0 : 0), k); return bay(i, j) < dn * (0.5 + n) ? ramp(RM, 0.25 + (1 - d / B) * 0.55 + n * 0.2, i, j) : null; }
       if (el === 'water') { const w = Math.sin(t / 14 + d / 6 + fbm(t / 40, d / 20, k) * 3); return bay(i, j) < dn * (0.5 + 0.5 * Math.max(0, w)) ? (w > 0.85 ? '#ffffff' : ramp(RM, 0.3 + (1 - d / B) * 0.4 + w * 0.12, i, j)) : null; }
       if (el === 'thunder') { const ridge = 1 - Math.abs(fbm(t / 26, d / 8, k) - 0.5) * 6; return ridge > 0.82 && d < B * 0.8 ? (ridge > 0.9 ? '#ffffff' : RM[4]) : (bay(i, j) < dn * 0.5 ? RM[2] : null); }
@@ -2045,7 +2045,7 @@ function alatEdges(el, heavy, scene) {
 // 불=타오르는 불길과 용암 균열 · 물=겹겹의 물결 마루와 포말·물보라 · 번개=가지 친 번개와 전기 핏줄 · 얼음=가지 뻗는 서리 결정과 얼음 기둥 · 용=검붉은 연기와 균열 핏줄
 function alatCorners(el, heavy, rnd, scene) {
   el = el || 'fire';
-  const S = heavy ? 1.3 : 1, K = scene === '결과' ? 0.62 : 1, Z = Math.round(112 * S * K), RM = ALAT_RAMP[el] ?? ALAT_RAMP.dragon, k0 = Math.floor(rnd() * 40);
+  const S = heavy ? 1.3 : 1, K = scene === '결과' ? 0.62 : 1, Z = Math.round(64 * S * K), RM = ALAT_RAMP[el] ?? ALAT_RAMP.dragon, k0 = Math.floor(rnd() * 40);
   for (const [cx, cy, dx, dy] of [[0, 0, 1, 1], [W, 0, -1, 1], [0, H, 1, -1], [W, H, -1, -1]]) {
     const buf = pixBuf(), kk = k0 + (dx > 0 ? 0 : 7) + (dy > 0 ? 0 : 13);
     const x0 = dx > 0 ? cx : cx - Z, y0 = dy > 0 ? cy : cy - Z;
@@ -2363,7 +2363,7 @@ async function render(scene, draw, monster = null) {
   const savedC = corrupt || alatTheme ? { ...C } : null;
   const savedRibbon = corrupt || alatTheme ? RIBBON.pending.fill : null;
   if (corrupt) { Object.assign(C, CORRUPT_C); RIBBON.pending.fill = '#b81c2a'; themeKey = ':corrupt'; }
-  if (alatTheme) { Object.assign(C, ALAT_C); RIBBON.pending.fill = '#9a4a24'; themeKey = ':alat'; }
+  if (alatTheme) { Object.assign(C, ALAT_C); RIBBON.pending.fill = '#a8662c'; themeKey = ':alat'; }
   try {
     const t0 = process.hrtime.bigint();
     skillCtx = null; rageGlitch = false; alatThemeEl = null;
@@ -2477,7 +2477,7 @@ function drawMinions(b, last, showingResult) {
 // ── 알바트리온 전용 헤더(기본 틀 대신): 갈라진 석판에 뿔 장식, 왼쪽 TURN 메달·오른쪽 속성 메달, 가운데 보스 HP 바(10% 눈금·분노 40% 표식)와 억제 게이지·에스카톤 ──
 function alatHeader(b) {
   const A = require('./알바트리온'), al = b.alat, el = al.element, col = ELEMENT_GLOW[el] || '#c8a0ff', rage = b.rage;
-  const stone = '#17100d', rim = '#8a5a38', rimDark = '#3a2418';
+  const stone = '#33241a', rim = '#c08a50', rimDark = '#5a3c24';
   // 석판: 양 끝이 비스듬히 잘린 판 + 이중 테두리 + 위아래 균열 줄
   const plate = [30, 22, 56, 14, W - 56, 14, W - 30, 22, W - 22, 60, W - 30, 112, W - 56, 118, 56, 118, 30, 112, 22, 60];
   p.poly(plate, rimDark); p.poly(plate.map((v, i) => (i % 2 ? 66 + (v - 66) * 0.9 : W / 2 + (v - W / 2) * 0.985)), stone);
@@ -2488,8 +2488,8 @@ function alatHeader(b) {
       const n = fbm(x / 22, y / 14, kz), vein = 1 - Math.abs(fbm(x / 30 + 4, y / 20, kz + 5) - 0.5) * 7.5;
       if (vein > 0.9) return mixHex('#1c130f', col, 0.85);
       if (vein > 0.82) return mixHex('#1c130f', col, 0.4);
-      if (mortar) return '#0b0705';
-      return ramp(['#0e0907', '#17100d', '#21160f', '#2c1e14', '#382718'], 0.3 + n * 0.5 + (y < 40 ? 0.08 : 0), i, j);
+      if (mortar) return '#1c120b';
+      return ramp(['#2a1d13', '#3a2a1c', '#4c3824', '#5e4630', '#725a3c'], 0.3 + n * 0.5 + (y < 40 ? 0.08 : 0), i, j);
     });
     tb.flush(null);
   }
