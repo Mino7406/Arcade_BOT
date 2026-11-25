@@ -2502,16 +2502,16 @@ function alatHeader(b) {
   for (const [dx, c] of [[-46, '#2a140c'], [-18, '#3a1c10'], [10, '#2a140c']]) { p.line(W / 2 + dx, 18, W / 2 + dx + 64, 52, 4, c); p.line(W / 2 + dx + 2, 20, W / 2 + dx + 60, 50, 1, '#7a3a1c'); }
   const name = rage ? b.monster.rageName : b.monster.name, nw = Math.min(p.textWidth(B(), name, 34), 360);
   { // 새긴 금속 글자: 속성 색 후광 → 어두운 외곽선 → 아래 그림자 → 본색 → 윗면 하이라이트
-    const nc = rage ? '#ffb090' : '#f6e0b8', ny = 36;
-    for (const [ox, oy] of [[-2, 0], [2, 0], [0, -2], [0, 2], [-2, -2], [2, -2], [-2, 2], [2, 2]]) text(name, W / 2 + ox, ny + oy, 34, '#1a0f08', { maxWidth: 360 });
-    text(name, W / 2, ny + 3, 34, '#000000', { maxWidth: 360 });
-    text(name, W / 2, ny, 34, nc, { maxWidth: 360 });
-    text(name, W / 2, ny - 1, 34, mixHex(nc, '#ffffff', 0.35), { maxWidth: 360 }); // 윗면 하이라이트(살짝 위로 겹침)
-    text(name, W / 2, ny + 1, 34, nc, { maxWidth: 360 });
+    const nc = rage ? '#ffb090' : '#f6e0b8', ny = 32;
+    for (const [ox, oy] of [[-2, 0], [2, 0], [0, -2], [0, 2], [-2, -2], [2, -2], [-2, 2], [2, 2]]) text(name, W / 2 + ox, ny + oy, 30, '#1a0f08', { maxWidth: 360 });
+    text(name, W / 2, ny + 3, 30, '#000000', { maxWidth: 360 });
+    text(name, W / 2, ny, 30, nc, { maxWidth: 360 });
+    text(name, W / 2, ny - 1, 30, mixHex(nc, '#ffffff', 0.35), { maxWidth: 360 }); // 윗면 하이라이트(살짝 위로 겹침)
+    text(name, W / 2, ny + 1, 30, nc, { maxWidth: 360 });
   }
   if (rage) { p.roundRect(W / 2 + nw / 2 + 22, 24, 58, 26, 6, '#5c1410'); text('분노', W / 2 + nw / 2 + 51, 37, 18, '#ffb4a8'); }
   // 보스 HP 바: 석재 틀 + 분절된 불씨빛 게이지 + 10% 눈금 + 40%(분노) 표식
-  const bx = 140, by = 54, bw = W - 392, bh = 26, sl = 14, ratio = Math.max(0, Math.min(1, b.hp / b.maxHp));
+  const bx = 140, by = 60, bw = W - 392, bh = 24, sl = 14, ratio = Math.max(0, Math.min(1, b.hp / b.maxHp));
   const quad = (x, w, y, hh, c) => p.poly([x + sl * (1 - (y - by) / bh), y, x + w + sl * (1 - (y - by) / bh), y, x + w + sl * (1 - (y + hh - by) / bh), y + hh, x + sl * (1 - (y + hh - by) / bh), y + hh], c);
   p.poly([bx + sl - 6, by - 6, bx + bw + sl + 6, by - 6, bx + bw - 6, by + bh + 6, bx - 6, by + bh + 6], rimDark); p.poly([bx + sl - 3, by - 3, bx + bw + sl + 3, by - 3, bx + bw - 3, by + bh + 3, bx - 3, by + bh + 3], '#0a0605');
   const ember = rage ? ['#2a0c20', '#7a1a4a', '#c8307a', '#ff6aa8', '#ffd0e4'] : ['#3a0a08', '#8a1a10', '#c8381c', '#f0661e', '#ffc060'];
@@ -2529,7 +2529,7 @@ function alatHeader(b) {
   p.roundRect(bx + bw / 2 - 70, by + 3, 156, bh - 6, 6, '#050302', 0.62); // 숫자 뒤 어두운 판(눈금과 섞이지 않게)
   text(`${b.hp.toLocaleString()} / ${b.maxHp.toLocaleString()}`, bx + bw / 2 + sl / 2, by + bh / 2 + 1, 18, '#ffffff');
   // 억제 게이지: 방패 라벨 + 비스듬한 10칸 분절 게이지(속성 색, 칸마다 윗면 광택) + 숫자 판. 가득 차면(억제 성공 상태) 테두리가 빛나고 MAX 표시
-  const gx = bx + 38, gy = 88, gw = 380, gh = 14, sl2 = 7, gr = al.gauge / A.K.GAUGE_MAX, full = al.gauge >= A.K.GAUGE_MAX;
+  const gx = bx + 38, gy = 95, gw = 380, gh = 13, sl2 = 7, gr = al.gauge / A.K.GAUGE_MAX, full = al.gauge >= A.K.GAUGE_MAX;
   const gq = (x, w, y, hh, c) => p.poly([x + sl2 * (1 - (y - gy) / gh), y, x + w + sl2 * (1 - (y - gy) / gh), y, x + w + sl2 * (1 - (y + hh - gy) / gh), y + hh, x + sl2 * (1 - (y + hh - gy) / gh), y + hh], c);
   if (full) { p.poly([gx - 6 + sl2, gy - 6, gx + gw + 6 + sl2, gy - 6, gx + gw + 6, gy + gh + 6, gx - 6, gy + gh + 6], mixHex('#0d0805', col, 0.55)); }
   p.poly([gx - 3 + sl2, gy - 3, gx + gw + 3 + sl2, gy - 3, gx + gw + 3, gy + gh + 3, gx - 3, gy + gh + 3], rimDark); gq(gx, gw, gy, gh, '#0a0605');
