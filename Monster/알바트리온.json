@@ -8,7 +8,7 @@
   "hard": true,
   "enabled": false,
   "partyClasses": "elemental",
-  "baseHp": 14000,
+  "baseHp": 12000,
   "damageRate": 0.8,
   "rage": {
     "hpRatio": 0.4,
