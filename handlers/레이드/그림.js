@@ -2433,6 +2433,11 @@ function renderBattle(r) {
       const cutY = Math.round((alatMouth.y + 2) * RENDER_SCALE), wpx = p.w, { bg, mon } = alatBody, fe = 26 * RENDER_SCALE;
       for (let yy = 0; yy < p.h; yy++) for (let xx = 0; xx < wpx; xx++) {
         const i = (yy * wpx + xx) * 3; if (mon[i] === bg[i] && mon[i + 1] === bg[i + 1] && mon[i + 2] === bg[i + 2]) continue;
+        if (usedFx === 'albolt') { // 낙뢰: 몸 전체를 또렷하게 두고 번개 연출이 그 위로 얇게(18~48%) 겹치게 — 몸이 묻혀 안 보이지 않도록
+          const er = p.buf[i], eg = p.buf[i + 1], eb = p.buf[i + 2], w = 0.18 + 0.3 * ((er + eg + eb) / 765);
+          p.buf[i] = Math.round(mon[i] * (1 - w) + er * w); p.buf[i + 1] = Math.round(mon[i + 1] * (1 - w) + eg * w); p.buf[i + 2] = Math.round(mon[i + 2] * (1 - w) + eb * w);
+          continue;
+        }
         const a = yy < cutY ? 1 : Math.max(0, 1 - (yy - cutY) / fe); // 입 아래로 갈수록 몸이 연출에 묻힘
         if (a <= 0) continue;
         if (a < 1 && bay(xx, yy) > a) continue; // 디더링으로 부드럽게 섞음(반투명 대신 도트 격자)
