@@ -2025,6 +2025,7 @@ let alatThemeEl = null, alatThemeRage = false;
 const ALAT_EDGE = { fire: [255, 124, 36], water: [70, 190, 255], thunder: [255, 236, 70], ice: [150, 220, 255], dragon: [232, 64, 122] };
 // 테두리 전체에 은은하게 흐르는 속성 이펙트(모서리 이펙트와 이어짐): 폭 30px 안쪽으로 옅게, 바깥일수록 짙게. 불=아른거리는 열기 줄 · 물=흐르는 물결 줄 · 번개=깜빡이는 전기 선 · 얼음=서리 결 · 용=번지는 어둠과 붉은 맥
 function alatEdges(el, heavy, scene) {
+  el = el || 'fire'; // 모집·결과 화면엔 지금 속성이 없다 — 불꽃빛으로
   const RM = ALAT_RAMP[el] ?? ALAT_RAMP.dragon, B = heavy ? 36 : 28, k = el.length * 5 + 3, buf = pixBuf();
   const dens = (d) => Math.pow(1 - d / B, 1.7); // 테두리에 가까울수록 짙게
   for (const [x0, y0, x1, y1, horiz] of [[0, 0, W, B, true], [0, H - B, W, H, true], [0, B, B, H - B, false], [W - B, B, W, H - B, false]]) {
@@ -2043,6 +2044,7 @@ function alatEdges(el, heavy, scene) {
 // 네 모서리 이펙트(디자인 좌표): 지금 속성마다 모서리에서 번지는 고밀도 도트 이펙트.
 // 불=타오르는 불길과 용암 균열 · 물=겹겹의 물결 마루와 포말·물보라 · 번개=가지 친 번개와 전기 핏줄 · 얼음=가지 뻗는 서리 결정과 얼음 기둥 · 용=검붉은 연기와 균열 핏줄
 function alatCorners(el, heavy, rnd, scene) {
+  el = el || 'fire';
   const S = heavy ? 1.3 : 1, K = scene === '결과' ? 0.62 : 1, Z = Math.round(112 * S * K), RM = ALAT_RAMP[el] ?? ALAT_RAMP.dragon, k0 = Math.floor(rnd() * 40);
   for (const [cx, cy, dx, dy] of [[0, 0, 1, 1], [W, 0, -1, 1], [0, H, 1, -1], [W, H, -1, -1]]) {
     const buf = pixBuf(), kk = k0 + (dx > 0 ? 0 : 7) + (dy > 0 ? 0 : 13);
