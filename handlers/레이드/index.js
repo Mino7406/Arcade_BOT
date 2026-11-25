@@ -168,7 +168,7 @@ function clock(deadline, withHours = false) {
 // 컨테이너(임베드 창) 왼쪽 색 줄: 모집 빨강 · 전투 금색 · 분노 빨강 · 클리어 초록 · 그 외 종료 회색
 const ACCENT = { recruit: 0xED4245, battle: 0xD9A93F, rage: 0xED4245, clear: 0x57F287, end: 0x4E5058 };
 // 오염 테마 몬스터(monster.theme 'corrupt')는 모집·전투·결과 카드 색 띠를 전부 짙은 붉은색으로
-const accentOf = (r, accent) => (r?.monster?.theme === 'corrupt' ? 0xB81C2A : r?.monster?.theme === 'alat' ? 0x6A4CC0 : accent); // 알바트리온 테마는 보랏빛 띠
+const accentOf = (r, accent) => (r?.monster?.theme === 'corrupt' ? 0xB81C2A : r?.monster?.theme === 'alat' ? 0x9A4A24 : accent); // 알바트리온 테마는 폐허의 불씨빛 띠
 
 function bar(value, max, length) {
   const filled = Math.max(0, Math.min(length, Math.round((value / max) * length)));

@@ -1931,7 +1931,36 @@ function frame() {
 }
 function monsterBox(y, h) {
   p.roundRect(20, y, W - 40, h, 14, C.box);
+  if (themeKey === ':alat') alatRuins(y, h);
   p.strokeRoundRect(20, y, W - 40, h, 14, 1.5, C.frame);
+}
+// 알바트리온 전용 배경(원작 알바트리온 전장처럼 모든 게 박살 난 폐허): 핏빛 황혼 하늘과 기울어진 붉은 달, 멀리 부서진 석조 기둥과 무너진 아치,
+// 바닥엔 갈라진 땅의 용암빛 금과 흩어진 잔해, 떠다니는 재. 칸 안쪽(x 24~W-24, y~y+h)에만 그린다.
+function alatRuins(y, h) {
+  const x0 = 24, x1 = W - 24, top = y + 4, bot = y + h - 4, gy = bot - 34; // gy: 땅 윗선
+  for (let yy = top; yy < gy; yy += 6) p.rect(x0, yy, x1 - x0, 6, mixHex('#1c0a0c', '#7a2c14', Math.pow((yy - top) / (gy - top), 1.6))); // 황혼 하늘(위 어둡고 지평선이 붉음)
+  p.circle(W * 0.72, top + (gy - top) * 0.42, 54, '#3a1410'); p.circle(W * 0.72, top + (gy - top) * 0.42, 44, '#7a2a1a'); p.circle(W * 0.72 - 6, top + (gy - top) * 0.42 - 4, 36, '#a04426'); // 붉은 달(무너진 하늘 사이로)
+  const seed = seeded(77); // 매번 같은 폐허
+  const ruin = (cx, base, w, hh, col, edge) => { // 위가 부러진 석조 기둥
+    const lean = (seed() - 0.5) * 10, brk = [0.7 + seed() * 0.3, 0.55 + seed() * 0.3, 0.8 + seed() * 0.2];
+    p.poly([cx - w / 2, base, cx - w / 2 + lean * 0.2, base - hh * brk[0], cx - w * 0.15 + lean * 0.5, base - hh * brk[1], cx + w * 0.1 + lean * 0.7, base - hh * brk[2], cx + w / 2 + lean, base - hh * (0.6 + seed() * 0.2), cx + w / 2, base], col);
+    p.line(cx - w / 2 + 2, base, cx - w / 2 + 2 + lean * 0.2, base - hh * brk[0] + 4, 2, edge); // 빛받는 모서리
+    for (let k = 1; k < 4; k++) p.line(cx - w / 2, base - hh * k * 0.22, cx + w / 2, base - hh * k * 0.22 + (seed() - 0.5) * 3, 1, '#00000055'.slice(0, 7)); // 석재 이음
+  };
+  const far = ['#2a1210', '#4a2418'], near = ['#140a09', '#6a3a24'];
+  for (const [cx, hh, w] of [[96, 104, 30], [196, 146, 36], [310, 86, 28], [610, 126, 34], [726, 160, 38], [818, 98, 30]]) ruin(cx, gy + 2, w, hh, far[0], far[1]); // 먼 기둥
+  // 무너진 아치: 두 기둥 위로 반쯤 남은 곡선과 떨어져 나간 조각
+  ruin(390, gy + 4, 40, 150, near[0], near[1]); ruin(560, gy + 4, 40, 104, near[0], near[1]);
+  p.poly([370, gy - 140, 410, gy - 158, 450, gy - 158, 490, gy - 140, 480, gy - 128, 450, gy - 142, 410, gy - 138], near[0]);
+  for (const [bx, by, bw, bh] of [[498, gy - 84, 12, 9], [512, gy - 60, 9, 8], [486, gy - 44, 8, 7]]) p.rect(bx, by, bw, bh, near[0]); // 떨어지는 조각
+  p.rect(x0, gy, x1 - x0, bot - gy, '#0c0605'); // 땅
+  for (let xx = x0; xx < x1; xx += 2) p.rect(xx, gy, 2, 3 + Math.floor(seed() * 4), '#1a0e0a'); // 울퉁불퉁한 땅 윗선
+  for (let i = 0; i < 9; i++) { // 갈라진 땅의 용암빛 금
+    let cx = x0 + 30 + seed() * (x1 - x0 - 60), cy = gy + 6;
+    for (let t = 0; t < 12; t++) { const nx = cx + (seed() - 0.5) * 22, ny = cy + 2 + seed() * 4; p.line(cx, cy, nx, ny, 2, '#ff7a2a'); p.line(cx, cy, nx, ny, 1, '#ffd070'); cx = nx; cy = Math.min(bot - 2, ny); }
+  }
+  for (let i = 0; i < 38; i++) { const bx = x0 + 6 + seed() * (x1 - x0 - 12), bw = 5 + seed() * 14, bh = 3 + seed() * 7; p.rect(bx, gy + 4 + seed() * 12, bw, bh, i % 3 ? '#1e1210' : '#3a2218'); } // 흩어진 잔해
+  for (let i = 0; i < 46; i++) p.rect(x0 + seed() * (x1 - x0), top + seed() * (bot - top), i % 5 ? 2 : 3, i % 5 ? 2 : 3, i % 4 ? '#8a5a3a' : '#ff9a4a'); // 떠다니는 재와 불씨
 }
 
 // 카드 4장(역할 순서 고정). drawCard(x, y, w, h, roleKey, member)로 안쪽을 채운다.
@@ -1977,14 +2006,14 @@ const CORRUPT_C = {
 };
 // ── 알바트리온 전용 테마(블랙월의 붉은 오염 테마를 참고): 폭풍을 두른 보랏빛 어둠의 화면 틀 + 지금 속성 색으로 번지는 가장자리 빛과 모서리 균열 ──
 const ALAT_C = {
-  bg: '#09071a', frame: '#6a4cc0', gold: '#e6dcff', box: '#05040f', card: '#15112a', cardEmpty: '#2a2248',
-  orange: '#c8a0ff', sub: '#ece6f6', dim: '#6a6088', muted: '#a79cc4', hpBack: '#221a3a',
+  bg: '#0c0706', frame: '#7a5a46', gold: '#f0d8b0', box: '#070403', card: '#1a1310', cardEmpty: '#33271f',
+  orange: '#e8923a', sub: '#f2e6d6', dim: '#76645a', muted: '#b4a08e', hpBack: '#2a1c16',
 };
 let alatThemeEl = null, alatThemeRage = false;
 const ALAT_EDGE = { fire: [255, 124, 36], water: [70, 190, 255], thunder: [255, 236, 70], ice: [150, 220, 255], dragon: [232, 64, 122] };
 // 후처리: ① 가장자리를 속성 색으로 밝힘(분노면 더 넓고 강하게) ② 네 모서리에서 갈라지는 균열(속성 색 + 하얀 심) ③ 흩날리는 속성 색 불씨 ④ 가는 가로 주사선(폭풍 느낌)
 function alatPost(scene, el, heavy) {
-  const col = ALAT_EDGE[el] ?? [170, 130, 255], rnd = seeded(scene.length * 41 + 5 + (el ? el.length * 7 : 0));
+  const col = ALAT_EDGE[el] ?? [255, 150, 70], rnd = seeded(scene.length * 41 + 5 + (el ? el.length * 7 : 0));
   const w = p.w, h = p.h, buf = p.buf;
   const inIcon = (x, y) => scene !== '모집' && scene !== '전투' ? false : ICON_KEEP.some(([kx, ky, kw, kh]) => x >= kx && x < kx + kw && y >= ky && y < ky + kh);
   const add = (x, y, c, k = 1) => { if (x < 0 || y < 0 || x >= w || y >= h || inIcon(x, y)) return; const j = (y * w + x) * 3; buf[j] = Math.min(255, buf[j] + Math.round(c[0] * k)); buf[j + 1] = Math.min(255, buf[j + 1] + Math.round(c[1] * k)); buf[j + 2] = Math.min(255, buf[j + 2] + Math.round(c[2] * k)); };
@@ -2245,7 +2274,7 @@ async function render(scene, draw, monster = null) {
   const savedC = corrupt || alatTheme ? { ...C } : null;
   const savedRibbon = corrupt || alatTheme ? RIBBON.pending.fill : null;
   if (corrupt) { Object.assign(C, CORRUPT_C); RIBBON.pending.fill = '#b81c2a'; themeKey = ':corrupt'; }
-  if (alatTheme) { Object.assign(C, ALAT_C); RIBBON.pending.fill = '#6a4cc0'; themeKey = ':alat'; }
+  if (alatTheme) { Object.assign(C, ALAT_C); RIBBON.pending.fill = '#9a4a24'; themeKey = ':alat'; }
   try {
     const t0 = process.hrtime.bigint();
     skillCtx = null; rageGlitch = false; alatThemeEl = null;
@@ -2693,7 +2722,7 @@ function renderBattle(r) {
     }, (mem) => {
       const state = memberState(b, mem, r.showingResult);
       if (usedMove && last?.hits[mem.userId]) return { color: '#ff4a3a', width: 4 }; // 이번 턴에 맞은 카드
-      if (state === 'pending') return { color: isCorrupt(m) ? '#ff3a4a' : isAlat(m) ? '#c8a0ff' : '#ffb52e', width: 4 }; // 오염 테마는 붉은 테두리, 알바트리온은 보랏빛
+      if (state === 'pending') return { color: isCorrupt(m) ? '#ff3a4a' : isAlat(m) ? '#f0a050' : '#ffb52e', width: 4 }; // 오염 테마는 붉은 테두리, 알바트리온은 보랏빛
       if (state === 'ready') return { color: '#3ecf6e', width: 2.5 };
       if (state === 'stunned') return { color: '#ffd23f', width: 2.5 };
       return null;
