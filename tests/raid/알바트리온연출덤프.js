@@ -21,7 +21,7 @@ const party = ['fire', 'water', 'thunder', 'ice'].map((role, i) => ({ userId: St
     rr.battle = B.createBattle(mon, party, Math.random, { minParty: 1 });
     rr.battle.alat.element = el; rr.battle.intent = key;
     for (const m of rr.battle.members) B.choose(rr.battle, m.userId, m.role === 'fire' ? 'guard' : 'attack');
-    B.resolveTurn(rr.battle, () => 0.5); rr.battle.alat.element = el; rr.showingResult = true; // 다음 턴 속성으로 바뀐 걸 되돌려 그 기술 속성 색으로 본다
+    B.resolveTurn(rr.battle, () => Number(process.env.ALAT_RNG || 0.5)); rr.battle.alat.element = el; rr.showingResult = true; // 다음 턴 속성으로 바뀐 걸 되돌려 그 기술 속성 색으로 본다
     const v = await raidMod.battleView(rr);
     require('fs').writeFileSync(path.join(${JSON.stringify(out)}, key + '.png'), v.files[0].attachment);
     console.log('saved', key);
@@ -42,7 +42,7 @@ try {
   for (const dir of ['handlers', 'commands', 'assets', 'Monster']) fs.cpSync(path.join(repo, dir), path.join(tmp, dir), { recursive: true });
   fs.copyFileSync(path.join(repo, 'config.js'), path.join(tmp, 'config.js'));
   fs.writeFileSync(path.join(tmp, 'run.js'), runner);
-  const r = spawnSync(process.execPath, [path.join(tmp, 'run.js')], { encoding: 'utf8', env: { ...process.env, ALAT_MODE: process.env.ALAT_MODE || '', NODE_PATH: path.join(repo, 'node_modules') } });
+  const r = spawnSync(process.execPath, [path.join(tmp, 'run.js')], { encoding: 'utf8', env: { ...process.env, ALAT_MODE: process.env.ALAT_MODE || '', ALAT_RNG: process.env.ALAT_RNG || '', NODE_PATH: path.join(repo, 'node_modules') } });
   console.log((r.stdout || '') + (r.stderr || ''));
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
