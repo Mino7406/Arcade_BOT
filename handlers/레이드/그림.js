@@ -1371,14 +1371,12 @@ function alatOverlay(fx, mx, my, targets, layer) {
 //   브레스(화염·물·서리): 뒤로 젖혔다 앞으로 숙이며 내뿜음 / 낙뢰: 날개를 펴고 위로 솟구침 / 용의 숨결: 크게 부풀며 앞으로 / 발톱: 앞으로 돌진 / 필살(에스카톤): 선택 화면에서 떨며 떠오르고, 결과에선 내리꽂음
 function alatMotion(fx, charging, cx, cy, turn) {
   const j = (k) => ((turn * 7 + k * 13) % 5) - 2; // 턴마다 다른 작은 떨림
-  if (charging) return { x: cx + j(1) * 3, y: cy - 6 + j(2) * 2, s: 1.18, ghosts: [{ x: cx + j(3) * 4 - 10, y: cy - 2, s: 1.12 }, { x: cx + j(4) * 4 + 10, y: cy, s: 1.08 }], streaks: { x: cx, y: cy, dir: -1 } };
-  if (fx === 'alflame') return { x: cx, y: cy + 20, s: 1.28, ghosts: [{ x: cx, y: cy - 10, s: 1.0 }, { x: cx, y: cy + 4, s: 1.12 }], streaks: { x: cx, y: cy, dir: 1 } }; // 숙이며 앞으로 내뿜음
-  if (fx === 'alwater') return { x: cx, y: cy + 10, s: 1.2, ghosts: [{ x: cx - 16, y: cy + 6, s: 1.14 }, { x: cx + 16, y: cy + 6, s: 1.14 }], streaks: { x: cx, y: cy, dir: 0 } }; // 몸을 틀며 물을 불러냄
-  if (fx === 'alice') return { x: cx, y: cy + 14, s: 1.24, ghosts: [{ x: cx, y: cy - 4, s: 1.06 }, { x: cx, y: cy + 6, s: 1.14 }], streaks: { x: cx, y: cy, dir: 1 } };
-  if (fx === 'albolt') return { x: cx, y: cy - 2, s: 1.16, ghosts: [{ x: cx - 10, y: cy + 4, s: 1.06 }, { x: cx + 10, y: cy - 2, s: 1.12 }], streaks: { x: cx, y: cy, dir: -1 } }; // 번쩍 솟구침
-  if (fx === 'aldragon') return { x: cx + j(5) * 2, y: cy + 8, s: 1.42, ghosts: [{ x: cx - 18, y: cy + 4, s: 1.28 }, { x: cx + 18, y: cy + 4, s: 1.28 }], streaks: { x: cx, y: cy, dir: 0 } }; // 크게 부풀며 전진
-  if (fx === 'smash') return { x: cx, y: cy + 26, s: 1.5, ghosts: [{ x: cx, y: cy - 14, s: 1.2 }, { x: cx, y: cy + 10, s: 1.36 }], streaks: { x: cx, y: cy, dir: 1 } };
-  if (fx === 'attack') return { x: cx + 22, y: cy + 20, s: 1.34, ghosts: [{ x: cx - 20, y: cy + 4, s: 1.06 }, { x: cx, y: cy + 12, s: 1.2 }], streaks: { x: cx, y: cy, dir: 1 } };
+  if (charging) return { x: cx + j(1) * 2, y: cy - 3 + j(2) * 1.5, s: 1.08, ghosts: [{ x: cx + j(3) * 3 - 4, y: cy - 4, s: 1.06 }, { x: cx + j(4) * 3 + 4, y: cy - 2, s: 1.04 }], streaks: { x: cx, y: cy, dir: -1 } };
+  if (fx === 'alflame' || fx === 'alwater' || fx === 'alice') return { x: cx, y: cy + 12, s: 1.14, ghosts: [{ x: cx, y: cy - 6, s: 1.0 }, { x: cx, y: cy + 2, s: 1.07 }], streaks: { x: cx, y: cy, dir: 1 } };
+  if (fx === 'albolt') return { x: cx, y: cy - 6, s: 1.1, ghosts: [{ x: cx - 6, y: cy + 4, s: 1.03 }, { x: cx + 6, y: cy - 1, s: 1.06 }], streaks: { x: cx, y: cy, dir: -1 } };
+  if (fx === 'aldragon') return { x: cx + j(5), y: cy + 6, s: 1.24, ghosts: [{ x: cx - 8, y: cy + 2, s: 1.12 }, { x: cx + 8, y: cy + 2, s: 1.12 }], streaks: { x: cx, y: cy, dir: 0 } };
+  if (fx === 'smash') return { x: cx, y: cy + 22, s: 1.3, ghosts: [{ x: cx, y: cy - 10, s: 1.1 }, { x: cx, y: cy + 8, s: 1.2 }], streaks: { x: cx, y: cy, dir: 1 } };
+  if (fx === 'attack') return { x: cx + 14, y: cy + 16, s: 1.2, ghosts: [{ x: cx - 12, y: cy + 2, s: 1.04 }, { x: cx, y: cy + 9, s: 1.12 }], streaks: { x: cx, y: cy, dir: 1 } };
   return null;
 }
 function alatStreaks({ x, y, dir }) { // 움직임 방향 속도선: dir 1 앞(아래)·-1 위·0 사방

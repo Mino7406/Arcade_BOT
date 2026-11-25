@@ -174,7 +174,7 @@ function monsterProblems(m) {
     const missing = [...used].filter(ch => !s.palette[ch]);
     if (missing.length) problems.push(`palette에 없는 글자: ${missing.join(' ')}`);
   }
-  if (s?.scale !== undefined && !(s.scale >= 0.5 && s.scale <= 2.0)) problems.push('sprite.scale은 0.5~2.0');
+  if (s?.scale !== undefined && !(s.scale >= 0.5 && s.scale <= 1.7)) problems.push('sprite.scale은 0.5~1.7');
   for (const key of REQUIRED_MOVES) if (!m.moves?.[key]) problems.push(`moves.${key} 없음`);
   for (const [key, mv] of Object.entries(m.moves ?? {})) {
     if (mv.readyPose && !s?.poses?.[mv.readyPose]) problems.push(`moves.${key}.readyPose "${mv.readyPose}"가 sprite.poses에 없음`);
