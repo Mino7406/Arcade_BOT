@@ -1400,7 +1400,7 @@ function alatMouthBurst(el, x, y, up) {
 }
 function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
   if (!move) return;
-  if (ALAT_FX.includes(move)) { if (layer === (move === 'alflame' || move === 'alice' ? 'front' : 'back')) alatOverlay(move, cx, cy, alatTargets, 'field'); return; } // 화염 브레스만 입에서 몸 앞으로 쏟아지고, 나머지 기술은 몸 뒤 배경 연출 // 알바트리온: 몬스터 칸 연출(카드·말풍선보다 아래), 타격은 맨 위에서 'hit'
+  if (ALAT_FX.includes(move)) { if (layer === (move === 'alflame' || move === 'alice' || move === 'albolt' ? 'front' : 'back')) alatOverlay(move, cx, cy, alatTargets, 'field'); return; } // 화염 브레스만 입에서 몸 앞으로 쏟아지고, 나머지 기술은 몸 뒤 배경 연출 // 알바트리온: 몬스터 칸 연출(카드·말풍선보다 아래), 타격은 맨 위에서 'hit'
   if (HEUNG_FX.includes(move)) { heungMonsterFx(move, cx, cy, layer); return; }
   if (move === 'fart' && layer === 'front') {
     // 구린 방귀: 뒤돌아선 엉덩이에서 뿜어진 커다란 가스 덩어리 하나가 파티 쪽(아래·양옆)으로 뭉게뭉게 부풀어 퍼진다.
@@ -2393,7 +2393,7 @@ function renderBattle(r) {
     if (usedFx && SKILL_FX.includes(usedFx)) skillCtx = { fx: usedFx, mx: W / 2, my: monsterY, targets: [] };
     alatTargets = ALAT_FX.includes(usedFx) ? b.members.filter(mm => last?.hits?.[mm.userId]).map(mm => [20 + activeRoles.indexOf(mm.role) * (CARD_W + CARD_GAP) + CARD_W / 2, CARD_Y + 86]) : [];
     heungTargets = usedFx === 'lightning' ? b.members.filter(mm => last?.hits?.[mm.userId]).map(mm => 121.5 + activeRoles.indexOf(mm.role) * 219) : []; // 낙뢰가 내려칠 카드 위치
-    const preFx = b.alat && ALAT_FX.includes(usedFx) && usedFx !== 'alflame' && usedFx !== 'alice' ? Buffer.from(p.buf) : null; // 연출(뒤 층)을 그리기 전 화면 — 연출이 어디에 칠해졌는지 알아내려고
+    const preFx = b.alat && ALAT_FX.includes(usedFx) && usedFx !== 'alflame' && usedFx !== 'alice' && usedFx !== 'albolt' ? Buffer.from(p.buf) : null; // 연출(뒤 층)을 그리기 전 화면 — 연출이 어디에 칠해졌는지 알아내려고
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'back', sporeColor, accentColor);
     // 투명화(유령): 다음 턴 동안 몸을 흐리게(회색)
     let alatMouth = null, alatBody = null;
@@ -2404,7 +2404,7 @@ function renderBattle(r) {
       if (mv) for (const gh of mv.ghosts) drawMonster(m, gh.x, gh.y, 112 * gh.s, { ...ex, gray: true }); // 잔상(흐린 그림자)
       if (mv) { if (mv.streaks) alatStreaks(mv); drawMonster(m, mv.x, mv.y, 112 * mv.s, ex); } else drawMonster(m, W / 2, monsterY, 112, ex);
       if (b.alat) alatMouth = { x: mv ? mv.x : W / 2, y: (mv ? mv.y : monsterY) - 8 + 6 };
-      if (bgSnap && (usedFx === 'alflame' || usedFx === 'alice')) alatBody = { bg: bgSnap, mon: Buffer.from(p.buf) };
+      if (bgSnap && (usedFx === 'alflame' || usedFx === 'alice' || usedFx === 'albolt')) alatBody = { bg: bgSnap, mon: Buffer.from(p.buf) };
       if (bgSnap && preFx) { // 연출(몸 뒤에 그린 것)과 몸이 겹쳐 보이게: 몸 픽셀에 뒤의 연출을 비쳐 섞는다(밝은 연출일수록 더 비침). 연출 모양은 그대로
         for (let yy = 0; yy < p.h; yy++) for (let xx = 0; xx < p.w; xx++) {
           const i = (yy * p.w + xx) * 3; if (p.buf[i] === bgSnap[i] && p.buf[i + 1] === bgSnap[i + 1] && p.buf[i + 2] === bgSnap[i + 2]) continue; // 몸이 아닌 칸
