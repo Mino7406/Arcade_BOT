@@ -213,5 +213,8 @@
       "attack": 1,
       "smash": 1
     }
+  },
+  "raid": {
+    "mvpItem": "reroll"
   }
 }

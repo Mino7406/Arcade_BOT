@@ -30,6 +30,7 @@ const { card, payload: cardPayload, notice } = require('../공통/카드');
 const { writeJsonIfChanged } = require('../공통/저장');
 const { grantHackTool, HACK_TOOL_NAME, hackToolWith, hackToolEmoji } = require('../게임/해킹툴');
 const { GATEWAY_NAME, gatewayEmoji, grantGateway } = require('../게임/블랙월게이트웨이');
+const { REROLL_NAME, rerollEmoji, grantReroll } = require('../게임/재회전석');
 const { displayNameFromInteraction } = require('../공통/이름');
 const {
   PLAYER_MAX_HP, POTIONS_PER_BATTLE, POTION_HEAL, GUARD_DAMAGE_RATE, ROLES, ROLE_ORDER, rolesOfMonster, roleTitle, ACTIONS, MONSTERS, HARD_MONSTERS, ALL_MONSTERS,
@@ -507,11 +508,11 @@ function subjectJosa(name) {
   return code % 28 ? '이' : '가';
 }
 // 보상 괄호 안 글자: XP와 (받았으면) 해킹 툴을 한 줄에. 해킹 툴은 최대 보유면 못 받으므로 사람마다 다를 수 있다.
-const rewardText = (xp, hackTool, gateway, gatewayFull) => `(${[xp > 0 ? `+${xp} XP` : null, hackTool ? `${hackToolEmoji()} ${HACK_TOOL_NAME} 1개` : null, gateway ? `${gatewayEmoji()} ${GATEWAY_NAME} 1개` : null, gatewayFull ? `${GATEWAY_NAME} 보유 한도` : null].filter(Boolean).join(' · ')})`;
+const rewardText = (xp, hackTool, gateway, gatewayFull, reroll, rerollFull) => `(${[xp > 0 ? `+${xp} XP` : null, hackTool ? `${hackToolEmoji()} ${HACK_TOOL_NAME} 1개` : null, gateway ? `${gatewayEmoji()} ${GATEWAY_NAME} 1개` : null, gatewayFull ? `${GATEWAY_NAME} 보유 한도` : null, reroll ? `${rerollEmoji()} ${REROLL_NAME} 1개` : null, rerollFull ? `${REROLL_NAME} 보유 한도` : null].filter(Boolean).join(' · ')})`;
 
 // 해킹 툴을 최대로 갖고 있어 못 받은 사람 안내(작은 글씨). 없으면 null.
 function hackToolFullLine(r, rewards) {
-  const full = rewards.filter(x => !x.hackTool && !x.gateway && !x.gatewayFull).map(x => r.battle?.members.find(mem => mem.userId === x.userId)?.name).filter(Boolean);
+  const full = rewards.filter(x => !x.hackTool && !x.gateway && !x.gatewayFull && !x.reroll && !x.rerollFull).map(x => r.battle?.members.find(mem => mem.userId === x.userId)?.name).filter(Boolean);
   return full.length ? `-# ${hackToolEmoji()} ${full.join(', ')}님은 ${hackToolWith('을')} 최대로 갖고 있어 받지 못했어요` : null;
 }
 
@@ -524,7 +525,7 @@ function endSummary(r, outcome, rewards) {
     lines.push(`${name} 토벌되어 XP 시스템이 복구되었습니다.`);
     const mvp = rewards.find(x => x.mvp);
     const mvpName = mvp && b?.members.find(mem => mem.userId === mvp.userId)?.name;
-    if (mvpName) lines.push(`> 👑 **MVP** : ${mvpName} · ${rewardText(mvp.xp, mvp.hackTool, mvp.gateway, mvp.gatewayFull)}`);
+    if (mvpName) lines.push(`> 👑 **MVP** : ${mvpName} · ${rewardText(mvp.xp, mvp.hackTool, mvp.gateway, mvp.gatewayFull, mvp.reroll, mvp.rerollFull)}`);
     // MVP 가 아닌 사람은 받은 것(해킹 툴 받았나)이 같은 사람끼리 한 줄로 묶는다 — 보통은 한 줄.
     for (const got of [true, false]) {
       const names = rewards.filter(x => !x.mvp && !!x.hackTool === got).map(x => b.members.find(mem => mem.userId === x.userId)?.name).filter(Boolean);
@@ -556,7 +557,7 @@ async function endView(r, outcome, rewards = []) {
       body += `남은 HP **${b.hp.toLocaleString()}** / ${b.maxHp.toLocaleString()} · ${b.turn}턴\n\n` +
         b.members.map(mem => {
           const reward = rewards.find(x => x.userId === mem.userId);
-          const xp = reward ? ` ${reward.xp > 0 ? `· **+${reward.xp} XP**` : ''}${reward.mvp ? ' 👑MVP' : ''}${reward.hackTool ? ` · ${hackToolEmoji()}+1` : ''}${reward.gateway ? ` · ${gatewayEmoji()}+1` : ''}` : '';
+          const xp = reward ? ` ${reward.xp > 0 ? `· **+${reward.xp} XP**` : ''}${reward.mvp ? ' 👑MVP' : ''}${reward.hackTool ? ` · ${hackToolEmoji()}+1` : ''}${reward.gateway ? ` · ${gatewayEmoji()}+1` : ''}${reward.reroll ? ` · ${rerollEmoji()}+1` : ''}` : '';
           const idle = outcome === 'clear' && !reward ? ' · *(직접 행동하지 않아 보상 없음)*' : '';
           return `${ROLES[mem.role].emoji} **${mem.name}** — 피해 ${mem.damage.toLocaleString()} · 회복 ${mem.healing} · 방어 ${mem.blocked ?? 0}${xp}${idle}`;
         }).join('\n');
@@ -1053,9 +1054,12 @@ function finishRaid(r, outcome) {
       // 해킹 툴(룰렛 꽝 번복권)도 1개씩 — 레벨 시스템이 없는 테스트 서버에도 줘서 룰렛에서 시험해 볼 수 있게 한다.
       // 남아 있는 몬스터(???)는 MVP에게 해킹 툴 대신 자기 아이템(블랙월 게이트웨이)을 주고, 일반 파티원은 해킹 툴 1개씩.
       const wantsGateway = isPersistent(r) && mem === mvp && raidRules(r).mvpItem === 'gateway';
-      const hackTool = wantsGateway ? false : grantHackTool(r.guildId, mem.userId); // 최대 보유면 false(못 받음)
+      // 알바트리온(raid.mvpItem 'reroll')은 MVP 에게 해킹 툴 대신 속성 재회전석(최대 1개)을 준다.
+      const wantsReroll = mem === mvp && raidRules(r)?.mvpItem === 'reroll';
+      const hackTool = wantsGateway || wantsReroll ? false : grantHackTool(r.guildId, mem.userId); // 최대 보유면 false(못 받음)
       const gateway = wantsGateway ? grantGateway(r.guildId, mem.userId) : false; // 최대 보유면 false(못 받음)
-      rewards.push({ userId: mem.userId, xp, mvp: mem === mvp, hackTool, gateway, gatewayFull: wantsGateway && !gateway });
+      const reroll = wantsReroll ? grantReroll(r.guildId, mem.userId) : false;
+      rewards.push({ userId: mem.userId, xp, mvp: mem === mvp, hackTool, gateway, gatewayFull: wantsGateway && !gateway, reroll, rerollFull: wantsReroll && !reroll });
       if (isExcludedGuild(r.guildId) || xp <= 0) continue;
       const result = applyXp(r.guildId, mem.userId, xp, `레이드 토벌 '${r.monster.name}'${mem === mvp ? ' (MVP)' : ''}`);
       if (result.leveledUp) announceLevelUp(r.client, r.guildId, mem.userId, result.newLevel);
@@ -1074,7 +1078,7 @@ function finishRaid(r, outcome) {
     유형: '레이드',
     내용: `레이드 종료 — ${r.monster.name} / ${OUTCOME_TEXT[outcome]}` +
       (r.battle ? ` / ${r.battle.turn}턴, 남은 HP ${r.battle.hp}/${r.battle.maxHp}` : '') +
-      (rewards.length ? ` / 보상: ${rewards.map(x => `${userLabel(x.userId)} +${x.xp}${x.gateway ? ` +${GATEWAY_NAME}` : x.gatewayFull ? ` (${GATEWAY_NAME} 보유 한도)` : x.hackTool ? ` +${HACK_TOOL_NAME}` : ` (${HACK_TOOL_NAME} 보유 한도)`}`).join(', ')}` : '') +
+      (rewards.length ? ` / 보상: ${rewards.map(x => `${userLabel(x.userId)} +${x.xp}${x.reroll ? ` +${REROLL_NAME}` : x.rerollFull ? ` (${REROLL_NAME} 보유 한도)` : x.gateway ? ` +${GATEWAY_NAME}` : x.gatewayFull ? ` (${GATEWAY_NAME} 보유 한도)` : x.hackTool ? ` +${HACK_TOOL_NAME}` : ` (${HACK_TOOL_NAME} 보유 한도)`}`).join(', ')}` : '') +
       (penalized ? ` / 벌칙: 모든 유저 -${penaltyXp} XP (${penalized}명)` : ''),
   });
 

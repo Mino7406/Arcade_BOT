@@ -858,6 +858,13 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     assert(shown2.includes('JACKPOT') && !JSON.stringify(spin2._replied ?? '').includes('먼저 베팅'), '게이트웨이 사용 버튼만 눌러도 최대 베팅으로 자동 베팅 → 바로 돌려 JACKPOT');
   });
 
+  await flow('재회전석: 보유량은 최대 1개, 사용은 개수만큼만', async () => {
+    const rr = require(path.join(root, 'handlers/게임/재회전석.js'));
+    assert(rr.grantReroll('g1', 'rru1') === true && rr.grantReroll('g1', 'rru1') === false, '재회전석은 최대 1개(두 번째 지급은 false)');
+    assert(rr.getRerolls('g1', 'rru1') === 1 && rr.getRerolls('g2', 'rru1') === 0, '보유량은 서버(길드)별');
+    assert(rr.useReroll('g1', 'rru1') === true && rr.getRerolls('g1', 'rru1') === 0 && rr.useReroll('g1', 'rru1') === false, '사용은 개수만큼만');
+  });
+
   // ── 룰렛 동시 사용 부하: 여러 명이 한꺼번에 돌려도 모두 결과를 받고 서버가 버텨야 한다 ──
   await flow('룰렛: 50명이 동시에 돌려도 전원 결과를 받고 메모리가 늘지 않는다', async () => {
     const N = 50;

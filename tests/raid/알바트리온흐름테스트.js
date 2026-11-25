@@ -88,6 +88,22 @@ const phase = () => raidMod.raidForTest(channel.guildId)?.phase;
   assert(!/화염기사|수정술사|뇌창사|빙결기사|검사|궁수|수호자|치유사/.test(desc()), '전투 화면에도 직업 이름 없음');
   await raidMod.forceEndRaid(MAIN);
 
+  // ── 클리어 보상: MVP 한 명만 속성 재회전석, 나머지는 해킹 툴 ──
+  err = await raidMod.forceSpawnRaid({ guildId: 'other', channel, client }, 'alatreon');
+  for (const [uid, role] of [['1', 'fire'], ['2', 'water'], ['3', 'thunder'], ['4', 'ice']]) await press(uid, 'raid:role:' + role);
+  assert(phase() === 'battle', '보상 시나리오: 전투 시작');
+  const rr = require(path.join(root, 'handlers/게임/재회전석.js'));
+  const ht = require(path.join(root, 'handlers/게임/해킹툴.js'));
+  raidMod.raidForTest(MAIN).battle.hp = 1;
+  // 앞 순서(화·수·뇌)가 먼저 쓰러뜨리면 뒤 순서는 행동하지 못해 보상이 없으므로, 셋은 방어하고 마지막 순서(빙)가 쓰러뜨린다.
+  for (const uid of ['1', '2', '3']) await press(uid, 'raid:act:guard');
+  await press('4', 'raid:act:attack');
+  await runTimers();
+  assert(!raidMod.getRaidStatus(MAIN).active, '보상 시나리오: 클리어로 종료');
+  const rerolls = ['1', '2', '3', '4'].map(u => rr.getRerolls(MAIN, u));
+  assert(rerolls.reduce((a, b) => a + b, 0) === 1 && rerolls[3] === 1, `클리어 보상: MVP(피해를 준 빙 직업) 한 명만 재회전석 1개 (${rerolls.join(',')})`);
+  assert(['1', '2', '3'].every(u => ht.getHackTools(MAIN, u) === 1) && ht.getHackTools(MAIN, '4') === 0, '클리어 보상: 나머지는 해킹 툴 1개, MVP는 해킹 툴 대신 재회전석');
+
   // ── 테스트 서버: 1명이어도 시작 ──
   channel.guildId = TEST; message.channel = null;
   err = await raidMod.forceSpawnRaid({ guildId: 'other', channel, client }, 'alatreon');
