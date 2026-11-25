@@ -118,6 +118,7 @@ const phase = () => raidMod.raidForTest(channel.guildId)?.phase;
   while (phase() === 'battle' && g1++ < 12) {
     const b = raidMod.raidForTest(MAIN).battle;
     const escaton = b.intent === 'smash';
+    for (const mm of b.members) mm.hp = Math.max(mm.hp, 100); // 속성 무관 무작위 공격과 약점 피해로 파티가 쓰러져 전멸하면 클리어 화면이 아니라서 흔들렸다 — 이 흐름은 클리어 경로를 보는 테스트라 체력을 채워 둔다
     if (escaton) b.alat.gauge = 100; // 상성 직업이 채웠다고 보고(억제 성공 경로)
     for (const [uid, role] of [['11', 'fire'], ['12', 'water'], ['13', 'thunder'], ['14', 'ice']]) {
       const alive = b.members.find(m => m.userId === uid)?.hp > 0;
