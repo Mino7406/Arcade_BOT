@@ -589,8 +589,8 @@
       "element": "fire"
     },
     "torrent": {
-      "name": "물 브레스",
-      "telegraph": "입안에 물이 차오른다...",
+      "name": "해일 소용돌이",
+      "telegraph": "발밑에서 물이 차오른다...",
       "target": "all",
       "damage": [
         6,
