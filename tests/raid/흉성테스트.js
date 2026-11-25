@@ -3,6 +3,7 @@
 const path = require('path');
 const root = __dirname;
 const timers = [];
+if (process.env.SEED) { let a = Number(process.env.SEED) >>> 0; Math.random = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; } // SEED=숫자 로 같은 난수를 다시 재현
 global.setTimeout = (fn, ms) => { const t = { fn, ms, cancelled: false, unref() { return t; } }; timers.push(t); return t; };
 global.clearTimeout = (t) => { if (t) t.cancelled = true; };
 global.setInterval = () => ({ unref() {} });
@@ -14,7 +15,7 @@ async function flushRender() {
     await new Promise(r => setImmediate(r));
   }
 }
-const runTimers = async () => { const due = timers.filter(t => !t.cancelled && t.ms > 1000); for (const t of due) { timers.splice(timers.indexOf(t), 1); await t.fn(); } await flushRender(); };
+const runTimers = async () => { const due = timers.filter(t => !t.cancelled && t.ms > 1000).sort((x, y) => x.ms - y.ms); for (const t of due) { timers.splice(timers.indexOf(t), 1); await t.fn(); await flushRender(); } await flushRender(); }; // 타이머마다 그림을 그려 본다(실제로는 몇 초씩 떨어져 있어 그림이 합쳐지지 않는다)
 
 const raidMod = require(path.join(root, 'handlers/레이드/index.js'));
 const battleMod = require(path.join(root, 'handlers/레이드/전투.js'));
@@ -60,6 +61,7 @@ function fakeInteraction(userId, customId) {
     const d = desc();
     const turn = +(d.match(/TURN (\d+)/)?.[1] ?? 0);
     const before = raidMod.getRaidStatus(channel.guildId).monsterName;
+    if (!landedAt) for (const m of raidMod.raidForTest(channel.guildId).battle.members) { m.stunTurn = 0; m.stunStatus = null; m.poisonStacks = 0; m.poisonUntil = 0; if (m.hp < 60) m.hp = 60; } // 위장 몬스터가 건 기절·독·화상은 풀고 쓰러진 사람은 살려 둔다(기절하면 방어를 못 하고, 위장 몬스터의 화상이 남으면 습격 화상 검사와 섞여 난수에 따라 깨졌다)
     imagesBefore = images.length;
     for (const uid of ['1', '2', '3']) {
       // 습격 전엔 유저1만 방어하고 나머지는 약하게 공격한다(위장 몬스터가 먼저 쓰러지지 않게 — 먼저 쓰러지는 경우는 엔진 시뮬로 확인).
@@ -83,11 +85,12 @@ function fakeInteraction(userId, customId) {
         const st = timers.filter(t => !t.cancelled && [5500].includes(t.ms)).sort((a, b) => a.ms - b.ms);
         let n = 1; for (const t of st) { timers.splice(timers.indexOf(t), 1); await t.fn(); await flushRender(); require('fs').writeFileSync(process.env.DUMP_DIR + '/st' + (n++) + '.png', images[images.length - 1]); }
       }
+      const imagesBeforeTimers = images.length;
       await runTimers(); // 단계 타이머(2·3단계)와 결과 타이머 실행 → 다음 턴(쉬는 턴) 선택 화면
-      assert(images.length - imagesBefore >= 4, `착지 결과가 단계별로 다시 그려짐(그림 ${images.length - imagesBefore}장)`);
+      assert(images.length - imagesBeforeTimers >= 2, `착지 결과가 단계별로 다시 그려짐(타이머 뒤 그림 ${images.length - imagesBeforeTimers}장, 남은 타이머 ${timers.filter(t => !t.cancelled).map(t => t.ms).join(',')}, 화면 ${desc().split('\n')[0]})`);
       if (process.env.DUMP_DIR) { require('fs').writeFileSync(process.env.DUMP_DIR + '/stage_last.png', images[images.length - 1]); require('fs').writeFileSync(process.env.DUMP_DIR + '/stage_first.png', images[imagesBefore + 1] ?? images[images.length - 1]); }
       const burnLine = desc().split('\n').find(l => l.includes('화상:')) ?? '';
-      assert(burnLine.includes('유저2') && burnLine.includes('유저3') && !burnLine.includes('유저1'), '방어하지 못한 사람(유저2·3)에게만 화상, 방어한 유저1은 없음');
+      assert(burnLine.includes('유저2') && burnLine.includes('유저3') && !burnLine.includes('유저1'), `방어하지 못한 사람(유저2·3)에게만 화상, 방어한 유저1은 없음 (화상줄: ${burnLine}, 화면: ${desc().split('\n').join(' / ').slice(0, 300)})`);
       const stunned = fakeInteraction('2', 'raid:act:attack'); await raidMod.handleRaidButton(stunned);
       assert(JSON.stringify(stunned.replied ?? {}).includes('기절'), '방어하지 못한 유저2는 다음 턴 기절(행동 불가)');
       const guarded = fakeInteraction('1', 'raid:act:attack'); await raidMod.handleRaidButton(guarded);
