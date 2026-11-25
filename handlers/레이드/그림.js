@@ -2512,7 +2512,7 @@ function alatHeader(b) {
   }
   if (rage) { p.roundRect(W / 2 + nw / 2 + 22, 24, 58, 26, 6, '#5c1410'); text('분노', W / 2 + nw / 2 + 51, 37, 18, '#ffb4a8'); }
   // 보스 HP 바: 석재 틀 + 분절된 불씨빛 게이지 + 10% 눈금 + 40%(분노) 표식
-  const bx = 140, by = 63, bw = W - 392, bh = 23, sl = 14, ratio = Math.max(0, Math.min(1, b.hp / b.maxHp));
+  const bx = 140, by = 63, sl0 = 14, bw = W - 280 - sl0, bh = 23, sl = 14, ratio = Math.max(0, Math.min(1, b.hp / b.maxHp));
   const quad = (x, w, y, hh, c) => p.poly([x + sl * (1 - (y - by) / bh), y, x + w + sl * (1 - (y - by) / bh), y, x + w + sl * (1 - (y + hh - by) / bh), y + hh, x + sl * (1 - (y + hh - by) / bh), y + hh], c);
   p.poly([bx + sl - 6, by - 6, bx + bw + sl + 6, by - 6, bx + bw - 6, by + bh + 6, bx - 6, by + bh + 6], rimDark); p.poly([bx + sl - 3, by - 3, bx + bw + sl + 3, by - 3, bx + bw - 3, by + bh + 3, bx - 3, by + bh + 3], '#0a0605');
   const ember = rage ? ['#2a0c20', '#7a1a4a', '#c8307a', '#ff6aa8', '#ffd0e4'] : ['#3a0a08', '#8a1a10', '#c8381c', '#f0661e', '#ffc060'];
@@ -2530,7 +2530,7 @@ function alatHeader(b) {
   p.roundRect(bx + bw / 2 - 70, by + 3, 156, bh - 6, 6, '#050302', 0.62); // 숫자 뒤 어두운 판(눈금과 섞이지 않게)
   text(`${b.hp.toLocaleString()} / ${b.maxHp.toLocaleString()}`, bx + bw / 2 + sl / 2, by + bh / 2 + 1, 18, '#ffffff');
   // 억제 게이지: 방패 라벨 + 비스듬한 10칸 분절 게이지(속성 색, 칸마다 윗면 광택) + 숫자 판. 가득 차면(억제 성공 상태) 테두리가 빛나고 MAX 표시
-  const gx = bx + 38, gy = 96, gw = 380, gh = 12, sl2 = 7, gr = al.gauge / A.K.GAUGE_MAX, full = al.gauge >= A.K.GAUGE_MAX;
+  const gw = 380, gh = 12, sl2 = 7, gx = Math.round(W / 2 - (gw + sl2) / 2), gy = 96, gr = al.gauge / A.K.GAUGE_MAX, full = al.gauge >= A.K.GAUGE_MAX;
   const gq = (x, w, y, hh, c) => p.poly([x + sl2 * (1 - (y - gy) / gh), y, x + w + sl2 * (1 - (y - gy) / gh), y, x + w + sl2 * (1 - (y + hh - gy) / gh), y + hh, x + sl2 * (1 - (y + hh - gy) / gh), y + hh], c);
   if (full) { p.poly([gx - 6 + sl2, gy - 6, gx + gw + 6 + sl2, gy - 6, gx + gw + 6, gy + gh + 6, gx - 6, gy + gh + 6], mixHex('#0d0805', col, 0.55)); }
   p.poly([gx - 3 + sl2, gy - 3, gx + gw + 3 + sl2, gy - 3, gx + gw + 3, gy + gh + 3, gx - 3, gy + gh + 3], rimDark); gq(gx, gw, gy, gh, '#0a0605');
@@ -2541,13 +2541,13 @@ function alatHeader(b) {
     gq(cx0, cell * fill, gy + 1, gh - 2, mixHex(col, '#000000', 0.25)); gq(cx0, cell * fill, gy + 1, (gh - 2) * 0.55, col); gq(cx0, cell * fill, gy + 1, 3, mixHex(col, '#ffffff', 0.6));
   }
   // 왼쪽 방패 라벨
-  const lx = gx - 26, ly = gy + gh / 2;
+  const lx = gx - 26 + 4, ly = gy + gh / 2;
   p.poly([lx - 13, ly - 13, lx + 13, ly - 13, lx + 13, ly + 3, lx, ly + 15, lx - 13, ly + 3], rim); p.poly([lx - 10, ly - 10, lx + 10, ly - 10, lx + 10, ly + 2, lx, ly + 12, lx - 10, ly + 2], '#0d0805'); p.poly([lx - 7, ly - 7, lx + 7, ly - 7, lx + 7, ly + 1, lx, ly + 9, lx - 7, ly + 1], mixHex('#0d0805', col, full ? 0.9 : 0.45));
   text('억제', lx, ly - 1, 11, '#ffffff');
   // 오른쪽 숫자 판
-  const nx = gx + gw + 38;
-  p.roundRect(nx - 30, gy - 5, 66, gh + 10, 7, '#0d0805', 0.85); p.strokeRoundRect(nx - 30, gy - 5, 66, gh + 10, 7, 1.5, full ? col : rimDark);
-  text(full ? 'MAX' : `${Math.round(al.gauge)}`, nx + 3, gy + gh / 2, 16, full ? '#ffffff' : col);
+  const nx = gx + gw + sl2 + 26; // 왼쪽 방패 라벨과 대칭
+  p.roundRect(nx - 24, gy - 5, 48, gh + 10, 7, '#0d0805', 0.85); p.strokeRoundRect(nx - 24, gy - 5, 48, gh + 10, 7, 1.5, full ? col : rimDark);
+  text(full ? 'MAX' : `${Math.round(al.gauge)}`, nx, gy + gh / 2, 16, full ? '#ffffff' : col);
   // 왼쪽 TURN 메달
   const mx1 = 88, my1 = 66;
   p.circle(mx1, my1, 34, rimDark); p.circle(mx1, my1, 31, '#0a0605'); p.circle(mx1, my1, 28, stone); p.strokeRoundRect(mx1 - 28, my1 - 28, 56, 56, 28, 2, rim);
@@ -2556,16 +2556,7 @@ function alatHeader(b) {
   const emblem = (cx, cy, R) => {
     p.circle(cx, cy, R + 6, mixHex('#0d0805', col, 0.16)); p.circle(cx, cy, R - 2, mixHex('#0d0805', col, 0.1)); // 방패 없이 은은한 빛무리만
     const u = R * 0.85, hi = mixHex(col, '#ffffff', 0.6), P = (pts, c, dx = 0, dy = 0) => p.poly(pts.flatMap(([x, y]) => [cx + dx + x * u, cy + dy + y * u]), c);
-    if (el === 'fire') { // 불꽃
-      P([[0, -1.05], [0.35, -0.5], [0.62, -0.05], [0.6, 0.45], [0.3, 0.88], [0, 0.98], [-0.3, 0.88], [-0.6, 0.45], [-0.58, -0.05], [-0.28, -0.4], [-0.18, -0.15], [-0.1, -0.6]], col);
-      P([[0, -0.1], [0.3, 0.3], [0.3, 0.62], [0, 0.88], [-0.3, 0.62], [-0.3, 0.3]], hi);
-    } else if (el === 'water') { // 물방울
-      P([[0, -1.05], [0.45, -0.25], [0.62, 0.3], [0.42, 0.82], [0, 1], [-0.42, 0.82], [-0.62, 0.3], [-0.45, -0.25]], col);
-      P([[-0.28, 0.1], [-0.12, 0.05], [-0.18, 0.55], [-0.34, 0.4]], hi);
-    } else if (el === 'thunder') { // 번개
-      P([[0.22, -1.05], [-0.58, 0.14], [-0.06, 0.14], [-0.26, 1.02], [0.58, -0.22], [0.06, -0.22], [0.5, -1.05]].slice(0, 6), col);
-      P([[0.18, -0.7], [-0.25, 0.0], [0.1, 0.0], [0.0, 0.5], [0.32, -0.12], [0.0, -0.12]], hi);
-    } else { // 얼음 결정 다발 / 용송석: 도트 비트맵(가장자리 어둡게·왼쪽 밝게·오른쪽 어둡게 자동 음영)
+    { // 도트 비트맵 아이콘(가장자리 어둡게·왼쪽 밝게·오른쪽 어둡게 자동 음영)
       const ICE = (() => { // 눈 결정: 가로·세로 가지 + 대각 가지 + 갈라진 곁가지
         const g = Array.from({ length: 17 }, () => Array(17).fill('.')), put = (x, y) => { if (x >= -8 && x <= 8 && y >= -8 && y <= 8) g[y + 8][x + 8] = 'C'; };
         for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) put(x, y);
@@ -2573,18 +2564,28 @@ function alatHeader(b) {
         for (const [dx, dy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) for (let d = 2; d <= 5; d++) put(dx * d, dy * d);
         return g.map(r => r.join(''));
       })();
+      const FIRE = ['......F........', '......FF.......', '.....FFF....F..', '.....FFOF...FF.', '....FFOOF..FFF..', '....FFOOOF.FFOF.', '...FFFOOOFFFFOF', '...FFOOYOOFFOOF', '..FFFOOYYOOFOOF', '..FFOOOYYYOOOOF', '..FFOOYYYYYOOFF', '..FFOOYYYYYOOFF', '...FFOOYYYOOFF.', '...FFFOOYOOFFF.', '....FFFOOOFFF..', '.....FFFFFFF...'].map(r => r.slice(0, 15).padEnd(15, '.'));
+      const WAT = ['.......W.......', '.......W.......', '......WWW......', '......WWW......', '.....WWWWW.....', '.....WWWWW.....', '....WWWWWWW....', '...WWWWWWWWW...', '...WWHWWWWWW...', '..WWWHWWWWWWW..', '..WWHHWWWWWWW..', '..WWHWWWWWWWW..', '..WWWWWWWWWWW..', '...WWWWWWWWW...', '....WWWWWWW....', '.....WWWWW.....', '......WWW......'];
+      const THU = ['......TTTTT....', '.....TTTTT.....', '.....TTTT......', '....TTTTT......', '....TTTTTTTT...', '...TTTTTTTT....', '...TTTTTTT.....', '.......TTTT....', '......TTTT.....', '......TTT......', '.....TTT.......', '.....TT........', '....TT.........', '....T..........'];
       const DRG = ['.......P.......', '......PPP......', '..P...PPP...P..', '.PPP..PPP..PPP.', '.PPP..PPP..PPP.', '.LLL..PPL..LLL.', '.LLL..LLL..LLL.', '.LLL..LLL..LLL.', '.LLLL.LLL.LLLL.', '..LLLLLLLLLLL..', '...LLLLLLLLL...', '.....LLLLL.....', '.....LLLLL.....', '.....LLLLL.....', '....LLLLLLL....'];
-      const rows = el === 'ice' ? ICE : DRG, pal = el === 'ice' ? { C: ['#e8faff', '#9fdcff', '#58a8e0'], o: '#0c3050' } : { L: ['#d6cdf4', '#a69ad8', '#6e5fae'], P: ['#b070ff', '#8a3ae8', '#5a1fb0'], o: '#1e1040' };
+      const PALS = {
+        fire: { F: ['#ff7a2a', '#e03c14', '#8a1a0c'], O: ['#ffc04a', '#ff9a2a', '#e8601a'], Y: ['#fffbe0', '#fff0a0', '#ffd860'], o: '#3a0a05' },
+        water: { W: ['#9ae8ff', '#46b4f0', '#1e6cc0'], H: ['#ffffff', '#ffffff', '#e8faff'], o: '#0a2a58' },
+        thunder: { T: ['#fffbb0', '#f6e83a', '#c89a10'], o: '#3a2c00' },
+        ice: { C: ['#e8faff', '#9fdcff', '#58a8e0'], o: '#0c3050' },
+        dragon: { L: ['#d6cdf4', '#a69ad8', '#6e5fae'], P: ['#b070ff', '#8a3ae8', '#5a1fb0'], o: '#1e1040' },
+      };
+      const rows = { fire: FIRE, water: WAT, thunder: THU, ice: ICE }[el] || DRG, pal = PALS[el] || PALS.dragon;
       const c = 3, ox = Math.round(cx - rows[0].length * c / 2), oy = Math.round(cy - rows.length * c / 2), at = (r, k) => rows[r]?.[k] ?? '.';
       for (let r = -1; r <= rows.length; r++) for (let k = -1; k <= rows[0].length; k++) {
         const ch = at(r, k); let color = null;
-        if (ch === '.') { if ('CLP'.includes(at(r - 1, k)) || 'CLP'.includes(at(r + 1, k)) || 'CLP'.includes(at(r, k - 1)) || 'CLP'.includes(at(r, k + 1))) color = pal.o; }
+        if (ch === '.') { if (at(r - 1, k) !== '.' || at(r + 1, k) !== '.' || at(r, k - 1) !== '.' || at(r, k + 1) !== '.') color = pal.o; }
         else { let st = 0; while (at(r, k - 1 - st) === ch) st++; let len = st; while (at(r, k + len - st) === ch) len++; const f = st / Math.max(1, len - 1); color = pal[ch][f < 0.34 ? 0 : f > 0.67 ? 2 : 1]; if (len < 3) color = pal[ch][1]; }
         if (color) p.rect(ox + k * c, oy + r * c, c, c, color);
       }
     }
   };
-  emblem(W - 92, 62, 30);
+  emblem(W - 88, 66, 30);
 }
 function renderBattle(r) {
   return render('전투', () => {
