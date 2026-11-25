@@ -32,12 +32,13 @@ const { grantHackTool, HACK_TOOL_NAME, hackToolWith, hackToolEmoji } = require('
 const { GATEWAY_NAME, gatewayEmoji, grantGateway } = require('../게임/블랙월게이트웨이');
 const { displayNameFromInteraction } = require('../공통/이름');
 const {
-  PLAYER_MAX_HP, POTIONS_PER_BATTLE, POTION_HEAL, GUARD_DAMAGE_RATE, ROLES, ROLE_ORDER, ACTIONS, MONSTERS, HARD_MONSTERS, ALL_MONSTERS,
+  PLAYER_MAX_HP, POTIONS_PER_BATTLE, POTION_HEAL, GUARD_DAMAGE_RATE, ROLES, ROLE_ORDER, rolesOfMonster, roleTitle, ACTIONS, MONSTERS, HARD_MONSTERS, ALL_MONSTERS,
   createBattle, rebindAmbush, checkChoice, choose, allChosen, resolveTurn,
   isErrored, errorTurnsLeft, isVulnerable, vulnTurnsLeft, isDoomed,
   isStunned, slowTurnsLeft, isShielded, isPowered, poisonTurnsLeft, poisonStacks, poisonDamage, isConfused, chillStacks, isFeared, isPhased, isStenched, stenchTurnsLeft, minionsAlive, isWeak, weakTurnsLeft, telegraphText, isWarnIntent, minusPct, contribution,
 } = require('./전투');
 const { renderRecruit, renderBattle, renderEnd, warmUp } = require('./그림');
+const alat = require('./알바트리온');
 
 // ── 설정 ────────────────────────────────────────────────────────
 const SPAWN_INTERVAL_DAYS = [1, 2]; // 출현 간격(일) 최소~최대. 매번 이 안에서 무작위로 뽑은 날 뒤, 아래 시간대 중 무작위 시각
@@ -54,6 +55,8 @@ const AMBUSH_STAGE_MS = 1000;       // (미사용 상수 유지)
 const RESULT_MS = 4500;             // 턴 결과 화면을 보여주는 시간 — 그동안 버튼이 꺼지고, 끝나면 다음 턴 선택 화면으로(3.5초는 짧다는 사용자 요청으로 4.5초)
 const BATTLE_LIMIT_MS = 20 * 60 * 1000; // 전투 제한 시간 — 넘기면 몬스터 도주
 const PARTY_MAX = 4;
+// 속성 직업 몬스터(알바트리온)는 본서버에서 모든 속성이 모여야 시작한다. 테스트 서버는 인원이 모자라도 시작할 수 있다.
+const needsFullParty = (r) => !!r.monster.partyClasses && !isExcludedGuild(r.guildId);
 const CLEAR_XP = 300;               // 토벌 성공 시 파티원 1인당
 const MVP_BONUS_XP = 100;           // 기여도 1위(피해 + 회복·부활 + 막아 준 피해, 레이드전투.js의 contribution) 추가 보상
 // 토벌 실패(전멸·시간 초과·무참가로 도주) 시 서버의 모든 유저가 잃는 XP — 레이드마다 이 범위에서 무작위 하나(모두 같은 값)
@@ -247,9 +250,9 @@ async function recruitView(r, { redraw = true } = {}) {
     // 그림이 없을 때는 그림에 있던 정보(몬스터·파티 자리)를 글자로 대신한다.
     sections.push({
       text: `# 🚨 레이드 발생!\n## ${m.emoji} ${m.name} 출현!\n${m.lore}\n\n` +
-        ROLE_ORDER.map(k => {
+        rolesOfMonster(m).map(k => {
           const p = r.party.find(x => x.role === k);
-          return `${ROLES[k].emoji} **${ROLES[k].name}** — ${p ? `**${p.name}**` : '-'}\n-# ✨ ${ROLES[k].skill.name}: ${ROLES[k].skill.desc}`;
+          return `${roleTitle(k)} — ${p ? `**${p.name}**` : '-'}\n-# ✨ ${ROLES[k].skill.name}: ${ROLES[k].skill.desc}`;
         }).join('\n'),
     });
   }
@@ -282,14 +285,18 @@ async function recruitView(r, { redraw = true } = {}) {
   });
   sections.push({
     row: new ActionRowBuilder().addComponents(
-      ...ROLE_ORDER.map(roleKey => {
+      ...rolesOfMonster(m).map(roleKey => {
         const role = ROLES[roleKey];
         const taken = r.party.find(x => x.role === roleKey);
+        // 방장(가장 먼저 참가해 남아 있는 사람) 이름 옆에는 왕관. 이름 없는 직업(속성)은 이모지 + 참가/이름만
+        const crown = taken && taken === r.party[0] ? ' 👑' : '';
+        const label = role.hideName
+          ? (taken ? `${taken.name}${crown}` : '참가')
+          : (taken ? `${role.name} · ${taken.name}${crown}` : `${role.name} 참가`);
         return new ButtonBuilder()
           .setCustomId(`raid:role:${roleKey}`)
           .setEmoji(role.emoji)
-          // 방장(가장 먼저 참가해 남아 있는 사람) 이름 옆에는 왕관
-          .setLabel(taken ? `${role.name} · ${taken.name}${taken === r.party[0] ? ' 👑' : ''}`.slice(0, 80) : `${role.name} 참가`)
+          .setLabel(label.slice(0, 80))
           .setStyle(taken ? ButtonStyle.Secondary : ButtonStyle.Primary)
           .setDisabled(!!taken);
       }),
@@ -297,7 +304,7 @@ async function recruitView(r, { redraw = true } = {}) {
   });
   sections.push({
     row: new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('raid:start').setEmoji('▶️').setLabel('바로 시작').setStyle(ButtonStyle.Success).setDisabled(r.party.length === 0),
+      new ButtonBuilder().setCustomId('raid:start').setEmoji('▶️').setLabel('바로 시작').setStyle(ButtonStyle.Success).setDisabled(needsFullParty(r) ? r.party.length < rolesOfMonster(m).length : r.party.length === 0),
       new ButtonBuilder().setCustomId('raid:leave').setEmoji('⛔').setLabel('참가 취소').setStyle(ButtonStyle.Danger).setDisabled(r.party.length === 0),
       new ButtonBuilder().setCustomId('raid:help').setEmoji('❔').setLabel('플레이 방법').setStyle(ButtonStyle.Secondary),
     ),
@@ -393,20 +400,22 @@ async function battleView(r, { redraw = true } = {}) {
     sections.push({
       text: `## ${b.rage ? `🔥 ${m.rageName}` : `${m.emoji} ${m.name}`}\n` +
         `\`${bar(b.hp, b.maxHp, 16)}\` **${b.hp.toLocaleString()}** / ${b.maxHp.toLocaleString()}\n` +
-        `⚠️ 다음 행동: **${telegraphText(b)}**${isWarnIntent(b) ? ' — **방어 추천!**' : ''}\n\n` +
+        `⚠️ 다음 행동: **${telegraphText(b)}**${isWarnIntent(b) ? ' — **방어 추천!**' : ''}\n` +
+        (b.alat ? `${alat.statusLine(b.alat)}\n` : '') + '\n' +
         b.members.map(mem => `${ROLES[mem.role].emoji} **${mem.name}** \`${bar(mem.hp, PLAYER_MAX_HP, 8)}\` ${mem.hp}/${PLAYER_MAX_HP}` +
           ` · ✨${mem.cooldown > 0 ? `${mem.cooldown}턴` : '준비'} · 🍖×${mem.potions}`).join('\n'),
     });
   }
   // 제목을 크게 바꿔 턴 전환이 눈에 띄게: 결과 화면 '📜 TURN N 종료' → 선택 화면 '⚔️ TURN N+1 · 행동을 고르세요'
   if (r.showingResult) {
-    sections.push({ text: `## 📜 TURN ${b.lastTurn?.turn ?? b.turn - 1} 종료\n-# 잠시 후 TURN ${b.turn}이 시작돼요` });
+    sections.push({ text: `## 📜 TURN ${b.lastTurn?.turn ?? b.turn - 1} 종료\n-# 잠시 후 TURN ${b.turn}이 시작돼요${b.alat ? `\n${alat.statusLine(b.alat)}` : ''}` });
   } else {
     const pending = b.members.filter(mem => mem.hp > 0 && !mem.choice && !isStunned(b, mem)).map(mem => mem.name);
     const effects = effectLines(b);
     sections.push({
       text: `## ⚔️ TURN ${b.turn} · 행동을 고르세요\n` +
         `⏳ **${clock(r.turnEndsAt)}** 남음\n` +
+        (b.alat ? `${alat.statusLine(b.alat)}\n` : '') +
         (effects.length ? effects.join('\n') + '\n' : '') +
         (pending.length ? `-# 아직 고르지 않음: ${pending.join(', ')}` : '-# 모두 골랐어요 - 곧 턴이 진행돼요'),
     });
@@ -596,7 +605,7 @@ function buildHelpView(monster) {
     { separator: true },
     { text: [
       '### 🧑‍🤝‍🧑 역할',
-      ...ROLE_ORDER.map(k => `${ROLES[k].emoji} **${ROLES[k].name}** - ✨${ROLES[k].skill.name}: ${ROLES[k].skill.desc} · 쿨타임 ${ROLES[k].skill.cooldown}턴`),
+      ...rolesOfMonster(monster).map(k => `${roleTitle(k)} - ✨${ROLES[k].skill.name}: ${ROLES[k].skill.desc} · 쿨타임 ${ROLES[k].skill.cooldown}턴`),
     ].join('\n') },
     { text: isPersistent({ monster }) ? `-# ⌛ 제한 시간 ${BATTLE_LIMIT_MS / 60000}분 · 시간 안에 쓰러뜨리지 못하거나 전멸하면 패배 — 몬스터는 도주하지 않고 모든 유저가 XP를 잃어요` : `-# ⌛ 제한 시간 ${BATTLE_LIMIT_MS / 60000}분 · 시간 안에 쓰러뜨리지 못하거나 전멸하면 몬스터가 도망쳐요(보상 없음)` },
   ];
@@ -874,7 +883,7 @@ async function spawnRaid(client, channel, { forced = false, monsterId = null } =
 // 모집 시간이 끝났을 때(타이머). 4명이 차서 이미 시작했으면 아무것도 하지 않는다.
 async function onRecruitEnd(r) {
   if (!isCurrent(r) || r.phase !== 'recruit') return;
-  if (r.party.length === 0) finishRaid(r, 'noshow');
+  if (r.party.length === 0 || (needsFullParty(r) && r.party.length < rolesOfMonster(r.monster).length)) finishRaid(r, 'noshow');
   else startBattle(r);
 }
 
@@ -915,7 +924,8 @@ function startBattle(r, { by = null } = {}) {
   clearTimer(r);
   closeHelpReplies(r); // 모집 중에 열어 둔 가이드는 전투가 시작되면 닫는다
   r.phase = 'battle';
-  r.party.sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role)); // 화면에 역할 순서대로
+  const order = rolesOfMonster(r.monster);
+  r.party.sort((a, b) => order.indexOf(a.role) - order.indexOf(b.role)); // 화면에 역할 순서대로
   const mention = r.party.map(p => p.userId).filter(id => id !== by);
   r.startMention = mention.length ? mention : null;
   // 본서버는 혼자여도 2인 HP(HP_MIN_PARTY), 테스트 서버는 혼자 끝까지 시험할 수 있게 1인 HP부터
@@ -923,7 +933,7 @@ function startBattle(r, { by = null } = {}) {
   r.battleStartedAt = Date.now(); // 종료 화면의 '걸린 시간'용
   r.battleEndsAt = r.battleStartedAt + BATTLE_LIMIT_MS;
   armTurnTimer(r);
-  logSystem({ 유형: '레이드', 내용: `전투 시작 — ${r.party.map(p => `${p.name}(${ROLES[p.role].name})`).join(', ')} / HP ${r.battle.maxHp}` });
+  logSystem({ 유형: '레이드', 내용: `전투 시작 — ${r.party.map(p => `${p.name}(${ROLES[p.role].hideName ? ROLES[p.role].emoji : ROLES[p.role].name})`).join(', ')} / HP ${r.battle.maxHp}` });
   requestRender(r, { image: true, immediate: true });
   startCountdown(r); // 전투는 5초 주기로
 }
@@ -1141,6 +1151,10 @@ async function handleRaidButton(interaction) {
         await interaction.reply(notice('아직 참가자가 없어요.', { ephemeral: true }));
         return;
       }
+      if (needsFullParty(r) && r.party.length < rolesOfMonster(r.monster).length) {
+        await interaction.reply(notice('⚠️ 모든 속성이 모여야 시작할 수 있어요.', { ephemeral: true }));
+        return;
+      }
       if (r.party[0].userId !== userId && !ADMIN_IDS.includes(userId)) {
         await interaction.reply(notice(`▶️ 바로 시작은 방장 **${r.party[0].name}**님과 관리자만 누를 수 있어요.`, { ephemeral: true }));
         return;
@@ -1175,7 +1189,7 @@ async function handleRaidButton(interaction) {
       await interaction.deferUpdate();
       return;
     }
-    if (!ROLES[arg]) return;
+    if (!rolesOfMonster(r.monster).includes(arg)) return;
     if (r.party.some(p => p.role === arg && p.userId !== userId)) {
       await interaction.reply(notice('이미 다른 사람이 고른 역할이에요.', { ephemeral: true }));
       return;

@@ -12,7 +12,7 @@ const path = require('path');
 const { drawEmojiFile } = require('../공통/이모지그림');
 const { Painter, loadFont } = require('./그림판');
 const { drawEnergy, drawFaint, bodyTint } = require('./용뢰');
-const { ROLES, ROLE_ORDER, PLAYER_MAX_HP, ACTIONS, createBattle, choose, resolveTurn, isStunned, slowTurnsLeft, isShielded, isPowered, poisonStacks, isConfused, chillStacks, isFeared, isPhased, isIntentHidden, isWarnIntent, telegraphText, moveFx, isWeak, weakTurnsLeft, isStenched, stenchTurnsLeft, isErrored, errorTurnsLeft, isVulnerable, vulnTurnsLeft, isDoomed } = require('./전투');
+const { ROLES, ROLE_ORDER, rolesOfMonster, PLAYER_MAX_HP, ACTIONS, createBattle, choose, resolveTurn, isStunned, slowTurnsLeft, isShielded, isPowered, poisonStacks, isConfused, chillStacks, isFeared, isPhased, isIntentHidden, isWarnIntent, telegraphText, moveFx, isWeak, weakTurnsLeft, isStenched, stenchTurnsLeft, isErrored, errorTurnsLeft, isVulnerable, vulnTurnsLeft, isDoomed } = require('./전투');
 
 const W = 900; // 설계 크기(좌표는 전부 이 기준)
 const H = 640;
@@ -260,6 +260,8 @@ const ROLE_SPRITES = {
     palette: { d: '#15151b', r: '#e5484d', h: '#ff9aa0', w: '#ffffff' },
   },
 };
+// 속성 직업 아이콘은 Task 5의 확정 그림으로 바뀐다. 그 전에는 같은 kind 의 기존 그림을 쓴다.
+for (const [k, kind] of [['fire', 'sword'], ['thunder', 'archer'], ['water', 'healer'], ['ice', 'tank']]) ROLE_SPRITES[k] ??= ROLE_SPRITES[kind];
 const ROLE_ICON_PX = 3.4; // 16칸 × 3.4 ≈ 54px
 function roleIcon(role, cx, cy, dim = false) {
   drawPixels(ROLE_SPRITES[role], cx, cy, ROLE_ICON_PX, { dim });
@@ -1395,8 +1397,9 @@ const CARD_Y = 362, CARD_H = 260, CARD_W = 203, CARD_GAP = 16;
 const NAME_SIZE = 28;
 // 카드 배경과 빈자리 테두리는 배경 캐시(background)에 이미 있다. 참가자 카드만 테두리를 덧그린다.
 // border(m) → { color, width } | null 로 장면마다 테두리를 정할 수 있다(기본: 금색 2px).
+let activeRoles = ROLE_ORDER; // 지금 그리는 몬스터의 직업 순서(render 가 정한다)
 function cards(members, drawCard, border = () => ({ color: C.gold, width: 2 })) {
-  ROLE_ORDER.forEach((roleKey, i) => {
+  activeRoles.forEach((roleKey, i) => {
     const x = 20 + i * (CARD_W + CARD_GAP);
     const m = members.find(q => q.role === roleKey) || null;
     const b = m && border(m);
@@ -1659,6 +1662,7 @@ function skillGlitch(ctx, seed) {
 async function render(scene, draw, monster = null) {
   if (!load()) return null;
   p = painter;
+  activeRoles = rolesOfMonster(monster);
   const corrupt = isCorrupt(monster);
   const savedC = corrupt ? { ...C } : null;
   const savedRibbon = corrupt ? RIBBON.pending.fill : null;
@@ -1702,7 +1706,7 @@ function renderRecruit(r) {
       // 이름 크기는 모집·전투·결과 모두 NAME_SIZE로 같게 — 모집 때 만든 글자 모양을 전투·결과에서 그대로 재사용한다
       // (크기가 다르면 서버에서 전투 시작 그림이 이름을 다시 그리느라 170ms 걸렸다).
       text(m ? m.name : '-', x + w / 2, y + 116, NAME_SIZE, m ? C.text : C.dim, { maxWidth: w - 20 });
-      text(role.name, x + w / 2, y + 152, 22, m ? C.orange : '#8a6a3a');
+      if (!role.hideName) text(role.name, x + w / 2, y + 152, 22, m ? C.orange : '#8a6a3a');
       pill(x + 14, y + 176, w - 28, 34, role.skill.name, 20);
       text(m ? '참가 완료' : '참가 대기', x + w / 2, y + 234, 22, m ? C.ok : C.muted);
     });
@@ -1846,7 +1850,7 @@ function renderBattle(r) {
     if (r.showingResult && (last?.ambushLanded || last?.cometLanded)) ambushImpact(W / 2, monsterY, 'back');
     if (skyDotNow) cometDot(W / 2, monsterY - 20);
     if (usedFx && SKILL_FX.includes(usedFx)) skillCtx = { fx: usedFx, mx: W / 2, my: monsterY, targets: [] };
-    heungTargets = usedFx === 'lightning' ? b.members.filter(mm => last?.hits?.[mm.userId]).map(mm => 121.5 + ROLE_ORDER.indexOf(mm.role) * 219) : []; // 낙뢰가 내려칠 카드 위치
+    heungTargets = usedFx === 'lightning' ? b.members.filter(mm => last?.hits?.[mm.userId]).map(mm => 121.5 + activeRoles.indexOf(mm.role) * 219) : []; // 낙뢰가 내려칠 카드 위치
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'back', sporeColor, accentColor);
     // 투명화(유령): 다음 턴 동안 몸을 흐리게(회색)
     if (!skyDotNow) drawMonster(m, W / 2, monsterY, 112, { rage: b.rage, pose, outline: shielded ? '#cfe8ff' : null, gray: isPhased(b), dormant: dormantNow });
@@ -1980,7 +1984,7 @@ function renderBattle(r) {
       if (!mem) {
         roleIcon(roleKey, x + w / 2, y + 72, true);
         text('-', x + w / 2, y + 138, NAME_SIZE, C.dim);
-        text(role.name, x + w / 2, y + 172, 20, '#8a6a3a');
+        if (!role.hideName) text(role.name, x + w / 2, y + 172, 20, '#8a6a3a');
         return;
       }
       const state = memberState(b, mem, r.showingResult);
@@ -2068,7 +2072,7 @@ function renderBattle(r) {
       for (const uid of Object.keys(last.hits || {})) {
         const mem = b.members.find(q => q.userId === uid);
         if (!mem) continue;
-        const i = ROLE_ORDER.indexOf(mem.role);
+        const i = activeRoles.indexOf(mem.role);
         curseLink(W / 2, monsterY, 20 + i * (CARD_W + CARD_GAP) + CARD_W / 2, CARD_Y + 86);
       }
     }
@@ -2205,8 +2209,8 @@ function renderEnd(r, outcome, rewards = []) {
         glitchText(mem.name, nameX + nw / 2, y + 32 + dy, 26, C.text, { seed: 11, off: 3, strips: 4, shift: 6, holes: 3, tint: true, maxWidth: 132 });
       } else text(mem.name, nameX, y + 32, 26, C.text, { align: 'left', maxWidth: 132 });
       // MVP 배지는 역할 줄 옆에(이름 줄에 두면 긴 이름일 때 피해 숫자와 겹친다)
-      const roleName = ROLES[mem.role].name;
-      text(roleName, nameX, y + 62 + dy, 18, C.orange, { align: 'left' });
+      const roleName = ROLES[mem.role].hideName ? '' : ROLES[mem.role].name;
+      if (roleName) text(roleName, nameX, y + 62 + dy, 18, C.orange, { align: 'left' });
       if (mvp) {
         const rw = p.textWidth(B(), roleName, 18);
         p.roundRect(nameX + rw + 8, y + 51 + dy, 46, 22, 6, wall ? '#ff3a4a' : '#e2b14a');
