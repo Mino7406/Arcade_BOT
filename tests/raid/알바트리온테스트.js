@@ -125,3 +125,76 @@ const stateOf = (element, extra = {}) => ({ element, prev: null, phaseLeft: 2, c
   assert(line.includes(ELEMENT_EMOJI.fire) && line.includes('에스카톤') && line.includes('/100'), 'statusLine: 이모지·에스카톤·/100 포함');
   assert(A.statusLine(stateOf('ice', { cycleTurn: 10, cycleLen: 10 })).includes('에스카톤 지금'), 'statusLine: 에스카톤 턴 문구');
 }
+
+// ── Task 2: 직업 세트 일반화 ──
+const E = require(path.join(__dirname, '../../handlers/레이드/전투.js'));
+{
+  assert(JSON.stringify(E.rolesOfMonster({})) === JSON.stringify(['sword', 'archer', 'tank', 'healer']), 'rolesOfMonster: 기본 세트');
+  assert(JSON.stringify(E.rolesOfMonster({ partyClasses: 'elemental' })) === JSON.stringify(['fire', 'water', 'thunder', 'ice']), 'rolesOfMonster: elemental 세트');
+  assert(E.roleTitle('fire') === '🔥', 'roleTitle: 속성 직업은 이모지만');
+  assert(E.roleTitle('sword') === '⚔️ **검사**', 'roleTitle: 기존 직업');
+
+  const slime = E.MONSTERS[0];
+  const party = ['sword', 'archer', 'tank', 'healer'].map((role, i) => ({ userId: 'u' + i, name: 'P' + i, role }));
+  const b = E.createBattle(slime, party, makeRng(1));
+  assert(JSON.stringify(b.roleOrder) === JSON.stringify(E.ROLE_ORDER), 'createBattle: 슬라임 roleOrder 기본');
+  for (const m of b.members) E.choose(b, m.userId, 'attack');
+  let threw = false, res;
+  try { res = E.resolveTurn(b, makeRng(2)); } catch (e) { threw = true; console.error(e); }
+  assert(!threw && (res === null || typeof res === 'string'), 'resolveTurn: 기존 4직업 한 턴 정상');
+}
+{
+  const fake = { ...JSON.parse(JSON.stringify(E.MONSTERS[0])), partyClasses: 'elemental' };
+  const party = ['fire', 'water', 'thunder', 'ice'].map((role, i) => ({ userId: 'e' + i, name: 'E' + i, role }));
+  const fresh = (seed) => E.createBattle(fake, party, makeRng(seed));
+  const skillAll = (b, who) => { for (const m of b.members) { m.cooldown = 0; E.choose(b, m.userId, who.includes(m.role) ? 'skill' : 'guard'); } };
+
+  // fire 스킬 피해 범위
+  let ok = true;
+  for (let i = 0; i < 100; i++) {
+    const b = fresh(100 + i); b.shieldTurn = 0;
+    for (const m of b.members) { m.cooldown = 0; E.choose(b, m.userId, m.role === 'fire' ? 'skill' : 'guard'); }
+    E.resolveTurn(b, makeRng(200 + i));
+    const v = b.lastTurn.acts.e0?.value;
+    if (!(v >= 270 && v <= 320)) ok = false;
+  }
+  assert(ok, 'fire 스킬 피해 270~320 (100회)');
+
+  // water 스킬: 회복·부활
+  {
+    const b = fresh(7);
+    const dead = b.members.find(m => m.role === 'thunder'); dead.hp = 0;
+    const hurt = b.members.find(m => m.role === 'fire'); hurt.hp = 50;
+    skillAll(b, ['water']);
+    E.resolveTurn(b, makeRng(8));
+    assert(dead.hp > 0 && hurt.hp > 50, 'water 스킬: 회복·부활');
+  }
+
+  // thunder 스킬 치명타 가능
+  {
+    let crit = false;
+    for (let i = 0; i < 200 && !crit; i++) {
+      const b = fresh(300 + i); skillAll(b, ['thunder']);
+      E.resolveTurn(b, makeRng(400 + i));
+      if (b.lastTurn.acts.e2?.crit) crit = true;
+    }
+    assert(crit, 'thunder 스킬: 치명타 발생');
+  }
+
+  // ice 스킬: 같은 시드 대비 받는 피해 0.6배
+  {
+    let worst = 0, checked = 0;
+    for (let i = 0; i < 40; i++) {
+      const a = fresh(500 + i), c = fresh(500 + i);
+      a.intent = c.intent = 'attack';
+      for (const b of [a, c]) for (const m of b.members) { m.cooldown = 0; E.choose(b, m.userId, 'potion'); } // 회복약은 난수를 쓰지 않아 두 전투의 몬스터 굴림이 같다
+      c.members.find(m => m.role === 'ice').choice = 'skill';
+      E.resolveTurn(a, makeRng(600 + i)); E.resolveTurn(c, makeRng(600 + i));
+      for (const m of a.members.filter(x => x.role !== 'ice')) {
+        const dA = 100 - m.hp, dC = 100 - c.members.find(x => x.userId === m.userId).hp;
+        if (dA > 5) { checked++; worst = Math.max(worst, Math.abs(Math.round(dA * 0.6) - dC)); }
+      }
+    }
+    assert(checked > 0 && worst <= 1, `ice 스킬: 받는 피해 ×0.6 (표본 ${checked}, 최대 오차 ${worst})`);
+  }
+}

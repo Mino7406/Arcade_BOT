@@ -55,25 +55,58 @@ const HP_MIN_PARTY = 2;
 // hpWeight: 몬스터 HP를 인원에 맞출 때 그 역할 한 명이 늘리는 몫(4종 합 4.0). 딜러가 빠지면 HP도 더 줄어든다.
 const ROLES = {
   sword: {
+    kind: 'sword',
     // 딜러 둘은 3턴 주기 기대 피해를 같게(검사 약 475 · 궁수 약 475, 치명타 포함). HP 가중치도 같게 1.15.
     // 궁수가 약 455로 조금 낮을 때는 기여도 MVP를 검사가 3배 더 자주 가져가서 차지 샷을 200~240 → 220~260으로 올림.
     name: '검사', emoji: '⚔️', attack: [90, 110], hpWeight: 1.15,
     skill: { name: '회전베기', cooldown: 3, damage: [250, 300], desc: '250~300 피해' },
   },
   archer: {
+    kind: 'archer',
     name: '궁수', emoji: '🏹', attack: [80, 100], critChance: 0.25, critMultiplier: 1.5, hpWeight: 1.15,
     skill: { name: '차지 샷', cooldown: 3, damage: [220, 260], critChance: 0.3, desc: '220~260 피해, 치명타 확률 30%' },
   },
   tank: {
+    kind: 'tank',
     name: '수호자', emoji: '🛡️', attack: [60, 80], hpWeight: 1.0,
     skill: { name: '수호의 태세', cooldown: 2, desc: '이번 턴 단일 공격을 대신 맞고 받는 피해 70% 감소, 맞은 피해 ×5 반격' }, // 예전 이름 '도발'(사용자 요청으로 변경 — 코드·주석의 '도발'은 이 스킬)
   },
   healer: {
+    kind: 'healer',
     name: '치유사', emoji: '💚', attack: [40, 60], hpWeight: 0.9,
     skill: { name: '치유의 빛', cooldown: 3, desc: '아군 전원 HP +20, 쓰러진 아군은 HP 25로 부활' },
   },
 };
 const ROLE_ORDER = ['sword', 'archer', 'tank', 'healer'];
+
+// 속성 직업 4종(알바트리온 전용, partyClasses:'elemental'). kind 는 행동 분기용(기존 직업과 같은 동작 공유), hideName 은 화면에 이모지만 쓴다.
+Object.assign(ROLES, {
+  fire: {
+    kind: 'sword', element: 'fire', hideName: true,
+    name: '화염', emoji: '🔥', attack: [100, 120], hpWeight: 1.15,
+    skill: { name: '플레임 버스트', cooldown: 3, damage: [270, 320], desc: '270~320 피해' },
+  },
+  thunder: {
+    kind: 'archer', element: 'thunder', hideName: true,
+    name: '번개', emoji: '⚡', attack: [80, 100], critChance: 0.25, critMultiplier: 1.5, hpWeight: 1.15,
+    skill: { name: '체인 라이트닝', cooldown: 3, damage: [220, 260], critChance: 0.3, desc: '220~260 피해, 치명타 확률 30%' },
+  },
+  water: {
+    kind: 'healer', element: 'water', hideName: true,
+    name: '물', emoji: '💧', attack: [40, 60], hpWeight: 0.9,
+    skill: { name: '아쿠아 웨이브', cooldown: 3, desc: '아군 전원 HP +20, 쓰러진 아군은 HP 25로 부활' },
+  },
+  ice: {
+    kind: 'frost', element: 'ice', hideName: true,
+    name: '얼음', emoji: '❄️', attack: [60, 80], hpWeight: 1.0,
+    skill: { name: '프로스트 월', cooldown: 2, desc: '이번 턴 아군 전원이 받는 피해 -40%' },
+  },
+});
+const ROLE_SETS = { default: ROLE_ORDER, elemental: ['fire', 'water', 'thunder', 'ice'] };
+const rolesOfMonster = (monster) => (monster?.partyClasses && ROLE_SETS[monster.partyClasses]) || ROLE_ORDER;
+const roleTitle = (roleKey) => { const r = ROLES[roleKey]; return r.hideName ? r.emoji : `${r.emoji} **${r.name}**`; };
+// 프로스트 월: 아군 전원이 받는 피해 배율. 알바트리온.js 의 K.FROST_RATE 와 같은 값(서로 require 하지 않는다).
+const FROST_RATE = 0.6;
 
 const ACTIONS = {
   attack: { name: '공격', emoji: '⚔️' },
@@ -371,6 +404,7 @@ function createBattle(monster, party, rng = Math.random, { minParty = HP_MIN_PAR
   const maxHp = calcMaxHp(monster, weight, smallPartyRate);
   const battle = {
     monster,
+    roleOrder: rolesOfMonster(monster),
     hpWeight: weight, hpSmallRate: smallPartyRate, // 습격으로 boss 가 나올 때 HP 를 같은 식으로 구하려고 남긴다
     maxHp,
     hp: maxHp,
@@ -640,7 +674,7 @@ function resolveTurn(battle, rng = Math.random) {
   const log = [];
   const last = { turn: battle.turn, acts: {}, hits: {}, effects: {}, poison: {}, monsterDamage: 0, monsterMove: null, shielded: isShielded(battle) };
   battle.lastTurn = last;
-  const ordered = ROLE_ORDER.map(r => battle.members.find(m => m.role === r)).filter(Boolean);
+  const ordered = (battle.roleOrder ?? ROLE_ORDER).map(r => battle.members.find(m => m.role === r)).filter(Boolean);
   const acting = ordered.filter(m => m.hp > 0);
   // 냉기(chill 블록이 있는 몬스터만): 행동하는 즉시 늘거나 줄고, 빙결은 아군 행동 뒤·몬스터 기술 뒤에 판정한다
   const chill = battle.monster.chill;
@@ -742,14 +776,14 @@ function resolveTurn(battle, rng = Math.random) {
       log.push(`${role.emoji} **${m.name}** 공격${tag} → **${dmg}**${crit ? ' 💥치명타!' : ''}${minionTag(hitRes.minion)}`);
     } else if (action === 'skill') {
       m.cooldown = role.skill.cooldown;
-      if (m.role === 'sword') {
+      if (role.kind === 'sword') {
         const hitRes = land(dealt(m, randInt(role.skill.damage, rng)));
         const dmg = hitRes.dmg;
         m.damage += dmg;
         addChill(m, hitChill());
         last.acts[m.userId] = { label: role.skill.name, value: dmg, skill: true };
         log.push(`${role.emoji} **${m.name}** ✨${role.skill.name} → **${dmg}**${minionTag(hitRes.minion)}`);
-      } else if (m.role === 'archer') {
+      } else if (role.kind === 'archer') {
         let dmg = randInt(role.skill.damage, rng);
         const crit = rng() < role.skill.critChance;
         if (crit) dmg *= role.critMultiplier;
@@ -759,12 +793,18 @@ function resolveTurn(battle, rng = Math.random) {
         addChill(m, hitChill());
         last.acts[m.userId] = { label: role.skill.name, value: dmg, crit, skill: true };
         log.push(`${role.emoji} **${m.name}** ✨${role.skill.name} → **${dmg}**${crit ? ' 💥치명타!' : ''}${minionTag(hitRes.minion)}`);
-      } else if (m.role === 'tank') {
+      } else if (role.kind === 'tank') {
         taunter = m;
         addChill(m, melt);
         last.acts[m.userId] = { label: role.skill.name, skill: true };
         log.push(`${role.emoji} **${m.name}** ✨${role.skill.name}! 몬스터의 시선을 끈다`);
-      } else if (m.role === 'healer') {
+      } else if (role.kind === 'frost') {
+        battle.frostTurn = battle.turn;
+        battle.frostBy = m.userId;
+        addChill(m, melt);
+        last.acts[m.userId] = { label: role.skill.name, skill: true };
+        log.push(`${role.emoji} **${m.name}** ✨${role.skill.name}! 아군 전원이 받는 피해가 줄어든다`);
+      } else if (role.kind === 'healer') {
         let healed = 0;
         const revived = [];
         const cleansed = new Set(); // 씻어낸 상태이상 이름(점액 등)
@@ -891,6 +931,11 @@ function resolveTurn(battle, rng = Math.random) {
       if (target === taunter && move.target === 'single') target.protected += Math.round(dmg);
       const rawDmg = Math.round(dmg);
       if (isVulnerable(battle, target)) dmg *= target.vulnRate; // 취약
+      if (battle.frostTurn === battle.turn) { // 프로스트 월: 막아 준 양은 시전자 기여
+        const caster = battle.members.find(x => x.userId === battle.frostBy);
+        if (caster) caster.protected += Math.round(dmg * (1 - FROST_RATE));
+        dmg *= FROST_RATE;
+      }
       if (target.guarding) dmg *= move.guardRate ?? GUARD_DAMAGE_RATE; // 대폭발처럼 방어가 덜 먹히는 기술은 guardRate
       if (target === taunter) { dmg *= TAUNT_DAMAGE_RATE; reflectRaw += rawDmg; }
       dmg = Math.max(1, Math.round(dmg));
@@ -1025,6 +1070,7 @@ function resolveTurn(battle, rng = Math.random) {
       const raw = Math.round(dmg);
       battle.incoming += raw;
       if (t === taunter) t.protected += raw;
+      if (battle.frostTurn === battle.turn) dmg *= FROST_RATE;
       if (t.guarding) dmg *= GUARD_DAMAGE_RATE;
       if (t === taunter) { dmg *= TAUNT_DAMAGE_RATE; reflectRaw += raw; }
       dmg = Math.max(1, Math.round(dmg));
@@ -1084,6 +1130,9 @@ module.exports = {
   GUARD_DAMAGE_RATE,
   ROLES,
   ROLE_ORDER,
+  ROLE_SETS,
+  rolesOfMonster,
+  roleTitle,
   ACTIONS,
   MONSTERS,
   HARD_MONSTERS,
