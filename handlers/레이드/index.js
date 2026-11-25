@@ -409,14 +409,13 @@ async function battleView(r, { redraw = true } = {}) {
   }
   // 제목을 크게 바꿔 턴 전환이 눈에 띄게: 결과 화면 '📜 TURN N 종료' → 선택 화면 '⚔️ TURN N+1 · 행동을 고르세요'
   if (r.showingResult) {
-    sections.push({ text: `## 📜 TURN ${b.lastTurn?.turn ?? b.turn - 1} 종료\n-# 잠시 후 TURN ${b.turn}이 시작돼요${b.alat ? `\n${alat.statusLine(b.alat)}` : ''}` });
+    sections.push({ text: `## 📜 TURN ${b.lastTurn?.turn ?? b.turn - 1} 종료\n-# 잠시 후 TURN ${b.turn}이 시작돼요` });
   } else {
     const pending = b.members.filter(mem => mem.hp > 0 && !mem.choice && !isStunned(b, mem)).map(mem => mem.name);
     const effects = effectLines(b);
     sections.push({
       text: `## ⚔️ TURN ${b.turn} · 행동을 고르세요\n` +
         `⏳ **${clock(r.turnEndsAt)}** 남음\n` +
-        (b.alat ? `${alat.statusLine(b.alat)}\n` : '') +
         (effects.length ? effects.join('\n') + '\n' : '') +
         (pending.length ? `-# 아직 고르지 않음: ${pending.join(', ')}` : '-# 모두 골랐어요 - 곧 턴이 진행돼요'),
     });

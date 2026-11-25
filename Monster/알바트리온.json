@@ -151,7 +151,14 @@
         6,
         8
       ],
-      "fx": "ignite"
+      "fx": "ignite",
+      "effect": "poison",
+      "effectTurns": 3,
+      "tickDamage": 2,
+      "stacks": 1,
+      "maxStacks": 3,
+      "guardBlocks": true,
+      "status": { "name": "화상", "emoji": "🔥", "color": "#ff9a3c" }
     },
     "torrent": {
       "name": "물기둥",
@@ -161,7 +168,12 @@
         6,
         8
       ],
-      "fx": "storm"
+      "fx": "storm",
+      "effect": "slow",
+      "effectTurns": 2,
+      "effectRate": 0.7,
+      "guardBlocks": true,
+      "status": { "name": "젖음", "emoji": "💧" }
     },
     "bolt": {
       "name": "낙뢰 강타",
@@ -171,7 +183,9 @@
         12,
         15
       ],
-      "fx": "lightning"
+      "fx": "lightning",
+      "effect": "stun",
+      "status": { "name": "감전", "emoji": "⚡" }
     },
     "frost": {
       "name": "서리 숨결",
@@ -181,7 +195,10 @@
         6,
         8
       ],
-      "fx": "frost"
+      "fx": "frost",
+      "effect": "fear",
+      "guardBlocks": true,
+      "status": { "name": "동상", "emoji": "❄️" }
     },
     "dragonbreath": {
       "name": "용의 숨결",

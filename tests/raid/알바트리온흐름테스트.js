@@ -82,7 +82,7 @@ const phase = () => raidMod.raidForTest(channel.guildId)?.phase;
   err = await raidMod.forceSpawnRaid({ guildId: 'other', channel, client }, 'alatreon');
   for (const [uid, role] of [['1', 'fire'], ['2', 'water'], ['3', 'thunder'], ['4', 'ice']]) await press(uid, 'raid:role:' + role);
   assert(phase() === 'battle', '4속성이 모이면 자동으로 전투 시작');
-  assert(desc().includes('TURN 1') && desc().includes('에스카톤'), '전투 화면에 TURN 1과 속성 상태 문구(에스카톤)');
+  assert(desc().includes('TURN 1') && !desc().includes('에스카톤'), '전투 화면에 TURN 1 (속성 현황은 그림 안 왼쪽 위로 옮겨 글자에는 없음)');
   if (process.env.DUMP_DIR) require('fs').writeFileSync(process.env.DUMP_DIR + '/alat-battle.png', images[images.length - 1]); // 눈으로 확인용
   assert(!/화염기사|수정술사|뇌창사|빙결기사|검사|궁수|수호자|치유사/.test(desc()), '전투 화면에도 직업 이름 없음');
   await raidMod.forceEndRaid(MAIN);

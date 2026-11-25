@@ -1897,6 +1897,20 @@ function renderBattle(r) {
       p.roundRect(nx - 56, ny - 17, 112, 34, 9, '#100c09');
       text(label, nx, ny, 28, color);
     });
+    // 알바트리온 현황(왼쪽 위): 지금 속성 · 억제 게이지 · 에스카톤까지 남은 턴
+    if (b.alat && ambushStage < 0) {
+      const A = require('./알바트리온'), al = b.alat, col = ELEMENT_GLOW[al.element] || '#c08aff';
+      const left = al.cycleLen - al.cycleTurn;
+      p.roundRect(30, 118, 206, 92, 12, '#1a1410');
+      p.strokeRoundRect(30, 118, 206, 92, 12, 2, col);
+      text('알바트리온 현황', 133, 135, 17, C.gold);
+      text(`${A.ELEMENT_NAME[al.element]}속성`, 50, 158, 19, col, { align: 'left' });
+      text(left <= 0 ? '에스카톤 지금!' : `에스카톤 ${left}턴 뒤`, 220, 158, 15, left <= 1 ? '#ff7a6a' : C.muted, { align: 'right' });
+      text('억제', 50, 184, 16, C.muted, { align: 'left' });
+      bar(88, 174, 120, 20, al.gauge / A.K.GAUGE_MAX, col);
+      p.strokeRoundRect(88, 174, 120, 20, 10, 1.5, C.gold);
+      text(`${Math.round(al.gauge)}`, 148, 184, 14, '#ffffff');
+    }
     // 몬스터 상자 오른쪽 위에 큰 방패 배지 + 문구(방어력 증가 · 받는 피해 -N%, 보호막 기술의 effectRate)
     if (shielded) {
       p.roundRect(W - 216, 132, 180, 54, 12, '#1c2a38');
