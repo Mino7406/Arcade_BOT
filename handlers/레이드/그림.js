@@ -264,8 +264,22 @@ const ROLE_SPRITES = {
 Object.assign(ROLE_SPRITES, require('./알바트리온아이콘'));
 const ROLE_ICON_PX = 3.4; // 16칸 × 3.4 ≈ 54px. 칸 수가 다른 그림(32칸)은 전체 크기가 같도록 칸 크기를 줄인다.
 const iconPx = (sprite, px = ROLE_ICON_PX) => (sprite.rows.length > 16 ? px * 1.3 : px) * 16 / sprite.rows.length; // 32칸 속성 아이콘은 더 크게
+// 속성 직업 카드: 속성 색 은은한 빛무리 + 바닥 그림자를 깔아 아이콘이 카드에 떠 보이지 않고 놓여 있게 한다.
+const ELEMENT_GLOW = { fire: '#ff8c23', water: '#46cdff', thunder: '#f0f546', ice: '#82d7ff' };
+const mixHex = (a, b, t) => '#' + [1, 3, 5].map(i => Math.round(parseInt(a.slice(i, i + 2), 16) * (1 - t) + parseInt(b.slice(i, i + 2), 16) * t).toString(16).padStart(2, '0')).join('');
+function elementGlow(role, cx, cy, dim) {
+  const glow = ELEMENT_GLOW[role];
+  if (!glow || !/^#[0-9a-f]{6}$/i.test(C.card)) return;
+  const k = dim ? 0.5 : 1;
+  [[33, 0.10], [28, 0.17], [22, 0.25]].forEach(([r, t]) => p.circle(cx, cy, r, mixHex(C.card, glow, t * k)));
+  const sy = cy + 31, pts = [];
+  for (let i = 0; i < 20; i++) { const a = i / 20 * Math.PI * 2; pts.push(cx + Math.cos(a) * 24, sy + Math.sin(a) * 4); }
+  p.poly(pts, mixHex(C.card, '#000000', 0.45));
+}
 function roleIcon(role, cx, cy, dim = false) {
-  drawPixels(ROLE_SPRITES[role], cx, cy, iconPx(ROLE_SPRITES[role]), { dim });
+  const dy = ELEMENT_GLOW[role] ? -4 : 0;
+  elementGlow(role, cx, cy + dy, dim);
+  drawPixels(ROLE_SPRITES[role], cx, cy + dy, iconPx(ROLE_SPRITES[role]), { dim });
 }
 
 // 몬스터: sprite(픽셀 아트). maxH 안에 맞춘다. gray: 결과 화면용 흑백.
