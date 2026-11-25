@@ -2397,6 +2397,51 @@ function drawMinions(b, last, showingResult) {
   return shown;
 }
 
+// ── 알바트리온 전용 헤더(기본 틀 대신): 갈라진 석판에 뿔 장식, 왼쪽 TURN 메달·오른쪽 속성 메달, 가운데 보스 HP 바(10% 눈금·분노 40% 표식)와 억제 게이지·에스카톤 ──
+function alatHeader(b) {
+  const A = require('./알바트리온'), al = b.alat, el = al.element, col = ELEMENT_GLOW[el] || '#c8a0ff', rage = b.rage;
+  const stone = '#17100d', rim = '#8a5a38', rimDark = '#3a2418';
+  // 석판: 양 끝이 비스듬히 잘린 판 + 이중 테두리 + 위아래 균열 줄
+  const plate = [30, 22, 56, 14, W - 56, 14, W - 30, 22, W - 22, 60, W - 30, 112, W - 56, 118, 56, 118, 30, 112, 22, 60];
+  p.poly(plate, rimDark); p.poly(plate.map((v, i) => (i % 2 ? 66 + (v - 66) * 0.9 : W / 2 + (v - W / 2) * 0.985)), stone);
+  p.line(60, 17, W - 60, 17, 2, rim); p.line(60, 115, W - 60, 115, 2, rim);
+  for (let i = 0; i < 14; i++) { const x = 90 + i * 55; p.line(x, 15, x + 7, 21, 1, rimDark); p.line(x + 20, 117, x + 12, 111, 1, rimDark); } // 석판의 잔금
+  // 이름 + 양옆 뿔 장식
+  const name = rage ? b.monster.rageName : b.monster.name, nw = Math.min(p.textWidth(B(), name, 34), 360);
+  text(name, W / 2, 36, 34, rage ? '#ffb090' : C.gold, { maxWidth: 360 });
+  for (const sd of [-1, 1]) {
+    const hx = W / 2 + sd * (nw / 2 + 22);
+    p.line(hx, 42, hx + sd * 26, 26, 3, '#d8c8b0'); p.line(hx + sd * 26, 26, hx + sd * 40, 30, 2, '#d8c8b0'); p.line(hx, 42, hx + sd * 20, 40, 3, rim); // 휘어 오른 뿔
+  }
+  if (rage) { p.roundRect(W / 2 + nw / 2 + 62, 26, 58, 26, 6, '#5c1410'); text('분노', W / 2 + nw / 2 + 91, 39, 18, '#ffb4a8'); }
+  // 보스 HP 바: 석재 틀 + 분절된 불씨빛 게이지 + 10% 눈금 + 40%(분노) 표식
+  const bx = 150, by = 54, bw = W - 300, bh = 26, ratio = Math.max(0, Math.min(1, b.hp / b.maxHp));
+  p.roundRect(bx - 6, by - 6, bw + 12, bh + 12, 8, rimDark); p.roundRect(bx - 3, by - 3, bw + 6, bh + 6, 6, '#0a0605');
+  const ember = rage ? ['#2a0c20', '#7a1a4a', '#c8307a', '#ff6aa8', '#ffd0e4'] : ['#3a0a08', '#8a1a10', '#c8381c', '#f0661e', '#ffc060'];
+  const seg = 4, n = Math.floor(bw / seg);
+  for (let i = 0; i < n; i++) {
+    const t = i / n, x = bx + i * seg; if (t >= ratio) { p.rect(x, by, seg - 1, bh, '#1c130f'); continue; }
+    p.rect(x, by, seg - 1, bh, ramp(ember, 0.25 + 0.5 * (1 - Math.abs(0.5 - (i % 40) / 40) * 1.4) + t * 0.2, i, 0)); // 가로로 일렁이는 불씨빛
+    p.rect(x, by, seg - 1, 5, ember[4]); // 윗면 하이라이트
+  }
+  for (let k = 1; k < 10; k++) p.rect(bx + Math.round(bw * k / 10) - 1, by, 2, k === 4 ? bh + 8 : 8, k === 4 ? '#ff7a5a' : '#0a0605'); // 10% 눈금(40%는 길고 붉게)
+  p.poly([bx + bw * 0.4 - 6, by + bh + 12, bx + bw * 0.4 + 6, by + bh + 12, bx + bw * 0.4, by + bh + 3], '#ff7a5a'); // 분노 표식
+  p.roundRect(W / 2 - 78, by + 3, 156, bh - 6, 6, '#050302', 0.62); // 숫자 뒤 어두운 판(눈금과 섞이지 않게)
+  text(`${b.hp.toLocaleString()} / ${b.maxHp.toLocaleString()}`, W / 2, by + bh / 2 + 1, 18, '#ffffff');
+  // 억제 게이지 + 에스카톤 카운트다운(옛 현황 패널을 헤더에 합침)
+  const gx = bx, gy = 92, gw = 330, gh = 9, gr = al.gauge / A.K.GAUGE_MAX, left = al.cycleLen - al.cycleTurn;
+  p.roundRect(gx - 2, gy - 2, gw + 4, gh + 4, 4, rimDark); p.rect(gx, gy, gw, gh, '#0a0605'); p.rect(gx, gy, gw * gr, gh, col);
+  text(`억제 ${Math.round(al.gauge)}`, gx + gw + 40, gy + 5, 15, col);
+  text(left <= 0 ? '에스카톤 지금!' : `에스카톤 ${left}턴 뒤`, bx + bw, gy + 5, 15, left <= 1 ? '#ff7a6a' : C.muted, { align: 'right' });
+  // 왼쪽 TURN 메달
+  const mx1 = 88, my1 = 66;
+  p.circle(mx1, my1, 34, rimDark); p.circle(mx1, my1, 31, '#0a0605'); p.circle(mx1, my1, 28, stone); p.strokeRoundRect(mx1 - 28, my1 - 28, 56, 56, 28, 2, rim);
+  text('TURN', mx1, my1 - 13, 12, C.muted); text(String(b.turn), mx1, my1 + 8, 28, C.gold);
+  // 오른쪽 속성 메달(지금 속성 색 테두리와 빛)
+  const mx2 = W - 88;
+  p.circle(mx2, my1, 34, rimDark); p.circle(mx2, my1, 31, col); p.circle(mx2, my1, 27, '#0a0605'); p.circle(mx2, my1, 21, mixHex('#0a0605', col, 0.3));
+  text(A.ELEMENT_NAME[el], mx2, my1 + 1, 26, '#ffffff');
+}
 function renderBattle(r) {
   return render('전투', () => {
     const b = r.battle;
@@ -2411,7 +2456,9 @@ function renderBattle(r) {
     const bodyGone = (m.theme === 'energy' && (r.showingResult ? !!(last?.ambushLanded || last?.cometLanded) : b.intent === 'recharge')) || (!r.showingResult && !isIntentHidden(b) && !!m.moves[b.intent]?.skyDot); // 돌덩이·하늘로 솟은 점(몸 없음)
     if (b.rage && !bodyGone) rageFx(m, W / 2, 196, 112, null, 'box'); // 분노: 바닥 불빛·불씨(몸이 없을 땐 둘 다 그리지 않는다)
 
-    // 상단: TURN 배지 · 몬스터 이름(분노) · HP 바
+    // 상단: TURN 배지 · 몬스터 이름(분노) · HP 바 (알바트리온은 전용 헤더)
+    if (isAlat(m)) alatHeader(b);
+    else {
     p.roundRect(30, 20, 118, 42, 10, '#2a2119');
     p.strokeRoundRect(30, 20, 118, 42, 10, 1.5, C.gold);
     text(`TURN ${b.turn}`, 89, 41, 24, C.gold);
@@ -2429,6 +2476,7 @@ function renderBattle(r) {
     bar(50, 74, W - 100, 32, hpShown / hpMaxShown, b.rage && !smokeFrame ? '#e5383b' : '#d94a2b');
     p.strokeRoundRect(50, 74, W - 100, 32, 16, 2, C.gold);
     text(`${hpShown.toLocaleString()} / ${hpMaxShown.toLocaleString()}`, W / 2, 90, 22, '#ffffff');
+    }
     if (ambushStage >= 0 && last?.ambushLanded) ambushSmoke(ambushStage); // 착지 연기: 0·1단계는 헤더를 완전히 덮고, 2단계에 흩어지고, 3단계엔 옅게 남는다
 
     // 몬스터 + 지난 턴 결과: 게임처럼 몬스터가 쓴 기술을 머리 왼쪽 위 말풍선으로 띄운다
@@ -2541,7 +2589,7 @@ function renderBattle(r) {
       text(label, nx, ny, 28, color);
     });
     // 알바트리온 현황(왼쪽 위): 지금 속성 · 억제 게이지 · 에스카톤까지 남은 턴
-    if (b.alat && ambushStage < 0) {
+    if (b.alat && ambushStage < 0 && !isAlat(m)) {
       const A = require('./알바트리온'), al = b.alat, col = ELEMENT_GLOW[al.element] || '#c08aff';
       const left = al.cycleLen - al.cycleTurn;
       p.roundRect(30, 118, 132, 112, 12, '#1a1410');
