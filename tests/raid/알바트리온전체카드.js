@@ -41,6 +41,8 @@ const play = (rr, rng = 0.5, gauge = null, guard = false) => { for (const m of r
   { const rr = mk('fire', 'smash'); play(rr, 0.5, 0, false); save('09_필살_억제실패', await raidMod.battleView(rr)); }
   // ── 쓰러진 파티원이 있는 전투 ──
   { const rr = mk('thunder', 'bolt'); rr.battle.members[1].hp = 0; rr.battle.members[2].hp = 18; play(rr); save('10_결과_쓰러짐', await raidMod.battleView(rr)); }
+  { const rr = mk('water', 'attack'); rr.battle.alat.gauge = 60; save('12_게이지_60', await raidMod.battleView(rr)); }
+  { const rr = mk('fire', 'attack'); rr.battle.alat.gauge = 100; save('13_게이지_MAX', await raidMod.battleView(rr)); }
   // ── 종료 ──
   const rewards = party(4).map((m, i) => ({ userId: m.userId, xp: i ? 300 : 400, mvp: i === 0, hackTool: i > 0, reroll: i === 0 }));
   for (const outcome of ['clear', 'wipe', 'timeout', 'noshow']) { const rr = mk('fire', 'attack'); if (outcome === 'clear') rr.battle.hp = 0; play(rr); save('11_종료_' + outcome, await raidMod.endView(rr, outcome, outcome === 'clear' ? rewards : [])); }

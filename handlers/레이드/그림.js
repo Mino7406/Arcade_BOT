@@ -2501,13 +2501,15 @@ function alatHeader(b) {
   // 이름 뒤로 그어진 발톱 자국 세 줄 + 이름 + 양옆 뿔 장식
   for (const [dx, c] of [[-46, '#2a140c'], [-18, '#3a1c10'], [10, '#2a140c']]) { p.line(W / 2 + dx, 18, W / 2 + dx + 64, 52, 4, c); p.line(W / 2 + dx + 2, 20, W / 2 + dx + 60, 50, 1, '#7a3a1c'); }
   const name = rage ? b.monster.rageName : b.monster.name, nw = Math.min(p.textWidth(B(), name, 34), 360);
-  text(name, W / 2, 36, 34, rage ? '#ffb090' : C.gold, { maxWidth: 360 });
-  for (const sd of [-1, 1]) { // 이름 양옆으로 펼친 날개 실루엣(날개 팔과 톱니 막)
-    const hx = W / 2 + sd * (nw / 2 + 16), tip = [hx + sd * 78, 24], knee = [hx + sd * 42, 30];
-    p.poly([hx, 40, knee[0], knee[1], tip[0], tip[1], hx + sd * 62, 40, hx + sd * 50, 44, hx + sd * 44, 50, hx + sd * 30, 46, hx + sd * 20, 50, hx + sd * 8, 44], '#2a1a12');
-    p.line(hx, 40, knee[0], knee[1], 2, rim); p.line(knee[0], knee[1], tip[0], tip[1], 2, rim); p.line(knee[0], knee[1], hx + sd * 44, 50, 1, rimDark); p.line(knee[0], knee[1], hx + sd * 20, 50, 1, rimDark);
+  { // 새긴 금속 글자: 속성 색 후광 → 어두운 외곽선 → 아래 그림자 → 본색 → 윗면 하이라이트
+    const nc = rage ? '#ffb090' : '#f6e0b8', ny = 36;
+    for (const [ox, oy] of [[-2, 0], [2, 0], [0, -2], [0, 2], [-2, -2], [2, -2], [-2, 2], [2, 2]]) text(name, W / 2 + ox, ny + oy, 34, '#1a0f08', { maxWidth: 360 });
+    text(name, W / 2, ny + 3, 34, '#000000', { maxWidth: 360 });
+    text(name, W / 2, ny, 34, nc, { maxWidth: 360 });
+    text(name, W / 2, ny - 1, 34, mixHex(nc, '#ffffff', 0.35), { maxWidth: 360 }); // 윗면 하이라이트(살짝 위로 겹침)
+    text(name, W / 2, ny + 1, 34, nc, { maxWidth: 360 });
   }
-  if (rage) { p.roundRect(W / 2 + nw / 2 + 62, 26, 58, 26, 6, '#5c1410'); text('분노', W / 2 + nw / 2 + 91, 39, 18, '#ffb4a8'); }
+  if (rage) { p.roundRect(W / 2 + nw / 2 + 22, 24, 58, 26, 6, '#5c1410'); text('분노', W / 2 + nw / 2 + 51, 37, 18, '#ffb4a8'); }
   // 보스 HP 바: 석재 틀 + 분절된 불씨빛 게이지 + 10% 눈금 + 40%(분노) 표식
   const bx = 140, by = 54, bw = W - 392, bh = 26, sl = 14, ratio = Math.max(0, Math.min(1, b.hp / b.maxHp));
   const quad = (x, w, y, hh, c) => p.poly([x + sl * (1 - (y - by) / bh), y, x + w + sl * (1 - (y - by) / bh), y, x + w + sl * (1 - (y + hh - by) / bh), y + hh, x + sl * (1 - (y + hh - by) / bh), y + hh], c);
@@ -2526,28 +2528,51 @@ function alatHeader(b) {
   for (let i = 0; i < n; i++) { const t = i / n; if (t < ratio) quad(bx + i * seg, seg - 1, by + 1, 3, ember[4]); } // 바 윗면 광택
   p.roundRect(bx + bw / 2 - 70, by + 3, 156, bh - 6, 6, '#050302', 0.62); // 숫자 뒤 어두운 판(눈금과 섞이지 않게)
   text(`${b.hp.toLocaleString()} / ${b.maxHp.toLocaleString()}`, bx + bw / 2 + sl / 2, by + bh / 2 + 1, 18, '#ffffff');
-  // 억제 게이지 + 에스카톤 카운트다운(옛 현황 패널을 헤더에 합침)
-  const gx = bx, gy = 92, gw = 270, gh = 9, gr = al.gauge / A.K.GAUGE_MAX, left = al.cycleLen - al.cycleTurn;
-  p.roundRect(gx - 2, gy - 2, gw + 4, gh + 4, 4, rimDark); p.rect(gx, gy, gw, gh, '#0a0605'); p.rect(gx, gy, gw * gr, gh, col);
-  for (let q = 1; q < 10; q++) p.rect(gx + Math.round(gw * q / 10), gy, 1, gh, '#0a0605'); // 억제 게이지 눈금
-  p.rect(gx, gy, gw * gr, 3, mixHex(col, '#ffffff', 0.5)); // 게이지 윗면 광택
-  for (const [rx, rn] of [[bx - 22, 'ᚠ']]) { p.circle(rx, 66, 12, rimDark); p.circle(rx, 66, 9, '#0a0605'); p.line(rx - 4, 70, rx, 58, 2, col); p.line(rx, 58, rx + 4, 70, 2, col); p.line(rx - 3, 66, rx + 3, 66, 2, col); } // 속성 색 룬 문양
-  p.roundRect(gx + gw + 6, gy - 8, 70, 22, 6, '#0d0805', 0.7); p.roundRect(bx + bw - 118, gy - 8, 124, 22, 6, '#0d0805', 0.7); // 글자 뒤 어두운 판(가시성)
-  text(`억제 ${Math.round(al.gauge)}`, gx + gw + 40, gy + 5, 15, col);
-  text(left <= 0 ? '에스카톤 지금!' : `에스카톤 ${left}턴 뒤`, bx + bw, gy + 5, 15, left <= 1 ? '#ff7a6a' : C.muted, { align: 'right' });
+  // 억제 게이지: 방패 라벨 + 비스듬한 10칸 분절 게이지(속성 색, 칸마다 윗면 광택) + 숫자 판. 가득 차면(억제 성공 상태) 테두리가 빛나고 MAX 표시
+  const gx = bx + 38, gy = 88, gw = 380, gh = 14, sl2 = 7, gr = al.gauge / A.K.GAUGE_MAX, full = al.gauge >= A.K.GAUGE_MAX;
+  const gq = (x, w, y, hh, c) => p.poly([x + sl2 * (1 - (y - gy) / gh), y, x + w + sl2 * (1 - (y - gy) / gh), y, x + w + sl2 * (1 - (y + hh - gy) / gh), y + hh, x + sl2 * (1 - (y + hh - gy) / gh), y + hh], c);
+  if (full) { p.poly([gx - 6 + sl2, gy - 6, gx + gw + 6 + sl2, gy - 6, gx + gw + 6, gy + gh + 6, gx - 6, gy + gh + 6], mixHex('#0d0805', col, 0.55)); }
+  p.poly([gx - 3 + sl2, gy - 3, gx + gw + 3 + sl2, gy - 3, gx + gw + 3, gy + gh + 3, gx - 3, gy + gh + 3], rimDark); gq(gx, gw, gy, gh, '#0a0605');
+  const cell = (gw - 9 * 3) / 10;
+  for (let q = 0; q < 10; q++) {
+    const cx0 = gx + q * (cell + 3), fill = Math.max(0, Math.min(1, gr * 10 - q));
+    if (fill <= 0) { gq(cx0, cell, gy + 1, gh - 2, '#1c130f'); continue; }
+    gq(cx0, cell * fill, gy + 1, gh - 2, mixHex(col, '#000000', 0.25)); gq(cx0, cell * fill, gy + 1, (gh - 2) * 0.55, col); gq(cx0, cell * fill, gy + 1, 3, mixHex(col, '#ffffff', 0.6));
+  }
+  // 왼쪽 방패 라벨
+  const lx = gx - 26, ly = gy + gh / 2;
+  p.poly([lx - 13, ly - 13, lx + 13, ly - 13, lx + 13, ly + 3, lx, ly + 15, lx - 13, ly + 3], rim); p.poly([lx - 10, ly - 10, lx + 10, ly - 10, lx + 10, ly + 2, lx, ly + 12, lx - 10, ly + 2], '#0d0805'); p.poly([lx - 7, ly - 7, lx + 7, ly - 7, lx + 7, ly + 1, lx, ly + 9, lx - 7, ly + 1], mixHex('#0d0805', col, full ? 0.9 : 0.45));
+  text('억제', lx, ly - 1, 11, '#ffffff');
+  // 오른쪽 숫자 판
+  const nx = gx + gw + 38;
+  p.roundRect(nx - 30, gy - 5, 66, gh + 10, 7, '#0d0805', 0.85); p.strokeRoundRect(nx - 30, gy - 5, 66, gh + 10, 7, 1.5, full ? col : rimDark);
+  text(full ? 'MAX' : `${Math.round(al.gauge)}`, nx + 3, gy + gh / 2, 16, full ? '#ffffff' : col);
   // 왼쪽 TURN 메달
   const mx1 = 88, my1 = 66;
   p.circle(mx1, my1, 34, rimDark); p.circle(mx1, my1, 31, '#0a0605'); p.circle(mx1, my1, 28, stone); p.strokeRoundRect(mx1 - 28, my1 - 28, 56, 56, 28, 2, rim);
   text('TURN', mx1, my1 - 13, 12, C.muted); text(String(b.turn), mx1, my1 + 8, 28, C.gold);
-  // 오른쪽: 다섯 속성 보석(불·물·번개·얼음·용) — 지금 속성만 켜지고 나머지는 꺼져 있다
+  // 오른쪽: 지금 속성 표기 (비교용 안: ALAT_ELV = A 큰 문장 / B 상성 안내 / C 보석 줄)
   const GEMS = [['fire', '#ff8c23'], ['water', '#46cdff'], ['thunder', '#f0f546'], ['ice', '#9ae4ff'], ['dragon', '#c08aff']];
-  GEMS.forEach(([k, c], i) => {
-    const gx2 = W - 218 + i * 38, gy2 = 62, on = k === el, r = on ? 16 : 12;
-    if (on) { p.circle(gx2, gy2, 22, mixHex('#0a0605', c, 0.25)); p.circle(gx2, gy2, 17, mixHex('#0a0605', c, 0.45)); }
-    p.poly([gx2, gy2 - r, gx2 + r * 0.72, gy2, gx2, gy2 + r, gx2 - r * 0.72, gy2], on ? c : mixHex('#1c130f', c, 0.4));
-    p.poly([gx2, gy2 - r + 3, gx2 + r * 0.72 - 3, gy2, gx2, gy2 + r - 3, gx2 - r * 0.72 + 3, gy2], on ? mixHex(c, '#ffffff', 0.45) : mixHex('#0f0907', c, 0.22));
-  });
-  text(`${A.ELEMENT_NAME[el]}속성`, W - 124, 96, 15, col);
+  const V = process.env.ALAT_ELV || 'C', who = A.COUNTER[el] ? A.ELEMENT_NAME[A.COUNTER[el]] + '속성 직업' : '전 직업';
+  const emblem = (cx, cy, R) => { // 방패형 문장: 이중 테두리 + 속성 색 안판 + 속성 글자
+    const shield = (r, c) => p.poly([cx - r, cy - r * 0.9, cx + r, cy - r * 0.9, cx + r, cy + r * 0.2, cx, cy + r * 1.15, cx - r, cy + r * 0.2], c);
+    p.circle(cx, cy, R + 8, mixHex('#0d0805', col, 0.22)); shield(R + 2, rim); shield(R, '#0d0805'); shield(R - 4, mixHex('#0d0805', col, 0.45)); shield(R - 9, mixHex('#0d0805', col, 0.18));
+    text(A.ELEMENT_NAME[el], cx, cy - 1, Math.round(R * 1.25), '#ffffff');
+  };
+  if (V === 'A') { emblem(W - 92, 62, 30); text(`${A.ELEMENT_NAME[el]}속성`, W - 92, 100, 14, col); }
+  else if (V === 'B') { // 현재 속성 문장 + 억제 직업 안내(누가 게이지를 올리는지)
+    emblem(W - 150, 60, 26);
+    p.roundRect(W - 116, 42, 94, 40, 8, '#0d0805', 0.7); p.strokeRoundRect(W - 116, 42, 94, 40, 8, 1.5, col);
+    text('억제 담당', W - 69, 54, 13, C.muted); text(who.replace('속성 직업', ''), W - 69, 72, 17, col); text(A.COUNTER[el] ? '속성 직업' : '', W - 69, 80, 0, col);
+  } else { // C: 다섯 보석 + 이름 배지
+    GEMS.forEach(([k, c], i) => {
+      const gx2 = W - 218 + i * 38, gy2 = 62, on = k === el, r = on ? 16 : 12;
+      if (on) { p.circle(gx2, gy2, 22, mixHex('#0a0605', c, 0.25)); p.circle(gx2, gy2, 17, mixHex('#0a0605', c, 0.45)); }
+      p.poly([gx2, gy2 - r, gx2 + r * 0.72, gy2, gx2, gy2 + r, gx2 - r * 0.72, gy2], on ? c : mixHex('#1c130f', c, 0.4));
+      p.poly([gx2, gy2 - r + 3, gx2 + r * 0.72 - 3, gy2, gx2, gy2 + r - 3, gx2 - r * 0.72 + 3, gy2], on ? mixHex(c, '#ffffff', 0.45) : mixHex('#0f0907', c, 0.22));
+    });
+    text(`${A.ELEMENT_NAME[el]}속성`, W - 124, 96, 15, col);
+  }
 }
 function renderBattle(r) {
   return render('전투', () => {
