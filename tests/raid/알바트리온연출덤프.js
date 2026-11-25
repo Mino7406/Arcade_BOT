@@ -26,6 +26,16 @@ const party = ['fire', 'water', 'thunder', 'ice'].map((role, i) => ({ userId: St
     require('fs').writeFileSync(path.join(${JSON.stringify(out)}, key + '.png'), v.files[0].attachment);
     console.log('saved', key);
   }
+  // 필살기 준비 화면(선택 화면)과 에스카톤 결과, 발톱 공격 결과
+  for (const [key, intent, showing] of [['smash_charge', 'smash', false], ['smash_hit', 'smash', true], ['claw', 'attack', true]]) {
+    const rr = { client: null, monster: mon, guildId: '1', channelId: '2', phase: 'battle', party, recruitEndsAt: 0, battleEndsAt: Date.now() + 9e5, turnEndsAt: Date.now() + 25e3, freezesXp: true, hasImage: false };
+    rr.battle = B.createBattle(mon, party, Math.random, { minParty: 1 });
+    rr.battle.intent = intent;
+    if (showing) { for (const m of rr.battle.members) B.choose(rr.battle, m.userId, 'guard'); rr.battle.alat.gauge = 100; B.resolveTurn(rr.battle, () => 0.5); rr.showingResult = true; }
+    const v = await raidMod.battleView(rr);
+    require('fs').writeFileSync(path.join(${JSON.stringify(out)}, key + '.png'), v.files[0].attachment);
+    console.log('saved', key);
+  }
 })().catch(e => { console.error(e); process.exit(1); });
 `;
 try {

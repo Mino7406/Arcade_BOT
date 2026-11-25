@@ -1340,9 +1340,29 @@ function alatOverlay(fx, mx, my, targets, layer) {
   alatTint(el, 0.07, 0.05);
 }
 
+// 알바트리온 기술 움직임: 정지 그림이라도 위치·크기·잔상으로 동작이 보이게 한다(이전 위치에 잔상, 진행 방향에 속도선).
+//   브레스(화염·물·서리): 뒤로 젖혔다 앞으로 숙이며 내뿜음 / 낙뢰: 날개를 펴고 위로 솟구침 / 용의 숨결: 크게 부풀며 앞으로 / 발톱: 앞으로 돌진 / 필살(에스카톤): 선택 화면에서 떨며 떠오르고, 결과에선 내리꽂음
+function alatMotion(fx, charging, cx, cy, turn) {
+  const j = (k) => ((turn * 7 + k * 13) % 5) - 2; // 턴마다 다른 작은 떨림
+  if (charging) return { x: cx + j(1) * 2, y: cy - 3 + j(2) * 1.5, s: 1.08, ghosts: [{ x: cx + j(3) * 3 - 4, y: cy - 4, s: 1.06 }, { x: cx + j(4) * 3 + 4, y: cy - 2, s: 1.04 }], streaks: { x: cx, y: cy, dir: -1 } };
+  if (fx === 'alflame' || fx === 'alwater' || fx === 'alice') return { x: cx, y: cy + 12, s: 1.14, ghosts: [{ x: cx, y: cy - 6, s: 1.0 }, { x: cx, y: cy + 2, s: 1.07 }], streaks: { x: cx, y: cy, dir: 1 } };
+  if (fx === 'albolt') return { x: cx, y: cy - 6, s: 1.1, ghosts: [{ x: cx - 6, y: cy + 4, s: 1.03 }, { x: cx + 6, y: cy - 1, s: 1.06 }], streaks: { x: cx, y: cy, dir: -1 } };
+  if (fx === 'aldragon') return { x: cx + j(5), y: cy + 6, s: 1.24, ghosts: [{ x: cx - 8, y: cy + 2, s: 1.12 }, { x: cx + 8, y: cy + 2, s: 1.12 }], streaks: { x: cx, y: cy, dir: 0 } };
+  if (fx === 'smash') return { x: cx, y: cy + 22, s: 1.3, ghosts: [{ x: cx, y: cy - 10, s: 1.1 }, { x: cx, y: cy + 8, s: 1.2 }], streaks: { x: cx, y: cy, dir: 1 } };
+  if (fx === 'attack') return { x: cx + 14, y: cy + 16, s: 1.2, ghosts: [{ x: cx - 12, y: cy + 2, s: 1.04 }, { x: cx, y: cy + 9, s: 1.12 }], streaks: { x: cx, y: cy, dir: 1 } };
+  return null;
+}
+function alatStreaks({ x, y, dir }) { // 움직임 방향 속도선: dir 1 앞(아래)·-1 위·0 사방
+  const col = ['#ffffff', '#cfc8e0', '#8a82a0'];
+  for (let q = 0; q < 14; q++) {
+    const sx = x + (q - 6.5) * 18 + ((q * 37) % 9) - 4, len = 16 + ((q * 53) % 22);
+    const y0 = dir >= 0 ? y - 70 - ((q * 29) % 20) : y + 30 + ((q * 29) % 20);
+    for (let t = 0; t < len; t += 4) if ((t / 4 + q) % 3) p.rect(Math.round(sx / 4) * 4, Math.round((y0 + (dir >= 0 ? t : -t)) / 4) * 4, 4, 4, col[Math.min(2, Math.floor(t / (len / 3)))]);
+  }
+}
 function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
   if (!move) return;
-  if (ALAT_FX.includes(move)) { if (layer === 'front') alatOverlay(move, cx, cy, alatTargets, 'field'); return; } // 알바트리온: 몬스터 칸 연출(카드·말풍선보다 아래), 타격은 맨 위에서 'hit'
+  if (ALAT_FX.includes(move)) { if (layer === 'back') alatOverlay(move, cx, cy, alatTargets, 'field'); return; } // 알바트리온: 몬스터 칸 연출(카드·말풍선보다 아래), 타격은 맨 위에서 'hit'
   if (HEUNG_FX.includes(move)) { heungMonsterFx(move, cx, cy, layer); return; }
   if (move === 'fart' && layer === 'front') {
     // 구린 방귀: 뒤돌아선 엉덩이에서 뿜어진 커다란 가스 덩어리 하나가 파티 쪽(아래·양옆)으로 뭉게뭉게 부풀어 퍼진다.
@@ -2337,7 +2357,12 @@ function renderBattle(r) {
     heungTargets = usedFx === 'lightning' ? b.members.filter(mm => last?.hits?.[mm.userId]).map(mm => 121.5 + activeRoles.indexOf(mm.role) * 219) : []; // 낙뢰가 내려칠 카드 위치
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'back', sporeColor, accentColor);
     // 투명화(유령): 다음 턴 동안 몸을 흐리게(회색)
-    if (!skyDotNow) drawMonster(m, W / 2, monsterY, 112, { rage: b.rage, pose, outline: shielded ? '#cfe8ff' : null, gray: isPhased(b), dormant: dormantNow, element: b.alat?.element });
+    if (!skyDotNow) {
+      const mv = b.alat ? alatMotion(r.showingResult ? usedFx : null, b.intent === 'smash' && !r.showingResult, W / 2, monsterY, b.turn) : null; // 알바트리온: 기술마다 움직임(돌진·솟구침·젖힘·떨림)과 잔상
+      const ex = { rage: b.rage, pose, outline: shielded ? '#cfe8ff' : null, gray: isPhased(b), dormant: dormantNow, element: b.alat?.element };
+      if (mv) for (const gh of mv.ghosts) drawMonster(m, gh.x, gh.y, 112 * gh.s, { ...ex, gray: true }); // 잔상(흐린 그림자)
+      if (mv) { if (mv.streaks) alatStreaks(mv); drawMonster(m, mv.x, mv.y, 112 * mv.s, ex); } else drawMonster(m, W / 2, monsterY, 112, ex);
+    }
     if (r.showingResult && (last?.ambushLanded || last?.cometLanded)) ambushImpact(W / 2, monsterY, 'front');
     if (shaking && !skyDotNow && !m.ui?.noShake) shakeFx(m, W / 2, monsterY, 112, pose); // ui.noShake 몬스터(???)는 떨림 대신 준비 자세(readyPose)만
     // 점화 카운트다운 중엔 어떤 자세·기술이든 도화선 끝에 불꽃 + 열기(sprite.fuseTip = [칸, 줄])
