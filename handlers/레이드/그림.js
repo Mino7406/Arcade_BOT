@@ -2023,6 +2023,23 @@ const ALAT_C = {
 };
 let alatThemeEl = null, alatThemeRage = false;
 const ALAT_EDGE = { fire: [255, 124, 36], water: [70, 190, 255], thunder: [255, 236, 70], ice: [150, 220, 255], dragon: [232, 64, 122] };
+// 테두리 전체에 은은하게 흐르는 속성 이펙트(모서리 이펙트와 이어짐): 폭 30px 안쪽으로 옅게, 바깥일수록 짙게. 불=아른거리는 열기 줄 · 물=흐르는 물결 줄 · 번개=깜빡이는 전기 선 · 얼음=서리 결 · 용=번지는 어둠과 붉은 맥
+function alatEdges(el, heavy, scene) {
+  const RM = ALAT_RAMP[el] ?? ALAT_RAMP.dragon, B = heavy ? 36 : 28, k = el.length * 5 + 3, buf = pixBuf();
+  const dens = (d) => Math.pow(1 - d / B, 1.7); // 테두리에 가까울수록 짙게
+  for (const [x0, y0, x1, y1, horiz] of [[0, 0, W, B, true], [0, H - B, W, H, true], [0, B, B, H - B, false], [W - B, B, W, H - B, false]]) {
+    buf.paint(x0, y0, x1, y1, (x, y, i, j) => {
+      const d = Math.min(x, W - x, y, H - y); if (d >= B) return null;
+      const t = horiz ? x : y, dn = dens(d) * 0.5; // 최대 50%만 채움
+      if (el === 'fire') { const n = fbm(t / 22, d / 9 - (horiz ? 0 : 0), k); return bay(i, j) < dn * (0.5 + n) ? ramp(RM, 0.25 + (1 - d / B) * 0.55 + n * 0.2, i, j) : null; }
+      if (el === 'water') { const w = Math.sin(t / 14 + d / 6 + fbm(t / 40, d / 20, k) * 3); return bay(i, j) < dn * (0.5 + 0.5 * Math.max(0, w)) ? (w > 0.85 ? '#ffffff' : ramp(RM, 0.3 + (1 - d / B) * 0.4 + w * 0.12, i, j)) : null; }
+      if (el === 'thunder') { const ridge = 1 - Math.abs(fbm(t / 26, d / 8, k) - 0.5) * 6; return ridge > 0.82 && d < B * 0.8 ? (ridge > 0.9 ? '#ffffff' : RM[4]) : (bay(i, j) < dn * 0.5 ? RM[2] : null); }
+      if (el === 'ice') { const ridge = 1 - Math.abs(fbm(t / 20, d / 10, k) - 0.5) * 5.5; return ridge > 0.84 ? '#ffffff' : (bay(i, j) < dn * 0.9 ? ramp(RM, 0.45 + (1 - d / B) * 0.4, i, j) : null); }
+      const ridge = 1 - Math.abs(fbm(t / 24, d / 9, k) - 0.5) * 6; return ridge > 0.86 && d < B * 0.85 ? RM[4] : (bay(i, j) < dn * (0.6 + fbm(t / 30, d / 12, k + 3)) ? ramp(RM, 0.05 + (1 - d / B) * 0.25, i, j) : null);
+    });
+  }
+  buf.flush(null);
+}
 // 네 모서리 이펙트(디자인 좌표): 지금 속성마다 모서리에서 번지는 고밀도 도트 이펙트.
 // 불=타오르는 불길과 용암 균열 · 물=겹겹의 물결 마루와 포말·물보라 · 번개=가지 친 번개와 전기 핏줄 · 얼음=가지 뻗는 서리 결정과 얼음 기둥 · 용=검붉은 연기와 균열 핏줄
 function alatCorners(el, heavy, rnd, scene) {
@@ -2103,6 +2120,7 @@ function alatPost(scene, el, heavy) {
     add(x, y, col, ((band - e) / band) ** 2 * (heavy ? 0.5 : 0.34));
   }
   // ② 네 모서리 이펙트: 지금 속성에 맞춰 모양이 바뀐다(불=불길 · 물=물결과 물방울 · 번개=번개 줄기 · 얼음=서리 결정 · 용=검붉은 균열)
+  alatEdges(el, heavy, scene);
   alatCorners(el, heavy, rnd, scene);
   // ③ 불씨
   for (let i = 0, n = heavy ? 120 : 50; i < n; i++) { const x = Math.floor(rnd() * w), y = Math.floor(rnd() * h), sz = 1 + Math.floor(rnd() * 2); for (let dy = 0; dy < sz; dy++) for (let dx = 0; dx < sz; dx++) set(x + dx, y + dy, rnd() < 0.5 ? col : [255, 255, 255]); }
