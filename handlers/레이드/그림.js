@@ -72,6 +72,7 @@ function text(s, x, y, size, color, opts = {}) {
 // ???처럼 기호뿐인 글자는 ①이 없고 ②만.
 function seeded(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1103515245 + 12345) >>> 0) / 4294967296); }
 function isCorrupt(monster) { return monster?.theme === 'corrupt'; }
+const isAlat = (monster) => monster?.theme === 'alat'; // 알바트리온 전용 테마(폭풍·균열)
 const REPLACEMENT = '\uFFFD';
 function corruptChars(s, seed, rate) {
   const rnd = seeded(seed * 7919 + s.length);
@@ -1974,6 +1975,42 @@ const CORRUPT_C = {
   bg: '#120507', frame: '#8a1c24', gold: '#ff3a4a', box: '#080203', card: '#1e0a0d', cardEmpty: '#3a1418',
   orange: '#ff6a5a', sub: '#f2dada', dim: '#7a5a5e', muted: '#b08a8a', hpBack: '#2e1418',
 };
+// ── 알바트리온 전용 테마(블랙월의 붉은 오염 테마를 참고): 폭풍을 두른 보랏빛 어둠의 화면 틀 + 지금 속성 색으로 번지는 가장자리 빛과 모서리 균열 ──
+const ALAT_C = {
+  bg: '#09071a', frame: '#6a4cc0', gold: '#e6dcff', box: '#05040f', card: '#15112a', cardEmpty: '#2a2248',
+  orange: '#c8a0ff', sub: '#ece6f6', dim: '#6a6088', muted: '#a79cc4', hpBack: '#221a3a',
+};
+let alatThemeEl = null, alatThemeRage = false;
+const ALAT_EDGE = { fire: [255, 124, 36], water: [70, 190, 255], thunder: [255, 236, 70], ice: [150, 220, 255], dragon: [232, 64, 122] };
+// 후처리: ① 가장자리를 속성 색으로 밝힘(분노면 더 넓고 강하게) ② 네 모서리에서 갈라지는 균열(속성 색 + 하얀 심) ③ 흩날리는 속성 색 불씨 ④ 가는 가로 주사선(폭풍 느낌)
+function alatPost(scene, el, heavy) {
+  const col = ALAT_EDGE[el] ?? [170, 130, 255], rnd = seeded(scene.length * 41 + 5 + (el ? el.length * 7 : 0));
+  const w = p.w, h = p.h, buf = p.buf;
+  const inIcon = (x, y) => scene !== '모집' && scene !== '전투' ? false : ICON_KEEP.some(([kx, ky, kw, kh]) => x >= kx && x < kx + kw && y >= ky && y < ky + kh);
+  const add = (x, y, c, k = 1) => { if (x < 0 || y < 0 || x >= w || y >= h || inIcon(x, y)) return; const j = (y * w + x) * 3; buf[j] = Math.min(255, buf[j] + Math.round(c[0] * k)); buf[j + 1] = Math.min(255, buf[j + 1] + Math.round(c[1] * k)); buf[j + 2] = Math.min(255, buf[j + 2] + Math.round(c[2] * k)); };
+  const set = (x, y, c) => { x = Math.round(x); y = Math.round(y); if (x < 0 || y < 0 || x >= w || y >= h || inIcon(x, y)) return; const j = (y * w + x) * 3; buf[j] = c[0]; buf[j + 1] = c[1]; buf[j + 2] = c[2]; };
+  // ① 가장자리 빛
+  const band = (heavy ? 0.1 : 0.06);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const e = Math.min(Math.min(x, w - 1 - x) / w, Math.min(y, h - 1 - y) / h);
+    if (e >= band) { if (x > w * band && x < w * (1 - band)) x = Math.floor(w * (1 - band)); continue; }
+    add(x, y, col, ((band - e) / band) ** 2 * (heavy ? 0.5 : 0.34));
+  }
+  // ② 모서리 균열
+  const crack = (x0, y0, ang, len, wd, depth) => {
+    let x = x0, y = y0, a = ang;
+    for (let t = 0; t < len; t++) {
+      a += (rnd() - 0.5) * 0.7; x += Math.cos(a); y += Math.sin(a);
+      for (let d = -wd; d <= wd; d++) set(x + d * Math.cos(a + 1.57), y + d * Math.sin(a + 1.57), d === 0 ? [255, 255, 255] : col.map(v => Math.min(255, v + 20)));
+      if (depth < 2 && t > 6 && rnd() < 0.07) crack(x, y, a + (rnd() < 0.5 ? -0.9 : 0.9), len * 0.5 - t * 0.3, 0, depth + 1);
+    }
+  };
+  for (const [cx, cy, a0] of [[0, 0, 0.78], [w, 0, 2.36], [0, h, -0.78], [w, h, -2.36]]) for (let i = 0, n = heavy ? 5 : 3; i < n; i++) crack(cx, cy, a0 + (rnd() - 0.5) * 1.1, ((heavy ? 110 : 70) + rnd() * 50) * (scene === '결과' ? 0.5 : 1), i === 0 ? 1 : 0, 0); // 결과 화면은 표 글자를 덜 건드리게 균열을 짧게
+  // ③ 불씨
+  for (let i = 0, n = heavy ? 120 : 50; i < n; i++) { const x = Math.floor(rnd() * w), y = Math.floor(rnd() * h), sz = 1 + Math.floor(rnd() * 2); for (let dy = 0; dy < sz; dy++) for (let dx = 0; dx < sz; dx++) set(x + dx, y + dy, rnd() < 0.5 ? col : [255, 255, 255]); }
+  // ④ 가는 주사선(한 줄 건너 아주 약하게 어둡게)
+  for (let y = 0; y < h; y += 4) for (let x = 0; x < w; x++) { if (inIcon(x, y)) continue; const j = (y * w + x) * 3; buf[j] = Math.round(buf[j] * 0.93); buf[j + 1] = Math.round(buf[j + 1] * 0.93); buf[j + 2] = Math.round(buf[j + 2] * 0.93); }
+}
 let themeKey = ''; // 배경 캐시 키 뒤에 붙는다(테마마다 배경을 따로 저장)
 // 화면 오염 후처리(6번째 시안 그대로, 실제 픽셀 675×480 단위): ① 가장자리 붉은 빛 ② 네 모서리 오염(옆 칸이 붉게 끌려와 어긋난 블록 ·
 // 붉은 블록 · 빠진 칸 · 회로 막대, 테두리를 따라 흐르는 세로 줄기) ③ 붉은 잡음 점 ④ 약한 가로 띠 밀림(글자 줄은 피함).
@@ -2204,16 +2241,18 @@ async function render(scene, draw, monster = null) {
   if (!load()) return null;
   p = painter;
   activeRoles = rolesOfMonster(monster);
-  const corrupt = isCorrupt(monster);
-  const savedC = corrupt ? { ...C } : null;
-  const savedRibbon = corrupt ? RIBBON.pending.fill : null;
+  const corrupt = isCorrupt(monster), alatTheme = isAlat(monster);
+  const savedC = corrupt || alatTheme ? { ...C } : null;
+  const savedRibbon = corrupt || alatTheme ? RIBBON.pending.fill : null;
   if (corrupt) { Object.assign(C, CORRUPT_C); RIBBON.pending.fill = '#b81c2a'; themeKey = ':corrupt'; }
+  if (alatTheme) { Object.assign(C, ALAT_C); RIBBON.pending.fill = '#6a4cc0'; themeKey = ':alat'; }
   try {
     const t0 = process.hrtime.bigint();
-    skillCtx = null; rageGlitch = false;
+    skillCtx = null; rageGlitch = false; alatThemeEl = null;
     draw();
     if (corrupt && skillCtx && SKILL_FX.includes(skillCtx.fx)) skillGlitch(skillCtx, (skillCtx.fx.length * 977 + 13) >>> 0);
     if (corrupt) corruptPost(scene, scene.length * 31 + 7 + (rageGlitch ? rageGlitch * 53 : 0), !!rageGlitch); // 분노는 턴마다 깨진 모양이 달라진다
+    if (alatTheme) alatPost(scene, alatThemeEl, !!alatThemeRage);
     const t1 = process.hrtime.bigint();
     const png = painter.png();
     logRender(scene, Number(t1 - t0) / 1e6, Number(process.hrtime.bigint() - t1) / 1e6, png.length);
@@ -2222,7 +2261,7 @@ async function render(scene, draw, monster = null) {
     console.error(`레이드 ${scene} 그림 실패:`, err);
     return null;
   } finally {
-    if (corrupt) { Object.assign(C, savedC); RIBBON.pending.fill = savedRibbon; themeKey = ''; }
+    if (corrupt || alatTheme) { Object.assign(C, savedC); RIBBON.pending.fill = savedRibbon; themeKey = ''; }
   }
 }
 
@@ -2327,6 +2366,7 @@ function renderBattle(r) {
     const smokeFrame = ambushStage === 0 && !!last?.ambushLanded; // 헤더가 아직 위장 몬스터 값인 단계(습격 착지만)
     background('battle', 120, 224);
     if (b.rage && isCorrupt(m)) rageGlitch = Math.max(1, b.turn | 0);
+    if (isAlat(m)) { alatThemeEl = b.alat?.element ?? null; alatThemeRage = b.rage; } // 테마 후처리가 지금 속성 색을 쓴다
     const bodyGone = (m.theme === 'energy' && (r.showingResult ? !!(last?.ambushLanded || last?.cometLanded) : b.intent === 'recharge')) || (!r.showingResult && !isIntentHidden(b) && !!m.moves[b.intent]?.skyDot); // 돌덩이·하늘로 솟은 점(몸 없음)
     if (b.rage && !bodyGone) rageFx(m, W / 2, 196, 112, null, 'box'); // 분노: 바닥 불빛·불씨(몸이 없을 땐 둘 다 그리지 않는다)
 
@@ -2653,7 +2693,7 @@ function renderBattle(r) {
     }, (mem) => {
       const state = memberState(b, mem, r.showingResult);
       if (usedMove && last?.hits[mem.userId]) return { color: '#ff4a3a', width: 4 }; // 이번 턴에 맞은 카드
-      if (state === 'pending') return { color: isCorrupt(m) ? '#ff3a4a' : '#ffb52e', width: 4 }; // 오염 테마는 붉은 테두리
+      if (state === 'pending') return { color: isCorrupt(m) ? '#ff3a4a' : isAlat(m) ? '#c8a0ff' : '#ffb52e', width: 4 }; // 오염 테마는 붉은 테두리, 알바트리온은 보랏빛
       if (state === 'ready') return { color: '#3ecf6e', width: 2.5 };
       if (state === 'stunned') return { color: '#ffd23f', width: 2.5 };
       return null;

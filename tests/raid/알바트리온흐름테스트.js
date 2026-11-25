@@ -131,6 +131,7 @@ const phase = () => raidMod.raidForTest(channel.guildId)?.phase;
   }
   assert(sawEscaton && suppressedAll, '전체 흐름 1: 에스카톤이 한 번 이상 오고 모두 억제됨');
   assert(!raidMod.getRaidStatus(MAIN).active, '전체 흐름 1: 몬스터를 쓰러뜨려 종료');
+  if (process.env.DUMP_DIR) require('fs').writeFileSync(process.env.DUMP_DIR + '/alat-clear.png', images[images.length - 1]); // 종료 화면 확인용
   assert(/CLEAR|토벌/.test(desc()) && desc().includes('속성 재회전석'), '전체 흐름 1: 종료 화면에 클리어와 속성 재회전석 보상 문구');
 
   // ── 전체 흐름 2: 아무도 게이지를 안 채우면 에스카톤에 전멸해 몬스터가 도망친다 ──
