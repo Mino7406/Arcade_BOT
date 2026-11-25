@@ -23,6 +23,7 @@ function initState(rng) {
   return {
     element: ELEMENTS[Math.floor(rng() * ELEMENTS.length)],
     prev: null,
+    shifted: false, // 방금 턴 끝에 속성이 바뀌었으면 true(다음 advanceTurn 때까지) — 화면이 '속성 전환' 연출을 띄운다
     phaseLeft: randInt(rng, K.PHASE_MIN, K.PHASE_MAX),
     cycleTurn: 1,
     cycleLen: randInt(rng, K.CYCLE_MIN, K.CYCLE_MAX),
@@ -44,10 +45,12 @@ function addGauge(state, amount) {
 
 // 턴이 끝날 때 한 번 호출
 function advanceTurn(state, rng) {
+  state.shifted = false;
   state.phaseLeft--;
   if (state.phaseLeft <= 0) {
     const choices = ELEMENTS.filter(e => e !== state.element);
     state.prev = state.element;
+    state.shifted = true;
     state.element = choices[Math.floor(rng() * choices.length)];
     state.phaseLeft = randInt(rng, K.PHASE_MIN, K.PHASE_MAX);
   }

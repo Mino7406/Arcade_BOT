@@ -212,7 +212,7 @@ const E = require(path.join(__dirname, '../../handlers/레이드/전투.js'));
   const mon = E.loadMonsters().find(m => m.id === 'alatreon');
   assert(!!mon, '알바트리온 몬스터 로드(꺼진 몬스터도 loadMonsters에는 있음)');
   assert(mon && E.monsterProblems(mon).length === 0, 'monsterProblems: 알바트리온 검증 통과');
-  assert(!E.MONSTERS.some(m => m.id === 'alatreon') && !E.HARD_MONSTERS.some(m => m.id === 'alatreon'), 'enabled:false라 출현 후보에는 없음');
+  assert(!E.MONSTERS.some(m => m.id === 'alatreon') && E.HARD_MONSTERS.some(m => m.id === 'alatreon') && E.ALL_MONSTERS.find(m => m.id === 'alatreon').testOnly === true, 'testOnly라 무작위 후보(MONSTERS)엔 없고 고난이도 목록에만 있음(소환은 index.js가 테스트 서버로 제한)');
   const clone = () => JSON.parse(JSON.stringify(mon));
   const bad1 = clone(); bad1.partyClasses = 'default';
   assert(E.monsterProblems(bad1).some(p => p.includes('alat')), 'monsterProblems: partyClasses가 elemental이 아니면 alat 문제');

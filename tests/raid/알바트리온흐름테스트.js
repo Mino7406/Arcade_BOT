@@ -53,6 +53,11 @@ const phase = () => raidMod.raidForTest(channel.guildId)?.phase;
 
 (async () => {
   lv.loadLevels();
+  // ── 테스트 서버 전용(testOnly): 본서버에서는 소환이 거절된다 ──
+  const alatMon = battleMod.ALL_MONSTERS.find(m => m.id === 'alatreon');
+  assert(alatMon.testOnly === true, '알바트리온은 testOnly(테스트 서버 전용)');
+  { const refused = await raidMod.forceSpawnRaid({ guildId: 'other', channel, client }, 'alatreon'); assert(/테스트 서버/.test(String(refused)) && !raidMod.getRaidStatus(MAIN).active, '본서버 소환은 거절됨'); }
+  alatMon.testOnly = false; // 아래 본서버 흐름 검증은 공개 상태를 가정(테스트 서버 구간 앞에서 다시 켠다)
   // ── 모집(본서버) ──
   let err = await raidMod.forceSpawnRaid({ guildId: 'other', channel, client }, 'alatreon');
   assert(!err && raidMod.getRaidStatus(MAIN).active, '알바트리온 소환 성공');

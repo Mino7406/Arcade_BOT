@@ -43,6 +43,9 @@ const play = (rr, rng = 0.5, gauge = null, guard = false) => { for (const m of r
   { const rr = mk('thunder', 'bolt'); rr.battle.members[1].hp = 0; rr.battle.members[2].hp = 18; play(rr); save('10_결과_쓰러짐', await raidMod.battleView(rr)); }
   { const rr = mk('water', 'attack'); rr.battle.alat.gauge = 60; save('12_게이지_60', await raidMod.battleView(rr)); }
   { const rr = mk('fire', 'attack'); rr.battle.alat.gauge = 100; save('13_게이지_MAX', await raidMod.battleView(rr)); }
+  // ── 속성 전환(방금 속성이 바뀐 화면): 선택 화면 4가지 + 결과 화면 1가지 ──
+  for (const [from, to] of [['fire', 'water'], ['water', 'thunder'], ['thunder', 'ice'], ['ice', 'fire']]) { const rr = mk(to, 'attack'); rr.battle.alat.prev = from; rr.battle.alat.shifted = true; save('14_전환_' + from + '_' + to, await raidMod.battleView(rr)); }
+  { const rr = mk('ice', 'frost'); play(rr); rr.battle.alat.prev = 'water'; rr.battle.alat.shifted = true; save('15_전환_결과화면', await raidMod.battleView(rr)); }
   // ── 종료 ──
   const rewards = party(4).map((m, i) => ({ userId: m.userId, xp: i ? 300 : 400, mvp: i === 0, hackTool: i > 0, reroll: i === 0 }));
   for (const outcome of ['clear', 'wipe', 'timeout', 'noshow']) { const rr = mk('fire', 'attack'); if (outcome === 'clear') rr.battle.hp = 0; play(rr); save('11_종료_' + outcome, await raidMod.endView(rr, outcome, outcome === 'clear' ? rewards : [])); }

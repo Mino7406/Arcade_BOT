@@ -283,6 +283,79 @@ function roleIcon(role, cx, cy, dim = false) {
   drawPixels(ROLE_SPRITES[role], cx, cy + dy, iconPx(ROLE_SPRITES[role]), { dim });
 }
 
+// ── 알바트리온 속성별 몸 변화: 칸 도트만으로 3톤(어두운 둘레 · 본색 · 밝은 심) 음영을 줘서 몸에 붙은 것처럼 ──
+// 불=뿔끝 불꽃 + 용암 균열(번지는 열기) + 가슴 불씨 / 물=어깨 지느러미 + 날개막 물결(마루 하이라이트) + 흘러내리는 물방울 / 번개=전기 줄기(곁가지·잔광) + 날개 윗선 + 스파크 / 얼음=날개 서리 무늬 + 날개막 성에 금 + 고드름 + 뿔끝 성에
+// (c, r)은 스프라이트 칸 좌표(60×46). 왼쪽 기준으로 적고 오른쪽은 59 - c 로 거울.
+function alatBodyFx(el, cx, cy, cell) {
+  const ox = cx - 30 * cell, oy = cy - 23 * cell;
+  const cd = (c, r, col) => p.rect(Math.round(ox + c * cell), Math.round(oy + r * cell), Math.ceil(cell), Math.ceil(cell), col);
+  const both = (fn) => { fn(1); fn(-1); };
+  const cc = (sd, c) => (sd === 1 ? c : 59 - c);
+  const pts = (a) => { const out = []; for (let i = 0; i < a.length - 1; i++) { const [c0, r0] = a[i], [c1, r1] = a[i + 1], n = Math.max(Math.abs(c1 - c0), Math.abs(r1 - r0), 1); for (let k = 0; k < n; k++) out.push([Math.round(c0 + (c1 - c0) * k / n), Math.round(r0 + (r1 - r0) * k / n)]); } out.push(a[a.length - 1]); return out; };
+  // 줄기: 먼저 둘레(halo, 좌우 한 칸) → 본색 → 밝은 심(몇 칸 건너 하나)
+  const bolt = (sd, a, halo, mid, core) => { const q = pts(a); for (const [c, r] of q) { cd(cc(sd, c) - 1, r, halo); cd(cc(sd, c) + 1, r, halo); } q.forEach(([c, r], i) => cd(cc(sd, c), r, i % 3 === 1 ? core : mid)); };
+  if (el === 'fire') {
+    both(sd => {
+      for (const [dx, dy, col] of [[0, 1, '#a02a08'], [0, 0, '#ff5a14'], [-1, 0, '#c8380c'], [1, 0, '#c8380c'], [0, -1, '#ff7a1c'], [-1, -1, '#ff5a14'], [0, -2, '#ffb347'], [1, -2, '#ff7a1c'], [0, -3, '#ffd060'], [0, -4, '#fff1b0']]) cd(cc(sd, 18) + dx, 1 + dy, col); // 뿔끝 불꽃(3톤 + 곁불)
+      bolt(sd, [[15, 12], [13, 14], [14, 16], [11, 18], [12, 20], [9, 22]], '#7a1c08', '#ff7a1c', '#ffe08a'); // 용암 균열 + 번지는 열기
+      bolt(sd, [[13, 14], [10, 15], [8, 17]], '#7a1c08', '#ff7a1c', '#ffe08a');
+      bolt(sd, [[11, 18], [8, 19], [6, 21]], '#7a1c08', '#ff7a1c', '#ffe08a');
+      for (const [c, r] of [[5, 13], [3, 17], [7, 24], [2, 21]]) cd(cc(sd, c), r, '#ffb347'); // 날개 끝에서 피어오르는 불씨
+    });
+  } else if (el === 'water') {
+    both(sd => {
+      // 어깨에서 말려 올라가는 파도 마루(끝이 안으로 말리고 흰 거품이 인다)
+      for (const [c, r, col] of [[17, 10, '#1c5a96'], [16, 9, '#2a8ad0'], [15, 8, '#46cdff'], [15, 7, '#46cdff'], [14, 6, '#7ad8ff'], [14, 5, '#7ad8ff'], [15, 4, '#bfeaff'], [16, 4, '#ffffff'], [17, 5, '#bfeaff'], [13, 7, '#2a8ad0'], [13, 8, '#1c5a96'], [12, 9, '#1c5a96'], [16, 6, '#2a8ad0'], [16, 8, '#2a8ad0']]) cd(cc(sd, c), r, col);
+      // 날개막을 가로지르는 S자 물결 세 줄: 사인 곡선을 따라 흐르고 마루마다 흰 거품, 줄 아래엔 짙은 그림자
+      for (const [r0, c0, c1] of [[15, 4, 14], [20, 3, 11]]) for (let c = c0; c <= c1; c++) {
+        const rr = r0 + Math.round(Math.sin(c * 0.8) * 1.4), crest = Math.sin(c * 0.8) > 0.8; // 두 줄이 같은 위상으로 나란히 흘러 격자처럼 보이지 않게
+        cd(cc(sd, c), rr + 1, '#1c5a96'); cd(cc(sd, c), rr, crest ? '#ffffff' : (c % 2 ? '#7ad8ff' : '#46cdff'));
+      }
+      // 날개 끝에서 떨어지는 물방울: 둥근 머리 + 꼬리, 아래로 갈수록 흐려짐
+      for (const [c, r] of [[3, 24], [7, 26], [11, 24]]) { cd(cc(sd, c), r, '#bfeaff'); cd(cc(sd, c), r + 1, '#7ad8ff'); cd(cc(sd, c), r + 2, '#46cdff'); cd(cc(sd, c), r + 4, '#2a8ad0'); }
+      // 몸 주위에 떠 있는 물방울(밝은 점 + 옅은 둘레)
+      for (const [c, r] of [[2, 14], [1, 19], [9, 6], [14, 27]]) { cd(cc(sd, c), r, '#ffffff'); cd(cc(sd, c) - 1, r, '#7ad8ff'); cd(cc(sd, c) + 1, r, '#7ad8ff'); cd(cc(sd, c), r + 1, '#7ad8ff'); }
+      cd(cc(sd, 18), 3, '#bfeaff'); cd(cc(sd, 19), 4, '#7ad8ff'); // 뿔에 맺힌 물기
+    });
+  } else if (el === 'thunder') {
+    both(sd => {
+      bolt(sd, [[18, 1], [15, 3], [16, 5], [12, 7], [13, 9], [9, 11], [10, 13], [5, 15]], '#8a7a10', '#f0f546', '#ffffff'); // 뿔끝에서 날개로 흐르는 전기 + 잔광
+      bolt(sd, [[13, 9], [16, 11], [15, 13]], '#8a7a10', '#f0f546', '#ffffff'); // 곁가지
+      bolt(sd, [[10, 13], [7, 14], [8, 17]], '#8a7a10', '#f0f546', '#ffffff');
+      for (const [c, r] of [[7, 8], [8, 8], [9, 9], [10, 10], [5, 11], [6, 11]]) cd(cc(sd, c), r, '#f0f546'); // 날개 윗선을 타는 전기
+      for (const [dx, dy] of [[0, -1], [1, 0], [-1, 0], [0, 1]]) cd(cc(sd, 18) + dx, 0 + dy, '#fff8b0'); cd(cc(sd, 18), 0, '#ffffff'); // 뿔끝 스파크(십자)
+      for (const [c, r] of [[3, 17], [2, 20], [4, 24]]) { cd(cc(sd, c), r, '#fff8b0'); cd(cc(sd, c) + 1, r, '#f0f546'); } // 튀는 불꽃
+    });
+  } else if (el === 'ice') {
+    both(sd => {
+      for (const [c, r, col] of [[3, 11, '#e8fbff'], [4, 10, '#e8fbff'], [5, 9, '#a8e4ff'], [6, 8, '#ffffff'], [7, 8, '#a8e4ff'], [8, 9, '#e8fbff'], [9, 10, '#a8e4ff'], [10, 11, '#e8fbff'], [11, 12, '#a8e4ff'], [12, 13, '#ffffff']]) cd(cc(sd, c), r, col); // 날개 윗가장자리 서리
+      for (const [c, r] of [[6, 12], [7, 13], [8, 14], [9, 13], [10, 12], [6, 16], [7, 17], [5, 18], [9, 16]]) cd(cc(sd, c), r, '#7ab8dc'); // 날개막 성에 금(가지 모양)
+      for (const [c, r] of [[5, 15], [8, 15], [4, 13], [11, 17], [3, 15]]) cd(cc(sd, c), r, '#e8fbff'); // 성에 알갱이
+      for (const [c, r, h] of [[2, 20, 3], [5, 22, 4], [8, 23, 3], [11, 22, 2]]) for (let k = 0; k < h; k++) { cd(cc(sd, c), r + k, k === h - 1 ? '#ffffff' : (k ? '#a8e4ff' : '#e8fbff')); if (k < h - 1) cd(cc(sd, c) + (sd === 1 ? 1 : -1), r + k, '#4a88b0'); } // 고드름(옆 그늘 한 줄)
+      cd(cc(sd, 17), 4, '#a8e4ff'); cd(cc(sd, 17), 5, '#e8fbff'); cd(cc(sd, 16), 6, '#a8e4ff'); // 뿔 옆 성에
+    });
+  }
+}
+
+// ── 알바트리온 속성 전환 연출: 이전 속성 색 고리가 바깥으로 흩어지고, 새 속성 색 고리가 몸을 감싸며 조여든다 + 큰 전환 문구 ──
+const ELEMENT_LABEL = { fire: '불꽃', water: '물', thunder: '번개', ice: '얼음', dragon: '용' };
+const ELEMENT_COLOR = { fire: '#ff8c23', water: '#46cdff', thunder: '#f0f546', ice: '#a8e4ff', dragon: '#e8407a' };
+function alatShiftBack(cx, cy, from, to) { // 몸 뒤(뒤 층): 퍼지는 옛 속성 고리 + 새 속성 후광
+  const a = ELEMENT_COLOR[from] || '#c08aff', b = ELEMENT_COLOR[to] || '#c08aff';
+  haze(cx, cy, 96, b, 0.16); haze(cx, cy, 64, b, 0.2);
+  for (const [r, w] of [[150, 5], [118, 4]]) for (let i = 0; i < 40; i++) { const ang = (i / 40) * Math.PI * 2; if (i % 3 === 0) continue; p.rect(Math.round(cx + Math.cos(ang) * r * 1.35), Math.round(cy + Math.sin(ang) * r * 0.62), w, w, a); } // 옛 속성: 바깥으로 흩어지는 점선 고리
+  for (let i = 0; i < 28; i++) { const ang = (i / 28) * Math.PI * 2; p.line(cx + Math.cos(ang) * 72, cy + Math.sin(ang) * 40, cx + Math.cos(ang) * 112, cy + Math.sin(ang) * 62, 3, i % 2 ? b : a + 'aa'); } // 몸에서 터지는 방사선
+}
+function alatShiftFront(cx, cy, from, to) { // 몸 앞(앞 층): 몸을 조여드는 새 속성 고리 + 문구
+  const b = ELEMENT_COLOR[to] || '#c08aff', a = ELEMENT_COLOR[from] || '#c08aff';
+  for (const [r, w] of [[84, 6], [56, 4]]) for (let i = 0; i < 36; i++) { const ang = (i / 36) * Math.PI * 2; if (i % 4 === 3) continue; p.rect(Math.round(cx + Math.cos(ang) * r * 1.3), Math.round(cy + Math.sin(ang) * r * 0.62), w, w, b); } // 새 속성: 몸을 감싸는 도트 고리
+  // 문구 띠: 왼쪽 빈 곳에 "속성 전환!  불꽃 ▶ 물"
+  const bx = 60, by = 166, bw = 230, bh = 64;
+  p.roundRect(bx, by, bw, bh, 10, '#100c09e6'); p.strokeRoundRect(bx, by, bw, bh, 10, 3, b);
+  text('속성 전환!', bx + bw / 2, by + 20, 24, b);
+  text(`${ELEMENT_LABEL[from] || '?'}에서 ${ELEMENT_LABEL[to] || '?'}(으)로`, bx + bw / 2, by + 46, 20, '#ffffff');
+}
+
 // 몬스터: sprite(픽셀 아트). maxH 안에 맞춘다. gray: 결과 화면용 흑백.
 // (그림 파일 몬스터는 PNG 해석기가 필요해 아직 지원하지 않는다 — 넣을 때 그림판.js에 추가)
 // pose: 기술 키(sprite.poses) — 없으면 평상시 얼굴(분노면 sprite.rageRows).
@@ -309,6 +382,7 @@ function drawMonster(monster, cx, cy, maxH, { rage = false, gray = false, pose =
     drawFaint((x, y, w, h, c) => p.rect(x, y, w, h, c), cx + ox * cell, cy + oy * cell, sp.dormantBodyR ?? rows[0].length / 2, cell, ++energyTick, sp.dormantGroundDy);
   }
   drawPixels({ ...sp, rows }, cx, cy, cell, { dim: gray, colors: tint ? { ...colors, ...tint } : colors });
+  if (element && !gray && !isDormant && monster.alat) alatBodyFx(element, cx, cy, cell);
 }
 // ── 습격 연출 ───────────────────────────────────────────────────────────────
 // 몬스터 칸(그림 틀 안쪽) 범위: 이 안에서만 그린다(HP 바·카드를 덮지 않게).
@@ -603,7 +677,7 @@ function stenchBehind(role, cx, cy, k) {
 // 아이콘 앞: 작은 구름이 아이콘 아래쪽에 살짝 걸치고, 위로 아주 작은 구름이 떠오름(아이콘은 비쳐 보이게 옅게)
 function stenchFront(cx, cy, k) {
   softCloud(cx - 4, cy + 30, 1.1, STENCH_C.mid, 0.16 * k);
-  softCloud(cx + 34, cy0, 0.55, STENCH_C.light, 0.22 * k);
+  softCloud(cx + 34, cy - 30, 0.55, STENCH_C.light, 0.22 * k);
   softCloud(cx - 30, cy - 40, 0.45, STENCH_C.light, 0.2 * k);
 }
 // 악취: 갈색 냄새 구름 배지 + 냄새 줄 + 남은 턴
@@ -696,10 +770,10 @@ function chillBadge(cx, cy, stacks) {
 }
 // 빙결: 역할 아이콘을 덮는 반투명 얼음 덩어리 + 흰 반사선
 function iceCover(cx, cy) {
-  p.roundRect(cx - 42, cy8, 84, 72, 8, '#bfeaff', 0.5); // 아래 이름 글자와 안 겹치게 높이 72
-  p.strokeRoundRect(cx - 42, cy8, 84, 72, 8, 2.5, '#e8fbff');
-  p.line(cx - 30, cy - 18, cx - 16, cy2, 4, '#ffffff');
-  p.line(cx - 30, cy - 4, cx - 4, cy0, 3, '#ffffff');
+  p.roundRect(cx - 42, cy - 38, 84, 72, 8, '#bfeaff', 0.5); // 아래 이름 글자와 안 겹치게 높이 72
+  p.strokeRoundRect(cx - 42, cy - 38, 84, 72, 8, 2.5, '#e8fbff');
+  p.line(cx - 30, cy - 18, cx - 16, cy - 32, 4, '#ffffff');
+  p.line(cx - 30, cy - 4, cx - 4, cy - 30, 3, '#ffffff');
   p.line(cx + 18, cy + 30, cx + 32, cy + 16, 3, '#ffffff');
 }
 // 환각(최면) 상태: 카드 아이콘 위에 겹쳐 그리는 청록 소용돌이(점액 얼룩처럼 아이콘에 묻은 느낌).
@@ -1669,7 +1743,7 @@ function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
         for (let i = 0; i < 8; i++) { const t0 = i / 8, t1 = (i + 1) / 8; p.line(cx + sd * (84 + len * t0), cy + y0 + (y1 - y0) * t0, cx + sd * (84 + len * t1), cy + y0 + (y1 - y0) * t1, Math.max(2, w * (1 - t0 * 0.7)), '#ffd166'); }
       }
       for (const [dx, dy, r] of [[120, 68, 11], [160, 60, 9], [205, 72, 10], [250, 62, 8]]) { p.circle(cx + sd * dx, cy + dy, r, '#8a7a62'); p.circle(cx + sd * dx - r * 0.3, cy + dy - r * 0.3, r * 0.35, '#b8a888'); }
-      star(cx + sd * 110, cy - 10, 9, '#ffd166'); star(cx + sd * 170, cy0, 6, '#fff1c2');
+      star(cx + sd * 110, cy - 10, 9, '#ffd166'); star(cx + sd * 170, cy - 30, 6, '#fff1c2');
     }
   }
 }
@@ -1866,7 +1940,7 @@ function hitFx(move, cx, cy, color, spore = color, accent = spore) {
   } else if (move === 'hypno') {
     // 몬스터 옆 최면 물결을 줄인 것 — 아이콘 양옆으로 퍼지는 도트 호 세 겹 + 반짝임
     hypnoWaves(cx, cy, 0.27, color, 2);
-    sparkle(cx - 26, cy0, 3, '#e8fffb');
+    sparkle(cx - 26, cy - 30, 3, '#e8fffb');
     sparkle(cx + 26, cy + 30, 3, '#e8fffb');
   } else if (move === 'burst') {
     // 아이콘 네 귀퉁이로 터진 포자 구름(가운데 아이콘은 보이게)
@@ -1919,9 +1993,9 @@ function hitFx(move, cx, cy, color, spore = color, accent = spore) {
     // 빙하 낙하: 아이콘 아래에서 솟구친 날카로운 얼음 결정 무리 + 튀는 조각 + 눈송이
     for (const [dx, len, w, ang] of [[-30, 34, 8, -2.05], [-12, 44, 9, -1.75], [12, 40, 9, -1.4], [30, 32, 7, -1.1]]) iceShard(cx + dx, cy + 22, len, w, ang, color); // 아이콘 아래쪽만 덮게
     for (const [dx, dy] of [[-40, -20], [40, -26], [-34, 34], [38, 30]]) iceShard(cx + dx, cy + dy, 14, 4, 0.8, color);
-    flake(cx + 30, cy4, 7);
+    flake(cx + 30, cy - 34, 7);
   } else if (move === 'smash') {
-    p.poly([cx, cy4, cx + 9, cy - 9, cx + 34, cy, cx + 9, cy + 9, cx, cy + 34, cx - 9, cy + 9, cx - 34, cy, cx - 9, cy - 9], '#ffd166'); // 충격 별(원래대로)
+    p.poly([cx, cy - 34, cx + 9, cy - 9, cx + 34, cy, cx + 9, cy + 9, cx, cy + 34, cx - 9, cy + 9, cx - 34, cy, cx - 9, cy - 9], '#ffd166'); // 충격 별(원래대로)
   }
 }
 
@@ -1935,7 +2009,7 @@ function monsterBox(y, h) {
   p.strokeRoundRect(20, y, W - 40, h, 14, 1.5, C.frame);
 }
 // 알바트리온 전용 배경: 원작 알바트리온 전장 '깊숙한 골짜기' — 켜켜이 쌓인 주황빛 암벽이 좁은 틈으로 갈라져 하늘의 빛줄기가 쏟아지고,
-// 왼쪽 벽에는 폭포와 물안개, 바닥은 모래빛 땅에 큼직한 바위 잔해. 칸 안쪽에만 그린다(몬스터는 이 위에 그린다).
+// 왼쪽 벽에는 폭포와 물안개, 바닥은 모래빛 땅. 칸 안쪽에만 그린다(몬스터는 이 위에 그린다).
 function alatCanyon(y, h) {
   const x0 = 24, x1 = W - 24, top = y + 4, bot = y + h - 4, gy = bot - 44, slitX = 478;
   const ROCK = ['#120a08', '#26150f', '#3f2417', '#5e3a22', '#8a5832', '#b97c46', '#dfa468'];
@@ -1965,13 +2039,8 @@ function alatCanyon(y, h) {
   for (const [mx, my, mr, a] of [[176, gy - 4, 30, 0.14], [168, gy - 18, 22, 0.1], [186, gy - 30, 16, 0.07]]) p.roundRect(mx - mr, my - mr, mr * 2, mr * 2, mr, '#dfeaf6', a);
   // 틈에서 내리는 빛 기둥과 바닥의 빛 웅덩이
   dotGlow(slitX + 4, gy - 40, 150, 120, '#fff2cc', 0.5, top); dotGlow(slitX + 4, gy + 6, 210, 34, '#ffe9b0', 0.55, top);
-  // 바닥의 큼직한 바위 잔해
+  // (바닥 바위 잔해는 어색해서 뺐다)
   const sd = seeded(31);
-  for (const [bx, bw, bh] of [[300, 46, 24], [372, 34, 18], [560, 54, 28], [630, 38, 20], [704, 62, 32], [250, 28, 14], [820, 40, 22]]) {
-    const by = gy + 4 + sd() * 14;
-    p.poly([bx - bw / 2, by + bh * 0.3, bx - bw * 0.3, by - bh * 0.7, bx + bw * 0.1, by - bh, bx + bw / 2, by - bh * 0.3, bx + bw * 0.4, by + bh * 0.3], '#5a3822');
-    p.poly([bx - bw * 0.3, by - bh * 0.7, bx + bw * 0.1, by - bh, bx + bw * 0.5, by - bh * 0.3, bx + bw * 0.1, by - bh * 0.4], '#b97c46'); // 빛받는 윗면
-  }
   for (let i = 0; i < 40; i++) p.rect(x0 + sd() * (x1 - x0), top + sd() * (bot - top), 2, 2, i % 3 ? '#f4d8a0' : '#ffffff'); // 빛 속에 떠다니는 먼지
 }
 
@@ -2677,6 +2746,8 @@ function renderBattle(r) {
     heungTargets = usedFx === 'lightning' ? b.members.filter(mm => last?.hits?.[mm.userId]).map(mm => 121.5 + activeRoles.indexOf(mm.role) * 219) : []; // 낙뢰가 내려칠 카드 위치
     const preFx = b.alat && ALAT_FX.includes(usedFx) && usedFx !== 'alflame' && usedFx !== 'alice' && usedFx !== 'albolt' ? Buffer.from(p.buf) : null; // 연출(뒤 층)을 그리기 전 화면 — 연출이 어디에 칠해졌는지 알아내려고
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'back', sporeColor, accentColor);
+    const shiftNow = b.alat?.shifted && b.alat.prev && !skyDotNow ? [b.alat.prev, b.alat.element] : null; // 방금 속성이 바뀐 화면(결과·다음 선택)
+    if (shiftNow) alatShiftBack(W / 2, monsterY, shiftNow[0], shiftNow[1]);
     // 투명화(유령): 다음 턴 동안 몸을 흐리게(회색)
     let alatMouth = null, alatBody = null;
     if (!skyDotNow) {
@@ -2711,6 +2782,7 @@ function renderBattle(r) {
     }
     if (b.rage && !m.ui?.noRageMark && !hideBody) rageFx(m, W / 2, monsterY, 112, pose, 'mark'); // ui.noRageMark 몬스터(???)는 붉은 핏줄 분노 마크를 그리지 않는다
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'front', sporeColor, accentColor);
+    if (shiftNow) alatShiftFront(W / 2, monsterY, shiftNow[0], shiftNow[1]);
     if (alatBody) { // 브레스가 입에서 몸 앞으로 이어지게: 입보다 위(머리·날개)는 몸 그대로, 입 아래는 몸이 브레스에 서서히 묻히고(위에서 아래로 부드럽게), 입에는 브레스 빛이 터진다
       const cutY = Math.round((alatMouth.y + 2) * RENDER_SCALE), wpx = p.w, { bg, mon } = alatBody, fe = 26 * RENDER_SCALE;
       for (let yy = 0; yy < p.h; yy++) for (let xx = 0; xx < wpx; xx++) {
