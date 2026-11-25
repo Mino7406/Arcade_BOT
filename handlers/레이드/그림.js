@@ -1074,6 +1074,33 @@ const BREATH_TEX = {
     if (I > -0.12 && t > 0.05) { const sm = fbm(x / 24, y / 24 + t * 2, k + 7); return bay(i, j) < 0.3 + sm * 0.6 ? B.edge[sm > 0.6 ? 2 : sm > 0.48 ? 1 : 0] : null; }
     return null;
   },
+  // 물: 입에서 쏟아지는 물살 — 가운데는 흰 물줄기, 둘레로 나선 띠가 감겨 흐르고 가장자리는 거품과 튀는 물방울
+  water(t, u, au, x, y, i, j, k, R) {
+    const en = fbm(t * 9, u * 2 + 5, k), lim = 0.9 + (en - 0.5) * 0.4;
+    if (au > lim + 0.25) return au < lim + 0.55 && t > 0.06 && hash2(i, j, k) < 0.1 * (1 - (au - lim - 0.25) / 0.3) ? (hash2(i, j, k + 1) < 0.5 ? '#ffffff' : R[4]) : null;
+    if (au > lim) return bay(i, j) < 0.6 + en * 0.4 ? (en > 0.48 ? '#ffffff' : R[5]) : null;
+    const ang = Math.asin(Math.max(-1, Math.min(1, u / lim))), helix = Math.sin(t * 46 - ang * 2.6 + k), core = Math.max(0, 1 - au / (lim * 0.34));
+    return ramp(R, 0.34 + (1 - au / lim) * 0.3 + helix * 0.2 + core * 0.35 + (fbm(t * 7, u * 3, k + 2) - 0.5) * 0.18, i, j);
+  },
+  // 낙뢰: 입에서 터지는 전기 — 노란 안개 속에 갈라지는 번개 핏줄(능선 잡음의 밝은 선)과 하얀 심, 가장자리는 튀는 스파크
+  thunder(t, u, au, x, y, i, j, k, R) {
+    if (au > 1.12) return null;
+    const ridge = 1 - Math.abs(fbm(t * 6 + u * 1.2, u * 3.4, k) - 0.5) * 7, vein = ridge > 0.62 ? ridge : 0;
+    const fog = (1 - Math.pow(Math.min(1, au), 1.8)) * 0.55 + (fbm(t * 8, u * 4, k + 3) - 0.5) * 0.3 - t * 0.1;
+    if (au < 0.1 + 0.03 * Math.sin(t * 40)) return '#ffffff';
+    if (vein) return vein > 0.82 ? '#ffffff' : R[5];
+    if (fog > 0.2) return ramp(R, 0.18 + fog, i, j);
+    return fog > 0.04 && bay(i, j) < fog * 3 ? R[1] : null;
+  },
+  // 용: 입에서 뿜는 어둠의 불 — 흰 심, 자홍 몸, 검붉은 바깥 연기, 그 위를 가르는 붉은 균열
+  dragon(t, u, au, x, y, i, j, k, R, B) {
+    const en = fbm(t * 7, u * 2, k), lim = 1 + (en - 0.5) * 0.35;
+    if (au > lim) return au < lim + 0.3 && t > 0.05 && bay(i, j) < 0.55 * (1 - (au - lim) / 0.3) ? B.edge[hash2(i, j, k) < 0.5 ? 1 : 2] : null;
+    const body = 1 - Math.pow(au / lim, 1.6), crack = Math.abs(fbm(t * 5 + u, u * 3, k + 6) - 0.5) < 0.03;
+    if (au < 0.08) return '#ffffff';
+    if (crack) return '#14000a';
+    return ramp(R, 0.16 + body * 0.78 + (fbm(t * 9, u * 5, k + 1) - 0.5) * 0.22, i, j);
+  },
 };
 // 뒤 배경을 가로지르는 브레스(몬스터 칸 층): 화면 누름 → 도트 빛 → 원뿔 줄기(흐르는 결·방사 줄무늬·연기 가장자리) → 집중선
 function breathField(el, ox, oy, ex, ey, spread, k0, rnd, tMax = 9) {
@@ -1192,81 +1219,14 @@ function alatOverlay(fx, mx, my, targets, layer) {
     // 소용돌이 해류: 입에서 터진 물이 나선으로 회전하는 터널이 되어 화면 전체를 감싸며 다가온다.
     // 가운데(몬스터)는 소용돌이의 눈, 바깥으로 갈수록 물결 고리(파도 마루)의 간격이 넓어져 관객 쪽으로 밀려오는 원근이 생긴다
     const cy = oy + 6;
-    if (field) {
-      p.roundRect(0, 0, W, H, 0, B.dark, 0.5);
-      buf.paint(0, 112, W, H, (x, y, i, j) => {
-        const dx = x - mx, dy = (y - cy) / 0.72, r = Math.hypot(dx, dy);
-        if (r < 80) return null; // 소용돌이 눈: 몬스터가 보이게 비워 둔다
-        if (r < 92) return fbm(x / 6, y / 6, k0) > 0.4 ? '#ffffff' : R[5]; // 소용돌이 눈의 거품 테
-        const th = Math.atan2(dy, dx), lr = Math.log(r / 80) / Math.log(1.55), tw = th + lr * 0.75;
-        const fr = (((lr - 0.12 * (k0 % 7)) % 1) + 1) % 1, cn = fbm(Math.cos(th) * 3 + 7, Math.sin(th) * 3 + lr * 2, k0 + 2);
-        if (fr < 0.12 + (cn - 0.5) * 0.14) return fbm(x / 7, y / 7, k0 + 3) > 0.35 ? '#ffffff' : R[5]; // 다가오는 파도 마루
-        const st = fbm(Math.cos(tw) * 3 + lr * 0.4, Math.sin(tw) * 3 + lr * 1.8, k0), swirl = Math.sin(tw * 6 - lr * 2) * 0.5 + 0.5;
-        return ramp(R, 0.16 + (1 - fr) * 0.34 + swirl * 0.22 + (st - 0.5) * 0.5, i, j);
-      });
-      buf.flush(null);
-      speedLines(mx, cy, 60, 100, 620, B.ray, rnd, 0.72, 110, H);
-      return;
-    }
+    if (field) { breathField('water', mx, oy, mx, H, 600, k0, rnd); return; }
     for (const [tx, ty] of targets) { cardBorderFx('water', tx, k0, rnd); droplets(tx, ty + 30, 12, 60, 54, R, rnd); }
     scatterMotes(B.mote, B.tail, rnd, 46, (x, y) => { const dx = x - mx, dy = y - cy, d = Math.hypot(dx, dy) || 1; return [dx / d, dy / d]; });
   } else if (el === 'thunder') {
     // 천뢰 낙하: 먹구름이 소용돌이치며 갈라지고, 화면을 세로로 가르는 빛기둥이 맞은 사람 앞 바닥에 꽂힌다.
     // 꽂힌 자리엔 빛의 반구가 솟고, 두꺼운 충격파 고리가 원근으로 커지며 파티 쪽으로 밀려온다
     const gx = ts[0][0], gy = floorY - 2, top = 112;
-    if (field) {
-      p.roundRect(0, 0, W, H, 0, B.dark, 0.62);
-      for (let q = 0; q < 50; q++) { const x = rnd() * W, y = 200 + rnd() * 430, len = 10 + rnd() * 16; for (let s = 0; s < len; s += AG) p.rect(snap(x - s * 0.35), snap(y + s), AG, AG, '#2a3450'); } // 옅은 비
-      const storm = ['#04050a', '#0c1022', '#181e36', '#2a3250', '#4a4e60', '#a8984e', '#f0e488', '#ffffff'];
-      buf.paint(0, top, W, 250, (x, y, i, j) => { // 먹구름: 기둥 위에서 소용돌이치고 밑면이 달아오른다
-        const dx = x - gx, dy = (y - top) * 2.2, r = Math.hypot(dx, dy), sw = Math.atan2(dy, dx) * 2 + r / 60;
-        const dens = fbm(Math.cos(sw) * 2 + x / 140, Math.sin(sw) * 2 + y / 40, k0) * 1.35 - (y - top) / 120 + (fbm(x / 20, y / 14, k0 + 3) - 0.5) * 0.3;
-        if (dens < 0.2) return null;
-        const lit = Math.max(0, 1 - r / 260) * (0.4 + (y - top) / 160);
-        return ramp(storm, Math.min(1, dens * 0.7 + lit * 0.9), i, j);
-      });
-      buf.flush(null);
-      dotGlow(gx, 230, 190, 240, B.glow[0], 0.32, top); dotGlow(gx, gy, 320, 90, B.glow[1], 0.4, top);
-      buf.paint(gx - 120, top, gx + 120, gy + 4, (x, y, i, j) => { // 빛기둥: 흰 심 + 아래로 흐르는 결 + 가장자리는 지직거리며 흩어짐
-        const t = (y - top) / (gy - top), hw = 40 + 22 * t, u = (x - gx + Math.sin(y / 23 + k0) * 6) / hw, au = Math.abs(u);
-        if (au > 1.25) return null;
-        if (au < 0.3 + 0.06 * Math.sin(y / 9)) return au < 0.18 || fbm(x / 6, y / 10, k0 + 9) > 0.45 ? '#ffffff' : R[5];
-        const st = fbm(u * 7 + 3, y / 70, k0 + 5), flick = Math.sin(y / 5 + k0) > 0.8 ? 0.12 : 0;
-        const v = (1 - au) * 0.95 + (st - 0.5) * 0.5 + flick;
-        if (au > 0.85 && bay(i, j) > (1.25 - au) * 2.2) return null;
-        return v > 0.12 ? ramp(R, Math.min(1, v + 0.1), i, j) : null;
-      });
-      buf.flush(null);
-      buf.paint(gx - 170, gy - 110, gx + 170, gy + 6, (x, y, i, j) => { // 꽂힌 자리에서 솟는 빛의 반구
-        const d = Math.hypot((x - gx) / 160, (y - gy) / 100); if (d > 1 || y > gy + 4) return null;
-        if (d > 0.82 && bay(i, j) > (1 - d) * 5) return null;
-        return ramp(R, 1.05 - d * 0.75 + (fbm(x / 12, y / 12, k0 + 6) - 0.5) * 0.3, i, j);
-      });
-      buf.flush(null);
-      for (const [rx, ry, w, v] of [[240, 42, 26, 0.95], [440, 80, 40, 0.7]]) { // 두꺼운 충격파 고리(앞쪽이 밝고 뒤로 흐려짐)
-        buf.paint(gx - rx - w, gy - ry - w, gx + rx + w, gy + ry + w, (x, y, i, j) => {
-          const d = Math.hypot((x - gx) / rx, (y - gy) / ry), b = (d - 1) * rx; if (Math.abs(b) > w / 2 || y < top + 4) return null;
-          const f = 1 - Math.abs(b) / (w / 2), front = y > gy ? 1 : 0.22;
-          return bay(i, j) < f * 1.7 * front ? ramp(R, (v * f + (fbm(x / 9, y / 9, k0 + 2) - 0.5) * 0.3) * front + 0.1, i, j) : null;
-        });
-      }
-      buf.flush(null);
-      const main = zigzag(gx + (rnd() - 0.5) * 30, top, gx, gy, rnd, 11, 36), paths = [[main, 1]];
-      for (let b = 0; b < 4; b++) { const s = main[2 + b * 2], sd = b % 2 ? 1 : -1; paths.push([zigzag(s[0], s[1], s[0] + sd * (40 + rnd() * 50), s[1] + 20 + rnd() * 40, rnd, 5, 16), 0]); } // 기둥에서 뻗는 곁가지
-      pxStrike(paths, R, ALAT_LINE.thunder, 6);
-      buf.paint(gx - 300, gy - 60, gx + 300, gy + 40, (x, y, i, j) => { // 꽂힌 자리: 흰 심이 달아오른 납작한 타원 + 가로로 길게 뻗는 섬광 + 짧은 세로 섬광(외곽선 없이 빛만)
-        const dx = Math.abs(x - gx), dy = Math.abs(y - gy), core = Math.hypot(dx / 84, dy / 24);
-        if (core < 1) return core < 0.55 ? '#ffffff' : (bay(i, j) < (1 - core) * 2.4 ? '#ffffff' : R[5]);
-        const hf = 1 - dx / 290; if (hf > 0 && dy < 2 + 6 * hf) return bay(i, j) < hf * 1.6 ? (dy < 4 ? '#ffffff' : R[5]) : null;
-        const vf = 1 - dy / 56; if (vf > 0 && dx < 2 + 5 * vf && y < gy) return bay(i, j) < vf * 1.6 ? '#ffffff' : null;
-        return null;
-      });
-      buf.flush(null);
-      for (let q = 0; q < 16; q++) { const a = -Math.PI * (0.05 + rnd() * 0.9), d = 50 + rnd() * 90, x = gx + Math.cos(a) * d * 1.6, y = gy + Math.sin(a) * d * 0.7; p.rect(snap(x), snap(y), 4, 4, rnd() < 0.5 ? '#ffffff' : R[5]); } // 튀는 불꽃
-      for (let q = 0; q < 22; q++) { const a = -Math.PI * (0.08 + rnd() * 0.84), d = 70 + rnd() * 170, x = gx + Math.cos(a) * d * 1.5, y = gy + Math.sin(a) * d, sz = 8 + Math.floor(rnd() * 3) * 4; if (y < top) continue; p.rect(snap(x), snap(y), sz, sz, '#16140c'); p.rect(snap(x), snap(y), sz / 2, sz / 2, '#f0c820'); } // 튀어 오르는 바닥 파편
-      speedLines(gx, gy, 46, 140, 640, B.ray, rnd, 0.5, top, H);
-      return;
-    }
+    if (field) { const tg = ts[0]; breathField('thunder', mx, oy, tg[0], tg[1], 230, k0, rnd, 1.08); return; }
     for (const [tx] of targets) cardBorderFx('thunder', tx, k0, rnd);
     p.roundRect(0, 0, W, H, 0, '#fffbe0', 0.12);
     scatterMotes(B.mote, B.tail, rnd, 30, (x, y) => { const dx = x - gx, dy = y - gy, d = Math.hypot(dx, dy) || 1; return [dx / d, dy / d]; });
@@ -1317,23 +1277,7 @@ function alatOverlay(fx, mx, my, targets, layer) {
   } else if (el === 'dragon') {
     // 정면 광선: 입에서 쏜 굵은 광선이 화면(파티)을 정면으로 꿰뚫는다 — 흰 심, 붉고 검은 동심원, 방사 줄무늬가 화면을 채우고 테두리엔 붉은 번개
     const cx = mx, cy = oy + 8;
-    if (field) {
-      p.roundRect(0, 0, W, H, 0, B.dark, 0.62);
-      const edgeAt = (th) => 330 * (0.85 + 0.3 * fbm(Math.cos(th) * 2 + 3, Math.sin(th) * 2 + 3, k0));
-      buf.paint(0, 112, W, H, (x, y, i, j) => {
-        const dx = x - cx, dy = (y - cy) / 0.8, r = Math.hypot(dx, dy), th = Math.atan2(dy, dx), edge = edgeAt(th);
-        if (r > edge) return r < edge + 150 && bay(i, j) < 0.5 * (1 - (r - edge) / 150) * (0.4 + 0.6 * (Math.sin(th * 14 + fbm(Math.cos(th) * 5, Math.sin(th) * 5, k0 + 4) * 4) * 0.5 + 0.5)) ? B.edge[hash2(i, j, k0) < 0.5 ? 1 : 2] : null;
-        const q = r / edge; if (q < 0.15) return '#ffffff';
-        const streak = Math.sin(th * 22 + fbm(Math.cos(th) * 4, q * 3, k0 + 2) * 5) * 0.5 + 0.5, ring = Math.sin(q * 26 - k0) > 0.86 ? 0.16 : 0;
-        return ramp(R, 1 - q * 0.88 + (streak - 0.5) * 0.4 * q + ring, i, j);
-      });
-      buf.flush(null);
-      speedLines(cx, cy, 70, 120, 640, B.ray, rnd, 0.8, 110, H);
-      const arcs = [];
-      for (let q = 0; q < 8; q++) { const a0 = rnd() * Math.PI * 2, pts = []; for (let s = 0; s <= 6; s++) { const a = a0 + s * 0.1, rr = edgeAt(a) * (0.95 + rnd() * 0.12); const y = cy + Math.sin(a) * rr * 0.8; if (y < 116) break; pts.push([cx + Math.cos(a) * rr, y]); } if (pts.length > 2) arcs.push([pts, q < 3 ? 1 : 0]); } // 광선 테두리를 기는 붉은 번개
-      pxStrike(arcs, RED_BOLT, '#14000a', 4);
-      return;
-    }
+    if (field) { breathField('dragon', mx, oy, mx, H, 600, k0, rnd); return; }
     for (const [tx] of targets) cardBorderFx('dragon', tx, k0, rnd);
     scatterMotes(B.mote, B.tail, rnd, 44, (x, y) => { const dx = x - cx, dy = y - cy, d = Math.hypot(dx, dy) || 1; return [dx / d, dy / d]; });
   }
