@@ -87,7 +87,7 @@ const ACTIONS = {
 // 봇이 켜질 때 폴더의 .json을 이름순으로 전부 읽어 출현 후보로 쓰고, 출현할 때 무작위로 고른다.
 // 새 몬스터는 슬라임.json을 복사해 고치면 된다 — 파일 안 "_메모"에 각 칸 설명이 있다("_"로 시작하는 키는 무시).
 // moves의 키는 몬스터마다 자유롭게 짓는다. 단 attack(기본 공격 — 재생을 못 쓸 때 대신 쓰는 기술)과
-// smash(필살기 — 7턴 동안 없으면 반드시, 연속 없음, 첫 턴 없음)는 공통 규칙이 쓰므로 꼭 있어야 한다.
+// smash(필살기 — 5턴 동안 없으면 반드시, 연속 없음, 첫 턴 없음)는 공통 규칙이 쓰므로 꼭 있어야 한다.
 // - target: 'single'(한 명) | 'all'(전원) | 'none'(피해 없음, 효과만) | 'self'(자기 회복)
 // - fx: 턴 결과 화면 연출 종류(MOVE_FX). 없으면 기술 키와 같은 이름을 쓴다(슬라임은 키 = 연출).
 // - smash.readyPose: 필살기를 예고하는 동안 보여 줄 자세(sprite.poses 키). 없으면 평상시 모습.
@@ -107,7 +107,7 @@ const EFFECTS = ['slow', 'stun', 'shield', 'poison', 'confuse', 'chill', 'fear',
 //   부하는 불려 나온 다음 턴부터 몬스터 기술 뒤에 한 마리씩 minions.attack(한 명, 도발 중이면 수호자)을 한다.
 //   아군 행동으로 부하를 다 처치하면 penalty(우울 상태): 다음 턴부터 turns턴 동안 몬스터가 받는 피해 × weakRate, 주는 피해 × dealRate(행동은 그대로).
 //   needMinions 기술(부하 합동 필살기)은 부하가 살아 있을 때만 고르고, 살아 있는 부하 한 마리마다 perMinion 피해를 더한다(그 턴 부하는 따로 공격하지 않음).
-//   ultimate: 필살기 2 — 필살기 1(smash)을 못 쓸 때 7턴 보장을 대신 채운다. 필살기끼리는 연속으로 나오지 않는다.
+//   ultimate: 필살기 2 — 필살기 1(smash)을 못 쓸 때 5턴 보장을 대신 채운다. 필살기끼리는 연속으로 나오지 않는다.
 // 오류(error — ??? 데이터 크래시): 맞은 사람(guardBlocks면 방어한 사람 제외)은 effectTurns턴 동안 고른 행동이 무작위 다른 행동으로 바뀐다(치유사 스킬로 해제).
 // 취약(vuln — 취약점 분석, target none이면 살아 있는 전원): effectTurns턴 동안 받는 몬스터 피해 × effectRate(치유사 스킬로 해제).
 // 즉사(doom — kill -9): 다음 턴 아군 행동이 끝난 뒤 effectRate 확률로 HP 0(분노 중 rageRate). 방어한 사람은 안 걸리고(guardBlocks) 치유사 스킬로 해제.
@@ -296,7 +296,7 @@ function rebindAmbush(battle, baseMonster) {
 }
 function calcMaxHp(monster, weight, smallRate) { return Math.max(500, Math.round((monster.baseHp * weight * smallRate) / PARTY_BASE_SIZE / 10) * 10); }
 
-const SMASH_PITY_TURNS = 7; // 이만큼 큰 한 방(smash)이 없었으면 다음엔 반드시 예고 — 짧은 판에서도 필살기를 보게
+const SMASH_PITY_TURNS = 5; // 이만큼 큰 한 방(smash)이 없었으면 다음엔 반드시 예고 — 짧은 판에서도 필살기를 보게
 function pickNextIntent(battle, rng) {
   // 습격: 정해 둔 턴이 되면 예고(위장 중이었던 몬스터가 쓰는 기술), 착지 다음 턴은 쉬는 턴(boss.moves.recharge)
   const am = battle.ambush;
@@ -307,7 +307,7 @@ function pickNextIntent(battle, rng) {
   if (ra && battle.lastTurn?.monsterMoveKey === ra && battle.monster.moves.recharge) return 'recharge';
   battle.sinceSmash = (battle.sinceSmash || 0) + 1;
   // 분노 연계(rage.afterPoison): 분노 중 이번 턴에 독을 걸었으면 다음 행동은 반드시 그 기술(독버섯: 독기 흡수).
-  // 필살기 보장(7턴)보다 먼저 — 필살기는 그다음 턴으로 밀린다.
+  // 필살기 보장(5턴)보다 먼저 — 필살기는 그다음 턴으로 밀린다.
   const combo = battle.rage && battle.monster.rage?.afterPoison;
   if (combo && battle.monster.moves[combo] && Object.values(battle.lastTurn?.effects ?? {}).includes('poison')) return combo;
   // 점화 카운트다운(꼬마 폭탄): 마지막 턴엔 대폭발, 그 전엔 점화를 다시 고르지 않는다(필살기 보장도 쉼)
@@ -866,7 +866,7 @@ function resolveTurn(battle, rng = Math.random) {
       defused = true;
       last.defused = true;
       battle.fuse = null;
-      battle.sinceSmash = 0; // 필살기 7턴 카운트를 새로(기획서)
+      battle.sinceSmash = 0; // 필살기 5턴 카운트를 새로(기획서)
       battle.fuseEnded = true;
       log.push(`😵 불이 꺼졌다! **${battle.monster.name}**이(가) 어지러워 이번 턴 행동하지 못한다`);
     }

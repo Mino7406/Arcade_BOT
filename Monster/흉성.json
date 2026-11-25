@@ -252,8 +252,8 @@
       "telegraph": "하늘 위로 알 수 없는 무언가가 다가온다...!? 방어하세요!",
       "target": "all",
       "damage": [
-        14,
-        18
+        18,
+        23
       ],
       "warn": true,
       "fx": "ambush",
