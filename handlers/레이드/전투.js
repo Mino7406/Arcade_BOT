@@ -7,6 +7,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const alat = require('./알바트리온.js');
 
 const PLAYER_MAX_HP = 100;
 const POTIONS_PER_BATTLE = 2;
@@ -152,6 +153,18 @@ function monsterProblems(m) {
   const problems = [];
   for (const key of ['id', 'name', 'emoji', 'rageName', 'lore']) if (typeof m[key] !== 'string' || !m[key]) problems.push(`${key} 없음`);
   if (!(m.baseHp > 0)) problems.push('baseHp는 0보다 큰 숫자');
+  if (m.partyClasses !== undefined && !Object.keys(ROLE_SETS).includes(m.partyClasses)) problems.push(`partyClasses는 ${Object.keys(ROLE_SETS).join('/')} 중 하나`);
+  if (m.alat !== undefined) { // 알바트리온식 속성 기믹: 속성별 기술표와 에스카톤(smash)
+    if (m.partyClasses !== 'elemental') problems.push('alat는 partyClasses가 elemental일 때만');
+    for (const el of alat.ELEMENTS) {
+      const table = m.alat?.moves?.[el];
+      if (!table || !Object.keys(table).length) { problems.push(`alat.moves.${el} 없음`); continue; }
+      for (const [k, w] of Object.entries(table)) {
+        if (!m.moves?.[k]) problems.push(`alat.moves.${el}의 기술 "${k}"가 moves에 없음`);
+        if (!(Number.isFinite(w) && w >= 0)) problems.push(`alat.moves.${el}.${k} 가중치는 0 이상 숫자`);
+      }
+    }
+  }
   if (m.enabled !== undefined && typeof m.enabled !== 'boolean') problems.push('enabled는 true/false');
   if (m.damageRate !== undefined && !(m.damageRate > 0)) problems.push('damageRate는 0보다 큰 숫자');
   if (m.soloDamageRate !== undefined && !(m.soloDamageRate > 0)) problems.push('soloDamageRate는 0보다 큰 숫자');
@@ -331,6 +344,7 @@ function calcMaxHp(monster, weight, smallRate) { return Math.max(500, Math.round
 
 const SMASH_PITY_TURNS = 5; // 이만큼 큰 한 방(smash)이 없었으면 다음엔 반드시 예고 — 짧은 판에서도 필살기를 보게
 function pickNextIntent(battle, rng) {
+  if (battle.alat) return alat.pickIntent(battle.alat, battle.monster, rng); // 속성 순환·에스카톤 몬스터는 자기 규칙만 쓴다
   // 습격: 정해 둔 턴이 되면 예고(위장 중이었던 몬스터가 쓰는 기술), 착지 다음 턴은 쉬는 턴(boss.moves.recharge)
   const am = battle.ambush;
   if (am && am.phase === 'pending' && battle.turn + 1 >= am.turn) return 'ambush';
@@ -475,6 +489,7 @@ function createBattle(monster, party, rng = Math.random, { minParty = HP_MIN_PAR
     battle.ambush = { bossId: boss.id, turn: minTurn + Math.floor(rng() * (maxTurn - minTurn + 1)), phase: 'pending', rested: false };
     battle.monster = withAmbushMove(monster, boss);
   }
+  if (monster.alat) battle.alat = alat.initState(rng);
   battle.intent = pickNextIntent(battle, rng);
   if (battle.intent === 'smash') battle.intent = 'attack'; // 첫 턴부터 필살기는 없게(시작하자마자 전원 기절 방지)
   assignMarks(battle, rng);
@@ -842,6 +857,7 @@ function resolveTurn(battle, rng = Math.random) {
       log.push(`${role.emoji} **${m.name}** 🍖회복약 → HP +${healed}${cured ? ` · ${cured.emoji}${cured.name} 해독` : ''}${thawed ? ` · ${chill.status.emoji}${chill.status.name} 제거` : ''}`);
     }
 
+    if (battle.alat && (action === 'attack' || action === 'skill')) alat.addGauge(battle.alat, alat.gaugeGain(battle.alat, m.role, action)); // 상성 직업이 억제 게이지를 올린다
     if (battle.hp <= 0 && interceptDisguiseDeath(battle, last, log)) continue; // 위장 몬스터가 먼저 쓰러져도 승리가 아니라 습격
     if (battle.hp <= 0) {
       battle.hp = 0;
@@ -949,7 +965,20 @@ function resolveTurn(battle, rng = Math.random) {
     last.monsterMoveKey = battle.intent; // 그림이 기술별 자세(sprite.poses)를 고를 때 쓴다
     last.monsterFx = moveFx(battle.intent, move); // 그림이 연출(monsterFx·hitFx)을 고를 때 쓴다
     if (move.skyDot) last.cometLanded = true; // 하늘에서 내려와 착지(습격과 같은 폭발·돌덩이 연출)
-    if (move.target === 'self') {
+    if (battle.alat && battle.intent === 'smash') {
+      // 에스카톤 저지먼트: 게이지가 가득이면 고정 피해(방어·프로스트 월 적용), 아니면 살아 있는 전원 즉사
+      const alive = aliveMembers(battle);
+      const res = alat.resolveEscaton(battle.alat, alive.map(t => ({ hp: t.hp, guarding: !!t.guarding })), { maxHp: PLAYER_MAX_HP, frost: battle.frostTurn === battle.turn }, rng);
+      alive.forEach((t, i) => {
+        const dmg = res.damage[i];
+        battle.incoming += dmg;
+        if (t.guarding && res.suppressed) t.blocked += Math.max(0, Math.round(PLAYER_MAX_HP * alat.K.ESCATON_HIT_RATE) - dmg);
+        t.hp = Math.max(0, t.hp - dmg);
+        last.hits[t.userId] = (last.hits[t.userId] || 0) + dmg;
+      });
+      last.escaton = { suppressed: res.suppressed };
+      log.push(`${battle.monster.emoji} **${monsterName}**의 **${move.name}**! ${res.suppressed ? '억제 성공 — 모두 버텨냈다!' : '억제 실패 — 하늘이 모든 것을 삼킨다…'}`);
+    } else if (move.target === 'self') {
       const before = battle.hp;
       const stacks = absorbStacks;
       // 독기 흡수(healPerStack): 예고 뒤 파티가 독을 다 지웠으면 빨아들일 독기가 없어 실패 — 회복 0, 공격력 증가도 없음
@@ -1114,6 +1143,7 @@ function resolveTurn(battle, rng = Math.random) {
     battle.rage = true;
     log.push(`🔥 **${battle.monster.rageName}**(으)로 변했다! 공격이 더 강해진다!`);
   }
+  if (battle.alat) alat.advanceTurn(battle.alat, rng);
   battle.intent = pickNextIntent(battle, rng);
   assignMarks(battle, rng);
   for (const m of battle.members) if (m.cooldown > 0) m.cooldown--;
@@ -1138,6 +1168,7 @@ module.exports = {
   HARD_MONSTERS,
   ALL_MONSTERS,
   loadMonsters,
+  monsterProblems,
   createBattle,
   getMember,
   aliveMembers,

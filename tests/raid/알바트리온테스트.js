@@ -198,3 +198,110 @@ const E = require(path.join(__dirname, '../../handlers/레이드/전투.js'));
     assert(checked > 0 && worst <= 1, `ice 스킬: 받는 피해 ×0.6 (표본 ${checked}, 최대 오차 ${worst})`);
   }
 }
+
+// ── Task 3: 몬스터 데이터와 전투 훅 ──
+{
+  const mon = E.loadMonsters().find(m => m.id === 'alatreon');
+  assert(!!mon, '알바트리온 몬스터 로드(꺼진 몬스터도 loadMonsters에는 있음)');
+  assert(mon && E.monsterProblems(mon).length === 0, 'monsterProblems: 알바트리온 검증 통과');
+  assert(!E.MONSTERS.some(m => m.id === 'alatreon') && !E.HARD_MONSTERS.some(m => m.id === 'alatreon'), 'enabled:false라 출현 후보에는 없음');
+  const clone = () => JSON.parse(JSON.stringify(mon));
+  const bad1 = clone(); bad1.partyClasses = 'default';
+  assert(E.monsterProblems(bad1).some(p => p.includes('alat')), 'monsterProblems: partyClasses가 elemental이 아니면 alat 문제');
+  const bad2 = clone(); bad2.alat.moves.fire = { nothing: 1 };
+  assert(E.monsterProblems(bad2).some(p => p.startsWith('alat')), 'monsterProblems: alat 기술이 moves에 없으면 문제');
+  const bad3 = clone(); bad3.partyClasses = 'zzz';
+  assert(E.monsterProblems(bad3).some(p => p.includes('partyClasses')), 'monsterProblems: 모르는 partyClasses');
+
+  const KEYS = ['fire', 'water', 'thunder', 'ice'];
+  const mk = (keys = KEYS, seed = 1) => E.createBattle(mon, keys.map((role, i) => ({ userId: role, name: role + i, role })), makeRng(seed), { minParty: 4 });
+  const act = (b, map, def = 'guard') => { for (const m of b.members) { m.cooldown = 0; E.choose(b, m.userId, map[m.role] ?? def); } };
+  const calm = (b, el = 'fire') => { b.alat.element = el; b.alat.phaseLeft = 3; b.intent = 'attack'; };
+
+  { // 생성
+    const b = mk();
+    assert(!!b.alat && Object.keys(mon.moves).includes(b.intent), 'createBattle: battle.alat 있고 intent가 moves의 키');
+    assert(!E.createBattle(E.MONSTERS[0], [{ userId: 'a', name: 'a', role: 'sword' }], makeRng(1)).alat, 'createBattle: 일반 몬스터엔 alat 없음');
+  }
+
+  { // 사이클: 에스카톤 턴에 smash, 처리 뒤 새 사이클
+    const b = mk(KEYS, 3); const rng2 = makeRng(9);
+    let guard = 0, sawEscaton = false, escIntent = false, cycleAfter = null;
+    while (guard++ < 40 && !sawEscaton) {
+      const atEsc = b.alat.cycleTurn === b.alat.cycleLen;
+      if (atEsc) { escIntent = b.intent === 'smash'; b.alat.gauge = 100; }
+      act(b, {}, 'attack');
+      const r = E.resolveTurn(b, rng2);
+      if (atEsc) { sawEscaton = !!b.lastTurn.escaton; cycleAfter = b.alat.cycleTurn; }
+      if (r) break;
+    }
+    assert(escIntent, '사이클: 에스카톤 턴의 intent는 smash');
+    assert(sawEscaton && cycleAfter <= 2, `사이클: last.escaton 생성, 새 사이클로 복귀(cycleTurn=${cycleAfter})`);
+  }
+
+  { // 게이지 가득 → 억제 성공
+    const b = mk(); b.alat.cycleTurn = b.alat.cycleLen; b.intent = 'smash'; b.alat.gauge = 100;
+    act(b, {}, 'attack');
+    const r = E.resolveTurn(b, makeRng(5));
+    assert(r === null && b.lastTurn.escaton?.suppressed === true, '에스카톤: 게이지 100이면 억제 성공·계속');
+    assert(b.members.every(m => m.hp === E.PLAYER_MAX_HP - 60), '에스카톤: 방어 안 하면 전원 HP -60');
+  }
+  { // 방어·프로스트 월
+    const b = mk(); b.alat.cycleTurn = b.alat.cycleLen; b.intent = 'smash'; b.alat.gauge = 100;
+    act(b, { ice: 'skill' }, 'guard');
+    E.resolveTurn(b, makeRng(5));
+    assert(b.members.every(m => m.hp === E.PLAYER_MAX_HP - (m.role === 'ice' ? 36 : 11)), '에스카톤: 방어+프로스트 월 중첩(HP -11), 시전자는 방어 안 해 -36');
+  }
+  { // 게이지 0 → 전멸
+    const b = mk(); b.alat.cycleTurn = b.alat.cycleLen; b.intent = 'smash'; b.alat.gauge = 0;
+    act(b, {}, 'guard');
+    const r = E.resolveTurn(b, makeRng(5));
+    assert(r === 'wipe' && b.log.some(l => l.includes('에스카톤')), '에스카톤: 게이지 0이면 wipe, 로그에 에스카톤');
+  }
+  { // 쓰러진 상성 직업
+    const b = mk(); calm(b, 'fire');
+    b.members.find(m => m.role === 'water').hp = 0;
+    act(b, {}, 'attack');
+    E.resolveTurn(b, makeRng(5));
+    assert(b.alat.gauge === 0, '쓰러진 상성 직업은 게이지를 올리지 못함');
+    const c = mk(); c.alat.cycleTurn = c.alat.cycleLen; c.intent = 'smash'; c.alat.gauge = 100;
+    const dead = c.members.find(m => m.role === 'thunder'); dead.hp = 0;
+    act(c, {}, 'attack');
+    E.resolveTurn(c, makeRng(5));
+    assert(dead.hp === 0 && c.members.filter(m => m !== dead).every(m => m.hp === E.PLAYER_MAX_HP - 60), '에스카톤: 살아 있는 사람만 피해');
+  }
+  { // 3인 파티, 속성 담당 없음
+    const b = mk(['fire', 'water', 'thunder'], 4); const rng2 = makeRng(11);
+    let ok = true;
+    for (let i = 0; i < 60; i++) {
+      calm(b, ['fire', 'water', 'thunder', 'ice', 'dragon'][i % 5]);
+      for (const m of b.members) m.hp = Math.max(m.hp, 50);
+      act(b, {}, 'attack');
+      const r = E.resolveTurn(b, rng2);
+      if (!Number.isFinite(b.alat.gauge)) ok = false;
+      if (r) break;
+    }
+    assert(ok, '3인 파티: 담당 없는 속성에서도 게이지가 유한');
+    const c = mk(['fire', 'water', 'thunder'], 4); calm(c, 'ice'); act(c, {}, 'attack'); E.resolveTurn(c, makeRng(1));
+    assert(c.alat.gauge === K.ATTACK_GAIN, '3인 파티: 빙 속성엔 화 직업이 올림');
+    const d = mk(['fire', 'water', 'thunder'], 4); calm(d, 'thunder'); act(d, {}, 'attack'); E.resolveTurn(d, makeRng(1));
+    assert(d.alat.gauge === 0, '3인 파티: 뇌 속성은 담당(빙)이 없어 0');
+  }
+  { // 직렬화
+    const b = mk(); const rng2 = makeRng(21);
+    for (let i = 0; i < 3; i++) { calm(b, 'fire'); act(b, {}, 'attack'); E.resolveTurn(b, rng2); }
+    const restored = JSON.parse(JSON.stringify(b));
+    const before = restored.alat.cycleTurn;
+    let threw = false;
+    try { act(restored, {}, 'attack'); E.resolveTurn(restored, makeRng(22)); } catch (e) { threw = true; console.error(e); }
+    assert(!threw && restored.alat.cycleTurn === before + 1, '직렬화 복원 뒤에도 resolveTurn 진행');
+  }
+  { // 공격·스킬당 게이지
+    const a = mk(); calm(a, 'fire'); act(a, { water: 'attack' }, 'guard'); E.resolveTurn(a, makeRng(2));
+    assert(a.alat.gauge === K.ATTACK_GAIN, '게이지: 상성 직업 공격 +ATTACK_GAIN');
+    const s = mk(); calm(s, 'fire'); act(s, { water: 'skill' }, 'guard'); E.resolveTurn(s, makeRng(2));
+    assert(s.alat.gauge === K.SKILL_GAIN, '게이지: 상성 직업 스킬 +SKILL_GAIN');
+    const n = mk(); calm(n, 'fire'); act(n, { thunder: 'attack' }, 'guard'); E.resolveTurn(n, makeRng(2));
+    assert(n.alat.gauge === 0, '게이지: 비상성 직업은 0');
+  }
+}
