@@ -875,81 +875,171 @@ function gooBlob(x, y, r, color) {
 }
 // 반투명 동그라미(연기·먼지·섬광)
 function haze(x, y, r, color, alpha) { p.roundRect(x - r, y - r, r * 2, r * 2, r, color, alpha); }
-// ── 알바트리온 속성 기술 연출(몬스터헌터 알바트리온 참고): 화염구·물 브레스·물 탄환·낙뢰·빙결 숨결·용의 숨결 ──
+// ── 알바트리온 속성 기술 연출(몬스터헌터 알바트리온 참고) ──
+// 흉성 습격 폭발(ambushFlash)과 같은 방식: 화면 전체 색 번쩍임 + 비네팅, 4px 도트로 디더링한 별 모양 폭발, 광선, 충격파 고리, 불꽃 입자, 파편.
+// 속성마다 팔레트를 바꾸고, 기술마다 모양(파도·탄환·번개·얼음 가시·구슬)을 더한다. 카드까지 덮도록 맨 위에 그린다.
 const ALAT_FX = ['alflame', 'alwater', 'albullet', 'albolt', 'alice', 'aldragon'];
-let alatTargets = []; // 단일 기술(물 탄환·낙뢰)에 맞은 카드 가운데 x
-function alatMonsterFx(move, cx, cy, layer) {
-  const mouthY = cy + 24, floorY = 392; // 카드 위쪽 가장자리 근처
-  if (move === 'alflame') {
-    if (layer === 'back') { p.roundRect(20, 120, W - 40, 224, 14, '#ff6a14', 0.16); return; }
-    // 입에서 불덩이가 날아가 바닥을 따라 불길이 번짐 + 불씨
-    for (const [dx, s] of [[-300, 0.7], [-200, 0.95], [-100, 1.15], [0, 1.3], [100, 1.15], [200, 0.95], [300, 0.7]]) flame(cx + dx, 300 - s * 6, s * 2.1);
-    for (const sd of [-1, 1]) for (let i = 1; i <= 5; i++) dot(cx + sd * (30 + i * 46), mouthY + i * 12, 6 + i, i % 2 ? '#ffb060' : '#ff6a2c');
-    for (const [dx, dy] of [[-250, 230], [-150, 214], [-40, 226], [60, 210], [170, 228], [260, 216]]) dot(cx + dx, dy, 5, '#ffe066');
-    return;
-  }
-  if (move === 'alwater') {
-    if (layer === 'back') { p.roundRect(20, 120, W - 40, 224, 14, '#2a8cff', 0.14); return; }
-    // 입에서 뿜어진 물 브레스가 파도처럼 가로로 퍼져 훑음
-    for (let band = 0; band < 3; band++) for (let x = cx - 360; x <= cx + 360; x += 12) {
-      const y = 236 + band * 26 + Math.sin(x / 38 + band * 1.7) * 12;
-      dot(x, y, 9 - band, band === 0 ? '#e8f8ff' : band === 1 ? '#7cc8ff' : '#2a78d8');
-    }
-    for (let i = 1; i <= 5; i++) { dot(cx - 14 + (i % 2) * 28, mouthY + i * 8, 8 + i, i % 2 ? '#cfeeff' : '#46cdff'); }
-    for (const [dx, dy] of [[-300, 206], [-210, 190], [-90, 200], [30, 188], [140, 202], [260, 192], [320, 210]]) dot(cx + dx, dy, 5, '#ffffff');
-    return;
-  }
-  if (move === 'albullet') {
-    // 입에서 맞은 카드로 날아가는 물 탄환(꼬리 + 구슬) — 카드 위에서 터짐
-    for (const tx of alatTargets.length ? alatTargets : [cx]) {
-      for (let i = 1; i <= 8; i++) { const t = i / 9; dot(cx + (tx - cx) * t, mouthY + (276 - mouthY) * t, 5 + t * 8, i % 2 ? '#7cc8ff' : '#cfeeff'); }
-      p.circle(tx, 282, 20, '#1e5fb8'); p.circle(tx, 282, 15, '#46cdff'); p.circle(tx - 5, 277, 6, '#ffffff');
-    }
-    return;
-  }
-  if (move === 'albolt') {
-    if (layer === 'back') { p.roundRect(20, 120, W - 40, 224, 14, '#fff6a0', 0.12); return; }
-    // 하늘에서 맞은 카드로 지그재그 번개가 내려치고 땅에서 불꽃이 튐
-    for (const tx of alatTargets.length ? alatTargets : [cx]) {
-      const pts = []; for (let y = 134, k = 0; y < floorY; y += 28, k++) pts.push([tx + (k % 2 ? 16 : -16) * (y > 330 ? 0.4 : 1), y]);
-      pts.push([tx, floorY]);
-      for (let i = 1; i < pts.length; i++) { p.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], 12, '#c8b020'); }
-      for (let i = 1; i < pts.length; i++) { p.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], 7, '#fff27a'); p.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], 3, '#ffffff'); }
-      for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; p.line(tx, floorY, tx + Math.cos(a) * 34, floorY + Math.sin(a) * 14, 4, '#fff27a'); }
-    }
-    return;
-  }
-  if (move === 'alice') {
-    if (layer === 'back') { p.roundRect(20, 120, W - 40, 224, 14, '#bfeaff', 0.15); return; }
-    // 입김이 퍼지고 바닥에서 얼음 가시가 솟음
-    for (const [ux, uy] of [[-1, 0.3], [-0.6, 0.8], [0, 1], [0.6, 0.8], [1, 0.3]]) for (let i = 1; i <= 5; i++) dot(cx + ux * (44 + i * 30), mouthY + uy * (i * 14), 5 + i * 1.6, i % 2 ? '#ffffff' : '#9fdcf4');
-    for (const [dx, h] of [[-320, 40], [-250, 58], [-170, 46], [-90, 66], [0, 52], [90, 66], [170, 46], [250, 58], [320, 40]]) iceShard(cx + dx, 340 - h / 2, h + 14, 10, -Math.PI / 2, '#8ad0ec');
-    for (const [dx, dy, r] of [[-280, 170, 9], [-130, 150, 7], [150, 156, 7], [290, 176, 9]]) flake(cx + dx, dy, r);
-    return;
-  }
-  if (move === 'aldragon') {
-    if (layer === 'back') { p.roundRect(20, 120, W - 40, 224, 14, '#9a58d0', 0.16); return; }
-    // 네 속성 구슬이 몸 둘레를 돌다 퍼져 나감
-    const cols = ['#ff8c23', '#46cdff', '#f0f546', '#82d7ff'];
-    for (let ring = 0; ring < 2; ring++) for (let k = 0; k < 16; k++) {
-      const a = (k / 16) * Math.PI * 2 + ring * 0.2, r = 120 + ring * 90;
-      dot(cx + Math.cos(a) * r, cy + 10 + Math.sin(a) * r * 0.42, 9 - ring * 2, cols[k % 4]);
-    }
-    for (const [dx, dy] of [[-180, -30], [180, -30], [-120, 70], [120, 70]]) sparkle(cx + dx, cy + dy, 4, '#d8a8ff');
+let alatTargets = []; // 이번 기술에 맞은 카드 가운데 x
+const ALAT_PAL = {
+  fire: { tint: '#ff1a14', vig: '#8a0000', core: ['#ffffff'], a: ['#fffbe8', '#ffe9a8'], b: ['#ffd35a', '#ffa83a'], c: ['#ff7a2a', '#ff5a24', '#e8381c'], d: ['#e8201a', '#b8140f', '#7a0c0c'], ray: ['#fff0c8', '#ffd890'], ring: ['#ffe2a0', '#ffffff', '#ff9a5a'], spark: ['#fffbe8', '#ffe080', '#ff9a3a', '#e8301a'], deb: ['#2a1210', '#7a3a2a'], mid: '#ff9a3a' },
+  water: { tint: '#1a6aff', vig: '#001a5a', core: ['#ffffff'], a: ['#f4feff', '#d0f2ff'], b: ['#9fe0ff', '#6cc8ff'], c: ['#2a8cff', '#2070e0', '#1a5cc8'], d: ['#1450b0', '#0c2f7a', '#0a1f55'], ray: ['#e8fbff', '#9fe0ff'], ring: ['#d0f2ff', '#ffffff', '#6cc8ff'], spark: ['#ffffff', '#cfeeff', '#6cc8ff', '#2a78d8'], deb: ['#0a1f55', '#2a68c8'], mid: '#46cdff' },
+  thunder: { tint: '#ffe81a', vig: '#5a4a00', core: ['#ffffff'], a: ['#fffff0', '#fffbc0'], b: ['#fff27a', '#ffe040'], c: ['#f0c820', '#e0a810', '#d89a10'], d: ['#a07810', '#7a5a08', '#4a3606'], ray: ['#ffffe0', '#fff27a'], ring: ['#fffbc0', '#ffffff', '#ffe040'], spark: ['#ffffff', '#fffbc0', '#ffe040', '#d89a10'], deb: ['#2a2208', '#7a6a20'], mid: '#f0f546' },
+  ice: { tint: '#7ad8ff', vig: '#0a3a5a', core: ['#ffffff'], a: ['#f4feff', '#e0f8ff'], b: ['#d8f4ff', '#b0e4f8'], c: ['#7ac8e8', '#5aaed8', '#4a9ac8'], d: ['#3a78a8', '#24507a', '#16345a'], ray: ['#f4feff', '#bfeaff'], ring: ['#e0f8ff', '#ffffff', '#8ad0ec'], spark: ['#ffffff', '#e0f8ff', '#9fdcf4', '#4a9ac8'], deb: ['#16345a', '#5aaed8'], mid: '#82d7ff' },
+  dragon: { tint: '#a02aff', vig: '#2a004a', core: ['#ffffff'], a: ['#fff0ff', '#f4d8ff'], b: ['#e8b8ff', '#d090ff'], c: ['#a050e0', '#8030c0', '#7028b0'], d: ['#5a1a90', '#3a0e60', '#220640'], ray: ['#f4d8ff', '#d090ff'], ring: ['#f4d8ff', '#ffffff', '#a050e0'], spark: ['#ffffff', '#f4d8ff', '#d090ff', '#7028b0'], deb: ['#220640', '#7a3ab0'], mid: '#c08aff' },
+};
+const alPick = (arr, n) => arr[Math.min(arr.length - 1, Math.floor(n * arr.length))];
+// 화면 전체 색 번쩍임 + 가장자리를 어둡게(비네팅)
+function alatTint(P, tint = 0.2, vig = 0.07) {
+  p.roundRect(0, 0, W, H, 0, P.tint, tint);
+  for (let k = 0; k < 6; k++) {
+    const t = 110 - k * 17, sd = 150 - k * 24;
+    p.roundRect(0, 0, W, t, 0, P.vig, vig); p.roundRect(0, H - t, W, t, 0, P.vig, vig);
+    p.roundRect(0, 0, sd, H, 0, P.vig, vig); p.roundRect(W - sd, 0, sd, H, 0, P.vig, vig);
   }
 }
-function alatHitFx(move, cx, cy) {
-  if (move === 'alflame') { flame(cx, cy + 22, 0.6); dot(cx - 22, cy - 18, 5, '#ffe066'); dot(cx + 24, cy - 10, 5, '#ff9a3c'); }
-  else if (move === 'alwater') { for (const [dx, dy, s] of [[-24, -14, 7], [22, -18, 6], [-18, 20, 6], [26, 16, 7]]) dot(cx + dx, cy + dy, s, '#7cc8ff'); p.strokeRoundRect(cx - 30, cy + 10, 60, 18, 9, 2, '#cfeeff'); }
-  else if (move === 'albullet') { for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; dot(cx + Math.cos(a) * 30, cy + Math.sin(a) * 26, 6, k % 2 ? '#cfeeff' : '#46cdff'); } }
-  else if (move === 'albolt') { sparkle(cx, cy, 5, '#fff27a'); for (const [dx, dy] of [[-30, -24], [32, -20], [-26, 26], [30, 24]]) p.line(cx, cy, cx + dx, cy + dy, 4, '#f0f546'); }
-  else if (move === 'alice') { flake(cx - 22, cy - 16, 8); flake(cx + 24, cy + 14, 7); p.strokeRoundRect(cx - 34, cy - 34, 68, 68, 14, 2, '#d8f4ff'); }
-  else if (move === 'aldragon') { for (let k = 0; k < 10; k++) { const a = (k / 10) * Math.PI * 2; dot(cx + Math.cos(a) * 32, cy + Math.sin(a) * 28, 6, k % 2 ? '#d8a8ff' : '#7a3ab0'); } }
+function alatRings(ex, ey, S, P, list) { for (const [rx, ry, ci, w] of list) for (let a = 0; a < 180; a++) { const t = (a / 180) * Math.PI * 2; dot(ex + Math.cos(t) * rx * S, ey + 20 + Math.sin(t) * ry * S, w, P.ring[ci]); } }
+function alatSparks(ex, ey, S, P, rnd, n = 30, spread = 300) {
+  for (let i = 0; i < n; i++) {
+    const t = rnd() * Math.PI * 2, d = (40 + rnd() * spread) * S, sz = 3 + Math.floor(rnd() * 4), px = ex + Math.cos(t) * d, py = ey + Math.sin(t) * d * 0.6, c = P.spark[Math.min(3, Math.floor(d / (spread * S / 4)))];
+    p.line(ex + Math.cos(t) * (d - 18 * S - sz * 2), ey + Math.sin(t) * (d - 18 * S - sz * 2) * 0.6, px, py, Math.max(1, sz - 2), c);
+    p.rect(px - sz / 2, py - sz / 2, sz, sz, c);
+  }
+}
+// 위에서 아래로 내려치는 지그재그 굵은 번개 + 번짐 + 곁가지
+function alatBolt(x0, y0, x1, y1, P, rnd, w = 12) {
+  const pts = [[x0, y0]], n = 9;
+  for (let i = 1; i < n; i++) { const t = i / n; pts.push([x0 + (x1 - x0) * t + (rnd() - 0.5) * 70 * Math.sin(t * Math.PI), y0 + (y1 - y0) * t]); }
+  pts.push([x1, y1]);
+  for (const [px, py] of pts) { haze(px, py, 40, P.mid, 0.09); haze(px, py, 22, P.a[0], 0.12); }
+  for (const [ww, c] of [[w + 10, P.d[1]], [w + 4, P.c[0]], [w, P.b[0]], [Math.max(3, w - 6), '#ffffff']])
+    for (let i = 0; i < pts.length - 1; i++) p.line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], ww, c);
+  for (let i = 1; i < pts.length - 2; i += 2) { const [bx, by] = pts[i], dir = i % 4 === 1 ? 1 : -1; p.line(bx, by, bx + dir * 60, by + 50, 5, P.b[0]); p.line(bx, by, bx + dir * 60, by + 50, 2, '#ffffff'); }
+}
+// (mx,my)에서 (ex,ey)로 퍼지는 도트 원뿔 줄기: 가운데는 밝은 심, 바깥은 어둡게, 가장자리는 들쭉날쭉
+function alatCone(mx, my, ex, ey, w0, w1, P, seed = 71) {
+  const L = Math.hypot(ex - mx, ey - my), ux = (ex - mx) / L, uy = (ey - my) / L, wm = Math.max(w0, w1) + 20;
+  const bx = Math.min(mx, ex) - wm, by = Math.min(my, ey) - wm;
+  cellPaint(4, (x, y) => {
+    const vx = x - mx, vy = y - my, t = (vx * ux + vy * uy) / L; if (t < 0 || t > 1) return null;
+    const s = Math.abs(-vx * uy + vy * ux), hw = w0 + (w1 - w0) * t, n = hash2(Math.floor(x / 4), Math.floor(y / 4), seed);
+    const a = s / (hw * (0.8 + 0.35 * n)); if (a > 1) return null;
+    const k = a * 0.82 + t * 0.3;
+    if (k < 0.16) return P.core[0]; if (k < 0.34) return alPick(P.a, n); if (k < 0.54) return alPick(P.b, n); if (k < 0.78) return alPick(P.c, n); return alPick(P.d, n);
+  }, { x0: Math.max(0, bx), y0: Math.max(0, by), x1: Math.min(W, Math.max(mx, ex) + wm), y1: Math.min(H, Math.max(my, ey) + wm) });
+}
+// 바닥(baseY)에서 솟는 불꽃 혀(색: 밑은 밝게 → 끝은 어둡게)
+function alatFlames(x0, x1, baseY, hMax, P, seedK, bias = 0) {
+  cellPaint(4, (x, y) => {
+    if (x < x0 || x > x1 || y > baseY) return null;
+    const col = Math.floor(x / 4), hh = hMax * (0.3 + 0.7 * Math.abs(Math.sin(x / 23 + seedK) * Math.cos(x / 9 + seedK * 2))) * (0.7 + 0.3 * hash2(col, seedK, 5)), d = baseY - y;
+    if (d > hh) return null;
+    const k = d / hh + (hash2(col, Math.floor(y / 4), 7) - 0.5) * 0.28 + bias;
+    if (k > 0.97) return null;
+    return k < 0.2 ? P.a[0] : k < 0.45 ? alPick(P.b, hash2(col, Math.floor(y / 4), 8)) : k < 0.7 ? alPick(P.c, hash2(col, Math.floor(y / 4), 9)) : alPick(P.d, hash2(col, Math.floor(y / 4), 10));
+  }, { x0: Math.max(0, x0), y0: Math.max(0, baseY - hMax - 4), x1: Math.min(W, x1), y1: Math.min(H, baseY + 4) });
+}
+// 면이 있는 얼음 결정(왼쪽 어둡게 · 오른쪽 밝게 · 하이라이트)
+function alatCrystal(x, baseY, h, w, P) {
+  const top = baseY - h, sh = baseY - h * 0.72, hw = w / 2;
+  p.poly([x, top - 5, x - hw - 5, sh, x - hw - 5, baseY + 3, x + hw + 5, baseY + 3, x + hw + 5, sh], P.d[1]);
+  p.poly([x, top, x - hw, sh, x - hw, baseY, x, baseY], P.c[1]);
+  p.poly([x, top, x + hw, sh, x + hw, baseY, x, baseY], P.b[0]);
+  p.poly([x, top + 4, x + hw * 0.5, sh + 6, x + hw * 0.5, baseY - h * 0.3, x + hw * 0.18, baseY - h * 0.3, x + hw * 0.18, sh + 12], '#ffffff');
+}
+// 화면 가장자리부터 번지는 서리
+function alatFrost(P, depth = 80) {
+  cellPaint(4, (x, y) => {
+    const d = Math.min(x, W - x, y, H - y), n = hash2(Math.floor(x / 4), Math.floor(y / 4), 77), thr = depth * (0.35 + 0.65 * hash2(Math.floor(x / 36), Math.floor(y / 36), 78));
+    if (d > thr || n < d / thr * 0.9) return null;
+    return n > 0.8 ? '#ffffff' : alPick(P.b, n);
+  }, { x0: 0, y0: 0, x1: W, y1: H });
+}
+// 물보라 왕관: (x,y)에서 위로 솟았다 떨어지는 물방울 호
+function alatSplash(x, y, P, rnd, n = 16, power = 1) {
+  for (let k = 0; k < n; k++) {
+    const a = -Math.PI * (0.1 + 0.8 * (k / (n - 1))), v = (60 + rnd() * 70) * power;
+    for (let s = 1; s <= 7; s++) { const t = s / 7, px = x + Math.cos(a) * v * t * 1.6, py = y + Math.sin(a) * v * t * 1.6 + 120 * t * t * power * 0.7; dot(px, py, 9 - s * 0.9, s < 3 ? '#ffffff' : s % 2 ? P.b[1] : P.a[1]); }
+  }
+  for (const [rx, ry, ci, w] of [[70, 16, 0, 4], [110, 26, 1, 3], [150, 36, 2, 3]]) for (let a = 0; a < 90; a++) { const t = a / 90 * Math.PI * 2; dot(x + Math.cos(t) * rx * power, y + 28 + Math.sin(t) * ry * power, w, P.ring[ci]); }
+}
+// 맨 위에 덮는 알바트리온 기술 연출. targets: 맞은 카드 [x, y]
+function alatOverlay(fx, mx, my, targets) {
+  const rnd = seedRng(++energyTick * 5 + 3), mouthY = my + 30;
+  if (fx === 'alflame') {
+    // 입에서 뻗는 불길 줄기 + 파티 쪽으로 번지는 불꽃 벽 + 솟는 불씨
+    const P = ALAT_PAL.fire; alatTint(P, 0.14, 0.06);
+    haze(mx, mouthY, 70, P.b[1], 0.3); alatCone(mx, mouthY, mx, 340, 22, 380, P);
+    alatFlames(0, W, 372, 80, P, 1.3, 0.1);
+    for (const [tx, ty] of targets) { alatFlames(tx - 56, tx + 56, ty + 100, 170, P, tx / 40, 0.25); haze(tx, ty, 70, P.b[1], 0.2); }
+    for (let i = 0; i < 46; i++) dot(rnd() * W, 130 + rnd() * 330, 3 + Math.floor(rnd() * 4), P.spark[i % 4]);
+  } else if (fx === 'alwater') {
+    // 입에서 뿜는 물줄기 + 가로로 밀려오는 파도(밑으로 갈수록 깊고 어둡다) + 물방울
+    const P = ALAT_PAL.water; alatTint(P, 0.14, 0.06);
+    alatCone(mx, mouthY, mx, 330, 20, 330, P);
+    const crest = (x) => 322 + Math.sin(x / 46) * 16 + Math.sin(x / 19 + 1) * 6;
+    cellPaint(4, (x, y) => {
+      const c0 = crest(x); if (y < c0 || y > 372 + hash2(Math.floor(x / 12), 2, 3) * 22) return null;
+      const d = y - c0, n = hash2(Math.floor(x / 4), Math.floor(y / 4), 61);
+      if (d < 7) return '#ffffff'; if (d < 16) return alPick(P.a, n); if (d < 40) return alPick(P.b, n); if (d < 70) return alPick(P.c, n); return n < 0.55 ? P.d[0] : P.c[2];
+    }, { x0: 0, y0: 280, x1: W, y1: 400 });
+    for (let x = 12; x < W; x += 24) { const c0 = crest(x), h = 14 + hash2(x, 3, 4) * 34; dot(x + (hash2(x, 8, 2) - 0.5) * 14, c0 - h, 6 + hash2(x, 5, 6) * 4, '#ffffff'); dot(x + 10, c0 - h * 0.45, 5, P.a[1]); }
+    for (const [tx, ty] of targets) alatSplash(tx, ty + 20, P, rnd, 12, 0.7);
+  } else if (fx === 'albullet') {
+    // 소용돌이치는 물 구슬이 날아가 맞은 카드에서 물기둥과 물보라 왕관으로 터진다
+    const P = ALAT_PAL.water; alatTint(P, 0.1, 0.05);
+    haze(mx, mouthY, 54, P.b[0], 0.3);
+    for (const [tx, ty] of targets) {
+      const ex = tx, ey = ty - 40, L = Math.hypot(ex - mx, ey - mouthY);
+      alatCone(mx, mouthY, ex, ey, 6, 26, P, 83); // 꼬리: 가늘다 굵어지는 물줄기
+      p.circle(ex, ey, 44, P.d[1]); p.circle(ex, ey, 37, P.c[0]); p.circle(ex, ey, 29, P.b[1]); p.circle(ex - 8, ey - 8, 20, P.a[1]);
+      for (let i = 0; i < 18; i++) { const a = i * 0.7 + 0.5, r = 6 + i * 1.7; dot(ex + Math.cos(a) * r, ey + Math.sin(a) * r, 5, i % 2 ? '#ffffff' : P.b[0]); } // 구슬 속 소용돌이
+      p.circle(ex - 14, ey - 16, 7, '#ffffff');
+      cellPaint(4, (x, y) => { const dx = Math.abs(x - tx), yy = ty + 92 - y; if (yy < 0 || yy > 190 || dx > 30 * (1 - yy / 330)) return null; const n = hash2(Math.floor(x / 4), Math.floor(y / 4), 85); return yy > 175 ? '#ffffff' : dx < 8 ? alPick(P.a, n) : alPick(P.b, n); }, { x0: tx - 40, y0: ty - 110, x1: tx + 40, y1: ty + 100 }); // 물기둥
+      alatSplash(tx, ty + 40, P, rnd, 18, 1.1);
+    }
+  } else if (fx === 'albolt') {
+    // 하늘에서 맞은 카드로 굵은 번개가 내려치고, 땅을 타고 전류가 사방으로 퍼진다
+    const P = ALAT_PAL.thunder; alatTint(P, 0.16, 0.06);
+    p.roundRect(0, 0, W, H, 0, '#ffffff', 0.1);
+    for (const [tx, ty] of targets.length ? targets : [[mx, 400]]) {
+      alatBolt(tx + (rnd() - 0.5) * 40, 0, tx, ty, P, rnd, 12);
+      for (const sd of [-1, 1]) for (let k = 0; k < 3; k++) { const ex = tx + sd * (60 + k * 46 + rnd() * 20); alatBolt(tx, ty + 8, ex, ty + 20 + (rnd() - 0.5) * 26, P, rnd, 4); } // 땅을 타는 전류
+      alatRings(tx, ty, 0.3, P, [[330, 70, 0, 4], [230, 50, 1, 3]]);
+      haze(tx, ty, 100, P.a[0], 0.3);
+      alatSparks(tx, ty, 0.4, P, rnd, 16, 260);
+    }
+    alatBolt(mx, my - 30, mx + 20, my + 130, P, rnd, 7); // 몸에서 터지는 방전
+  } else if (fx === 'alice') {
+    // 바닥에서 얼음 결정이 솟아오르고 화면 가장자리부터 서리가 번진다
+    const P = ALAT_PAL.ice; alatTint(P, 0.14, 0.06);
+    alatFrost(P, 90);
+    haze(mx, mouthY, 80, P.a[0], 0.25);
+    for (let k = 0; k < 7; k++) { const a = Math.PI * (0.15 + k * 0.1), len = 120 + hash2(k, 1, 2) * 60; iceShard(mx, mouthY + 10, len, 22, a, P.c[0]); } // 입에서 뻗는 얼음 숨결
+    for (const [x, h, w] of [[40, 50, 28], [130, 84, 36], [225, 60, 30], [330, 96, 38], [570, 96, 38], [675, 60, 30], [770, 84, 36], [860, 50, 28]]) alatCrystal(x, 372, h, w, P);
+    for (const [tx, ty] of targets) {
+      for (const [dx, h, w] of [[-48, 80, 28], [0, 112, 36], [48, 80, 28]]) alatCrystal(tx + dx, ty + 128, h, w, P);
+      p.strokeRoundRect(tx - 78, ty - 90, 156, 210, 14, 4, '#e0f8ff');
+    }
+    for (let i = 0; i < 30; i++) flake(rnd() * W, 130 + rnd() * 330, 6 + Math.floor(rnd() * 5));
+  } else if (fx === 'aldragon') {
+    // 속성 색이 꼬여 도는 용의 광선: 입 앞에 모인 구슬에서 맞은 카드까지 뻗고 카드 위에 빛기둥이 솟는다
+    const P = ALAT_PAL.dragon, cols = ['#ff8c23', '#46cdff', '#f0f546', '#82d7ff']; alatTint(P, 0.18, 0.07);
+    haze(mx, mouthY, 90, P.b[0], 0.28);
+    for (const [tx, ty] of targets.length ? targets : [[mx, 400]]) {
+      alatCone(mx, mouthY, tx, ty, 12, 54, P, 91);
+      const L = Math.hypot(tx - mx, ty - mouthY), ux = (tx - mx) / L, uy = (ty - mouthY) / L;
+      for (let k = 0; k < 4; k++) for (let i = 0; i <= 44; i++) { const t = i / 44, off = Math.sin(t * 16 + k * Math.PI / 2) * (10 + t * 34), x = mx + (tx - mx) * t - uy * off, y = mouthY + (ty - mouthY) * t + ux * off; dot(x, y, 8 - t * 2, cols[k]); } // 속성 색 나선
+      cellPaint(4, (x, y) => { const dx = Math.abs(x - tx); if (y > ty + 100 || y < 130 || dx > 13) return null; const n = hash2(Math.floor(x / 4), Math.floor(y / 4), 93); return dx < 6 ? '#ffffff' : alPick(P.b, n); }, { x0: tx - 40, y0: 130, x1: tx + 40, y1: ty + 104 }); // 빛기둥
+      alatRings(tx, ty, 0.3, P, [[330, 70, 0, 4], [230, 50, 1, 3]]);
+    }
+    for (let k = 0; k < 4; k++) { const a = (k / 4) * Math.PI * 2 + 0.8; p.circle(mx + Math.cos(a) * 40, mouthY + Math.sin(a) * 22, 11, cols[k]); p.circle(mx + Math.cos(a) * 40, mouthY + Math.sin(a) * 22, 5, '#ffffff'); }
+    for (let i = 0; i < 30; i++) dot(rnd() * W, 130 + rnd() * 330, 3 + Math.floor(rnd() * 3), i % 2 ? P.spark[1] : cols[i % 4]);
+  }
 }
 
 function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
   if (!move) return;
-  if (ALAT_FX.includes(move)) { alatMonsterFx(move, cx, cy, layer); return; }
+  if (ALAT_FX.includes(move)) return; // 알바트리온 연출은 alatOverlay 가 맨 위에 그린다
   if (HEUNG_FX.includes(move)) { heungMonsterFx(move, cx, cy, layer); return; }
   if (move === 'fart' && layer === 'front') {
     // 구린 방귀: 뒤돌아선 엉덩이에서 뿜어진 커다란 가스 덩어리 하나가 파티 쪽(아래·양옆)으로 뭉게뭉게 부풀어 퍼진다.
@@ -1395,7 +1485,7 @@ function dragonBadge(cx, cy, turns) {
 function hitFx(move, cx, cy, color, spore = color, accent = spore) {
   if (move === 'ambush') move = 'comet'; // 습격도 필살 흉성 낙하와 같은 맞은 카드 이펙트(불덩이 폭발)
   if (HEUNG_FX.includes(move)) { heungHitFx(move, cx, cy); return; }
-  if (ALAT_FX.includes(move)) { alatHitFx(move, cx, cy); return; }
+  if (ALAT_FX.includes(move)) return;
   if (move === 'fart') {
     return; // 구린 방귀 피격·악취는 카드에서 stenchBehind·stenchFront로(아이콘 뒤·앞에 나눠 그림)
   }
@@ -1940,7 +2030,7 @@ function renderBattle(r) {
     if (r.showingResult && (last?.ambushLanded || last?.cometLanded)) ambushImpact(W / 2, monsterY, 'back');
     if (skyDotNow) cometDot(W / 2, monsterY - 20);
     if (usedFx && SKILL_FX.includes(usedFx)) skillCtx = { fx: usedFx, mx: W / 2, my: monsterY, targets: [] };
-    alatTargets = usedFx === 'albolt' || usedFx === 'albullet' ? b.members.filter(mm => last?.hits?.[mm.userId]).map(mm => 121.5 + activeRoles.indexOf(mm.role) * 219) : [];
+    alatTargets = ALAT_FX.includes(usedFx) ? b.members.filter(mm => last?.hits?.[mm.userId]).map(mm => [20 + activeRoles.indexOf(mm.role) * (CARD_W + CARD_GAP) + CARD_W / 2, CARD_Y + 86]) : [];
     heungTargets = usedFx === 'lightning' ? b.members.filter(mm => last?.hits?.[mm.userId]).map(mm => 121.5 + activeRoles.indexOf(mm.role) * 219) : []; // 낙뢰가 내려칠 카드 위치
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'back', sporeColor, accentColor);
     // 투명화(유령): 다음 턴 동안 몸을 흐리게(회색)
@@ -2180,6 +2270,7 @@ function renderBattle(r) {
         curseLink(W / 2, monsterY, 20 + i * (CARD_W + CARD_GAP) + CARD_W / 2, CARD_Y + 86);
       }
     }
+    if (r.showingResult && ALAT_FX.includes(usedFx)) alatOverlay(usedFx, W / 2, monsterY, alatTargets);
     if (ambushStage >= 0) ambushFlash(ambushStage, W / 2, monsterY); // 착지: 화면 전체 붉은 번쩍임과 폭발(맨 위에 덮음)
   }, r.battle?.monster ?? r.monster);
 }
