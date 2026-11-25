@@ -2557,22 +2557,30 @@ function alatHeader(b) {
     p.circle(cx, cy, R + 6, mixHex('#0d0805', col, 0.16)); p.circle(cx, cy, R - 2, mixHex('#0d0805', col, 0.1)); // 방패 없이 은은한 빛무리만
     const u = R * 0.85, hi = mixHex(col, '#ffffff', 0.6), P = (pts, c, dx = 0, dy = 0) => p.poly(pts.flatMap(([x, y]) => [cx + dx + x * u, cy + dy + y * u]), c);
     { // 도트 비트맵 아이콘(가장자리 어둡게·왼쪽 밝게·오른쪽 어둡게 자동 음영)
-      const ICE = (() => { // 눈 결정: 가로·세로 가지 + 대각 가지 + 갈라진 곁가지
-        const g = Array.from({ length: 17 }, () => Array(17).fill('.')), put = (x, y) => { if (x >= -8 && x <= 8 && y >= -8 && y <= 8) g[y + 8][x + 8] = 'C'; };
-        for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) put(x, y);
-        for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) for (let d = 1; d <= 8; d++) { put(dx * d, dy * d); if (d === 4 || d === 6) for (const sg of [-1, 1]) put(dx * d + (dy ? sg : 0) * 1 + (dx ? 0 : 0), dy * d + (dx ? sg : 0) * 1 + (dy ? 0 : 0)); if (d === 4 || d === 6) for (const sg of [-1, 1]) put(dx ? dx * (d + 1) : sg, dy ? dy * (d + 1) : sg); }
-        for (const [dx, dy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) for (let d = 2; d <= 5; d++) put(dx * d, dy * d);
+      const ICE = (() => { // 눈 결정: 굵은 가로·세로·대각 가지 + 갈라진 곁가지 + 육각 중심(축은 하얗게)
+        const N = 9, g = Array.from({ length: 2 * N + 1 }, () => Array(2 * N + 1).fill('.')), put = (x, y, ch) => { if (Math.abs(x) <= N && Math.abs(y) <= N) g[y + N][x + N] = ch; };
+        for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) for (let d = 2; d <= N; d++) { // 굵은 가지(끝은 가늘게)
+          if (d <= 6) for (const o of [-1, 1]) put(dx ? dx * d : o, dy ? dy * d : o, 'l');
+          if (d === 4 || d === 7) for (const sg of [-1, 1]) for (let t = 1; t <= 2; t++) put(dx ? dx * (d + t) : sg * t, dy ? dy * (d + t) : sg * t, 'm'); // V자 곁가지
+        }
+        for (const [dx, dy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) for (let d = 2; d <= 6; d++) { put(dx * d, dy * d, 'l'); if (d <= 5) put(dx * d, dy * (d - 1), 'm'); put(dx * 6 + dx, dy * 6, 'm'); }
+        for (let x = -2; x <= 2; x++) for (let y = -2; y <= 2; y++) if (Math.abs(x) + Math.abs(y) <= 3) put(x, y, 'l'); // 육각 중심
+        for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) for (let d = 0; d <= N; d++) put(dx * d, dy * d, 'w'); // 가지 중심선
+        put(0, 0, 'w');
         return g.map(r => r.join(''));
       })();
       const FIRE = ['......F........', '......FF.......', '.....FFF....F..', '.....FFOF...FF.', '....FFOOF..FFF..', '....FFOOOF.FFOF.', '...FFFOOOFFFFOF', '...FFOOYOOFFOOF', '..FFFOOYYOOFOOF', '..FFOOOYYYOOOOF', '..FFOOYYYYYOOFF', '..FFOOYYYYYOOFF', '...FFOOYYYOOFF.', '...FFFOOYOOFFF.', '....FFFOOOFFF..', '.....FFFFFFF...'].map(r => r.slice(0, 15).padEnd(15, '.'));
-      const WAT = ['.......W.......', '.......W.......', '......WWW......', '......WWW......', '.....WWWWW.....', '.....WWWWW.....', '....WWWWWWW....', '...WWWWWWWWW...', '...WWHWWWWWW...', '..WWWHWWWWWWW..', '..WWHHWWWWWWW..', '..WWHWWWWWWWW..', '..WWWWWWWWWWW..', '...WWWWWWWWW...', '....WWWWWWW....', '.....WWWWW.....', '......WWW......'];
+      const WAT = (() => { // 물방울: 둥글게 부푼 방울 + 왼쪽 위 하이라이트 + 오른쪽 아래로 짙어지는 음영
+        const hw = [0, 0, 1, 1, 2, 3, 3, 4, 5, 6, 6, 7, 7, 7, 7, 6, 6, 5, 3], H = hw.length;
+        return hw.map((w, y) => { let r = ''; for (let x = -8; x <= 8; x++) { if (Math.abs(x) > w) { r += '.'; continue; } const t = (x + 7) / 14 * 0.45 + y / (H - 1) * 0.55; r += ((x <= -3 && x >= -4 && y >= 9 && y <= 13) || (x === -3 && y === 8)) ? 'H' : t < 0.3 ? 'a' : t < 0.48 ? 'b' : t < 0.66 ? 'c' : t < 0.84 ? 'd' : 'e'; } return r; });
+      })();
       const THU = ['......TTTTT....', '.....TTTTT.....', '.....TTTT......', '....TTTTT......', '....TTTTTTTT...', '...TTTTTTTT....', '...TTTTTTT.....', '.......TTTT....', '......TTTT.....', '......TTT......', '.....TTT.......', '.....TT........', '....TT.........', '....T..........'];
       const DRG = ['.......P.......', '......PPP......', '..P...PPP...P..', '.PPP..PPP..PPP.', '.PPP..PPP..PPP.', '.LLL..PPL..LLL.', '.LLL..LLL..LLL.', '.LLL..LLL..LLL.', '.LLLL.LLL.LLLL.', '..LLLLLLLLLLL..', '...LLLLLLLLL...', '.....LLLLL.....', '.....LLLLL.....', '.....LLLLL.....', '....LLLLLLL....'];
       const PALS = {
         fire: { F: ['#ff7a2a', '#e03c14', '#8a1a0c'], O: ['#ffc04a', '#ff9a2a', '#e8601a'], Y: ['#fffbe0', '#fff0a0', '#ffd860'], o: '#3a0a05' },
-        water: { W: ['#9ae8ff', '#46b4f0', '#1e6cc0'], H: ['#ffffff', '#ffffff', '#e8faff'], o: '#0a2a58' },
+        water: { a: '#c4f2ff', b: '#6cd2ff', c: '#36a4f0', d: '#2074cc', e: '#1850a4', H: '#ffffff', o: '#0a2a58' },
         thunder: { T: ['#fffbb0', '#f6e83a', '#c89a10'], o: '#3a2c00' },
-        ice: { C: ['#e8faff', '#9fdcff', '#58a8e0'], o: '#0c3050' },
+        ice: { w: '#ffffff', l: '#a8e4ff', m: '#5eb2ee', o: '#0c3050' },
         dragon: { L: ['#d6cdf4', '#a69ad8', '#6e5fae'], P: ['#b070ff', '#8a3ae8', '#5a1fb0'], o: '#1e1040' },
       };
       const rows = { fire: FIRE, water: WAT, thunder: THU, ice: ICE }[el] || DRG, pal = PALS[el] || PALS.dragon;
@@ -2580,7 +2588,7 @@ function alatHeader(b) {
       for (let r = -1; r <= rows.length; r++) for (let k = -1; k <= rows[0].length; k++) {
         const ch = at(r, k); let color = null;
         if (ch === '.') { if (at(r - 1, k) !== '.' || at(r + 1, k) !== '.' || at(r, k - 1) !== '.' || at(r, k + 1) !== '.') color = pal.o; }
-        else { let st = 0; while (at(r, k - 1 - st) === ch) st++; let len = st; while (at(r, k + len - st) === ch) len++; const f = st / Math.max(1, len - 1); color = pal[ch][f < 0.34 ? 0 : f > 0.67 ? 2 : 1]; if (len < 3) color = pal[ch][1]; }
+        else { let st = 0; while (at(r, k - 1 - st) === ch) st++; let len = st; while (at(r, k + len - st) === ch) len++; const f = st / Math.max(1, len - 1); const e = pal[ch]; color = typeof e === 'string' ? e : (len < 3 ? e[1] : e[f < 0.34 ? 0 : f > 0.67 ? 2 : 1]); }
         if (color) p.rect(ox + k * c, oy + r * c, c, c, color);
       }
     }
