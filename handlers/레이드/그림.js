@@ -1374,7 +1374,7 @@ function alatMouthBurst(el, x, y, up) {
 }
 function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
   if (!move) return;
-  if (ALAT_FX.includes(move)) { if (layer === 'back') alatOverlay(move, cx, cy, alatTargets, 'field'); return; } // 알바트리온: 몬스터 칸 연출(카드·말풍선보다 아래), 타격은 맨 위에서 'hit'
+  if (ALAT_FX.includes(move)) { if (layer === 'front') alatOverlay(move, cx, cy, alatTargets, 'field'); return; } // 알바트리온: 몬스터 칸 연출(카드·말풍선보다 아래), 타격은 맨 위에서 'hit'
   if (HEUNG_FX.includes(move)) { heungMonsterFx(move, cx, cy, layer); return; }
   if (move === 'fart' && layer === 'front') {
     // 구린 방귀: 뒤돌아선 엉덩이에서 뿜어진 커다란 가스 덩어리 하나가 파티 쪽(아래·양옆)으로 뭉게뭉게 부풀어 퍼진다.
@@ -2369,13 +2369,15 @@ function renderBattle(r) {
     heungTargets = usedFx === 'lightning' ? b.members.filter(mm => last?.hits?.[mm.userId]).map(mm => 121.5 + activeRoles.indexOf(mm.role) * 219) : []; // 낙뢰가 내려칠 카드 위치
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'back', sporeColor, accentColor);
     // 투명화(유령): 다음 턴 동안 몸을 흐리게(회색)
-    let alatMouth = null;
+    let alatMouth = null, alatBody = null;
     if (!skyDotNow) {
       const mv = b.alat ? alatMotion(r.showingResult ? usedFx : null, b.intent === 'smash' && !r.showingResult, W / 2, monsterY, b.turn) : null; // 알바트리온: 기술마다 움직임(돌진·솟구침·젖힘·떨림)과 잔상
       const ex = { rage: b.rage, pose, outline: shielded ? '#cfe8ff' : null, gray: isPhased(b), dormant: dormantNow, element: b.alat?.element };
+      const bgSnap = b.alat && ALAT_FX.includes(usedFx) ? Buffer.from(p.buf) : null; // 몸 픽셀을 알아내려고 몬스터를 그리기 전 화면을 기억해 둔다
       if (mv) for (const gh of mv.ghosts) drawMonster(m, gh.x, gh.y, 112 * gh.s, { ...ex, gray: true }); // 잔상(흐린 그림자)
       if (mv) { if (mv.streaks) alatStreaks(mv); drawMonster(m, mv.x, mv.y, 112 * mv.s, ex); } else drawMonster(m, W / 2, monsterY, 112, ex);
       if (b.alat) alatMouth = { x: mv ? mv.x : W / 2, y: (mv ? mv.y : monsterY) - 8 + 6 };
+      if (bgSnap) alatBody = { bg: bgSnap, mon: Buffer.from(p.buf) };
     }
     if (r.showingResult && (last?.ambushLanded || last?.cometLanded)) ambushImpact(W / 2, monsterY, 'front');
     if (shaking && !skyDotNow && !m.ui?.noShake) shakeFx(m, W / 2, monsterY, 112, pose); // ui.noShake 몬스터(???)는 떨림 대신 준비 자세(readyPose)만
@@ -2391,7 +2393,14 @@ function renderBattle(r) {
     }
     if (b.rage && !m.ui?.noRageMark && !hideBody) rageFx(m, W / 2, monsterY, 112, pose, 'mark'); // ui.noRageMark 몬스터(???)는 붉은 핏줄 분노 마크를 그리지 않는다
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'front', sporeColor, accentColor);
-    if (alatMouth && ALAT_FX.includes(usedFx)) alatMouthBurst(ALAT_FX_EL[usedFx], alatMouth.x, alatMouth.y, usedFx === 'albolt'); // 입 앞 짧은 숨결(몸 앞): 뒤 배경 브레스와 이어져 입에서 나오는 것처럼 보이게
+    if (alatBody) { // 브레스는 몸 앞에 반투명으로: 입보다 위(머리·날개)는 몸을 그대로, 입 아래 몸통은 브레스와 반반 섞어 몸이 비쳐 보이게
+      const cutY = Math.round((alatMouth.y + 2) * RENDER_SCALE), wpx = p.w, { bg, mon } = alatBody;
+      for (let yy = 0; yy < p.h; yy++) for (let xx = 0; xx < wpx; xx++) {
+        const i = (yy * wpx + xx) * 3; if (mon[i] === bg[i] && mon[i + 1] === bg[i + 1] && mon[i + 2] === bg[i + 2]) continue;
+        const a = yy < cutY ? 1 : 0.55; // 몸 쪽 비율(아래 몸통은 브레스가 45%)
+        p.buf[i] = Math.round(mon[i] * a + p.buf[i] * (1 - a)); p.buf[i + 1] = Math.round(mon[i + 1] * a + p.buf[i + 1] * (1 - a)); p.buf[i + 2] = Math.round(mon[i + 2] * a + p.buf[i + 2] * (1 - a));
+      }
+    }
     const minionsShown = drawMinions(b, last, r.showingResult);
     // 몬스터 오른쪽: 이번 턴 받은 피해(빨강) · 재생 회복량(초록, 피해 아래). 결과 화면에서만.
     const dealtNow = r.showingResult && !last?.ambushLanded ? last?.monsterDamage : 0; // 습격 착지 턴의 피해는 사라진 위장 몬스터에게 들어간 것이라 보여 주지 않는다
