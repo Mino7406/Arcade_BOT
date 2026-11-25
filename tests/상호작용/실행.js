@@ -14,7 +14,7 @@ try {
   fs.cpSync(path.join(repo, 'Monster'), path.join(tmp, 'Monster'), { recursive: true });
   fs.copyFileSync(path.join(repo, 'config.js'), path.join(tmp, 'config.js'));
   fs.copyFileSync(path.join(__dirname, '흐름.js'), path.join(tmp, 'run.js'));
-  const result = spawnSync(process.execPath, [path.join(tmp, 'run.js')], {
+  const result = spawnSync(process.execPath, ['--expose-gc', path.join(tmp, 'run.js')], {
     encoding: 'utf8', timeout: 120_000,
     env: { ...process.env, NODE_PATH: path.join(repo, 'node_modules') },
   });

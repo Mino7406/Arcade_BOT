@@ -871,6 +871,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     const users = Array.from({ length: N }, (_, i) => `bulk${i}`);
     for (const u of users) lv.applyXp('g1', u, 800, 'test');
     channel.sent.length = 0;
+    global.gc?.(); // RSS 는 쓰레기 수거 시점에 따라 출렁여서(+9MB ↔ +95MB) 재기 전에 비운다(실행기가 --expose-gc 로 돌린다)
     const rssBefore = process.memoryUsage().rss;
     const t0 = Date.now();
     await Promise.all(users.map(async (u) => {
@@ -890,6 +891,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     const done = channel.sent.filter(m => JSON.stringify(m.components || []).includes('결과')).length;
     assert(done === N, `최종 결과 화면 ${done}개(${N} 기대)`);
     assert(ms < 15000, `50명 동시 처리에 ${ms}ms(15초 이내 기대)`);
+    global.gc?.();
     const grewMb = (process.memoryUsage().rss - rssBefore) / 1048576;
     assert(grewMb < 60, `메모리가 ${grewMb.toFixed(1)}MB 늘어남(60MB 이내 기대)`);
     console.log(`   (50명 동시: ${ms}ms, 메모리 +${grewMb.toFixed(1)}MB)`);
