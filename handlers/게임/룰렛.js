@@ -14,6 +14,7 @@ const { writeJsonIfChanged } = require('../공통/저장');
 const { card, payload, notice, COLORS, footerSide, pullButton } = require('../공통/카드');
 const { HACK_TOOL_NAME, hackToolWith, HACK_TOOL_MAX, hackToolEmoji, hackUseButtonEmoji, hackUseEmoji, getHackTools, useHackTool } = require('./해킹툴');
 const { GATEWAY_NAME, gatewayEmoji, gatewayButtonEmoji, getGateways, useGateway, GATEWAY_MAX } = require('./블랙월게이트웨이');
+const { REROLL_NAME, REROLL_MAX, rerollEmoji, getRerolls, useReroll } = require('./재회전석');
 
 const ROULETTE_PATH = path.join(__dirname, '..', '..', 'DB', 'roulette.json');
 fs.mkdirSync(path.dirname(ROULETTE_PATH), { recursive: true });
@@ -134,6 +135,9 @@ const hackToolsOf = (guildId, userId) => (hackUnlimited(guildId) ? Infinity : ge
 // 블랙월 게이트웨이(??? 레이드 MVP 보상): 돌리기 전에 발동해 두면 이번 판이 100% 잭팟. 테스트 서버에서는 무제한.
 const gatewaysOf = (guildId, userId) => (hackUnlimited(guildId) ? Infinity : getGateways(guildId, userId));
 const gatewayHaveText = (have) => (have === Infinity ? '테스트 서버 · 무제한' : `${have}/${GATEWAY_MAX}개`);
+// 속성 재회전석(알바트리온 레이드 MVP 보상): 결과가 나온 직후 릴 한 칸만 골라 다시 돌린다. 테스트 서버에서는 무제한.
+const rerollsOf = (guildId, userId) => (hackUnlimited(guildId) ? Infinity : getRerolls(guildId, userId));
+const rerollHaveText = (have) => (have === Infinity ? '테스트 서버 · 무제한' : `${have}/${REROLL_MAX}개`);
 const hackHaveText = (have) => (have === Infinity ? '테스트 서버 · 무제한' : `${have}/${HACK_TOOL_MAX}개`);
 
 // 해킹된 카드의 안내 줄: 인코딩이 깨진 것처럼 대체 문자(�)와 오류 코드를 섞는다(읽을 수는 있게).
@@ -278,6 +282,22 @@ function buildHackPromptPayload(prompt, have, extra = {}) {
     footer: `⏰ ${HACK_PROMPT_MS / 1000}초 안에 고르지 않으면 결과가 그대로 확정돼요.`,
     rows: [row],
   }), extra); // 이미 본인 전용인 메시지를 고쳐 쓰므로 ephemeral 플래그는 넣지 않는다(화면 모음은 extra로 넘김)
+}
+
+// 결과 직후 돌린 사람에게만 보이는 속성 재회전석 사용 확인: 다시 돌릴 릴을 고른다.
+function buildRerollPromptPayload(prompt, have, extra = {}) {
+  const row = new ActionRowBuilder().addComponents(
+    ...prompt.spin.reels.map((reel, i) => new ButtonBuilder().setCustomId(`roulette:rr:${prompt.id}:${i}`).setLabel(`${i + 1}번 릴 ${reel}`).setStyle(ButtonStyle.Primary)),
+    new ButtonBuilder().setCustomId(`roulette:rrkeep:${prompt.id}`).setLabel('넘기기').setStyle(ButtonStyle.Secondary),
+  );
+  return payload(card({
+    color: HACK_COLOR,
+    header: `${rerollEmoji()} ${REROLL_NAME}`,
+    sub: [`보유 ${rerollHaveText(have)}`],
+    blocks: [`릴 **한 칸만** 골라 다시 돌릴까요?\n-# 지금 결과: ${spinLabel(prompt.spin)} (×${prompt.spin.multiplier}) · 결과가 더 나빠질 수도 있어요`],
+    footer: `⏰ ${HACK_PROMPT_MS / 1000}초 안에 고르지 않으면 결과가 그대로 확정돼요.`,
+    rows: [row],
+  }), extra);
 }
 
 function buildBetRow(lobby) {
@@ -453,6 +473,8 @@ async function spinLobby(interaction, lobby, lobbies) {
 
   // 꽝이고 해킹 툴이 있으면 번복할지 본인에게만 묻는다(결과를 채널에 못 올렸으면 다시 돌릴 자리가 없어 묻지 않음).
   // 묻지 않으면 '돌리는 중' 안내(예전 로비 자리)는 지운다. 공개 실패로 결과를 여기 보여 줬으면 남긴다.
+  // 속성 재회전석이 있으면 결과 직후(꽝이든 아니든) 한 릴만 다시 돌릴지 먼저 묻는다. 게이트웨이로 확정한 잭팟은 묻지 않는다.
+  if (shown && !spin.gateway && await offerReroll(interaction, { lobby, bet, spin, ...shown, hacks: 0, root: interaction })) return;
   if (spin.kind === 'none' && shown && await offerHack(interaction, { lobby, bet, ...shown, hacks: 0, root: interaction })) return;
   if (shown) await interaction.deleteReply().catch(() => {});
 }
@@ -467,6 +489,14 @@ function jackpotSpin(bet) {
 // 릴 3개를 돌려 결과와 지급액을 정한다.
 function rollSpin(bet) {
   const reels = [spinReel(), spinReel(), spinReel()];
+  const { multiplier, kind, symbol } = resolvePayout(reels);
+  return { reels, multiplier, kind, symbol, payout: Math.round(bet * multiplier) };
+}
+
+// 한 릴 재회전: index 칸만 reelFn()으로 바꿔 결과와 지급액을 다시 계산한 새 spin 을 돌려준다(원본은 그대로).
+function rerollReel(spin, index, bet, reelFn = spinReel) {
+  const reels = [...spin.reels];
+  reels[index] = reelFn();
   const { multiplier, kind, symbol } = resolvePayout(reels);
   return { reels, multiplier, kind, symbol, payout: Math.round(bet * multiplier) };
 }
@@ -575,7 +605,7 @@ async function closePrompt(prompt, via = null) {
 async function handleHackButton(interaction, action, promptId) {
   const prompts = getHackPrompts(interaction.client);
   const prompt = prompts.get(promptId);
-  if (!prompt) {
+  if (!prompt || prompt.kind === 'reroll') { // 재회전석 확인은 rr 버튼만 처리한다
     await interaction.reply(notice('⚠️ **이미 확정된 결과예요.**', { ephemeral: true }));
     return;
   }
@@ -639,6 +669,96 @@ async function handleHackButton(interaction, action, promptId) {
   if (message) await closePrompt(prompt, interaction);
 }
 
+// 결과가 나온 직후 속성 재회전석이 있으면 본인에게만 보이는 확인을 띄운다. 시간이 지나면 결과 확정. 띄웠으면 true.
+async function offerReroll(interaction, ctx) {
+  const have = rerollsOf(ctx.lobby.guildId, ctx.lobby.userId);
+  if (have <= 0) return false;
+  const prompts = getHackPrompts(interaction.client);
+  const prompt = { ...ctx, kind: 'reroll', id: interaction.id, guildId: ctx.lobby.guildId, userId: ctx.lobby.userId, interaction, msg: null, timeoutId: null };
+  prompts.set(prompt.id, prompt);
+  try {
+    prompt.msg = await interaction.followUp(buildRerollPromptPayload(prompt, have, { ephemeral: true }));
+  } catch (err) {
+    prompts.delete(prompt.id);
+    console.error('속성 재회전석 확인 메시지 표시 실패:', err);
+    return false;
+  }
+  prompt.timeoutId = setTimeout(() => {
+    if (prompts.get(prompt.id) !== prompt) return;
+    prompts.delete(prompt.id);
+    closePrompt(prompt); // 시간이 지나면 결과 확정 — 아이템은 그대로
+  }, HACK_PROMPT_MS);
+  return true;
+}
+
+// 🔁 릴 고르기(rr) / 넘기기(rrkeep) 버튼
+async function handleRerollButton(interaction, action, promptId, indexStr) {
+  const prompts = getHackPrompts(interaction.client);
+  const prompt = prompts.get(promptId);
+  if (!prompt || prompt.kind !== 'reroll') {
+    await interaction.reply(notice('⚠️ **이미 확정된 결과예요.**', { ephemeral: true }));
+    return;
+  }
+  if (interaction.user.id !== prompt.userId) {
+    await interaction.reply(notice('⚠️ **본인 룰렛에만 쓸 수 있어요.**', { ephemeral: true }));
+    return;
+  }
+  // 아래 await 전에 판을 지워서, 연타해도 한 번만 처리되게 한다.
+  clearTimeout(prompt.timeoutId);
+  prompts.delete(promptId);
+
+  const { lobby, bet } = prompt;
+  // 넘기기: 아이템을 쓰지 않고 결과 확정. 꽝이고 해킹 툴이 있으면 이어서 해킹 툴 확인.
+  if (action === 'rrkeep') {
+    await interaction.deferUpdate().catch(() => {});
+    if (prompt.spin.kind === 'none' && await offerHack(interaction, { lobby, bet, channel: prompt.channel, message: prompt.message, reels: prompt.spin.reels, hacks: prompt.hacks, root: prompt.root })) return;
+    await closePrompt(prompt, interaction);
+    return;
+  }
+  const index = parseInt(indexStr, 10);
+  if (!(index >= 0 && index <= 2)) {
+    await interaction.update(notice('⚠️ **릴을 알 수 없어요.** 결과가 그대로 확정됐어요.'));
+    return;
+  }
+  // 관리자 긴급정지·레이드로 미니게임 XP가 멈췄으면 쓰지 않고(아이템도 그대로) 결과를 확정한다.
+  if (isMinigameXpFrozen()) {
+    const content = isRaidXpFrozen()
+      ? `👾 **몬스터 때문에 XP 시스템이 고장 나 ${REROLL_NAME}을 쓸 수 없습니다.**`
+      : `⚙️ **현재 관리자가 미니게임 XP를 일시 중지해 ${REROLL_NAME}을 쓸 수 없습니다.**`;
+    await interaction.update(notice(`${content}\n-# 결과는 그대로 확정되고 아이템은 쓰지 않았어요.`));
+    return;
+  }
+  if (!hackUnlimited(prompt.guildId) && !useReroll(prompt.guildId, prompt.userId)) {
+    await interaction.update(notice(`⚠️ **${REROLL_NAME}이 없어요.** 결과가 그대로 확정됐어요.`));
+    return;
+  }
+  const left = rerollsOf(prompt.guildId, prompt.userId);
+  await interaction.update(notice(`${rerollEmoji()} **${REROLL_NAME}을 사용했어요!** ${index + 1}번 릴을 다시 돌리는 중...\n-# 남은 ${REROLL_NAME} ${rerollHaveText(left)}`));
+
+  const spin = rerollReel(prompt.spin, index, bet);
+  // 이미 이전 결과의 지급액까지 정산돼 있으므로 차액(음수 포함)만 반영해 그날 손익이 (새 지급 - 베팅)이 되게 한다.
+  const diff = spin.payout - prompt.spin.payout;
+  let result = { leveledUp: false };
+  if (!isTestGuild(prompt.guildId) && diff !== 0) {
+    result = applyXp(prompt.guildId, prompt.userId, diff, `룰렛 ${REROLL_NAME} ${index + 1}번 릴 (베팅 ${bet}, ${spinLabel(prompt.spin)} → ${spinLabel(spin)} x${spin.multiplier}, 차액 ${diff})`);
+  }
+  logSystem({ 유형: '룰렛', 유저: userLabel(prompt.userId), 내용: `${REROLL_NAME} 사용(${index + 1}번 릴, 남은 ${left === Infinity ? '무제한' : `${left}개`}) — 베팅 ${bet}, ${spinLabel(prompt.spin)} → ${spinLabel(spin)} x${spin.multiplier}` });
+
+  let message = null;
+  try {
+    message = await revealSpin(prompt.channel, prompt.message, lobby, bet, spin, prompt.hacks, prompt.reels);
+  } catch (err) {
+    console.error('룰렛 재회전석 결과 공개 실패:', err);
+    logError('게임 오류', `룰렛 ${REROLL_NAME} 결과 채널 공개 실패 — ${userLabel(prompt.userId)}에게만 결과 표시`, err);
+    await interaction.followUp(buildResultPayload(lobby, resultView(bet, spin, prompt.hacks), { ephemeral: true })).catch(() => {});
+  }
+  if (result.leveledUp) announceLevelUp(interaction.client, prompt.guildId, prompt.userId, result.newLevel).catch(() => {});
+
+  // 다시 돌린 결과가 꽝이고 해킹 툴이 있으면 이어서 해킹 툴 확인(같은 확인 메시지 자리).
+  if (spin.kind === 'none' && message && await offerHack(interaction, { lobby, bet, channel: prompt.channel, message, reels: spin.reels, hacks: prompt.hacks, root: prompt.root })) return;
+  if (message) await closePrompt(prompt, interaction);
+}
+
 async function handleRouletteButton(interaction) {
   const { customId } = interaction;
   const lobbies = getLobbies(interaction.client);
@@ -646,6 +766,10 @@ async function handleRouletteButton(interaction) {
   const action = parts[1]; // bet | max | gate | spin | cancel | hack | keep
   if (action === 'hack' || action === 'keep') {
     await handleHackButton(interaction, action, parts[2]);
+    return;
+  }
+  if (action === 'rr' || action === 'rrkeep') {
+    await handleRerollButton(interaction, action, parts[2], parts[3]);
     return;
   }
   const lobbyId = parts[2];
@@ -703,4 +827,4 @@ async function handleRouletteButton(interaction) {
 }
 
 // buildLobbyPayload/buildResultPayload는 화면 모음·테스트에서 직접 그려 보려고 함께 내보낸다.
-module.exports = { buildLobbyPayload, buildWallErosionPayload, WALL_EROSION, buildSpinningPayload, buildResultPayload, buildHackPromptPayload, buildHackIntroPayload, startRouletteCommand, handleRouletteButton, loadRoulette, saveRoulette, MIN_BET, MAX_BET };
+module.exports = { buildLobbyPayload, buildWallErosionPayload, WALL_EROSION, buildSpinningPayload, buildResultPayload, buildHackPromptPayload, buildRerollPromptPayload, rerollReel, buildHackIntroPayload, startRouletteCommand, handleRouletteButton, loadRoulette, saveRoulette, MIN_BET, MAX_BET };
