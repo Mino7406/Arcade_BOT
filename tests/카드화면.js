@@ -256,6 +256,7 @@ async function buildScreens() {
   const rlLose = rl.buildResultPayload(rlb, { bet: 300, resultLine: '😢 **꽝**', netLine: '📉 **-300 XP**', net: -300, reels: ['💎', '🍒', '🍋'], multiplier: 0 });
   add('룰렛', '결과 — 꽝', '', rlLose, rlWith(rlLose));
   add('룰렛', '꽝 → 해킹 툴 사용 확인(본인에게만)', '해킹 툴이 있을 때만 · 60초 지나면 결과 확정', rl.buildHackPromptPayload({ id: '1', bet: 300 }, 2, { ephemeral: true }));
+  add('룰렛', '결과 직후 → 속성 재회전석 사용 확인(본인에게만)', '알바트리온 MVP 보상 · 재회전석이 있을 때만 · 릴 한 칸만 다시 돌림 · 60초 지나면 결과 확정', rl.buildRerollPromptPayload({ id: '1', bet: 300, spin: { reels: ['🍒', '🍒', '🍋'], kind: 'two', multiplier: 1.5, payout: 450 } }, 1, { ephemeral: true }));
   const rlHack = rl.buildResultPayload(rlb, { bet: 300, resultLine: '**🍋 레몬 트리플 매칭!** (×2.5)', netLine: '📈 **+450 XP**', net: 450, reels: ['🍋', '🍋', '🍋'], multiplier: 2.5, hacks: 1 });
   [0, 1, 2].forEach(step => {
     const intro = rl.buildHackIntroPayload(rlb, 300, ['💎', '🍒', '🍋'], step, 1);
