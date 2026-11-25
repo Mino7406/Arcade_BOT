@@ -2031,6 +2031,7 @@ function alatEdges(el, heavy, scene) {
   for (const [x0, y0, x1, y1, horiz] of [[0, 0, W, B, true], [0, H - B, W, H, true], [0, B, B, H - B, false], [W - B, B, W, H - B, false]]) {
     buf.paint(x0, y0, x1, y1, (x, y, i, j) => {
       const d = Math.min(x, W - x, y, H - y); if (d >= B) return null;
+      if (scene === '전투' && y < 124 && x > 46 && x < W - 46) return null; // 보스 바·정보가 있는 헤더 구역은 이펙트를 그리지 않는다(가시성)
       const t = horiz ? x : y, dn = dens(d) * 0.28; // 최대 28%만 채움
       if (el === 'fire') { const n = fbm(t / 22, d / 9 - (horiz ? 0 : 0), k); return bay(i, j) < dn * (0.5 + n) ? ramp(RM, 0.25 + (1 - d / B) * 0.55 + n * 0.2, i, j) : null; }
       if (el === 'water') { const w = Math.sin(t / 14 + d / 6 + fbm(t / 40, d / 20, k) * 3); return bay(i, j) < dn * (0.5 + 0.5 * Math.max(0, w)) ? (w > 0.85 ? '#ffffff' : ramp(RM, 0.3 + (1 - d / B) * 0.4 + w * 0.12, i, j)) : null; }
@@ -2053,6 +2054,7 @@ function alatCorners(el, heavy, rnd, scene) {
     const map = (lx, ly) => [cx + dx * lx, cy + dy * ly];
     buf.paint(x0, y0, x0 + Z, y0 + Z, (x, y, i, j) => {
       const [lx, ly] = loc(x, y), r = Math.hypot(lx, ly), f = 1 - r / Z; if (f <= 0) return null;
+      if (scene === '전투' && y < 124 && x > 46 && x < W - 46) return null; // 헤더 정보 구역 제외
       const edge = Math.max(0, 1 - Math.min(lx, ly) / 26); // 두 테두리에 붙은 정도
       if (el === 'fire') {
         const n = fbm(lx / 15 + ly / 46, ly / 15 - lx / 46 - kk * 0.1, kk), n2 = fbm(lx / 6, ly / 6, kk + 3);
@@ -2092,7 +2094,7 @@ function alatCorners(el, heavy, rnd, scene) {
     // 속성별 덧그림: 모서리 장식
     if (el === 'fire') for (let q = 0; q < 26 * S; q++) { const [px, py] = map(4 + rnd() * Z * 0.9, 4 + rnd() * Z * 0.9); const sz = rnd() < 0.3 ? 4 : 2; p.rect(snap(px), snap(py), sz, sz, ['#fffbe8', '#ffe28a', '#ffb347', '#ff7a2a'][Math.floor(rnd() * 4)]); } // 날리는 불씨
     if (el === 'water') for (let q = 0; q < 22 * S; q++) { const a = rnd() * 1.5, rr = 30 + rnd() * Z * 0.8, [px, py] = map(Math.cos(a) * rr, Math.sin(a) * rr); p.circle(px, py, 1.5 + rnd() * 3, q % 2 ? '#dff4ff' : '#5ab4ff'); p.rect(Math.round(px) - 1, Math.round(py) - 1, 2, 2, '#ffffff'); } // 튀는 물방울
-    if (el === 'thunder') {
+    if (el === 'thunder' && !(scene === '전투' && cy === 0)) {
       const paths = [];
       for (let q = 0; q < 3 * S; q++) {
         const a = Math.atan2(dy, dx) + (rnd() - 0.5) * 1.2, len = (80 + rnd() * 70) * S * K, pts = [[cx, cy]];
@@ -2102,7 +2104,7 @@ function alatCorners(el, heavy, rnd, scene) {
       }
       pxStrike(paths, RM, '#241a00', 3);
     }
-    if (el === 'ice') for (let q = 0; q < 6 * S; q++) { const along = 14 + rnd() * Z * 0.8, [px, py] = rnd() < 0.5 ? map(along, 4) : map(4, along); pxCrystal(buf, px, py + 6, (22 + rnd() * 52) * S * K, 9 + rnd() * 8, (rnd() - 0.5) * 0.9 + (dx < 0 ? 0.2 : -0.2), RM); buf.flush('#0a2440'); } // 테두리에서 자란 얼음 기둥
+    if (el === 'ice' && !(scene === '전투' && cy === 0)) for (let q = 0; q < 6 * S; q++) { const along = 14 + rnd() * Z * 0.8, [px, py] = rnd() < 0.5 ? map(along, 4) : map(4, along); pxCrystal(buf, px, py + 6, (22 + rnd() * 52) * S * K, 9 + rnd() * 8, (rnd() - 0.5) * 0.9 + (dx < 0 ? 0.2 : -0.2), RM); buf.flush('#0a2440'); } // 테두리에서 자란 얼음 기둥
     if (el === 'ice') for (let q = 0; q < 14; q++) { const [px, py] = map(6 + rnd() * Z * 0.85, 6 + rnd() * Z * 0.85); pxFlake(px, py, rnd() < 0.4); }
     if (el === 'dragon') for (let q = 0; q < 16 * S; q++) { const [px, py] = map(4 + rnd() * Z * 0.8, 4 + rnd() * Z * 0.8); p.rect(snap(px), snap(py), 4, 4, rnd() < 0.5 ? '#ffa0d0' : '#e8407a'); } // 떠다니는 불씨
   }
@@ -2486,8 +2488,8 @@ function alatHeader(b) {
     tb.paint(36, 20, W - 36, 112, (x, y, i, j) => {
       const row = Math.floor(y / 14), off = (row % 2) * 34, bx = (x + off) % 68, mortar = bx < 2 || (y % 14) < 2;
       const n = fbm(x / 22, y / 14, kz), vein = 1 - Math.abs(fbm(x / 30 + 4, y / 20, kz + 5) - 0.5) * 7.5;
-      if (vein > 0.9) return mixHex('#1c130f', col, 0.85);
-      if (vein > 0.82) return mixHex('#1c130f', col, 0.4);
+      if (vein > 0.95) return mixHex('#33241a', col, 0.6);
+      if (vein > 0.9) return mixHex('#33241a', col, 0.25);
       if (mortar) return '#1c120b';
       return ramp(['#2a1d13', '#3a2a1c', '#4c3824', '#5e4630', '#725a3c'], 0.3 + n * 0.5 + (y < 40 ? 0.08 : 0), i, j);
     });
@@ -2531,6 +2533,7 @@ function alatHeader(b) {
   for (let q = 1; q < 10; q++) p.rect(gx + Math.round(gw * q / 10), gy, 1, gh, '#0a0605'); // 억제 게이지 눈금
   p.rect(gx, gy, gw * gr, 3, mixHex(col, '#ffffff', 0.5)); // 게이지 윗면 광택
   for (const [rx, rn] of [[bx - 22, 'ᚠ'], [bx + bw + 28, 'ᚨ']]) { p.circle(rx, 66, 12, rimDark); p.circle(rx, 66, 9, '#0a0605'); p.line(rx - 4, 70, rx, 58, 2, col); p.line(rx, 58, rx + 4, 70, 2, col); p.line(rx - 3, 66, rx + 3, 66, 2, col); } // 속성 색 룬 문양
+  p.roundRect(gx + gw + 6, gy - 8, 70, 22, 6, '#0d0805', 0.7); p.roundRect(bx + bw - 118, gy - 8, 124, 22, 6, '#0d0805', 0.7); // 글자 뒤 어두운 판(가시성)
   text(`억제 ${Math.round(al.gauge)}`, gx + gw + 40, gy + 5, 15, col);
   text(left <= 0 ? '에스카톤 지금!' : `에스카톤 ${left}턴 뒤`, bx + bw, gy + 5, 15, left <= 1 ? '#ff7a6a' : C.muted, { align: 'right' });
   // 왼쪽 TURN 메달
