@@ -14,6 +14,7 @@ const K = {
   ATTACK_GAIN: 5, SKILL_GAIN: 15,
   DRAGON_EFF: 1 / 3,
   ESCATON_HIT_RATE: 0.6, GUARD_RATE: 0.3, FROST_RATE: 0.6,
+  RESIST_RATE: 0.7, WEAK_RATE: 1.3, // 기술 속성 대 유저 속성: 반감·약점 피해 배율
 };
 
 const randInt = (rng, a, b) => a + Math.floor(rng() * (b - a + 1));
@@ -72,15 +73,25 @@ function resolveEscaton(state, members, opts, rng) {
   return { suppressed, damage };
 }
 
-// 몬스터 데이터의 alat.moves[속성] = { 기술키: 가중치 } 에서 가중 무작위
+// 공격은 지금 속성과 상관없이 몬스터 데이터의 alat.attacks = { 기술키: 가중치 } 에서 가중 무작위.
+// (지금 속성은 방어 상성 — 어느 직업이 억제 게이지를 올리는지 — 에만 쓰인다)
 function pickIntent(state, monster, rng) {
   if (isEscatonTurn(state)) return 'smash';
-  const table = monster.alat.moves[state.element];
+  const table = monster.alat.attacks;
   const keys = Object.keys(table);
   const total = keys.reduce((s, k) => s + table[k], 0);
   let r = rng() * total;
   for (const k of keys) { r -= table[k]; if (r < 0) return k; }
   return keys[keys.length - 1];
+}
+
+// 기술 속성(attackEl) → 그 기술에 맞은 유저(role)가 받는 피해 배율.
+// 그 속성을 억제하는 직업(COUNTER[속성])은 반감, 그 직업의 속성을 이기는 속성(COUNTER[직업])에 맞으면 약점. 용·무속성은 1
+function elementRate(attackEl, role) {
+  if (!COUNTER[attackEl]) return 1;
+  if (COUNTER[attackEl] === role) return K.RESIST_RATE;
+  if (COUNTER[role] === attackEl) return K.WEAK_RATE;
+  return 1;
 }
 
 function statusLine(state) {
@@ -93,5 +104,5 @@ function statusLine(state) {
 
 module.exports = {
   ELEMENTS, COUNTER, ELEMENT_EMOJI, ELEMENT_NAME, K,
-  initState, gaugeGain, addGauge, advanceTurn, isEscatonTurn, resolveEscaton, pickIntent, statusLine,
+  initState, gaugeGain, addGauge, advanceTurn, isEscatonTurn, resolveEscaton, pickIntent, elementRate, statusLine,
 };

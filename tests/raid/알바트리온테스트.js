@@ -110,13 +110,21 @@ const stateOf = (element, extra = {}) => ({ element, prev: null, phaseLeft: 2, c
 
 // pickIntent
 {
-  const monster = { alat: { moves: { fire: { attack: 3, flame: 1 }, water: { attack: 1 }, thunder: { attack: 1 }, ice: { attack: 1 }, dragon: { attack: 1, roar: 2 } } } };
+  const monster = { alat: { attacks: { attack: 1, flame: 1, torrent: 1, frost: 1 } } };
   const esc = stateOf('fire', { cycleTurn: 10, cycleLen: 10 });
   assert(A.pickIntent(esc, monster, rng) === 'smash', 'pickIntent: 에스카톤 턴은 smash');
-  const normal = stateOf('fire', { cycleTurn: 3, cycleLen: 10 });
-  let always = true;
-  for (let i = 0; i < 500; i++) if (!Object.keys(monster.alat.moves.fire).includes(A.pickIntent(normal, monster, rng))) always = false;
-  assert(always, 'pickIntent: 속성별 기술 중에서만 고름');
+  const seen = new Set();
+  for (const el of ['fire', 'ice']) for (let i = 0; i < 400; i++) seen.add(A.pickIntent(stateOf(el, { cycleTurn: 3, cycleLen: 10 }), monster, rng));
+  assert([...seen].every(k => k in monster.alat.attacks) && seen.size === 4, 'pickIntent: 지금 속성과 상관없이 공격표 전체에서 고름');
+}
+
+// elementRate: 기술 속성 대 유저 속성
+{
+  assert(A.elementRate('water', 'thunder') === K.RESIST_RATE, 'elementRate: 물 기술은 번개 직업에 반감');
+  assert(A.elementRate('water', 'fire') === K.WEAK_RATE, 'elementRate: 물 기술은 불 직업에 약점');
+  assert(A.elementRate('water', 'ice') === 1, 'elementRate: 물 기술은 얼음 직업에 보통');
+  assert(A.elementRate('fire', 'water') === K.RESIST_RATE && A.elementRate('fire', 'ice') === K.WEAK_RATE, 'elementRate: 불 기술은 물 반감·얼음 약점');
+  assert(A.elementRate('dragon', 'fire') === 1 && A.elementRate(undefined, 'fire') === 1, 'elementRate: 용·무속성은 보통');
 }
 
 // statusLine
@@ -208,7 +216,7 @@ const E = require(path.join(__dirname, '../../handlers/레이드/전투.js'));
   const clone = () => JSON.parse(JSON.stringify(mon));
   const bad1 = clone(); bad1.partyClasses = 'default';
   assert(E.monsterProblems(bad1).some(p => p.includes('alat')), 'monsterProblems: partyClasses가 elemental이 아니면 alat 문제');
-  const bad2 = clone(); bad2.alat.moves.fire = { nothing: 1 };
+  const bad2 = clone(); bad2.alat.attacks = { nothing: 1 };
   assert(E.monsterProblems(bad2).some(p => p.startsWith('alat')), 'monsterProblems: alat 기술이 moves에 없으면 문제');
   const bad3 = clone(); bad3.partyClasses = 'zzz';
   assert(E.monsterProblems(bad3).some(p => p.includes('partyClasses')), 'monsterProblems: 모르는 partyClasses');

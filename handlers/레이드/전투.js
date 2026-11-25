@@ -154,17 +154,16 @@ function monsterProblems(m) {
   for (const key of ['id', 'name', 'emoji', 'rageName', 'lore']) if (typeof m[key] !== 'string' || !m[key]) problems.push(`${key} 없음`);
   if (!(m.baseHp > 0)) problems.push('baseHp는 0보다 큰 숫자');
   if (m.partyClasses !== undefined && !Object.keys(ROLE_SETS).includes(m.partyClasses)) problems.push(`partyClasses는 ${Object.keys(ROLE_SETS).join('/')} 중 하나`);
-  if (m.alat !== undefined) { // 알바트리온식 속성 기믹: 속성별 기술표와 에스카톤(smash)
+  if (m.alat !== undefined) { // 알바트리온식 속성 기믹: 속성과 상관없이 고르는 공격표(alat.attacks)와 에스카톤(smash)
     if (m.partyClasses !== 'elemental') problems.push('alat는 partyClasses가 elemental일 때만');
-    for (const el of alat.ELEMENTS) {
-      const table = m.alat?.moves?.[el];
-      if (!table || !Object.keys(table).length) { problems.push(`alat.moves.${el} 없음`); continue; }
-      for (const [k, w] of Object.entries(table)) {
-        if (!m.moves?.[k]) problems.push(`alat.moves.${el}의 기술 "${k}"가 moves에 없음`);
-        if (!(Number.isFinite(w) && w >= 0)) problems.push(`alat.moves.${el}.${k} 가중치는 0 이상 숫자`);
-      }
+    const table = m.alat?.attacks;
+    if (!table || !Object.keys(table).length) problems.push('alat.attacks 없음');
+    else for (const [k, w] of Object.entries(table)) {
+      if (!m.moves?.[k]) problems.push(`alat.attacks의 기술 "${k}"가 moves에 없음`);
+      if (!(Number.isFinite(w) && w >= 0)) problems.push(`alat.attacks.${k} 가중치는 0 이상 숫자`);
     }
   }
+  for (const [key, move] of Object.entries(m.moves ?? {})) if (move.element !== undefined && !alat.ELEMENTS.includes(move.element)) problems.push(`moves.${key}.element는 ${alat.ELEMENTS.join('/')} 중 하나`);
   if (m.enabled !== undefined && typeof m.enabled !== 'boolean') problems.push('enabled는 true/false');
   if (m.damageRate !== undefined && !(m.damageRate > 0)) problems.push('damageRate는 0보다 큰 숫자');
   if (m.soloDamageRate !== undefined && !(m.soloDamageRate > 0)) problems.push('soloDamageRate는 0보다 큰 숫자');
@@ -947,6 +946,7 @@ function resolveTurn(battle, rng = Math.random) {
       if (target === taunter && move.target === 'single') target.protected += Math.round(dmg);
       const rawDmg = Math.round(dmg);
       if (isVulnerable(battle, target)) dmg *= target.vulnRate; // 취약
+      if (battle.alat && move.element) dmg *= alat.elementRate(move.element, target.role); // 알바트리온: 기술 속성 대 유저 속성(반감·약점)
       if (battle.frostTurn === battle.turn) { // 프로스트 월: 막아 준 양은 시전자 기여
         const caster = battle.members.find(x => x.userId === battle.frostBy);
         if (caster) caster.protected += Math.round(dmg * (1 - FROST_RATE));
@@ -1005,7 +1005,8 @@ function resolveTurn(battle, rng = Math.random) {
       const parts = targets.map(t => {
         const dmg = hit(t);
         last.hits[t.userId] = (last.hits[t.userId] || 0) + dmg; // 수호자가 표식 두 몫을 맞으면 합산
-        let tag = '';
+        const er = battle.alat && move.element ? alat.elementRate(move.element, t.role) : 1;
+        let tag = er < 1 ? ' 🛡️반감' : er > 1 ? ' 💥약점' : '';
         // 기술 효과: 점액·독은 맞은 사람 전원(guardBlocks면 방어한 사람 제외), 기절은 방어하지 않은 사람만(쓰러진 사람 제외)
         const blocked = !!move.guardBlocks && t.guarding;
         if (t.hp > 0 && move.effect === 'poison' && !blocked) {
