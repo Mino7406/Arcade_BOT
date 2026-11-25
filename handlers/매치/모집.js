@@ -198,7 +198,7 @@ async function handleMojipModal(interaction) {
     return;
   }
 
-  const data = { game, gameInfo, title, datetime, players, description, autoClose: true, createdAt: Date.now(), organizer: { id: interaction.user.id, displayName: displayNameFromInteraction(interaction) } };
+  const data = { game, gameInfo, title, datetime, players, description, autoClose: true, mentionSteam: true, createdAt: Date.now(), organizer: { id: interaction.user.id, displayName: displayNameFromInteraction(interaction) } };
   // 알림 예약은 기본 ON: 일시를 읽을 수 있으면 자동으로 켠다(안 고친 지금 시각이면 "마감 시 발송" = 마감 때 바로, 고쳤으면 그 시각). 끄려면 🔔 알림 예약에서 비워 제출.
   const autoNotify = deriveNotifyFromDatetime(datetime, { base: data.createdAt });
   if (autoNotify) Object.assign(data, autoNotify, { notifyAuto: true, notifyAutoSrc: datetime });
