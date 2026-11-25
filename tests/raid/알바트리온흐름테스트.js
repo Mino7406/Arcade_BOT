@@ -112,7 +112,7 @@ const phase = () => raidMod.raidForTest(channel.guildId)?.phase;
   await joinAll([['11', 'fire'], ['12', 'water'], ['13', 'thunder'], ['14', 'ice']]);
   assert(phase() === 'battle', '전체 흐름 1: 전투 시작');
   const rr1 = raidMod.raidForTest(MAIN);
-  rr1.battle.hp = 600; // 에스카톤 한두 번 안에 끝나게
+  rr1.battle.hp = 1500; // 에스카톤 전에 쓰러지지 않을 만큼(600이면 치명타가 몰리면 에스카톤 전에 끝나 흔들렸다), 몇 턴 안에 끝날 만큼
   rr1.battle.alat.cycleTurn = rr1.battle.alat.cycleLen - 1; // 다음 턴이 에스카톤
   let sawEscaton = false, suppressedAll = true, g1 = 0;
   while (phase() === 'battle' && g1++ < 12) {

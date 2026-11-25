@@ -293,7 +293,8 @@ function drawMonster(monster, cx, cy, maxH, { rage = false, gray = false, pose =
   const isDormant = monster.theme === 'energy' && (dormant || process.env.ENERGY_DORMANT === '1') && !!sp.dormantRows;
   const rows = isDormant ? sp.dormantRows : (pose && sp.poses?.[pose]) || (rage && sp.rageRows) || sp.rows;
   const elementColors = element && sp.elementColors?.[element] ? sp.elementColors[element] : null; // 알바트리온: 지금 속성에 맞는 몸 색
-  const colors = isDormant ? { ...sp.dormantColors, ...(outline ? { a: outline } : {}) } : (rage || outline || elementColors ? { ...(rage ? sp.rageColors : {}), ...elementColors, ...(outline ? { a: outline } : {}) } : null);
+  const poseColors = pose && sp.poseColors?.[pose] ? sp.poseColors[pose] : null; // 알바트리온: 기술 자세마다 입 속·뿔 빛 색(쓰는 기술 속성)
+  const colors = isDormant ? { ...sp.dormantColors, ...(outline ? { a: outline } : {}) } : (rage || outline || elementColors || poseColors ? { ...(rage ? sp.rageColors : {}), ...elementColors, ...poseColors, ...(outline ? { a: outline } : {}) } : null);
   // sprite.scale: 몬스터마다 그림 크기 배율(기본 1). 칸 수가 많아 작아 보이는 몬스터를 키울 때 쓴다.
   const cell = Math.floor((maxH * (sp.scale ?? 1)) / rows.length);
   // 용뢰 테마(흉성): 몸 뒤에 붉은 후광과 무작위 번개를 그린다. 그릴 때마다 시드가 달라 화면마다 모양이 바뀐다. 흑백(결과·쓰러짐)엔 그리지 않는다.
@@ -1180,7 +1181,7 @@ function cardBorderFx(el, tx, k0, rnd) {
 const ALAT_FX_EL = { alflame: 'fire', alwater: 'water', albolt: 'thunder', alice: 'ice', aldragon: 'dragon' };
 function alatOverlay(fx, mx, my, targets, layer) {
   const el = ALAT_FX_EL[fx]; if (!el) return;
-  const rnd = seedRng(energyTick * 5 + (layer === 'hit' ? 17 : 3) + mx), k0 = Math.floor(seedRng(energyTick)() * 50), oy = my + 24, floorY = 340;
+  const rnd = seedRng(energyTick * 5 + (layer === 'hit' ? 17 : 3) + mx), k0 = Math.floor(seedRng(energyTick)() * 50), oy = my - 8, floorY = 340; // oy: 알바트리온 그림의 입 높이
   const R = ALAT_RAMP[el], B = BREATH[el], buf = pixBuf(), field = layer === 'field';
   const ts = targets.length ? targets : [[mx, CARD_Y + 86]];
   if (el === 'fire') {
