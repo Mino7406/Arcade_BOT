@@ -2406,7 +2406,8 @@ function alatHeader(b) {
   p.poly(plate, rimDark); p.poly(plate.map((v, i) => (i % 2 ? 66 + (v - 66) * 0.9 : W / 2 + (v - W / 2) * 0.985)), stone);
   p.line(60, 17, W - 60, 17, 2, rim); p.line(60, 115, W - 60, 115, 2, rim);
   for (let i = 0; i < 14; i++) { const x = 90 + i * 55; p.line(x, 15, x + 7, 21, 1, rimDark); p.line(x + 20, 117, x + 12, 111, 1, rimDark); } // 석판의 잔금
-  // 이름 + 양옆 뿔 장식
+  // 이름 뒤로 그어진 발톱 자국 세 줄 + 이름 + 양옆 뿔 장식
+  for (const [dx, c] of [[-46, '#2a140c'], [-18, '#3a1c10'], [10, '#2a140c']]) { p.line(W / 2 + dx, 18, W / 2 + dx + 64, 52, 4, c); p.line(W / 2 + dx + 2, 20, W / 2 + dx + 60, 50, 1, '#7a3a1c'); }
   const name = rage ? b.monster.rageName : b.monster.name, nw = Math.min(p.textWidth(B(), name, 34), 360);
   text(name, W / 2, 36, 34, rage ? '#ffb090' : C.gold, { maxWidth: 360 });
   for (const sd of [-1, 1]) {
@@ -2415,19 +2416,22 @@ function alatHeader(b) {
   }
   if (rage) { p.roundRect(W / 2 + nw / 2 + 62, 26, 58, 26, 6, '#5c1410'); text('분노', W / 2 + nw / 2 + 91, 39, 18, '#ffb4a8'); }
   // 보스 HP 바: 석재 틀 + 분절된 불씨빛 게이지 + 10% 눈금 + 40%(분노) 표식
-  const bx = 150, by = 54, bw = W - 300, bh = 26, ratio = Math.max(0, Math.min(1, b.hp / b.maxHp));
-  p.roundRect(bx - 6, by - 6, bw + 12, bh + 12, 8, rimDark); p.roundRect(bx - 3, by - 3, bw + 6, bh + 6, 6, '#0a0605');
+  const bx = 140, by = 54, bw = W - 360, bh = 26, sl = 14, ratio = Math.max(0, Math.min(1, b.hp / b.maxHp));
+  const quad = (x, w, y, hh, c) => p.poly([x + sl * (1 - (y - by) / bh), y, x + w + sl * (1 - (y - by) / bh), y, x + w + sl * (1 - (y + hh - by) / bh), y + hh, x + sl * (1 - (y + hh - by) / bh), y + hh], c);
+  p.poly([bx + sl - 6, by - 6, bx + bw + sl + 6, by - 6, bx + bw - 6, by + bh + 6, bx - 6, by + bh + 6], rimDark); p.poly([bx + sl - 3, by - 3, bx + bw + sl + 3, by - 3, bx + bw - 3, by + bh + 3, bx - 3, by + bh + 3], '#0a0605');
   const ember = rage ? ['#2a0c20', '#7a1a4a', '#c8307a', '#ff6aa8', '#ffd0e4'] : ['#3a0a08', '#8a1a10', '#c8381c', '#f0661e', '#ffc060'];
   const seg = 4, n = Math.floor(bw / seg);
   for (let i = 0; i < n; i++) {
-    const t = i / n, x = bx + i * seg; if (t >= ratio) { p.rect(x, by, seg - 1, bh, '#1c130f'); continue; }
-    p.rect(x, by, seg - 1, bh, ramp(ember, 0.25 + 0.5 * (1 - Math.abs(0.5 - (i % 40) / 40) * 1.4) + t * 0.2, i, 0)); // 가로로 일렁이는 불씨빛
-    p.rect(x, by, seg - 1, 5, ember[4]); // 윗면 하이라이트
+    const t = i / n, x = bx + i * seg, jag = Math.abs(t - ratio) < 0.05 ? (hash2(i, b.turn, 3) - 0.5) * 0.05 : 0; // 줄어든 끝은 칼로 벤 듯 들쭉날쭉
+    if (t >= ratio + jag) { quad(x, seg - 1, by, bh, '#1c130f'); continue; }
+    quad(x, seg - 1, by, bh, ramp(ember, 0.25 + 0.5 * (1 - Math.abs(0.5 - (i % 40) / 40) * 1.4) + t * 0.2, i, 0));
+    quad(x, seg - 1, by, 5, ember[4]);
   }
-  for (let k = 1; k < 10; k++) p.rect(bx + Math.round(bw * k / 10) - 1, by, 2, k === 4 ? bh + 8 : 8, k === 4 ? '#ff7a5a' : '#0a0605'); // 10% 눈금(40%는 길고 붉게)
-  p.poly([bx + bw * 0.4 - 6, by + bh + 12, bx + bw * 0.4 + 6, by + bh + 12, bx + bw * 0.4, by + bh + 3], '#ff7a5a'); // 분노 표식
-  p.roundRect(W / 2 - 78, by + 3, 156, bh - 6, 6, '#050302', 0.62); // 숫자 뒤 어두운 판(눈금과 섞이지 않게)
-  text(`${b.hp.toLocaleString()} / ${b.maxHp.toLocaleString()}`, W / 2, by + bh / 2 + 1, 18, '#ffffff');
+  for (let q = 0; q < 6; q++) p.rect(Math.round((bx + bw * ratio + sl * 0.5 + (hash2(q, b.turn, 7) - 0.5) * 30) / 4) * 4, by - 6 - Math.floor(hash2(q, b.turn, 9) * 12), 3, 3, q % 2 ? '#ffd070' : ember[3]); // 끊어진 끝에서 튀는 불씨
+  for (let k = 1; k < 10; k++) { const x = bx + Math.round(bw * k / 10), y0 = k === 4 ? by - 2 : by; p.line(x + sl * 0.5 + (k === 4 ? 2 : 0), y0, x - 1, by + bh + (k === 4 ? 6 : 0), k === 4 ? 3 : 2, k === 4 ? '#ff7a5a' : '#0a0605'); }
+  p.poly([bx + bw * 0.4 + sl * 0.25 - 6, by + bh + 14, bx + bw * 0.4 + sl * 0.25 + 6, by + bh + 14, bx + bw * 0.4 + sl * 0.25, by + bh + 5], '#ff7a5a');
+  p.roundRect(bx + bw / 2 - 70, by + 3, 156, bh - 6, 6, '#050302', 0.62); // 숫자 뒤 어두운 판(눈금과 섞이지 않게)
+  text(`${b.hp.toLocaleString()} / ${b.maxHp.toLocaleString()}`, bx + bw / 2 + sl / 2, by + bh / 2 + 1, 18, '#ffffff');
   // 억제 게이지 + 에스카톤 카운트다운(옛 현황 패널을 헤더에 합침)
   const gx = bx, gy = 92, gw = 330, gh = 9, gr = al.gauge / A.K.GAUGE_MAX, left = al.cycleLen - al.cycleTurn;
   p.roundRect(gx - 2, gy - 2, gw + 4, gh + 4, 4, rimDark); p.rect(gx, gy, gw, gh, '#0a0605'); p.rect(gx, gy, gw * gr, gh, col);
@@ -2437,10 +2441,15 @@ function alatHeader(b) {
   const mx1 = 88, my1 = 66;
   p.circle(mx1, my1, 34, rimDark); p.circle(mx1, my1, 31, '#0a0605'); p.circle(mx1, my1, 28, stone); p.strokeRoundRect(mx1 - 28, my1 - 28, 56, 56, 28, 2, rim);
   text('TURN', mx1, my1 - 13, 12, C.muted); text(String(b.turn), mx1, my1 + 8, 28, C.gold);
-  // 오른쪽 속성 메달(지금 속성 색 테두리와 빛)
-  const mx2 = W - 88;
-  p.circle(mx2, my1, 34, rimDark); p.circle(mx2, my1, 31, col); p.circle(mx2, my1, 27, '#0a0605'); p.circle(mx2, my1, 21, mixHex('#0a0605', col, 0.3));
-  text(A.ELEMENT_NAME[el], mx2, my1 + 1, 26, '#ffffff');
+  // 오른쪽: 다섯 속성 보석(불·물·번개·얼음·용) — 지금 속성만 켜지고 나머지는 꺼져 있다
+  const GEMS = [['fire', '#ff8c23'], ['water', '#46cdff'], ['thunder', '#f0f546'], ['ice', '#9ae4ff'], ['dragon', '#c08aff']];
+  GEMS.forEach(([k, c], i) => {
+    const gx2 = W - 218 + i * 38, gy2 = 62, on = k === el, r = on ? 16 : 12;
+    if (on) { p.circle(gx2, gy2, 22, mixHex('#0a0605', c, 0.25)); p.circle(gx2, gy2, 17, mixHex('#0a0605', c, 0.45)); }
+    p.poly([gx2, gy2 - r, gx2 + r * 0.72, gy2, gx2, gy2 + r, gx2 - r * 0.72, gy2], on ? c : mixHex('#1c130f', c, 0.4));
+    p.poly([gx2, gy2 - r + 3, gx2 + r * 0.72 - 3, gy2, gx2, gy2 + r - 3, gx2 - r * 0.72 + 3, gy2], on ? mixHex(c, '#ffffff', 0.45) : mixHex('#0f0907', c, 0.22));
+  });
+  text(`${A.ELEMENT_NAME[el]}속성`, W - 124, 96, 15, col);
 }
 function renderBattle(r) {
   return render('전투', () => {
