@@ -1232,8 +1232,8 @@ function alatOverlay(fx, mx, my, targets, layer) {
       }
       buf.flush(null);
       const fiss = [];
-      for (let q = 0; q < 5; q++) { const a = Math.PI * (0.06 + 0.88 * q / 4) + (rnd() - 0.5) * 0.12, len = 240 + rnd() * 260; fiss.push([zigzag(gx, gy + 6, gx + Math.cos(a) * len, gy + 6 + Math.abs(Math.sin(a)) * len * 0.45, rnd, 9, 20), 1]); } // 달아오른 바닥 금
-      pxStrike(fiss, R, ALAT_LINE.thunder, 5);
+      for (let q = 0; q < 5; q++) { const a = Math.PI * (0.24 + 0.52 * q / 4) + (rnd() - 0.5) * 0.08, len = 200 + rnd() * 160; fiss.push([zigzag(gx, gy + 10, gx + Math.cos(a) * len * 1.3, gy + 10 + Math.sin(a) * len * 0.6, rnd, 7, 10), 0]); } // 달아오른 바닥 금
+      pxStrike(fiss, ['#0e0c04', '#2a2208', '#5a4a10', '#a88a18', '#3a2e0a', '#ffe040', '#fff59a'], '#0a0802', 3); // 갈라진 땅: 어두운 틈 속에 달아오른 가는 심
       const main = zigzag(gx + (rnd() - 0.5) * 30, top, gx, gy, rnd, 11, 36), paths = [[main, 1]];
       for (let b = 0; b < 4; b++) { const s = main[2 + b * 2], sd = b % 2 ? 1 : -1; paths.push([zigzag(s[0], s[1], s[0] + sd * (40 + rnd() * 50), s[1] + 20 + rnd() * 40, rnd, 5, 16), 0]); } // 기둥에서 뻗는 곁가지
       pxStrike(paths, R, ALAT_LINE.thunder, 6);
