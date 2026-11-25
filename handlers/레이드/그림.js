@@ -1116,12 +1116,31 @@ const RED_BOLT = ['#1a0006', '#5a0a1a', '#a01430', '#e8203a', '#ff5a6a', '#ffb0b
 function cardBorderFx(el, tx, k0, rnd) {
   const x0 = cardLeft(tx), x1 = x0 + CARD_W, y0 = CARD_Y, y1 = CARD_Y + CARD_H, R = ALAT_RAMP[el], buf = pixBuf();
   const edgeD = (x, y) => Math.min(x - x0, x1 - x, y - y0, y1 - y);
-  if (el === 'thunder') {
+  if (el === 'thunder') { // 전기가 흐르는 테두리: 바깥 빛 번짐 → 안쪽 전기 띠(속을 기는 하얀 잔전류) → 두 겹 테두리 전류 → 모서리 건너뛰는 전류·십자 섬광 → 바깥으로 튀는 방전·불꽃
+    buf.paint(x0 - 16, y0 - 16, x1 + 16, y1 + 16, (x, y, i, j) => {
+      const d = edgeD(x, y), n = fbm(x / 10, y / 10, k0 + tx);
+      if (d < 0) { const o = -d; return o < 16 && bay(i, j) < (1 - o / 16) * (0.35 + n * 0.4) ? (o < 6 ? R[4] : R[3]) : null; }
+      const thr = 5 + n * 16 * (y < y0 + 60 || y > y1 - 60 ? 1 : 0.7); if (d > thr) return null;
+      if (Math.abs(fbm(x / 7, y / 7, k0 + 5) - 0.5) < 0.045) return '#ffffff';
+      return bay(i, j) < (1 - d / thr) * 1.15 ? ramp(R, 0.5 + (1 - d / thr) * 0.45, i, j) : null;
+    });
+    buf.flush(null);
+    p.strokeRoundRect(x0, y0, CARD_W, CARD_H, 12, 3, '#fff59a');
     const paths = [], pts = [[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]];
-    for (let s = 0; s < 4; s++) paths.push([zigzag(pts[s][0], pts[s][1], pts[s + 1][0], pts[s + 1][1], rnd, 12, 12), s === 0 ? 1 : 0]);
-    for (const [cx, cy] of pts.slice(0, 4)) for (let q = 0; q < 2; q++) paths.push([zigzag(cx, cy, cx + (rnd() - 0.5) * 70, cy + (rnd() - 0.5) * 70, rnd, 4, 14), 0]); // 모서리에서 튀는 불꽃
-    p.strokeRoundRect(x0, y0, CARD_W, CARD_H, 12, 4, '#fff59a');
+    for (let s = 0; s < 4; s++) {
+      const [ax, ay] = pts[s], [bx, by] = pts[s + 1], nx = -(by - ay), ny = bx - ax, L = Math.hypot(nx, ny), ix = -nx / L * 6, iy = -ny / L * 6; // ix,iy: 카드 안쪽으로 6px
+      paths.push([zigzag(ax, ay, bx, by, rnd, 16, 10), 1]);
+      paths.push([zigzag(ax + ix, ay + iy, bx + ix, by + iy, rnd, 20, 16), 0]);
+      for (let q = 0; q < 3; q++) { // 바깥으로 짧게 튀는 방전
+        const t = 0.1 + rnd() * 0.8, sx = ax + (bx - ax) * t, sy = ay + (by - ay) * t, len = 16 + rnd() * 26;
+        paths.push([zigzag(sx, sy, sx + nx / L * len + (rnd() - 0.5) * 16, sy + ny / L * len + (rnd() - 0.5) * 16, rnd, 3, 10), 0]);
+      }
+    }
+    const crn = [[x0, y0, 1, 1], [x1, y0, -1, 1], [x1, y1, -1, -1], [x0, y1, 1, -1]];
+    for (const [cx, cy, sx, sy] of crn) paths.push([zigzag(cx + sx * 34, cy - sy * 4, cx - sx * 4, cy + sy * 34, rnd, 5, 14), 0]); // 모서리를 건너뛰는 전류
     pxStrike(paths, R, ALAT_LINE.thunder, 3);
+    for (const [cx, cy] of crn) { const x = snap(cx), y = snap(cy); for (let s = 4; s <= 16; s += 4) { const c = s < 12 ? '#ffffff' : R[5]; p.rect(x - s, y, 4, 4, c); p.rect(x + s, y, 4, 4, c); p.rect(x, y - s, 4, 4, c); p.rect(x, y + s, 4, 4, c); } p.rect(x - 4, y - 4, 12, 12, R[5]); p.rect(x, y, 4, 4, '#ffffff'); } // 모서리 십자 섬광
+    for (let q = 0; q < 26; q++) { const s = Math.floor(rnd() * 4), t = rnd(), [ax, ay] = pts[s], [bx, by] = pts[s + 1], o = (rnd() - 0.3) * 22; const x = ax + (bx - ax) * t + (s % 2 ? o * (s === 1 ? 1 : -1) : 0), y = ay + (by - ay) * t + (s % 2 ? 0 : o * (s === 0 ? -1 : 1)); p.rect(snap(x), snap(y), 4, 4, rnd() < 0.5 ? '#ffffff' : R[5]); } // 테두리 둘레 불꽃 알갱이
     return;
   }
   buf.paint(x0 - 6, y0 - 6, x1 + 6, y1 + 6, (x, y, i, j) => {
