@@ -21,8 +21,7 @@
         "attack": 1
       },
       "water": {
-        "torrent": 2,
-        "bullet": 2,
+        "torrent": 3,
         "attack": 1
       },
       "thunder": {
@@ -233,24 +232,6 @@
         1
       ],
       "fx": "smash"
-    },
-    "bullet": {
-      "name": "물 탄환",
-      "telegraph": "입 앞에 물방울이 뭉친다...",
-      "target": "single",
-      "damage": [
-        11,
-        14
-      ],
-      "fx": "albullet",
-      "effect": "slow",
-      "effectTurns": 2,
-      "effectRate": 0.7,
-      "guardBlocks": true,
-      "status": {
-        "name": "젖음",
-        "emoji": "💧"
-      }
     }
   },
   "intentWeights": {

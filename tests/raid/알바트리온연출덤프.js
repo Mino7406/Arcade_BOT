@@ -16,12 +16,12 @@ const B = require('./handlers/레이드/전투.js');
 const mon = B.loadMonsters().find(m => m.id === 'alatreon');
 const party = ['fire', 'water', 'thunder', 'ice'].map((role, i) => ({ userId: String(100 + i), name: '유저' + (i + 1), role }));
 (async () => {
-  for (const [key, el] of [['flame', 'fire'], ['torrent', 'water'], ['bullet', 'water'], ['bolt', 'thunder'], ['frost', 'ice'], ['dragonbreath', 'dragon']]) {
+  for (const [key, el] of [['flame', 'fire'], ['torrent', 'water'], ['bolt', 'thunder'], ['frost', 'ice'], ['dragonbreath', 'dragon']]) {
     const rr = { client: null, monster: mon, guildId: '1', channelId: '2', phase: 'battle', party, recruitEndsAt: 0, battleEndsAt: Date.now() + 9e5, turnEndsAt: Date.now() + 25e3, freezesXp: true, hasImage: false };
     rr.battle = B.createBattle(mon, party, Math.random, { minParty: 1 });
     rr.battle.alat.element = el; rr.battle.intent = key;
     for (const m of rr.battle.members) B.choose(rr.battle, m.userId, m.role === 'fire' ? 'guard' : 'attack');
-    B.resolveTurn(rr.battle, () => 0.5); rr.showingResult = true;
+    B.resolveTurn(rr.battle, () => 0.5); rr.battle.alat.element = el; rr.showingResult = true; // 다음 턴 속성으로 바뀐 걸 되돌려 그 기술 속성 색으로 본다
     const v = await raidMod.battleView(rr);
     require('fs').writeFileSync(path.join(${JSON.stringify(out)}, key + '.png'), v.files[0].attachment);
     console.log('saved', key);
