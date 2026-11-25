@@ -2393,17 +2393,27 @@ function renderBattle(r) {
     if (usedFx && SKILL_FX.includes(usedFx)) skillCtx = { fx: usedFx, mx: W / 2, my: monsterY, targets: [] };
     alatTargets = ALAT_FX.includes(usedFx) ? b.members.filter(mm => last?.hits?.[mm.userId]).map(mm => [20 + activeRoles.indexOf(mm.role) * (CARD_W + CARD_GAP) + CARD_W / 2, CARD_Y + 86]) : [];
     heungTargets = usedFx === 'lightning' ? b.members.filter(mm => last?.hits?.[mm.userId]).map(mm => 121.5 + activeRoles.indexOf(mm.role) * 219) : []; // 낙뢰가 내려칠 카드 위치
+    const preFx = b.alat && ALAT_FX.includes(usedFx) && usedFx !== 'alflame' ? Buffer.from(p.buf) : null; // 연출(뒤 층)을 그리기 전 화면 — 연출이 어디에 칠해졌는지 알아내려고
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'back', sporeColor, accentColor);
     // 투명화(유령): 다음 턴 동안 몸을 흐리게(회색)
     let alatMouth = null, alatBody = null;
     if (!skyDotNow) {
       const mv = b.alat ? alatMotion(r.showingResult ? usedFx : null, b.intent === 'smash' && !r.showingResult, W / 2, monsterY, b.turn) : null; // 알바트리온: 기술마다 움직임(돌진·솟구침·젖힘·떨림)과 잔상
       const ex = { rage: b.rage, pose, outline: shielded ? '#cfe8ff' : null, gray: isPhased(b), dormant: dormantNow, element: b.alat?.element };
-      const bgSnap = b.alat && usedFx === 'alflame' ? Buffer.from(p.buf) : null; // 몸 픽셀을 알아내려고 몬스터를 그리기 전 화면을 기억해 둔다
+      const bgSnap = b.alat && ALAT_FX.includes(usedFx) ? Buffer.from(p.buf) : null; // 몸 픽셀을 알아내려고 몬스터를 그리기 전 화면을 기억해 둔다
       if (mv) for (const gh of mv.ghosts) drawMonster(m, gh.x, gh.y, 112 * gh.s, { ...ex, gray: true }); // 잔상(흐린 그림자)
       if (mv) { if (mv.streaks) alatStreaks(mv); drawMonster(m, mv.x, mv.y, 112 * mv.s, ex); } else drawMonster(m, W / 2, monsterY, 112, ex);
       if (b.alat) alatMouth = { x: mv ? mv.x : W / 2, y: (mv ? mv.y : monsterY) - 8 + 6 };
-      if (bgSnap) alatBody = { bg: bgSnap, mon: Buffer.from(p.buf) };
+      if (bgSnap && usedFx === 'alflame') alatBody = { bg: bgSnap, mon: Buffer.from(p.buf) };
+      if (bgSnap && preFx) { // 연출(몸 뒤에 그린 것)과 몸이 겹쳐 보이게: 몸 픽셀에 뒤의 연출을 비쳐 섞는다(밝은 연출일수록 더 비침). 연출 모양은 그대로
+        for (let yy = 0; yy < p.h; yy++) for (let xx = 0; xx < p.w; xx++) {
+          const i = (yy * p.w + xx) * 3; if (p.buf[i] === bgSnap[i] && p.buf[i + 1] === bgSnap[i + 1] && p.buf[i + 2] === bgSnap[i + 2]) continue; // 몸이 아닌 칸
+          const dr = bgSnap[i] - preFx[i], dg = bgSnap[i + 1] - preFx[i + 1], db = bgSnap[i + 2] - preFx[i + 2];
+          if (Math.abs(dr) + Math.abs(dg) + Math.abs(db) < 12) continue; // 연출이 없는 칸
+          const lum = (bgSnap[i] + bgSnap[i + 1] + bgSnap[i + 2]) / 765, w = 0.1 + 0.26 * lum; // 연출 밝기에 따라 10~36%만 몸 위로 비침(몸 모양은 또렷하게)
+          p.buf[i] = Math.round(p.buf[i] * (1 - w) + bgSnap[i] * w); p.buf[i + 1] = Math.round(p.buf[i + 1] * (1 - w) + bgSnap[i + 1] * w); p.buf[i + 2] = Math.round(p.buf[i + 2] * (1 - w) + bgSnap[i + 2] * w);
+        }
+      }
     }
     if (r.showingResult && (last?.ambushLanded || last?.cometLanded)) ambushImpact(W / 2, monsterY, 'front');
     if (shaking && !skyDotNow && !m.ui?.noShake) shakeFx(m, W / 2, monsterY, 112, pose); // ui.noShake 몬스터(???)는 떨림 대신 준비 자세(readyPose)만
