@@ -2393,13 +2393,17 @@ function renderBattle(r) {
     }
     if (b.rage && !m.ui?.noRageMark && !hideBody) rageFx(m, W / 2, monsterY, 112, pose, 'mark'); // ui.noRageMark 몬스터(???)는 붉은 핏줄 분노 마크를 그리지 않는다
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'front', sporeColor, accentColor);
-    if (alatBody) { // 브레스는 입에서 나와 앞으로: 입보다 위(머리·날개)와 입 아래 몸통은 몸을 그대로 두고, 입 바로 아래 좁은 띠(입에서 아래로 갈수록 넓어짐)만 브레스가 몸 앞을 지나가게 한다
-      const cutY = Math.round((alatMouth.y + 2) * RENDER_SCALE), wpx = p.w, { bg, mon } = alatBody, mxp = alatMouth.x * RENDER_SCALE;
+    if (alatBody) { // 브레스가 입에서 몸 앞으로 이어지게: 입보다 위(머리·날개)는 몸 그대로, 입 아래는 몸이 브레스에 서서히 묻히고(위에서 아래로 부드럽게), 입에는 브레스 빛이 터진다
+      const cutY = Math.round((alatMouth.y + 2) * RENDER_SCALE), wpx = p.w, { bg, mon } = alatBody, fe = 26 * RENDER_SCALE;
       for (let yy = 0; yy < p.h; yy++) for (let xx = 0; xx < wpx; xx++) {
         const i = (yy * wpx + xx) * 3; if (mon[i] === bg[i] && mon[i + 1] === bg[i + 1] && mon[i + 2] === bg[i + 2]) continue;
-        if (yy >= cutY && Math.abs(xx - mxp) < (4 + (yy - cutY) * 0.3) * RENDER_SCALE * 1.3) continue; // 브레스 띠 안은 연출 그대로
+        const a = yy < cutY ? 1 : Math.max(0, 1 - (yy - cutY) / fe); // 입 아래로 갈수록 몸이 연출에 묻힘
+        if (a <= 0) continue;
+        if (a < 1 && bay(xx, yy) > a) continue; // 디더링으로 부드럽게 섞음(반투명 대신 도트 격자)
         p.buf[i] = mon[i]; p.buf[i + 1] = mon[i + 1]; p.buf[i + 2] = mon[i + 2];
       }
+      const Bk = BREATH[ALAT_FX_EL[usedFx]]; // 입에서 터지는 빛(브레스 색): 몸이 연출에 묻히는 경계를 가려 이어 준다
+      haze(alatMouth.x, alatMouth.y + 4, 30, Bk.glow[1], 0.28); haze(alatMouth.x, alatMouth.y + 4, 18, Bk.glow[1], 0.3); haze(alatMouth.x, alatMouth.y + 4, 8, '#ffffff', 0.5);
     }
     const minionsShown = drawMinions(b, last, r.showingResult);
     // 몬스터 오른쪽: 이번 턴 받은 피해(빨강) · 재생 회복량(초록, 피해 아래). 결과 화면에서만.

@@ -42,7 +42,7 @@ try {
   for (const dir of ['handlers', 'commands', 'assets', 'Monster']) fs.cpSync(path.join(repo, dir), path.join(tmp, dir), { recursive: true });
   fs.copyFileSync(path.join(repo, 'config.js'), path.join(tmp, 'config.js'));
   fs.writeFileSync(path.join(tmp, 'run.js'), runner);
-  const r = spawnSync(process.execPath, [path.join(tmp, 'run.js')], { encoding: 'utf8', env: { ...process.env, NODE_PATH: path.join(repo, 'node_modules') } });
+  const r = spawnSync(process.execPath, [path.join(tmp, 'run.js')], { encoding: 'utf8', env: { ...process.env, ALAT_MODE: process.env.ALAT_MODE || '', NODE_PATH: path.join(repo, 'node_modules') } });
   console.log((r.stdout || '') + (r.stderr || ''));
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
