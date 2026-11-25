@@ -2393,12 +2393,12 @@ function renderBattle(r) {
     }
     if (b.rage && !m.ui?.noRageMark && !hideBody) rageFx(m, W / 2, monsterY, 112, pose, 'mark'); // ui.noRageMark 몬스터(???)는 붉은 핏줄 분노 마크를 그리지 않는다
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'front', sporeColor, accentColor);
-    if (alatBody) { // 브레스는 몸 앞에 반투명으로: 입보다 위(머리·날개)는 몸을 그대로, 입 아래 몸통은 브레스와 반반 섞어 몸이 비쳐 보이게
-      const cutY = Math.round((alatMouth.y + 2) * RENDER_SCALE), wpx = p.w, { bg, mon } = alatBody;
+    if (alatBody) { // 브레스는 입에서 나와 앞으로: 입보다 위(머리·날개)와 입 아래 몸통은 몸을 그대로 두고, 입 바로 아래 좁은 띠(입에서 아래로 갈수록 넓어짐)만 브레스가 몸 앞을 지나가게 한다
+      const cutY = Math.round((alatMouth.y + 2) * RENDER_SCALE), wpx = p.w, { bg, mon } = alatBody, mxp = alatMouth.x * RENDER_SCALE;
       for (let yy = 0; yy < p.h; yy++) for (let xx = 0; xx < wpx; xx++) {
         const i = (yy * wpx + xx) * 3; if (mon[i] === bg[i] && mon[i + 1] === bg[i + 1] && mon[i + 2] === bg[i + 2]) continue;
-        const a = yy < cutY ? 1 : 0.55; // 몸 쪽 비율(아래 몸통은 브레스가 45%)
-        p.buf[i] = Math.round(mon[i] * a + p.buf[i] * (1 - a)); p.buf[i + 1] = Math.round(mon[i + 1] * a + p.buf[i + 1] * (1 - a)); p.buf[i + 2] = Math.round(mon[i + 2] * a + p.buf[i + 2] * (1 - a));
+        if (yy >= cutY && Math.abs(xx - mxp) < (4 + (yy - cutY) * 0.3) * RENDER_SCALE * 1.3) continue; // 브레스 띠 안은 연출 그대로
+        p.buf[i] = mon[i]; p.buf[i + 1] = mon[i + 1]; p.buf[i + 2] = mon[i + 2];
       }
     }
     const minionsShown = drawMinions(b, last, r.showingResult);
