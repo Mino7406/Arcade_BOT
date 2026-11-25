@@ -1237,7 +1237,15 @@ function alatOverlay(fx, mx, my, targets, layer) {
       const main = zigzag(gx + (rnd() - 0.5) * 30, top, gx, gy, rnd, 11, 36), paths = [[main, 1]];
       for (let b = 0; b < 4; b++) { const s = main[2 + b * 2], sd = b % 2 ? 1 : -1; paths.push([zigzag(s[0], s[1], s[0] + sd * (40 + rnd() * 50), s[1] + 20 + rnd() * 40, rnd, 5, 16), 0]); } // 기둥에서 뻗는 곁가지
       pxStrike(paths, R, ALAT_LINE.thunder, 6);
-      pxBurst(buf, gx, gy, 120, R, rnd, 0.42); buf.flush(ALAT_LINE.thunder);
+      buf.paint(gx - 300, gy - 60, gx + 300, gy + 40, (x, y, i, j) => { // 꽂힌 자리: 흰 심이 달아오른 납작한 타원 + 가로로 길게 뻗는 섬광 + 짧은 세로 섬광(외곽선 없이 빛만)
+        const dx = Math.abs(x - gx), dy = Math.abs(y - gy), core = Math.hypot(dx / 84, dy / 24);
+        if (core < 1) return core < 0.55 ? '#ffffff' : (bay(i, j) < (1 - core) * 2.4 ? '#ffffff' : R[5]);
+        const hf = 1 - dx / 290; if (hf > 0 && dy < 2 + 6 * hf) return bay(i, j) < hf * 1.6 ? (dy < 4 ? '#ffffff' : R[5]) : null;
+        const vf = 1 - dy / 56; if (vf > 0 && dx < 2 + 5 * vf && y < gy) return bay(i, j) < vf * 1.6 ? '#ffffff' : null;
+        return null;
+      });
+      buf.flush(null);
+      for (let q = 0; q < 16; q++) { const a = -Math.PI * (0.05 + rnd() * 0.9), d = 50 + rnd() * 90, x = gx + Math.cos(a) * d * 1.6, y = gy + Math.sin(a) * d * 0.7; p.rect(snap(x), snap(y), 4, 4, rnd() < 0.5 ? '#ffffff' : R[5]); } // 튀는 불꽃
       for (let q = 0; q < 22; q++) { const a = -Math.PI * (0.08 + rnd() * 0.84), d = 70 + rnd() * 170, x = gx + Math.cos(a) * d * 1.5, y = gy + Math.sin(a) * d, sz = 8 + Math.floor(rnd() * 3) * 4; if (y < top) continue; p.rect(snap(x), snap(y), sz, sz, '#16140c'); p.rect(snap(x), snap(y), sz / 2, sz / 2, '#f0c820'); } // 튀어 오르는 바닥 파편
       speedLines(gx, gy, 46, 140, 640, B.ray, rnd, 0.5, top, H);
       return;
