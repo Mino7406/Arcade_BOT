@@ -1931,36 +1931,48 @@ function frame() {
 }
 function monsterBox(y, h) {
   p.roundRect(20, y, W - 40, h, 14, C.box);
-  if (themeKey === ':alat') alatRuins(y, h);
+  if (themeKey === ':alat') alatCanyon(y, h);
   p.strokeRoundRect(20, y, W - 40, h, 14, 1.5, C.frame);
 }
-// 알바트리온 전용 배경(원작 알바트리온 전장처럼 모든 게 박살 난 폐허): 핏빛 황혼 하늘과 기울어진 붉은 달, 멀리 부서진 석조 기둥과 무너진 아치,
-// 바닥엔 갈라진 땅의 용암빛 금과 흩어진 잔해, 떠다니는 재. 칸 안쪽(x 24~W-24, y~y+h)에만 그린다.
-function alatRuins(y, h) {
-  const x0 = 24, x1 = W - 24, top = y + 4, bot = y + h - 4, gy = bot - 34; // gy: 땅 윗선
-  for (let yy = top; yy < gy; yy += 6) p.rect(x0, yy, x1 - x0, 6, mixHex('#1c0a0c', '#7a2c14', Math.pow((yy - top) / (gy - top), 1.6))); // 황혼 하늘(위 어둡고 지평선이 붉음)
-  p.circle(W * 0.72, top + (gy - top) * 0.42, 54, '#3a1410'); p.circle(W * 0.72, top + (gy - top) * 0.42, 44, '#7a2a1a'); p.circle(W * 0.72 - 6, top + (gy - top) * 0.42 - 4, 36, '#a04426'); // 붉은 달(무너진 하늘 사이로)
-  const seed = seeded(77); // 매번 같은 폐허
-  const ruin = (cx, base, w, hh, col, edge) => { // 위가 부러진 석조 기둥
-    const lean = (seed() - 0.5) * 10, brk = [0.7 + seed() * 0.3, 0.55 + seed() * 0.3, 0.8 + seed() * 0.2];
-    p.poly([cx - w / 2, base, cx - w / 2 + lean * 0.2, base - hh * brk[0], cx - w * 0.15 + lean * 0.5, base - hh * brk[1], cx + w * 0.1 + lean * 0.7, base - hh * brk[2], cx + w / 2 + lean, base - hh * (0.6 + seed() * 0.2), cx + w / 2, base], col);
-    p.line(cx - w / 2 + 2, base, cx - w / 2 + 2 + lean * 0.2, base - hh * brk[0] + 4, 2, edge); // 빛받는 모서리
-    for (let k = 1; k < 4; k++) p.line(cx - w / 2, base - hh * k * 0.22, cx + w / 2, base - hh * k * 0.22 + (seed() - 0.5) * 3, 1, '#00000055'.slice(0, 7)); // 석재 이음
-  };
-  const far = ['#2a1210', '#4a2418'], near = ['#140a09', '#6a3a24'];
-  for (const [cx, hh, w] of [[96, 104, 30], [196, 146, 36], [310, 86, 28], [610, 126, 34], [726, 160, 38], [818, 98, 30]]) ruin(cx, gy + 2, w, hh, far[0], far[1]); // 먼 기둥
-  // 무너진 아치: 두 기둥 위로 반쯤 남은 곡선과 떨어져 나간 조각
-  ruin(390, gy + 4, 40, 150, near[0], near[1]); ruin(560, gy + 4, 40, 104, near[0], near[1]);
-  p.poly([370, gy - 140, 410, gy - 158, 450, gy - 158, 490, gy - 140, 480, gy - 128, 450, gy - 142, 410, gy - 138], near[0]);
-  for (const [bx, by, bw, bh] of [[498, gy - 84, 12, 9], [512, gy - 60, 9, 8], [486, gy - 44, 8, 7]]) p.rect(bx, by, bw, bh, near[0]); // 떨어지는 조각
-  p.rect(x0, gy, x1 - x0, bot - gy, '#0c0605'); // 땅
-  for (let xx = x0; xx < x1; xx += 2) p.rect(xx, gy, 2, 3 + Math.floor(seed() * 4), '#1a0e0a'); // 울퉁불퉁한 땅 윗선
-  for (let i = 0; i < 9; i++) { // 갈라진 땅의 용암빛 금
-    let cx = x0 + 30 + seed() * (x1 - x0 - 60), cy = gy + 6;
-    for (let t = 0; t < 12; t++) { const nx = cx + (seed() - 0.5) * 22, ny = cy + 2 + seed() * 4; p.line(cx, cy, nx, ny, 2, '#ff7a2a'); p.line(cx, cy, nx, ny, 1, '#ffd070'); cx = nx; cy = Math.min(bot - 2, ny); }
+// 알바트리온 전용 배경: 원작 알바트리온 전장 '깊숙한 골짜기' — 켜켜이 쌓인 주황빛 암벽이 좁은 틈으로 갈라져 하늘의 빛줄기가 쏟아지고,
+// 왼쪽 벽에는 폭포와 물안개, 바닥은 모래빛 땅에 큼직한 바위 잔해. 칸 안쪽에만 그린다(몬스터는 이 위에 그린다).
+function alatCanyon(y, h) {
+  const x0 = 24, x1 = W - 24, top = y + 4, bot = y + h - 4, gy = bot - 44, slitX = 478;
+  const ROCK = ['#120a08', '#26150f', '#3f2417', '#5e3a22', '#8a5832', '#b97c46', '#dfa468'];
+  const k = 7;
+  const edgeL = (yy) => slitX - 112 + (yy - top) * 0.2 + (fbm(yy / 18, 1.3, k) - 0.5) * 40; // 틈의 왼쪽 가장자리(들쭉날쭉)
+  const edgeR = (yy) => slitX + 120 - (yy - top) * 0.22 + (fbm(yy / 16, 4.1, k + 2) - 0.5) * 40;
+  const buf = pixBuf();
+  buf.paint(x0, top, x1, bot, (x, yy, i, j) => {
+    if (yy > gy + 2) { // 모래빛 바닥: 틈에서 쏟아진 빛 아래가 밝다
+      const lit = Math.max(0, 1 - Math.abs(x - slitX) / 330), n = fbm(x / 26, yy / 8, k + 4);
+      return ramp(['#3a2418', '#6a4628', '#a26e3e', '#d49a58', '#f0c47e'], 0.2 + lit * 0.62 + (n - 0.5) * 0.3 - (yy - gy) / 260, i, j);
+    }
+    const l = edgeL(yy), r = edgeR(yy);
+    if (x > l && x < r) { // 하늘: 틈 가운데가 가장 하얗다
+      const t = (x - l) / (r - l), c = 1 - Math.abs(t - 0.5) * 2;
+      return ramp(['#c89a6a', '#f2d8a8', '#fff2d0', '#ffffff'], 0.35 + c * 0.7 - (yy - top) / (gy - top) * 0.25, i, j);
+    }
+    const dist = x < l ? l - x : x - r, side = x < l ? 0 : 1; // 암벽: 층리(비스듬한 줄무늬) + 틈에 가까울수록 빛을 받아 밝다
+    const strata = Math.sin((yy + dist * (side ? -0.45 : 0.45)) / 5.5 + fbm(x / 40, yy / 30, k + 6) * 6) * 0.5 + 0.5;
+    const light = Math.max(0, 1 - dist / 170) * (side ? 0.95 : 0.7), shade = (x < x0 + 120 && !side) || (x > x1 - 90 && side) ? 0.5 : 1; // 맨 왼쪽은 그늘
+    const crag = fbm(x / 22, yy / 16, k + 9);
+    return ramp(ROCK, (0.08 + light * 0.7 + strata * 0.26 + (crag - 0.5) * 0.4) * shade, i, j);
+  });
+  buf.flush(null);
+  // 왼쪽 폭포: 바위 틈에서 떨어지는 흰 물줄기와 아래의 물안개
+  for (let q = 0; q < 6; q++) { const fx = 168 + q * 4 + (q % 2) * 2; p.rect(fx, top + 34 + q * 3, 3, gy - top - 34 - q * 3, q % 2 ? '#e8f2ff' : '#bcd6f0'); }
+  for (const [mx, my, mr, a] of [[176, gy - 4, 30, 0.14], [168, gy - 18, 22, 0.1], [186, gy - 30, 16, 0.07]]) p.roundRect(mx - mr, my - mr, mr * 2, mr * 2, mr, '#dfeaf6', a);
+  // 틈에서 내리는 빛 기둥과 바닥의 빛 웅덩이
+  dotGlow(slitX + 4, gy - 40, 150, 120, '#fff2cc', 0.5, top); dotGlow(slitX + 4, gy + 6, 210, 34, '#ffe9b0', 0.55, top);
+  // 바닥의 큼직한 바위 잔해
+  const sd = seeded(31);
+  for (const [bx, bw, bh] of [[300, 46, 24], [372, 34, 18], [560, 54, 28], [630, 38, 20], [704, 62, 32], [250, 28, 14], [820, 40, 22]]) {
+    const by = gy + 4 + sd() * 14;
+    p.poly([bx - bw / 2, by + bh * 0.3, bx - bw * 0.3, by - bh * 0.7, bx + bw * 0.1, by - bh, bx + bw / 2, by - bh * 0.3, bx + bw * 0.4, by + bh * 0.3], '#5a3822');
+    p.poly([bx - bw * 0.3, by - bh * 0.7, bx + bw * 0.1, by - bh, bx + bw * 0.5, by - bh * 0.3, bx + bw * 0.1, by - bh * 0.4], '#b97c46'); // 빛받는 윗면
   }
-  for (let i = 0; i < 38; i++) { const bx = x0 + 6 + seed() * (x1 - x0 - 12), bw = 5 + seed() * 14, bh = 3 + seed() * 7; p.rect(bx, gy + 4 + seed() * 12, bw, bh, i % 3 ? '#1e1210' : '#3a2218'); } // 흩어진 잔해
-  for (let i = 0; i < 46; i++) p.rect(x0 + seed() * (x1 - x0), top + seed() * (bot - top), i % 5 ? 2 : 3, i % 5 ? 2 : 3, i % 4 ? '#8a5a3a' : '#ff9a4a'); // 떠다니는 재와 불씨
+  for (let i = 0; i < 40; i++) p.rect(x0 + sd() * (x1 - x0), top + sd() * (bot - top), 2, 2, i % 3 ? '#f4d8a0' : '#ffffff'); // 빛 속에 떠다니는 먼지
 }
 
 // 카드 4장(역할 순서 고정). drawCard(x, y, w, h, roleKey, member)로 안쪽을 채운다.
