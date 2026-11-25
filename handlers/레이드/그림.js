@@ -1241,6 +1241,12 @@ function alatOverlay(fx, mx, my, targets, layer) {
     // 천뢰 낙하: 먹구름이 소용돌이치며 갈라지고, 화면을 세로로 가르는 빛기둥이 맞은 사람 앞 바닥에 꽂힌다.
     // 꽂힌 자리엔 빛의 반구가 솟고, 두꺼운 충격파 고리가 원근으로 커지며 파티 쪽으로 밀려온다
     const gx = ts[0][0], gy = floorY - 2, top = 112;
+    if (layer === 'front') { // 몸 앞: 번개 줄기 몇 가닥이 몸 위를 가로질러 몸과 연출이 겹쳐 보이게(가는 줄기라 몸을 가리지 않음)
+      const paths = [];
+      for (const off of [-92, -38, 34, 88]) paths.push([zigzag(mx + off + (rnd() - 0.5) * 20, 116, gx + (mx + off - gx) * 0.35, gy, rnd, 9, 30), off === -38 || off === 34 ? 1 : 0]);
+      pxStrike(paths, R, ALAT_LINE.thunder, 4);
+      return;
+    }
     if (field) {
       p.roundRect(0, 0, W, H, 0, B.dark, 0.62);
       for (let q = 0; q < 50; q++) { const x = rnd() * W, y = 200 + rnd() * 430, len = 10 + rnd() * 16; for (let s = 0; s < len; s += AG) p.rect(snap(x - s * 0.35), snap(y + s), AG, AG, '#2a3450'); } // 옅은 비
@@ -1370,12 +1376,14 @@ function alatOverlay(fx, mx, my, targets, layer) {
 // 알바트리온 기술 움직임: 정지 그림이라도 위치·크기·잔상으로 동작이 보이게 한다(이전 위치에 잔상, 진행 방향에 속도선).
 //   브레스(화염·물·서리): 뒤로 젖혔다 앞으로 숙이며 내뿜음 / 낙뢰: 날개를 펴고 위로 솟구침 / 용의 숨결: 크게 부풀며 앞으로 / 발톱: 앞으로 돌진 / 필살(에스카톤): 선택 화면에서 떨며 떠오르고, 결과에선 내리꽂음
 function alatMotion(fx, charging, cx, cy, turn) {
-  // 몬스터가 연출 앞으로 튀어나와 커지지 않게: 크기·앞뒤 이동 없이 제자리에서 살짝 떠오르며 날갯짓하듯 위아래로만 움직인다(잔상·속도선 없음)
+  // 앞으로 튀어나오거나 커지지 않는다: 제자리에서 몸을 살짝 들썩이는 정도(크기 1.0 고정, 잔상·속도선 없음). 몸은 연출 앞 그대로.
   const j = (k) => ((turn * 7 + k * 13) % 5) - 2; // 턴마다 다른 작은 떨림
-  if (charging) return { x: cx + j(1) * 2, y: cy - 6 + j(2), s: 1, ghosts: [] };
-  if (fx === 'smash') return { x: cx, y: cy - 4, s: 1, ghosts: [] };
-  if (fx === 'attack') return { x: cx + 8, y: cy - 2, s: 1, ghosts: [] };
-  if (ALAT_FX.includes(fx)) return { x: cx, y: cy - 8, s: 1, ghosts: [] };
+  if (charging) return { x: cx + j(1) * 2, y: cy - 4 + j(2), s: 1, ghosts: [] }; // 필살 준비: 몸을 떨며 살짝 떠오름
+  if (fx === 'alflame' || fx === 'alwater' || fx === 'alice') return { x: cx, y: cy + 4, s: 1, ghosts: [] }; // 브레스: 고개를 숙이듯 살짝 내려앉음
+  if (fx === 'albolt') return { x: cx, y: cy - 6, s: 1, ghosts: [] }; // 낙뢰: 날개를 펴며 살짝 솟음
+  if (fx === 'aldragon') return { x: cx + j(5), y: cy - 2, s: 1, ghosts: [] }; // 용의 숨결: 가슴을 부풀리며 좌우로 살짝 떨림
+  if (fx === 'smash') return { x: cx, y: cy + 6, s: 1, ghosts: [] };
+  if (fx === 'attack') return { x: cx + 10, y: cy + 4, s: 1, ghosts: [] }; // 발톱: 옆으로 살짝 몸을 던짐
   return null;
 }
 function alatStreaks({ x, y, dir }) { // 움직임 방향 속도선: dir 1 앞(아래)·-1 위·0 사방
@@ -1400,7 +1408,7 @@ function alatMouthBurst(el, x, y, up) {
 }
 function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
   if (!move) return;
-  if (ALAT_FX.includes(move)) { if (layer === (move === 'alflame' ? 'front' : 'back')) alatOverlay(move, cx, cy, alatTargets, 'field'); return; } // 화염 브레스만 입에서 몸 앞으로 쏟아지고, 나머지 기술은 몸 뒤 배경 연출 // 알바트리온: 몬스터 칸 연출(카드·말풍선보다 아래), 타격은 맨 위에서 'hit'
+  if (ALAT_FX.includes(move)) { if (layer === (move === 'alflame' ? 'front' : 'back')) alatOverlay(move, cx, cy, alatTargets, 'field'); else if (layer === 'front' && move === 'albolt') alatOverlay(move, cx, cy, alatTargets, 'front'); return; } // 화염 브레스만 입에서 몸 앞으로 쏟아지고, 나머지 기술은 몸 뒤 배경 연출 // 알바트리온: 몬스터 칸 연출(카드·말풍선보다 아래), 타격은 맨 위에서 'hit'
   if (HEUNG_FX.includes(move)) { heungMonsterFx(move, cx, cy, layer); return; }
   if (move === 'fart' && layer === 'front') {
     // 구린 방귀: 뒤돌아선 엉덩이에서 뿜어진 커다란 가스 덩어리 하나가 파티 쪽(아래·양옆)으로 뭉게뭉게 부풀어 퍼진다.
@@ -2399,11 +2407,18 @@ function renderBattle(r) {
     if (!skyDotNow) {
       const mv = b.alat ? alatMotion(r.showingResult ? usedFx : null, b.intent === 'smash' && !r.showingResult, W / 2, monsterY, b.turn) : null; // 알바트리온: 기술마다 움직임(돌진·솟구침·젖힘·떨림)과 잔상
       const ex = { rage: b.rage, pose, outline: shielded ? '#cfe8ff' : null, gray: isPhased(b), dormant: dormantNow, element: b.alat?.element };
-      const bgSnap = b.alat && usedFx === 'alflame' ? Buffer.from(p.buf) : null; // 몸 픽셀을 알아내려고 몬스터를 그리기 전 화면을 기억해 둔다
+      const bgSnap = b.alat && (usedFx === 'alflame' || usedFx === 'albolt') ? Buffer.from(p.buf) : null; // 몸 픽셀을 알아내려고 몬스터를 그리기 전 화면을 기억해 둔다
       if (mv) for (const gh of mv.ghosts) drawMonster(m, gh.x, gh.y, 112 * gh.s, { ...ex, gray: true }); // 잔상(흐린 그림자)
       if (mv) { if (mv.streaks) alatStreaks(mv); drawMonster(m, mv.x, mv.y, 112 * mv.s, ex); } else drawMonster(m, W / 2, monsterY, 112, ex);
       if (b.alat) alatMouth = { x: mv ? mv.x : W / 2, y: (mv ? mv.y : monsterY) - 8 + 6 };
-      if (bgSnap) alatBody = { bg: bgSnap, mon: Buffer.from(p.buf) };
+      if (bgSnap && usedFx === 'albolt') { // 낙뢰: 번개 빛이 몸에도 닿게 — 몸을 번개빛으로 물들이고 위쪽일수록 밝게, 연출 뒤 배경과 한 장면처럼 이어지게
+        for (let yy = 0; yy < p.h; yy++) for (let xx = 0; xx < p.w; xx++) {
+          const i = (yy * p.w + xx) * 3; if (p.buf[i] === bgSnap[i] && p.buf[i + 1] === bgSnap[i + 1] && p.buf[i + 2] === bgSnap[i + 2]) continue;
+          const a = 0.34 + 0.2 * Math.max(0, 1 - yy / (p.h * 0.5));
+          p.buf[i] = Math.round(p.buf[i] * (1 - a) + 255 * a); p.buf[i + 1] = Math.round(p.buf[i + 1] * (1 - a) + 238 * a); p.buf[i + 2] = Math.round(p.buf[i + 2] * (1 - a) + 120 * a);
+        }
+      }
+      if (bgSnap && usedFx === 'alflame') alatBody = { bg: bgSnap, mon: Buffer.from(p.buf) };
     }
     if (r.showingResult && (last?.ambushLanded || last?.cometLanded)) ambushImpact(W / 2, monsterY, 'front');
     if (shaking && !skyDotNow && !m.ui?.noShake) shakeFx(m, W / 2, monsterY, 112, pose); // ui.noShake 몬스터(???)는 떨림 대신 준비 자세(readyPose)만
