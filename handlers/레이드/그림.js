@@ -1062,22 +1062,64 @@ const BREATH = {
 };
 // 브레스 줄기의 모양: 입(ox,oy)에서 (ex,ey) 방향으로 원근으로 넓어진다. 칸마다 [축 방향 t, 폭 비율 u]
 function breathAxis(ox, oy, ex, ey) { const L = Math.hypot(ex - ox, ey - oy) || 1; return { L, ux: (ex - ox) / L, uy: (ey - oy) / L }; }
+// 속성마다 줄기 속 질감: (t 입에서부터 거리 비율, u 폭 비율 -1~1) → 색. 같은 틀이어도 한눈에 다른 기술로 보이게
+const tri01 = (v) => Math.abs(((v % 1) + 1) % 1 - 0.5) * 2;
+const BREATH_TEX = {
+  // 화염: 일렁이는 불길 + 방사 줄무늬, 가장자리는 말려 오르는 검은 연기
+  fire(t, u, au, x, y, i, j, k, R, B) {
+    if (au > 1.3) return null;
+    const n = fbm(u * 2.4 + 9, t * 5.5 - u * u * 2, k), st = fbm(u * 13 + 3, t * 1.3, k + 4);
+    const I = (1 - Math.pow(Math.min(1, au), 2.2)) * 0.88 + (n - 0.5) * 0.85 + (st - 0.5) * 0.6 - t * 0.08;
+    if (I > 0.16) return ramp(R, Math.min(1, (I - 0.1) * 1.35), i, j);
+    if (I > -0.12 && t > 0.05) { const sm = fbm(x / 24, y / 24 + t * 2, k + 7); return bay(i, j) < 0.3 + sm * 0.6 ? B.edge[sm > 0.6 ? 2 : sm > 0.48 ? 1 : 0] : null; }
+    return null;
+  },
+  // 물: 꼬이며 도는 나선 띠 + 맥동하는 물결 고리, 가장자리는 하얀 거품과 흩어지는 물방울
+  water(t, u, au, x, y, i, j, k, R) {
+    const en = fbm(t * 8, u * 2 + 5, k), lim = 0.92 + (en - 0.5) * 0.35;
+    if (au > lim + 0.2) return au < lim + 0.5 && t > 0.08 && hash2(i, j, k) < 0.08 * (1 - (au - lim - 0.2) / 0.3) ? (hash2(i, j, k + 1) < 0.5 ? '#ffffff' : R[4]) : null;
+    if (au > lim) return bay(i, j) < 0.55 + en * 0.4 ? (en > 0.5 ? '#ffffff' : R[5]) : null;
+    const ang = Math.asin(Math.max(-1, Math.min(1, u / lim))), helix = Math.sin(t * 42 - ang * 2.4 + k), ring = Math.sin(t * 22 - k) > 0.93 ? 0.3 : 0;
+    return ramp(R, 0.4 + (1 - au / lim) * 0.35 + helix * 0.18 + ring + (fbm(t * 6, u * 3, k + 2) - 0.5) * 0.2, i, j);
+  },
+  // 낙뢰: 꽉 찬 줄기 대신 가는 플라스마 심 + 성긴 전기 안개(번개 다발은 따로 그린다)
+  thunder(t, u, au, x, y, i, j, k, R) {
+    if (au > 1.1) return null;
+    const core = 0.1 + 0.05 * Math.sin(t * 50 + k) + (fbm(t * 10, 1, k) - 0.5) * 0.08;
+    if (au < core) return au < core * 0.45 ? '#ffffff' : R[5];
+    if (au < core * 2.2) return ramp(R, 0.78 - (au - core) / (core * 1.2) * 0.3, i, j);
+    return bay(i, j) < (1 - au) * 0.42 * (0.4 + fbm(t * 5, u * 4, k + 3)) ? (hash2(i, j, k) < 0.5 ? R[2] : R[1]) : null;
+  },
+  // 서리: 깨진 얼음 면 조각으로 채운 줄기(면마다 밝기가 다르고 금이 간다), 가장자리는 얼음 가시로 들쭉날쭉
+  ice(t, u, au, x, y, i, j, k, R) {
+    const lim = 0.95 + 0.24 * tri01(t * 26 + (u > 0 ? 0.5 : 0)) * Math.min(1, t * 4); if (au > lim) return null;
+    const gx = t * 15, gy = (u + 1.3) * 3.2, cx = Math.floor(gx), cy = Math.floor(gy);
+    let d1 = 9, d2 = 9, id = 0;
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+      const px = cx + a + hash2(cx + a, cy + b, k), py = cy + b + hash2(cx + a, cy + b, k + 1), d = (gx - px) ** 2 + (gy - py) ** 2;
+      if (d < d1) { d2 = d1; d1 = d; id = hash2(cx + a, cy + b, k + 2); } else if (d < d2) d2 = d;
+    }
+    if (Math.sqrt(d2) - Math.sqrt(d1) < 0.07) return au > lim - 0.1 ? R[2] : R[1]; // 얼음 금
+    return ramp(R, 0.42 + id * 0.42 + (1 - au / lim) * 0.16 + (au > lim - 0.09 ? 0.2 : 0), i, j);
+  },
+  // 용: 속은 검고 가장자리만 붉게 타는 어둠의 줄기 + 휘감는 나선 촉수, 바깥은 검은 연기
+  dragon(t, u, au, x, y, i, j, k, R, B) {
+    const lim = 1 + (fbm(t * 7, u * 2, k) - 0.5) * 0.3;
+    if (au > lim) return au < lim + 0.28 && t > 0.05 && bay(i, j) < 0.55 * (1 - (au - lim) / 0.28) ? B.edge[hash2(i, j, k) < 0.5 ? 1 : 2] : null;
+    const rim = Math.pow(au / lim, 3), tendril = Math.sin(t * 34 - u * 7 + k) > 0.8 ? 0.4 : 0;
+    return ramp(R, 0.06 + rim * 0.86 + tendril * (1 - rim) + (fbm(t * 9, u * 5, k + 1) - 0.5) * 0.15, i, j);
+  },
+};
 // 뒤 배경을 가로지르는 브레스(몬스터 칸 층): 화면 누름 → 도트 빛 → 원뿔 줄기(흐르는 결·방사 줄무늬·연기 가장자리) → 집중선
 function breathField(el, ox, oy, ex, ey, spread, k0, rnd, tMax = 9) {
   const R = ALAT_RAMP[el], B = BREATH[el], { L, ux, uy } = breathAxis(ox, oy, ex, ey);
   p.roundRect(0, 0, W, H, 0, B.dark, 0.5);
   dotGlow(ox, oy + 30, 330, 230, B.glow[0], 0.55, 110); dotGlow(ox, oy + 10, 170, 110, B.glow[1], 0.6, 110);
-  const buf = pixBuf();
+  const buf = pixBuf(), tex = BREATH_TEX[el];
   buf.paint(0, 112, W, H, (x, y, i, j) => {
     const vx = x - ox, vy = y - oy, t = (vx * ux + vy * uy) / L; if (t < -0.02 || t > tMax) return null;
-    const hw = 14 + spread * Math.pow(Math.max(0, t), 1.1), u = (-vx * uy + vy * ux) / hw, au = Math.abs(u); if (au > 1.3) return null;
-    const n = fbm(u * 2.4 + 9, t * 5.5 - u * u * 2, k0), st = fbm(u * 13 + 3, t * 1.3, k0 + 4);
-    const I = (1 - Math.pow(Math.min(1, au), 2.2)) * 0.88 + (n - 0.5) * 0.85 + (st - 0.5) * 0.6 - t * 0.08;
-    const under = y > CARD_Y; // 카드 뒤로 지나가는 부분은 성기고 어둡게(카드 글자가 읽히게)
-    if (under && bay(i, j) > 0.45) return null;
-    if (I > 0.16) return ramp(R, Math.min(1, (I - 0.1) * 1.35) * (under ? 0.4 : 1), i, j);
-    if (I > -0.12 && t > 0.05) { const sm = fbm(x / 24, y / 24 + t * 2, k0 + 7); return bay(i, j) < (0.3 + sm * 0.6) * (under ? 0.5 : 1) ? B.edge[sm > 0.6 ? 2 : sm > 0.48 ? 1 : 0] : null; }
-    return null;
+    const u = (-vx * uy + vy * ux) / (14 + spread * Math.pow(Math.max(0, t), 1.1));
+    return tex(t, u, Math.abs(u), x, y, i, j, k0, R, B);
   });
   buf.flush(null);
   speedLines(ox, oy, 70, 80, 560, B.ray, rnd, 0.75, 110, CARD_Y); // HP 바 아래부터
@@ -1110,7 +1152,7 @@ function alatOverlay(fx, mx, my, targets, layer) {
     breathField(el, mx, oy, ex, ey, spread, k0, rnd, single ? 1.05 : 9);
     if (el === 'thunder' || el === 'dragon') { // 줄기 속을 내달리는 번개(용은 붉은 번개)
       const { L, ux, uy } = breathAxis(mx, oy, ex, ey), paths = [];
-      for (let q = 0; q < 7; q++) { const t = 0.55 + rnd() * 0.4, u = (rnd() - 0.5) * 1.4, hw = 14 + spread * Math.pow(t, 1.1); paths.push([zigzag(mx + (rnd() - 0.5) * 16, oy + 8, mx + ux * t * L - uy * u * hw, Math.min(CARD_Y - 8, oy + uy * t * L + ux * u * hw), rnd, 9, 30), q < 2 ? 1 : 0]); }
+      for (let q = 0; q < (el === 'thunder' ? 16 : 7); q++) { const t = 0.45 + rnd() * 0.6, u = (rnd() - 0.5) * 1.4, hw = 14 + spread * Math.pow(t, 1.1); paths.push([zigzag(mx + (rnd() - 0.5) * 16, oy + 8, mx + ux * t * L - uy * u * hw, oy + uy * t * L + ux * u * hw, rnd, 9, 30), q < 2 ? 1 : 0]); if (el === 'thunder' && q % 2 === 0) { const m = paths[paths.length - 1][0][4]; paths.push([zigzag(m[0], m[1], m[0] + (rnd() - 0.5) * 120, m[1] + 40 + rnd() * 50, rnd, 5, 20), 0]); } }
       pxStrike(paths, el === 'dragon' ? ['#1a0006', '#5a0a1a', '#a01430', '#e8203a', '#ff5a6a', '#ffb0b8', '#ffffff'] : R, el === 'dragon' ? '#14000a' : ALAT_LINE.thunder, 4);
     }
     return;
