@@ -2127,7 +2127,8 @@ function alatPost(scene, el, heavy) {
   alatEdges(el, heavy, scene);
   alatCorners(el, heavy, rnd, scene);
   // ③ 불씨
-  for (let i = 0, n = heavy ? 120 : 50; i < n; i++) { const x = Math.floor(rnd() * w), y = Math.floor(rnd() * h), sz = 1 + Math.floor(rnd() * 2); for (let dy = 0; dy < sz; dy++) for (let dx = 0; dx < sz; dx++) set(x + dx, y + dy, rnd() < 0.5 ? col : [255, 255, 255]); }
+  for (let i = 0, n = heavy ? 120 : 50; i < n; i++) { const x = Math.floor(rnd() * w), y = Math.floor(rnd() * h), sz = 1 + Math.floor(rnd() * 2); if (scene === '전투' && y < 124 * RENDER_SCALE) continue; // 헤더 구역엔 불씨를 뿌리지 않는다
+     for (let dy = 0; dy < sz; dy++) for (let dx = 0; dx < sz; dx++) set(x + dx, y + dy, rnd() < 0.5 ? col : [255, 255, 255]); }
   // ④ 가는 주사선(한 줄 건너 아주 약하게 어둡게)
   for (let y = 0; y < h; y += 4) for (let x = 0; x < w; x++) { if (inIcon(x, y)) continue; const j = (y * w + x) * 3; buf[j] = Math.round(buf[j] * 0.93); buf[j + 1] = Math.round(buf[j + 1] * 0.93); buf[j + 2] = Math.round(buf[j + 2] * 0.93); }
 }
@@ -2488,8 +2489,6 @@ function alatHeader(b) {
     tb.paint(36, 20, W - 36, 112, (x, y, i, j) => {
       const row = Math.floor(y / 14), off = (row % 2) * 34, bx = (x + off) % 68, mortar = bx < 2 || (y % 14) < 2;
       const n = fbm(x / 22, y / 14, kz), vein = 1 - Math.abs(fbm(x / 30 + 4, y / 20, kz + 5) - 0.5) * 7.5;
-      if (vein > 0.95) return mixHex('#33241a', col, 0.6);
-      if (vein > 0.9) return mixHex('#33241a', col, 0.25);
       if (mortar) return '#1c120b';
       return ramp(['#2a1d13', '#3a2a1c', '#4c3824', '#5e4630', '#725a3c'], 0.3 + n * 0.5 + (y < 40 ? 0.08 : 0), i, j);
     });
@@ -2510,7 +2509,7 @@ function alatHeader(b) {
   }
   if (rage) { p.roundRect(W / 2 + nw / 2 + 62, 26, 58, 26, 6, '#5c1410'); text('분노', W / 2 + nw / 2 + 91, 39, 18, '#ffb4a8'); }
   // 보스 HP 바: 석재 틀 + 분절된 불씨빛 게이지 + 10% 눈금 + 40%(분노) 표식
-  const bx = 140, by = 54, bw = W - 360, bh = 26, sl = 14, ratio = Math.max(0, Math.min(1, b.hp / b.maxHp));
+  const bx = 140, by = 54, bw = W - 392, bh = 26, sl = 14, ratio = Math.max(0, Math.min(1, b.hp / b.maxHp));
   const quad = (x, w, y, hh, c) => p.poly([x + sl * (1 - (y - by) / bh), y, x + w + sl * (1 - (y - by) / bh), y, x + w + sl * (1 - (y + hh - by) / bh), y + hh, x + sl * (1 - (y + hh - by) / bh), y + hh], c);
   p.poly([bx + sl - 6, by - 6, bx + bw + sl + 6, by - 6, bx + bw - 6, by + bh + 6, bx - 6, by + bh + 6], rimDark); p.poly([bx + sl - 3, by - 3, bx + bw + sl + 3, by - 3, bx + bw - 3, by + bh + 3, bx - 3, by + bh + 3], '#0a0605');
   const ember = rage ? ['#2a0c20', '#7a1a4a', '#c8307a', '#ff6aa8', '#ffd0e4'] : ['#3a0a08', '#8a1a10', '#c8381c', '#f0661e', '#ffc060'];
@@ -2528,11 +2527,11 @@ function alatHeader(b) {
   p.roundRect(bx + bw / 2 - 70, by + 3, 156, bh - 6, 6, '#050302', 0.62); // 숫자 뒤 어두운 판(눈금과 섞이지 않게)
   text(`${b.hp.toLocaleString()} / ${b.maxHp.toLocaleString()}`, bx + bw / 2 + sl / 2, by + bh / 2 + 1, 18, '#ffffff');
   // 억제 게이지 + 에스카톤 카운트다운(옛 현황 패널을 헤더에 합침)
-  const gx = bx, gy = 92, gw = 330, gh = 9, gr = al.gauge / A.K.GAUGE_MAX, left = al.cycleLen - al.cycleTurn;
+  const gx = bx, gy = 92, gw = 270, gh = 9, gr = al.gauge / A.K.GAUGE_MAX, left = al.cycleLen - al.cycleTurn;
   p.roundRect(gx - 2, gy - 2, gw + 4, gh + 4, 4, rimDark); p.rect(gx, gy, gw, gh, '#0a0605'); p.rect(gx, gy, gw * gr, gh, col);
   for (let q = 1; q < 10; q++) p.rect(gx + Math.round(gw * q / 10), gy, 1, gh, '#0a0605'); // 억제 게이지 눈금
   p.rect(gx, gy, gw * gr, 3, mixHex(col, '#ffffff', 0.5)); // 게이지 윗면 광택
-  for (const [rx, rn] of [[bx - 22, 'ᚠ'], [bx + bw + 28, 'ᚨ']]) { p.circle(rx, 66, 12, rimDark); p.circle(rx, 66, 9, '#0a0605'); p.line(rx - 4, 70, rx, 58, 2, col); p.line(rx, 58, rx + 4, 70, 2, col); p.line(rx - 3, 66, rx + 3, 66, 2, col); } // 속성 색 룬 문양
+  for (const [rx, rn] of [[bx - 22, 'ᚠ']]) { p.circle(rx, 66, 12, rimDark); p.circle(rx, 66, 9, '#0a0605'); p.line(rx - 4, 70, rx, 58, 2, col); p.line(rx, 58, rx + 4, 70, 2, col); p.line(rx - 3, 66, rx + 3, 66, 2, col); } // 속성 색 룬 문양
   p.roundRect(gx + gw + 6, gy - 8, 70, 22, 6, '#0d0805', 0.7); p.roundRect(bx + bw - 118, gy - 8, 124, 22, 6, '#0d0805', 0.7); // 글자 뒤 어두운 판(가시성)
   text(`억제 ${Math.round(al.gauge)}`, gx + gw + 40, gy + 5, 15, col);
   text(left <= 0 ? '에스카톤 지금!' : `에스카톤 ${left}턴 뒤`, bx + bw, gy + 5, 15, left <= 1 ? '#ff7a6a' : C.muted, { align: 'right' });
