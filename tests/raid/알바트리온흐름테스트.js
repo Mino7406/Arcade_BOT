@@ -104,6 +104,49 @@ const phase = () => raidMod.raidForTest(channel.guildId)?.phase;
   assert(rerolls.reduce((a, b) => a + b, 0) === 1 && rerolls[3] === 1, `클리어 보상: MVP(피해를 준 빙 직업) 한 명만 재회전석 1개 (${rerolls.join(',')})`);
   assert(['1', '2', '3'].every(u => ht.getHackTools(MAIN, u) === 1) && ht.getHackTools(MAIN, '4') === 0, '클리어 보상: 나머지는 해킹 툴 1개, MVP는 해킹 툴 대신 재회전석');
 
+  // ── 전체 흐름 1: 상성 직업이 게이지를 채워 에스카톤을 억제하고 몬스터를 쓰러뜨린다 ──
+  const joinAll = async (ids) => {
+    await raidMod.forceSpawnRaid({ guildId: 'other', channel, client }, 'alatreon');
+    for (const [uid, role] of ids) await press(uid, 'raid:role:' + role);
+  };
+  const ROLE_BY = { fire: 'water', water: 'thunder', thunder: 'ice', ice: 'fire' }; // 속성 → 억제 직업(알바트리온.js 와 같은 고리)
+  await joinAll([['11', 'fire'], ['12', 'water'], ['13', 'thunder'], ['14', 'ice']]);
+  assert(phase() === 'battle', '전체 흐름 1: 전투 시작');
+  const rr1 = raidMod.raidForTest(MAIN);
+  rr1.battle.hp = 600; // 에스카톤 한두 번 안에 끝나게
+  rr1.battle.alat.cycleTurn = rr1.battle.alat.cycleLen - 1; // 다음 턴이 에스카톤
+  let sawEscaton = false, suppressedAll = true, g1 = 0;
+  while (phase() === 'battle' && g1++ < 12) {
+    const b = raidMod.raidForTest(MAIN).battle;
+    const escaton = b.intent === 'smash';
+    if (escaton) b.alat.gauge = 100; // 상성 직업이 채웠다고 보고(억제 성공 경로)
+    for (const [uid, role] of [['11', 'fire'], ['12', 'water'], ['13', 'thunder'], ['14', 'ice']]) {
+      const alive = b.members.find(m => m.userId === uid)?.hp > 0;
+      if (!alive) continue;
+      const act = escaton ? (role === 'fire' || role === 'thunder' ? 'attack' : 'guard') : 'attack';
+      await press(uid, 'raid:act:' + act);
+    }
+    if (b.lastTurn?.escaton) { sawEscaton = true; if (!b.lastTurn.escaton.suppressed) suppressedAll = false; }
+    await runTimers();
+  }
+  assert(sawEscaton && suppressedAll, '전체 흐름 1: 에스카톤이 한 번 이상 오고 모두 억제됨');
+  assert(!raidMod.getRaidStatus(MAIN).active, '전체 흐름 1: 몬스터를 쓰러뜨려 종료');
+  assert(/CLEAR|토벌/.test(desc()) && desc().includes('속성 재회전석'), '전체 흐름 1: 종료 화면에 클리어와 속성 재회전석 보상 문구');
+
+  // ── 전체 흐름 2: 아무도 게이지를 안 채우면 에스카톤에 전멸해 몬스터가 도망친다 ──
+  await joinAll([['21', 'fire'], ['22', 'water'], ['23', 'thunder'], ['24', 'ice']]);
+  raidMod.raidForTest(MAIN).battle.alat.cycleTurn = raidMod.raidForTest(MAIN).battle.alat.cycleLen - 1;
+  let g2 = 0, escatonLog = false;
+  while (phase() === 'battle' && g2++ < 12) {
+    const b = raidMod.raidForTest(MAIN).battle;
+    for (const [uid] of [['21'], ['22'], ['23'], ['24']]) await press(uid, 'raid:act:guard'); // 방어만 — 게이지는 오르지 않는다
+    if (b.log?.some(l => l.includes('에스카톤'))) escatonLog = true;
+    await runTimers();
+  }
+  assert(escatonLog, '전체 흐름 2: 에스카톤 로그(억제 실패)가 남음');
+  assert(!raidMod.getRaidStatus(MAIN).active, '전체 흐름 2: 전멸로 종료');
+  assert(/전멸|도망|FAILED/.test(desc()), `전체 흐름 2: 종료 화면에 전멸·도주 문구 (${desc().split('\n')[0]})`);
+
   // ── 테스트 서버: 1명이어도 시작 ──
   channel.guildId = TEST; message.channel = null;
   err = await raidMod.forceSpawnRaid({ guildId: 'other', channel, client }, 'alatreon');
