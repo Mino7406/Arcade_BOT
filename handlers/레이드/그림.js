@@ -2393,7 +2393,7 @@ function renderBattle(r) {
     if (usedFx && SKILL_FX.includes(usedFx)) skillCtx = { fx: usedFx, mx: W / 2, my: monsterY, targets: [] };
     alatTargets = ALAT_FX.includes(usedFx) ? b.members.filter(mm => last?.hits?.[mm.userId]).map(mm => [20 + activeRoles.indexOf(mm.role) * (CARD_W + CARD_GAP) + CARD_W / 2, CARD_Y + 86]) : [];
     heungTargets = usedFx === 'lightning' ? b.members.filter(mm => last?.hits?.[mm.userId]).map(mm => 121.5 + activeRoles.indexOf(mm.role) * 219) : []; // 낙뢰가 내려칠 카드 위치
-    const preFx = b.alat && ALAT_FX.includes(usedFx) && usedFx !== 'alflame' ? Buffer.from(p.buf) : null; // 연출(뒤 층)을 그리기 전 화면 — 연출이 어디에 칠해졌는지 알아내려고
+    const preFx = b.alat && ALAT_FX.includes(usedFx) && usedFx !== 'alflame' && usedFx !== 'alice' ? Buffer.from(p.buf) : null; // 연출(뒤 층)을 그리기 전 화면 — 연출이 어디에 칠해졌는지 알아내려고
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'back', sporeColor, accentColor);
     // 투명화(유령): 다음 턴 동안 몸을 흐리게(회색)
     let alatMouth = null, alatBody = null;
