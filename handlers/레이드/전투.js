@@ -131,7 +131,7 @@ const MONSTER_DIR = path.join(__dirname, '..', '..', 'Monster');
 const REQUIRED_MOVES = ['attack', 'smash'];
 // 그림(레이드그림.js)이 아는 연출 종류. 새 연출은 레이드그림.js의 monsterFx·hitFx에 그리고 여기에 이름을 더한다.
 const MOVE_FX = ['attack', 'sweep', 'charge', 'smash', 'heal', 'spore', 'hypno', 'absorb', 'burst', 'frost', 'icefall',
-  'curse', 'wail', 'phase', 'storm', 'dust', 'smoke', 'ignite', 'boom', 'summon', 'peel', 'fart', 'overclock', 'deadeye', 'vuln', 'killnine', 'crash', 'gateway', 'ambush', 'recharge', 'thump', 'chain', 'erode', 'lightning', 'release', 'comet'];
+  'curse', 'wail', 'phase', 'storm', 'dust', 'smoke', 'ignite', 'boom', 'summon', 'peel', 'fart', 'overclock', 'deadeye', 'vuln', 'killnine', 'crash', 'gateway', 'ambush', 'recharge', 'thump', 'chain', 'erode', 'lightning', 'release', 'comet', 'alflame', 'alwater', 'albullet', 'albolt', 'alice', 'aldragon'];
 const EFFECTS = ['slow', 'stun', 'shield', 'poison', 'confuse', 'chill', 'fear', 'phase', 'smoke', 'summon', 'stench', 'error', 'vuln', 'doom'];
 // stench(악취 — 원숭이 대장 구린 방귀): 맞은 사람(guardBlocks면 방어한 사람 제외)은 effectTurns턴 동안 회복약을 못 쓰고,
 //   치유사 스킬 회복량 × effectRate(씻어내지 못함). followUp: 이 기술을 쓴 다음 턴엔 반드시 그 기술(바나나 껍질 → 구린 방귀).

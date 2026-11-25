@@ -875,8 +875,81 @@ function gooBlob(x, y, r, color) {
 }
 // 반투명 동그라미(연기·먼지·섬광)
 function haze(x, y, r, color, alpha) { p.roundRect(x - r, y - r, r * 2, r * 2, r, color, alpha); }
+// ── 알바트리온 속성 기술 연출(몬스터헌터 알바트리온 참고): 화염구·물 브레스·물 탄환·낙뢰·빙결 숨결·용의 숨결 ──
+const ALAT_FX = ['alflame', 'alwater', 'albullet', 'albolt', 'alice', 'aldragon'];
+let alatTargets = []; // 단일 기술(물 탄환·낙뢰)에 맞은 카드 가운데 x
+function alatMonsterFx(move, cx, cy, layer) {
+  const mouthY = cy + 24, floorY = 392; // 카드 위쪽 가장자리 근처
+  if (move === 'alflame') {
+    if (layer === 'back') { p.roundRect(20, 120, W - 40, 224, 14, '#ff6a14', 0.16); return; }
+    // 입에서 불덩이가 날아가 바닥을 따라 불길이 번짐 + 불씨
+    for (const [dx, s] of [[-300, 0.7], [-200, 0.95], [-100, 1.15], [0, 1.3], [100, 1.15], [200, 0.95], [300, 0.7]]) flame(cx + dx, 300 - s * 6, s * 2.1);
+    for (const sd of [-1, 1]) for (let i = 1; i <= 5; i++) dot(cx + sd * (30 + i * 46), mouthY + i * 12, 6 + i, i % 2 ? '#ffb060' : '#ff6a2c');
+    for (const [dx, dy] of [[-250, 230], [-150, 214], [-40, 226], [60, 210], [170, 228], [260, 216]]) dot(cx + dx, dy, 5, '#ffe066');
+    return;
+  }
+  if (move === 'alwater') {
+    if (layer === 'back') { p.roundRect(20, 120, W - 40, 224, 14, '#2a8cff', 0.14); return; }
+    // 입에서 뿜어진 물 브레스가 파도처럼 가로로 퍼져 훑음
+    for (let band = 0; band < 3; band++) for (let x = cx - 360; x <= cx + 360; x += 12) {
+      const y = 236 + band * 26 + Math.sin(x / 38 + band * 1.7) * 12;
+      dot(x, y, 9 - band, band === 0 ? '#e8f8ff' : band === 1 ? '#7cc8ff' : '#2a78d8');
+    }
+    for (let i = 1; i <= 5; i++) { dot(cx - 14 + (i % 2) * 28, mouthY + i * 8, 8 + i, i % 2 ? '#cfeeff' : '#46cdff'); }
+    for (const [dx, dy] of [[-300, 206], [-210, 190], [-90, 200], [30, 188], [140, 202], [260, 192], [320, 210]]) dot(cx + dx, dy, 5, '#ffffff');
+    return;
+  }
+  if (move === 'albullet') {
+    // 입에서 맞은 카드로 날아가는 물 탄환(꼬리 + 구슬) — 카드 위에서 터짐
+    for (const tx of alatTargets.length ? alatTargets : [cx]) {
+      for (let i = 1; i <= 8; i++) { const t = i / 9; dot(cx + (tx - cx) * t, mouthY + (276 - mouthY) * t, 5 + t * 8, i % 2 ? '#7cc8ff' : '#cfeeff'); }
+      p.circle(tx, 282, 20, '#1e5fb8'); p.circle(tx, 282, 15, '#46cdff'); p.circle(tx - 5, 277, 6, '#ffffff');
+    }
+    return;
+  }
+  if (move === 'albolt') {
+    if (layer === 'back') { p.roundRect(20, 120, W - 40, 224, 14, '#fff6a0', 0.12); return; }
+    // 하늘에서 맞은 카드로 지그재그 번개가 내려치고 땅에서 불꽃이 튐
+    for (const tx of alatTargets.length ? alatTargets : [cx]) {
+      const pts = []; for (let y = 134, k = 0; y < floorY; y += 28, k++) pts.push([tx + (k % 2 ? 16 : -16) * (y > 330 ? 0.4 : 1), y]);
+      pts.push([tx, floorY]);
+      for (let i = 1; i < pts.length; i++) { p.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], 12, '#c8b020'); }
+      for (let i = 1; i < pts.length; i++) { p.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], 7, '#fff27a'); p.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], 3, '#ffffff'); }
+      for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; p.line(tx, floorY, tx + Math.cos(a) * 34, floorY + Math.sin(a) * 14, 4, '#fff27a'); }
+    }
+    return;
+  }
+  if (move === 'alice') {
+    if (layer === 'back') { p.roundRect(20, 120, W - 40, 224, 14, '#bfeaff', 0.15); return; }
+    // 입김이 퍼지고 바닥에서 얼음 가시가 솟음
+    for (const [ux, uy] of [[-1, 0.3], [-0.6, 0.8], [0, 1], [0.6, 0.8], [1, 0.3]]) for (let i = 1; i <= 5; i++) dot(cx + ux * (44 + i * 30), mouthY + uy * (i * 14), 5 + i * 1.6, i % 2 ? '#ffffff' : '#9fdcf4');
+    for (const [dx, h] of [[-320, 40], [-250, 58], [-170, 46], [-90, 66], [0, 52], [90, 66], [170, 46], [250, 58], [320, 40]]) iceShard(cx + dx, 340 - h / 2, h + 14, 10, -Math.PI / 2, '#8ad0ec');
+    for (const [dx, dy, r] of [[-280, 170, 9], [-130, 150, 7], [150, 156, 7], [290, 176, 9]]) flake(cx + dx, dy, r);
+    return;
+  }
+  if (move === 'aldragon') {
+    if (layer === 'back') { p.roundRect(20, 120, W - 40, 224, 14, '#9a58d0', 0.16); return; }
+    // 네 속성 구슬이 몸 둘레를 돌다 퍼져 나감
+    const cols = ['#ff8c23', '#46cdff', '#f0f546', '#82d7ff'];
+    for (let ring = 0; ring < 2; ring++) for (let k = 0; k < 16; k++) {
+      const a = (k / 16) * Math.PI * 2 + ring * 0.2, r = 120 + ring * 90;
+      dot(cx + Math.cos(a) * r, cy + 10 + Math.sin(a) * r * 0.42, 9 - ring * 2, cols[k % 4]);
+    }
+    for (const [dx, dy] of [[-180, -30], [180, -30], [-120, 70], [120, 70]]) sparkle(cx + dx, cy + dy, 4, '#d8a8ff');
+  }
+}
+function alatHitFx(move, cx, cy) {
+  if (move === 'alflame') { flame(cx, cy + 22, 0.6); dot(cx - 22, cy - 18, 5, '#ffe066'); dot(cx + 24, cy - 10, 5, '#ff9a3c'); }
+  else if (move === 'alwater') { for (const [dx, dy, s] of [[-24, -14, 7], [22, -18, 6], [-18, 20, 6], [26, 16, 7]]) dot(cx + dx, cy + dy, s, '#7cc8ff'); p.strokeRoundRect(cx - 30, cy + 10, 60, 18, 9, 2, '#cfeeff'); }
+  else if (move === 'albullet') { for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; dot(cx + Math.cos(a) * 30, cy + Math.sin(a) * 26, 6, k % 2 ? '#cfeeff' : '#46cdff'); } }
+  else if (move === 'albolt') { sparkle(cx, cy, 5, '#fff27a'); for (const [dx, dy] of [[-30, -24], [32, -20], [-26, 26], [30, 24]]) p.line(cx, cy, cx + dx, cy + dy, 4, '#f0f546'); }
+  else if (move === 'alice') { flake(cx - 22, cy - 16, 8); flake(cx + 24, cy + 14, 7); p.strokeRoundRect(cx - 34, cy - 34, 68, 68, 14, 2, '#d8f4ff'); }
+  else if (move === 'aldragon') { for (let k = 0; k < 10; k++) { const a = (k / 10) * Math.PI * 2; dot(cx + Math.cos(a) * 32, cy + Math.sin(a) * 28, 6, k % 2 ? '#d8a8ff' : '#7a3ab0'); } }
+}
+
 function monsterFx(move, cx, cy, color, layer, spore = color, accent = spore) {
   if (!move) return;
+  if (ALAT_FX.includes(move)) { alatMonsterFx(move, cx, cy, layer); return; }
   if (HEUNG_FX.includes(move)) { heungMonsterFx(move, cx, cy, layer); return; }
   if (move === 'fart' && layer === 'front') {
     // 구린 방귀: 뒤돌아선 엉덩이에서 뿜어진 커다란 가스 덩어리 하나가 파티 쪽(아래·양옆)으로 뭉게뭉게 부풀어 퍼진다.
@@ -1322,6 +1395,7 @@ function dragonBadge(cx, cy, turns) {
 function hitFx(move, cx, cy, color, spore = color, accent = spore) {
   if (move === 'ambush') move = 'comet'; // 습격도 필살 흉성 낙하와 같은 맞은 카드 이펙트(불덩이 폭발)
   if (HEUNG_FX.includes(move)) { heungHitFx(move, cx, cy); return; }
+  if (ALAT_FX.includes(move)) { alatHitFx(move, cx, cy); return; }
   if (move === 'fart') {
     return; // 구린 방귀 피격·악취는 카드에서 stenchBehind·stenchFront로(아이콘 뒤·앞에 나눠 그림)
   }
@@ -1866,6 +1940,7 @@ function renderBattle(r) {
     if (r.showingResult && (last?.ambushLanded || last?.cometLanded)) ambushImpact(W / 2, monsterY, 'back');
     if (skyDotNow) cometDot(W / 2, monsterY - 20);
     if (usedFx && SKILL_FX.includes(usedFx)) skillCtx = { fx: usedFx, mx: W / 2, my: monsterY, targets: [] };
+    alatTargets = usedFx === 'albolt' || usedFx === 'albullet' ? b.members.filter(mm => last?.hits?.[mm.userId]).map(mm => 121.5 + activeRoles.indexOf(mm.role) * 219) : [];
     heungTargets = usedFx === 'lightning' ? b.members.filter(mm => last?.hits?.[mm.userId]).map(mm => 121.5 + activeRoles.indexOf(mm.role) * 219) : []; // 낙뢰가 내려칠 카드 위치
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'back', sporeColor, accentColor);
     // 투명화(유령): 다음 턴 동안 몸을 흐리게(회색)
@@ -1901,15 +1976,14 @@ function renderBattle(r) {
     if (b.alat && ambushStage < 0) {
       const A = require('./알바트리온'), al = b.alat, col = ELEMENT_GLOW[al.element] || '#c08aff';
       const left = al.cycleLen - al.cycleTurn;
-      p.roundRect(30, 118, 206, 92, 12, '#1a1410');
-      p.strokeRoundRect(30, 118, 206, 92, 12, 2, col);
-      text('알바트리온 현황', 133, 135, 17, C.gold);
-      text(`${A.ELEMENT_NAME[al.element]}속성`, 50, 158, 19, col, { align: 'left' });
-      text(left <= 0 ? '에스카톤 지금!' : `에스카톤 ${left}턴 뒤`, 220, 158, 15, left <= 1 ? '#ff7a6a' : C.muted, { align: 'right' });
-      text('억제', 50, 184, 16, C.muted, { align: 'left' });
-      bar(88, 174, 120, 20, al.gauge / A.K.GAUGE_MAX, col);
-      p.strokeRoundRect(88, 174, 120, 20, 10, 1.5, C.gold);
-      text(`${Math.round(al.gauge)}`, 148, 184, 14, '#ffffff');
+      p.roundRect(30, 118, 132, 112, 12, '#1a1410');
+      p.strokeRoundRect(30, 118, 132, 112, 12, 2, col);
+      text('알바트리온 현황', 96, 135, 16, C.gold);
+      text(`${A.ELEMENT_NAME[al.element]}속성`, 96, 158, 20, col);
+      text(left <= 0 ? '에스카톤 지금!' : `에스카톤 ${left}턴 뒤`, 96, 181, 15, left <= 1 ? '#ff7a6a' : C.muted);
+      bar(42, 194, 108, 20, al.gauge / A.K.GAUGE_MAX, col);
+      p.strokeRoundRect(42, 194, 108, 20, 10, 1.5, C.gold);
+      text(`억제 ${Math.round(al.gauge)}`, 96, 204, 14, '#ffffff');
     }
     // 몬스터 상자 오른쪽 위에 큰 방패 배지 + 문구(방어력 증가 · 받는 피해 -N%, 보호막 기술의 effectRate)
     if (shielded) {
