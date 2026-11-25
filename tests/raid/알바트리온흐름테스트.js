@@ -73,11 +73,10 @@ const phase = () => raidMod.raidForTest(channel.guildId)?.phase;
   await press('2', 'raid:role:fire');
   await press('3', 'raid:role:thunder');
   assert(raidMod.raidForTest(MAIN).party.length === 3 && phase() === 'recruit', '3명 모집 중');
-  assert(buttons().find(b => b.custom_id === 'raid:start').disabled === true, '3명이면 시작 버튼 비활성');
+  assert(buttons().find(b => b.custom_id === 'raid:start').disabled === false, '3명이어도 시작 버튼 활성(전원 필수 아님)');
   it = await press('1', 'raid:start');
-  assert(pText(it.replied).includes('모든 속성이 모여야') && phase() === 'recruit', '3명 시작 시도: 안내 문구, 전투 시작 안 됨');
-  await runTimers(); // 모집 마감
-  assert(!raidMod.getRaidStatus(MAIN).active, '3명으로 모집이 끝나면 noshow로 종료');
+  assert(phase() === 'battle', '3명으로 바로 시작');
+  await raidMod.forceEndRaid(MAIN);
 
   // ── 4명 → 자동 시작 ──
   err = await raidMod.forceSpawnRaid({ guildId: 'other', channel, client }, 'alatreon');

@@ -263,7 +263,7 @@ const ROLE_SPRITES = {
 // 속성 직업(🔥💧⚡❄️) 아이콘: 32×32 확정 그림(scripts/아이콘변환.js 가 만든 파일). 오라 칸은 반투명(#rrggbb80)이다.
 Object.assign(ROLE_SPRITES, require('./알바트리온아이콘'));
 const ROLE_ICON_PX = 3.4; // 16칸 × 3.4 ≈ 54px. 칸 수가 다른 그림(32칸)은 전체 크기가 같도록 칸 크기를 줄인다.
-const iconPx = (sprite, px = ROLE_ICON_PX) => px * 16 / sprite.rows.length;
+const iconPx = (sprite, px = ROLE_ICON_PX) => (sprite.rows.length > 16 ? px * 1.3 : px) * 16 / sprite.rows.length; // 32칸 속성 아이콘은 더 크게
 function roleIcon(role, cx, cy, dim = false) {
   drawPixels(ROLE_SPRITES[role], cx, cy, iconPx(ROLE_SPRITES[role]), { dim });
 }

@@ -56,8 +56,8 @@ const AMBUSH_STAGE_MS = 1000;       // (미사용 상수 유지)
 const RESULT_MS = 4500;             // 턴 결과 화면을 보여주는 시간 — 그동안 버튼이 꺼지고, 끝나면 다음 턴 선택 화면으로(3.5초는 짧다는 사용자 요청으로 4.5초)
 const BATTLE_LIMIT_MS = 20 * 60 * 1000; // 전투 제한 시간 — 넘기면 몬스터 도주
 const PARTY_MAX = 4;
-// 속성 직업 몬스터(알바트리온)는 본서버에서 모든 속성이 모여야 시작한다. 테스트 서버는 인원이 모자라도 시작할 수 있다.
-const needsFullParty = (r) => !!r.monster.partyClasses && !isExcludedGuild(r.guildId);
+// 속성 직업 몬스터(알바트리온)도 인원이 모자라도 시작할 수 있다(전원 필수 아님).
+const needsFullParty = () => false; // 알바트리온도 다른 레이드처럼 인원이 적어도 시작할 수 있다(전원 필수 아님)
 const CLEAR_XP = 300;               // 토벌 성공 시 파티원 1인당
 const MVP_BONUS_XP = 100;           // 기여도 1위(피해 + 회복·부활 + 막아 준 피해, 레이드전투.js의 contribution) 추가 보상
 // 토벌 실패(전멸·시간 초과·무참가로 도주) 시 서버의 모든 유저가 잃는 XP — 레이드마다 이 범위에서 무작위 하나(모두 같은 값)
