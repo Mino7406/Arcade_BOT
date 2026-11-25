@@ -305,3 +305,21 @@ const E = require(path.join(__dirname, '../../handlers/레이드/전투.js'));
     assert(n.alat.gauge === 0, '게이지: 비상성 직업은 0');
   }
 }
+
+// ── Task 5: 아이콘 ──
+{
+  const icons = require(path.join(__dirname, '../../handlers/레이드/알바트리온아이콘.js'));
+  const AURA_COLOR = { fire: '#ff8c2380', water: '#46cdff80', thunder: '#f0f54680', ice: '#82d7ff80' };
+  for (const k of ['fire', 'water', 'thunder', 'ice']) {
+    const ic = icons[k];
+    assert(!!ic && ic.rows.length === 32 && ic.rows.every(r => [...r].length === 32), `아이콘 ${k}: 32×32`);
+    assert(ic.rows.every(r => [...r].every(ch => ch === '.' || ic.palette[ch])), `아이콘 ${k}: 모든 칸이 투명이거나 팔레트에 있음`);
+    const alphaCodes = Object.entries(ic.palette).filter(([, v]) => v.length === 9).map(([c]) => c);
+    const alphaCells = ic.rows.join('').split('').filter(ch => alphaCodes.includes(ch)).length;
+    assert(alphaCodes.length >= 1 && alphaCells >= 30 && alphaCells <= 400, `아이콘 ${k}: 알파 오라 칸 ${alphaCells}개`);
+    assert(alphaCodes.some(c => ic.palette[c] === AURA_COLOR[k]), `아이콘 ${k}: 오라색 ${AURA_COLOR[k]}`);
+    const rows = ic.rows.map(r => [...r]);
+    // 확정 그림(사용자 승인)은 오라·무기가 격자 가장자리에 닿는 속성이 있어 한 칸 여백은 요구하지 않고, 네 모서리가 비어 있는지만 본다.
+    assert(rows[0][0] === '.' && rows[0][31] === '.' && rows[31][0] === '.' && rows[31][31] === '.', `아이콘 ${k}: 네 모서리 칸이 비어 있음`);
+  }
+}

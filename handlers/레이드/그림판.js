@@ -282,14 +282,21 @@ class Painter {
 
   // 정수 픽셀 사각형(안티앨리어싱 없음 — 픽셀 아트·배경용). 시작·끝을 각각 반올림해, 맞닿은
   // 사각형(픽셀 아트 칸)끼리는 배율이 소수여도 틈이나 겹침이 생기지 않는다.
+  // hex 가 '#rrggbbaa'(9자)면 알파 합성(source-over)으로 아래 그림이 비쳐 보이게 칠한다(알바트리온 아이콘의 반투명 오라).
   rect(x, y, w, h, hex) {
     const c = rgb(hex);
     const s = this.s;
     const x0 = Math.max(0, Math.round(x * s)), x1 = Math.min(this.w, Math.round((x + w) * s));
     const y0 = Math.max(0, Math.round(y * s)), y1 = Math.min(this.h, Math.round((y + h) * s));
+    const a = hex.length > 7 ? parseInt(hex.slice(7, 9), 16) / 255 : 1;
     for (let yy = y0; yy < y1; yy++) {
       let i = (yy * this.w + x0) * 3;
-      for (let xx = x0; xx < x1; xx++, i += 3) { this.buf[i] = c[0]; this.buf[i + 1] = c[1]; this.buf[i + 2] = c[2]; }
+      if (a >= 1) for (let xx = x0; xx < x1; xx++, i += 3) { this.buf[i] = c[0]; this.buf[i + 1] = c[1]; this.buf[i + 2] = c[2]; }
+      else for (let xx = x0; xx < x1; xx++, i += 3) {
+        this.buf[i] = Math.round(c[0] * a + this.buf[i] * (1 - a));
+        this.buf[i + 1] = Math.round(c[1] * a + this.buf[i + 1] * (1 - a));
+        this.buf[i + 2] = Math.round(c[2] * a + this.buf[i + 2] * (1 - a));
+      }
     }
   }
 

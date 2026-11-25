@@ -217,7 +217,7 @@ function subjectJosa(name) {
 function grayOf(hex, k) {
   const v = Math.round((parseInt(hex.slice(1, 3), 16) * 0.3 + parseInt(hex.slice(3, 5), 16) * 0.59 + parseInt(hex.slice(5, 7), 16) * 0.11) * k);
   const g = v.toString(16).padStart(2, '0');
-  return `#${g}${g}${g}`;
+  return `#${g}${g}${g}${hex.slice(7)}`; // 알파(#rrggbbaa)가 있으면 그대로 유지
 }
 
 // 역할 아이콘: 몬스터와 같은 16×16 픽셀 아트(오리지널). '.'은 투명.
@@ -260,24 +260,26 @@ const ROLE_SPRITES = {
     palette: { d: '#15151b', r: '#e5484d', h: '#ff9aa0', w: '#ffffff' },
   },
 };
-// 속성 직업 아이콘은 Task 5의 확정 그림으로 바뀐다. 그 전에는 같은 kind 의 기존 그림을 쓴다.
-for (const [k, kind] of [['fire', 'sword'], ['thunder', 'archer'], ['water', 'healer'], ['ice', 'tank']]) ROLE_SPRITES[k] ??= ROLE_SPRITES[kind];
-const ROLE_ICON_PX = 3.4; // 16칸 × 3.4 ≈ 54px
+// 속성 직업(🔥💧⚡❄️) 아이콘: 32×32 확정 그림(scripts/아이콘변환.js 가 만든 파일). 오라 칸은 반투명(#rrggbb80)이다.
+Object.assign(ROLE_SPRITES, require('./알바트리온아이콘'));
+const ROLE_ICON_PX = 3.4; // 16칸 × 3.4 ≈ 54px. 칸 수가 다른 그림(32칸)은 전체 크기가 같도록 칸 크기를 줄인다.
+const iconPx = (sprite, px = ROLE_ICON_PX) => px * 16 / sprite.rows.length;
 function roleIcon(role, cx, cy, dim = false) {
-  drawPixels(ROLE_SPRITES[role], cx, cy, ROLE_ICON_PX, { dim });
+  drawPixels(ROLE_SPRITES[role], cx, cy, iconPx(ROLE_SPRITES[role]), { dim });
 }
 
 // 몬스터: sprite(픽셀 아트). maxH 안에 맞춘다. gray: 결과 화면용 흑백.
 // (그림 파일 몬스터는 PNG 해석기가 필요해 아직 지원하지 않는다 — 넣을 때 그림판.js에 추가)
 // pose: 기술 키(sprite.poses) — 없으면 평상시 얼굴(분노면 sprite.rageRows).
 // outline: 외곽선(a) 색을 바꿔 칠한다(보호막으로 단단해진 몸).
-function drawMonster(monster, cx, cy, maxH, { rage = false, gray = false, pose = null, outline = null, dormant = false } = {}) {
+function drawMonster(monster, cx, cy, maxH, { rage = false, gray = false, pose = null, outline = null, dormant = false, element = null } = {}) {
   const sp = monster.sprite;
   if (!sp) return;
   // dormant(흉성의 용뢰가 빠진 돌덩이 상태): sprite.dormantRows/dormantColors 로 그리고, 번개·후광·몸 색 변화는 모두 끈다.
   const isDormant = monster.theme === 'energy' && (dormant || process.env.ENERGY_DORMANT === '1') && !!sp.dormantRows;
   const rows = isDormant ? sp.dormantRows : (pose && sp.poses?.[pose]) || (rage && sp.rageRows) || sp.rows;
-  const colors = isDormant ? { ...sp.dormantColors, ...(outline ? { a: outline } : {}) } : (rage || outline ? { ...(rage ? sp.rageColors : {}), ...(outline ? { a: outline } : {}) } : null);
+  const elementColors = element && sp.elementColors?.[element] ? sp.elementColors[element] : null; // 알바트리온: 지금 속성에 맞는 몸 색
+  const colors = isDormant ? { ...sp.dormantColors, ...(outline ? { a: outline } : {}) } : (rage || outline || elementColors ? { ...(rage ? sp.rageColors : {}), ...elementColors, ...(outline ? { a: outline } : {}) } : null);
   // sprite.scale: 몬스터마다 그림 크기 배율(기본 1). 칸 수가 많아 작아 보이는 몬스터를 키울 때 쓴다.
   const cell = Math.floor((maxH * (sp.scale ?? 1)) / rows.length);
   // 용뢰 테마(흉성): 몸 뒤에 붉은 후광과 무작위 번개를 그린다. 그릴 때마다 시드가 달라 화면마다 모양이 바뀐다. 흑백(결과·쓰러짐)엔 그리지 않는다.
@@ -1853,7 +1855,7 @@ function renderBattle(r) {
     heungTargets = usedFx === 'lightning' ? b.members.filter(mm => last?.hits?.[mm.userId]).map(mm => 121.5 + activeRoles.indexOf(mm.role) * 219) : []; // 낙뢰가 내려칠 카드 위치
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'back', sporeColor, accentColor);
     // 투명화(유령): 다음 턴 동안 몸을 흐리게(회색)
-    if (!skyDotNow) drawMonster(m, W / 2, monsterY, 112, { rage: b.rage, pose, outline: shielded ? '#cfe8ff' : null, gray: isPhased(b), dormant: dormantNow });
+    if (!skyDotNow) drawMonster(m, W / 2, monsterY, 112, { rage: b.rage, pose, outline: shielded ? '#cfe8ff' : null, gray: isPhased(b), dormant: dormantNow, element: b.alat?.element });
     if (r.showingResult && (last?.ambushLanded || last?.cometLanded)) ambushImpact(W / 2, monsterY, 'front');
     if (shaking && !skyDotNow && !m.ui?.noShake) shakeFx(m, W / 2, monsterY, 112, pose); // ui.noShake 몬스터(???)는 떨림 대신 준비 자세(readyPose)만
     // 점화 카운트다운 중엔 어떤 자세·기술이든 도화선 끝에 불꽃 + 열기(sprite.fuseTip = [칸, 줄])
@@ -2201,7 +2203,7 @@ function renderEnd(r, outcome, rewards = []) {
         p.strokeRoundRect(rx, y, rw2, 86, 12, 2, '#ff3a4a');
         text('▓ BLACKWALL GATEWAY — ACCESS GRANTED ▓', rx + rw2 / 2, y + 78, 11, '#ff6a78');
       } else if (mvp) p.strokeRoundRect(RP.x + 14, y, RP.w - 28, 86, 12, 2, C.gold);
-      drawPixels(ROLE_SPRITES[mem.role], RP.x + 52, y + 43, 2.7, { dim: mem.hp <= 0 && !clear });
+      drawPixels(ROLE_SPRITES[mem.role], RP.x + 52, y + 43, iconPx(ROLE_SPRITES[mem.role], 2.7), { dim: mem.hp <= 0 && !clear });
       const nameX = RP.x + 86;
       const dy = wall ? -5 : 0; // 블랙월 줄은 아래 안내 문구 자리를 위해 이름·역할 줄을 살짝 올린다
       if (wall) { // 이름도 블랙월에 오염돼 청록·붉은 색이 어긋나고 띠가 밀린다
