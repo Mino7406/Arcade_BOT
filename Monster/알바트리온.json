@@ -563,7 +563,7 @@
   "moves": {
     "attack": {
       "name": "발톱 후려치기",
-      "telegraph": "거대한 발톱을 치켜든다...",
+      "telegraph": "거대한 발톱이 하늘을 가른다...",
       "target": "single",
       "damage": [
         9,
@@ -573,7 +573,7 @@
     },
     "flame": {
       "name": "화염 브레스",
-      "telegraph": "입안에서 불길이 일렁인다...",
+      "telegraph": "목 깊은 곳에서 불길이 끓어오른다...",
       "target": "all",
       "damage": [
         6,
@@ -595,7 +595,7 @@
     },
     "torrent": {
       "name": "해일 소용돌이",
-      "telegraph": "발밑에서 물이 차오른다...",
+      "telegraph": "발밑으로 해일이 밀려든다...",
       "target": "all",
       "damage": [
         6,
@@ -615,7 +615,7 @@
     },
     "bolt": {
       "name": "낙뢰 강타",
-      "telegraph": "하늘이 번쩍인다...",
+      "telegraph": "먹구름 속에서 뇌광이 번뜩인다...",
       "target": "single",
       "damage": [
         12,
@@ -631,7 +631,7 @@
     },
     "frost": {
       "name": "서리 숨결",
-      "telegraph": "차가운 숨결이 퍼진다...",
+      "telegraph": "대기가 얼어붙으며 서리가 번진다...",
       "target": "all",
       "damage": [
         6,
@@ -648,7 +648,7 @@
     },
     "dragonbreath": {
       "name": "용의 숨결",
-      "telegraph": "다섯 속성이 한데 모인다...",
+      "telegraph": "용의 기운이 정면으로 모여든다...",
       "target": "all",
       "damage": [
         8,
@@ -681,6 +681,7 @@
   "raid": {
     "persistent": true,
     "defeatPenaltyXp": 0,
+    "mvpBonusXp": 700,
     "mvpItem": "reroll"
   },
   "theme": "alat",

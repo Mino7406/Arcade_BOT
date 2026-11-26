@@ -5,7 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = require('discord.js');
-const { renderSlot, renderHackIntro, INTRO_STEP_COUNT, idleImage } = require('./룰렛그림');
+const { renderSlot, renderHackIntro, renderRerollIntro, REROLL_INTRO_COUNT, INTRO_STEP_COUNT, idleImage } = require('./룰렛그림');
 const { applyXp, getXp, levelFromXp, isLevelsLoaded, isExcludedGuild, announceLevelUp, isMinigameXpFrozen, isRaidXpFrozen } = require('../레벨/레벨링');
 const { isTestGuild } = require('../../config');
 const { kstDateString, timeUntilKstMidnight } = require('../공통/시간');
@@ -14,7 +14,7 @@ const { writeJsonIfChanged } = require('../공통/저장');
 const { card, payload, notice, COLORS, footerSide, pullButton } = require('../공통/카드');
 const { HACK_TOOL_NAME, hackToolWith, HACK_TOOL_MAX, hackToolEmoji, hackUseButtonEmoji, hackUseEmoji, getHackTools, useHackTool } = require('./해킹툴');
 const { GATEWAY_NAME, gatewayEmoji, gatewayButtonEmoji, getGateways, useGateway, GATEWAY_MAX } = require('./블랙월게이트웨이');
-const { REROLL_NAME, REROLL_MAX, rerollEmoji, getRerolls, useReroll } = require('./재회전석');
+const { REROLL_NAME, REROLL_MAX, REROLL_DESC, rerollEmoji, getRerolls, useReroll } = require('./역린');
 
 const ROULETTE_PATH = path.join(__dirname, '..', '..', 'DB', 'roulette.json');
 fs.mkdirSync(path.dirname(ROULETTE_PATH), { recursive: true });
@@ -25,6 +25,7 @@ const BET_PRESETS = [10, 50, 100, 200, 300]; // 한 줄 버튼 최대 5개
 const LOBBY_TIMEOUT_MS = 60 * 1000;
 const WALL_COLOR = 0xB81C2A; // 블랙월 게이트웨이를 발동한 룰렛 카드 띠 색(붉은)
 const wallFooter = () => `${gatewayEmoji()} 블랙월 프로토콜 업로드 완료. [ACCESS_GRANTED]`; // 이모지는 봇이 켜진 뒤에야 정해지므로 쓸 때마다 만든다
+const REROLL_COLOR = 0xDD5AA6; // 역린 카드 띠 색(이모지의 분홍과 맞춤)
 const HACK_COLOR = 0x8B7CF6; // 해킹 툴 확인 메시지 띠 색(이모지와 맞춘 보라)
 const HACK_PROMPT_MS = 60 * 1000; // 꽝이 나온 뒤 해킹 툴을 쓸지 고르는 시간(지나면 결과 확정)
 
@@ -135,7 +136,7 @@ const hackToolsOf = (guildId, userId) => (hackUnlimited(guildId) ? Infinity : ge
 // 블랙월 게이트웨이(??? 레이드 MVP 보상): 돌리기 전에 발동해 두면 이번 판이 100% 잭팟. 테스트 서버에서는 무제한.
 const gatewaysOf = (guildId, userId) => (hackUnlimited(guildId) ? Infinity : getGateways(guildId, userId));
 const gatewayHaveText = (have) => (have === Infinity ? '테스트 서버 · 무제한' : `${have}/${GATEWAY_MAX}개`);
-// 속성 재회전석(알바트리온 레이드 MVP 보상): 결과가 나온 직후 릴 한 칸만 골라 다시 돌린다. 테스트 서버에서는 무제한.
+// 역린(알바트리온 레이드 MVP 보상): 결과가 나온 직후 릴 한 칸만 골라 다시 돌린다. 테스트 서버에서는 무제한.
 const rerollsOf = (guildId, userId) => (hackUnlimited(guildId) ? Infinity : getRerolls(guildId, userId));
 const rerollHaveText = (have) => (have === Infinity ? '테스트 서버 · 무제한' : `${have}/${REROLL_MAX}개`);
 const hackHaveText = (have) => (have === Infinity ? '테스트 서버 · 무제한' : `${have}/${HACK_TOOL_MAX}개`);
@@ -243,7 +244,7 @@ function buildHackIntroPayload(lobby, bet, reels, step, hacks) {
   }), { files: [slotFile(png)] });
 }
 
-function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multiplier = 0, hacks = 0, gateway = false }, extra = {}) {
+function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multiplier = 0, hacks = 0, gateway = false, rerolled = null, rerollNote = '' }, extra = {}) {
   const win = net > 0;
   const jackpot = reels[0] === reels[1] && reels[1] === reels[2] && reels[0] === '7️⃣';
   const png = renderSlot({
@@ -254,17 +255,19 @@ function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multi
     badgeColor: jackpot ? '#ffd700' : win ? '#ffd23f' : '#c9b8a0',
     hacked: hacks > 0 || gateway,
     wall: gateway,
+    rerolled,
     phase: hacks > 0 || gateway ? 7 : 0, // 해킹 모드 결과 그림의 글리치 모양(프레임 번호)
   });
   return payload(card({
-    color: gateway ? WALL_COLOR : hacks > 0 ? HACK_COLOR : win ? 0xFFD700 : COLORS.muted,
-    header: gateway ? `${gatewayEmoji()} 룰렛머신` : hacks > 0 ? `${hackToolEmoji()} 룰렛머신` : '🎰 룰렛머신',
-    sub: [`<@${lobby.userId}>`, hacks > 0 || gateway ? null : '결과', hackLabel(hacks), gateway ? `${gatewayEmoji()} ${GATEWAY_NAME} 사용` : null].filter(Boolean),
+    color: gateway ? WALL_COLOR : rerolled != null ? REROLL_COLOR : hacks > 0 ? HACK_COLOR : win ? 0xFFD700 : COLORS.muted,
+    header: gateway ? `${gatewayEmoji()} 룰렛머신` : rerolled != null ? `${rerollEmoji()} 룰렛머신` : hacks > 0 ? `${hackToolEmoji()} 룰렛머신` : '🎰 룰렛머신',
+    sub: [`<@${lobby.userId}>`, hacks > 0 || gateway || rerolled != null ? null : '결과', hackLabel(hacks), rerolled != null ? `${rerollEmoji()} ${REROLL_NAME} · ${rerolled + 1}번 릴 재회전` : null, gateway ? `${gatewayEmoji()} ${GATEWAY_NAME} 사용` : null].filter(Boolean),
     blocks: [
       { image: SLOT_URL, divider: true }, // 제목·결과 줄 아래 구분선
       `### ${resultLine}　${netLine}`, // 결과와 손익을 한 줄에
+      ...(rerolled != null && rerollNote ? [`-# ${rerollNote}`] : []),
     ],
-    footer: gateway ? wallFooter() : hacks > 0 ? HACK_FOOTER : '⏰ 하루에 한 번만 돌릴 수 있어요.',
+    footer: gateway ? wallFooter() : rerolled != null ? '🐉 용의 불길이 릴 한 칸을 다시 태웠어요.' : hacks > 0 ? HACK_FOOTER : '⏰ 하루에 한 번만 돌릴 수 있어요.',
   }), { files: [slotFile(png)], ...extra });
 }
 
@@ -284,18 +287,18 @@ function buildHackPromptPayload(prompt, have, extra = {}) {
   }), extra); // 이미 본인 전용인 메시지를 고쳐 쓰므로 ephemeral 플래그는 넣지 않는다(화면 모음은 extra로 넘김)
 }
 
-// 결과 직후 돌린 사람에게만 보이는 속성 재회전석 사용 확인: 다시 돌릴 릴을 고른다.
+// 결과 직후 돌린 사람에게만 보이는 역린 사용 확인: 다시 돌릴 릴을 고른다.
 function buildRerollPromptPayload(prompt, have, extra = {}) {
   const row = new ActionRowBuilder().addComponents(
     ...prompt.spin.reels.map((reel, i) => new ButtonBuilder().setCustomId(`roulette:rr:${prompt.id}:${i}`).setLabel(`${i + 1}번 릴 ${reel}`).setStyle(ButtonStyle.Primary)),
-    new ButtonBuilder().setCustomId(`roulette:rrkeep:${prompt.id}`).setLabel('넘기기').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`roulette:rrkeep:${prompt.id}`).setLabel('아껴 두기').setStyle(ButtonStyle.Secondary),
   );
   return payload(card({
-    color: HACK_COLOR,
+    color: REROLL_COLOR,
     header: `${rerollEmoji()} ${REROLL_NAME}`,
     sub: [`보유 ${rerollHaveText(have)}`],
-    blocks: [`릴 **한 칸만** 골라 다시 돌릴까요?\n-# 지금 결과: ${spinLabel(prompt.spin)} (×${prompt.spin.multiplier}) · 결과가 더 나빠질 수도 있어요`],
-    footer: `⏰ ${HACK_PROMPT_MS / 1000}초 안에 고르지 않으면 결과가 그대로 확정돼요.`,
+    blocks: [`🐉 **용의 역린이 반응하고 있어요.** ${REROLL_DESC}.\n-# 지금 결과: ${spinLabel(prompt.spin)} (×${prompt.spin.multiplier}) · 다시 돌린 결과가 더 나쁠 수도 있어요`],
+    footer: `⏰ ${HACK_PROMPT_MS / 1000}초 안에 고르지 않으면 결과가 그대로 확정돼요. 역린은 그대로 남아요.`,
     rows: [row],
   }), extra);
 }
@@ -473,7 +476,7 @@ async function spinLobby(interaction, lobby, lobbies) {
 
   // 꽝이고 해킹 툴이 있으면 번복할지 본인에게만 묻는다(결과를 채널에 못 올렸으면 다시 돌릴 자리가 없어 묻지 않음).
   // 묻지 않으면 '돌리는 중' 안내(예전 로비 자리)는 지운다. 공개 실패로 결과를 여기 보여 줬으면 남긴다.
-  // 속성 재회전석이 있으면 결과 직후(꽝이든 아니든) 한 릴만 다시 돌릴지 먼저 묻는다. 게이트웨이로 확정한 잭팟은 묻지 않는다.
+  // 역린이 있으면 결과 직후(꽝이든 아니든) 한 릴만 다시 돌릴지 먼저 묻는다. 게이트웨이로 확정한 잭팟은 묻지 않는다.
   if (shown && !spin.gateway && await offerReroll(interaction, { lobby, bet, spin, ...shown, hacks: 0, root: interaction })) return;
   if (spin.kind === 'none' && shown && await offerHack(interaction, { lobby, bet, ...shown, hacks: 0, root: interaction })) return;
   if (shown) await interaction.deleteReply().catch(() => {});
@@ -504,7 +507,7 @@ function rerollReel(spin, index, bet, reelFn = spinReel) {
 const spinLabel = (spin) => (spin.kind === 'triple' ? `${spin.symbol} 트리플` : spin.kind === 'two' ? '더블' : '꽝');
 
 // 결과 카드에 넘길 값(결과 줄·손익 줄). net 은 그날 판의 최종 손익(지급 - 베팅).
-function resultView(bet, spin, hacks) {
+function resultView(bet, spin, hacks, reroll = null) {
   const { kind, symbol, multiplier, reels } = spin;
   const net = spin.payout - bet;
   const symbolLabel = symbol ? `${symbol} ${SYMBOL_NAMES[symbol]}` : '';
@@ -517,12 +520,36 @@ function resultView(bet, spin, hacks) {
         ? `🙂 **더블 매칭!** (×${multiplier})`
         : `😢 **꽝**`;
   const netLine = net >= 0 ? `📈 **+${net} XP**` : `📉 **${net} XP**`;
-  return { bet, resultLine, netLine, net, reels, multiplier, hacks, gateway: !!spin.gateway };
+  return { bet, resultLine, netLine, net, reels, multiplier, hacks, gateway: !!spin.gateway, ...(reroll ? { rerolled: reroll.index, rerollNote: reroll.note } : {}) };
+}
+
+// 역린 발동 장면(돌기 전 4장): 알바트리온 용 속성 도트 연출 — 용의 기운이 모이고, 칸의 그림이 타들어 가며 새 릴이 드러난다.
+const REROLL_FOOTERS = ['용의 기운이 릴에 모여든다...', '잠들어 있던 역린이 깨어난다...', '역린이 터지며 릴이 타들어 간다!', '불씨가 흩날리며 새 릴이 돌기 시작한다...'];
+function buildRerollIntroPayload(lobby, bet, reels, index, step, hacks = 0) {
+  const png = renderRerollIntro({ reels, bet, index, step });
+  return payload(card({
+    color: REROLL_COLOR,
+    header: `${rerollEmoji()} 룰렛머신`,
+    sub: [`<@${lobby.userId}>`, `${rerollEmoji()} ${REROLL_NAME} 사용`, hackLabel(hacks)].filter(Boolean),
+    blocks: [{ image: SLOT_URL, divider: true }],
+    footer: `${rerollEmoji()} ${index + 1}번 릴 — ${REROLL_FOOTERS[step] ?? REROLL_FOOTERS[0]}`,
+  }), { files: [slotFile(png)] });
+}
+// 역린 사용: 다시 돌릴 릴(index)만 금빛 테두리로 강조하고 그 칸만 돌아간다(나머지는 직전 결과 그대로 어둡게). reels 에서 null 인 칸이 도는 중.
+function buildRerollSpinPayload(lobby, bet, reels, index, phase = 0, hacks = 0) {
+  const png = renderSlot({ reels, bet, phase, rerollIdx: index, right: '불길 속에서 회전 중...', rightColor: '#ffb0dc' });
+  return payload(card({
+    color: REROLL_COLOR,
+    header: `${rerollEmoji()} 룰렛머신`,
+    sub: [`<@${lobby.userId}>`, `${rerollEmoji()} ${REROLL_NAME} 사용`, hackLabel(hacks)].filter(Boolean),
+    blocks: [{ image: SLOT_URL, divider: true }],
+    footer: `${rerollEmoji()} 용의 불길 속에서 ${index + 1}번 릴만 다시 돌아가요...`,
+  }), { files: [slotFile(png)] });
 }
 
 // 채널에 릴이 하나씩 멈추는 연출을 보여 주고 결과로 고친다. message 가 있으면(해킹 툴로 다시 돌릴 때) 그 카드를 그대로 다시 돌린다.
 // 결과가 실제로 올라간 메시지를 돌려준다(수정이 끝내 실패해 새로 보냈으면 새 메시지).
-async function revealSpin(channel, message, lobby, bet, spin, hacks, introReels = null) {
+async function revealSpin(channel, message, lobby, bet, spin, hacks, introReels = null, reroll = null) {
   const wall = !!spin.gateway; // 블랙월 게이트웨이 발동: 돌기 전에 평범한 룰렛이 블랙월에 잠식당하고, 덮인 뒤 붉은 블랙월 룰렛이 돈다
   if (wall) {
     for (let step = 0; step < WALL_EROSION.length; step++) {
@@ -539,17 +566,32 @@ async function revealSpin(channel, message, lobby, bet, spin, hacks, introReels 
       if (message) await sleep(INTRO_STEP_MS);
     }
   }
+  if (reroll) {
+    // 역린: 용의 기운에 칸이 타들어 가고(4장) → 그 칸만 돌다가 → 새 결과로 멈춘다(나머지 칸은 그대로)
+    const { index, prevReels } = reroll;
+    const spinning = prevReels.map((r, i) => (i === index ? null : r));
+    const frames = [
+      ...Array.from({ length: REROLL_INTRO_COUNT }, (_, step) => [buildRerollIntroPayload(lobby, bet, prevReels, index, step, hacks), INTRO_STEP_MS]),
+      [buildRerollSpinPayload(lobby, bet, spinning, index, 1, hacks), SPIN_STEP_MS],
+    ];
+    for (const [pl, wait] of frames) {
+      if (message) { try { await message.edit(pl); } catch { message = null; } }
+      if (!message) message = await channel.send(pl);
+      await sleep(wait);
+    }
+  }
   const first = buildSpinningPayload(lobby, bet, [null, null, null], 0, hacks, wall);
-  if (message) {
+  if (!reroll && message) {
     try { await message.edit(first); } catch { message = null; } // 카드가 지워졌으면 새로 올린다
   }
-  if (!message) message = await channel.send(first);
-
-  await animateSpin(message, lobby, bet, spin.reels, hacks, wall);
+  if (!reroll) {
+    if (!message) message = await channel.send(first);
+    await animateSpin(message, lobby, bet, spin.reels, hacks, wall);
+  }
 
   // 결과 수정이 일시적 오류(네트워크/레이트리밋)로 한 번 실패하면 메시지가 "릴이 돌아가는 중..."에
   // 영영 멈춰 보였다. 몇 번 재시도하고, 그래도 안 되면 결과를 새 메시지로 보낸다.
-  const finalPayload = buildResultPayload(lobby, resultView(bet, spin, hacks));
+  const finalPayload = buildResultPayload(lobby, resultView(bet, spin, hacks, reroll ? { index: reroll.index, note: reroll.note } : null));
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       // 응답이 영영 오지 않고 매달리는 경우(재시도 로직이 못 도는 경우)도 있어 시간 제한을 둔다.
@@ -605,7 +647,7 @@ async function closePrompt(prompt, via = null) {
 async function handleHackButton(interaction, action, promptId) {
   const prompts = getHackPrompts(interaction.client);
   const prompt = prompts.get(promptId);
-  if (!prompt || prompt.kind === 'reroll') { // 재회전석 확인은 rr 버튼만 처리한다
+  if (!prompt || prompt.kind === 'reroll') { // 역린 확인은 rr 버튼만 처리한다
     await interaction.reply(notice('⚠️ **이미 확정된 결과예요.**', { ephemeral: true }));
     return;
   }
@@ -663,13 +705,15 @@ async function handleHackButton(interaction, action, promptId) {
     announceLevelUp(interaction.client, prompt.guildId, prompt.userId, result.newLevel).catch(() => {});
   }
 
-  // 또 꽝이면 남은 개수가 있는 한 계속 쓸 수 있다(같은 확인 메시지 자리에 다시 묻는다).
+  // 새 결과에도 역린이 있으면 먼저 묻는다(첫 결과에서 아꼈거나, 재도전 결과를 한 릴 더 고치고 싶을 수 있다).
+  // 그다음 또 꽝이면 남은 개수가 있는 한 계속 쓸 수 있다(같은 확인 메시지 자리에 다시 묻는다).
   // 아니면 '사용했어요' 안내와 '돌리는 중' 안내를 지운다(결과는 채널 카드에 있다).
+  if (message && await offerReroll(interaction, { lobby, bet, spin, channel: prompt.channel, message, reels: spin.reels, hacks, root: prompt.root })) return;
   if (spin.kind === 'none' && message && await offerHack(interaction, { lobby, bet, channel: prompt.channel, message, reels: spin.reels, hacks, root: prompt.root })) return;
   if (message) await closePrompt(prompt, interaction);
 }
 
-// 결과가 나온 직후 속성 재회전석이 있으면 본인에게만 보이는 확인을 띄운다. 시간이 지나면 결과 확정. 띄웠으면 true.
+// 결과가 나온 직후 역린이 있으면 본인에게만 보이는 확인을 띄운다. 시간이 지나면 결과 확정. 띄웠으면 true.
 async function offerReroll(interaction, ctx) {
   const have = rerollsOf(ctx.lobby.guildId, ctx.lobby.userId);
   if (have <= 0) return false;
@@ -677,10 +721,12 @@ async function offerReroll(interaction, ctx) {
   const prompt = { ...ctx, kind: 'reroll', id: interaction.id, guildId: ctx.lobby.guildId, userId: ctx.lobby.userId, interaction, msg: null, timeoutId: null };
   prompts.set(prompt.id, prompt);
   try {
-    prompt.msg = await interaction.followUp(buildRerollPromptPayload(prompt, have, { ephemeral: true }));
+    // 처음엔 결과 카드 아래 후속 메시지로, 해킹 툴 재도전 뒤에는 같은 확인 메시지 자리(버튼을 누른 메시지)를 고쳐 쓴다.
+    if (interaction === ctx.root) prompt.msg = await interaction.followUp(buildRerollPromptPayload(prompt, have, { ephemeral: true }));
+    else await interaction.editReply(buildRerollPromptPayload(prompt, have));
   } catch (err) {
     prompts.delete(prompt.id);
-    console.error('속성 재회전석 확인 메시지 표시 실패:', err);
+    console.error('역린 확인 메시지 표시 실패:', err);
     return false;
   }
   prompt.timeoutId = setTimeout(() => {
@@ -717,7 +763,7 @@ async function handleRerollButton(interaction, action, promptId, indexStr) {
   }
   const index = parseInt(indexStr, 10);
   if (!(index >= 0 && index <= 2)) {
-    await interaction.update(notice('⚠️ **릴을 알 수 없어요.** 결과가 그대로 확정됐어요.'));
+    await interaction.update(notice('⚠️ **릴을 알 수 없어요.** 결과가 그대로 확정됐어요.', { color: REROLL_COLOR }));
     return;
   }
   // 관리자 긴급정지·레이드로 미니게임 XP가 멈췄으면 쓰지 않고(아이템도 그대로) 결과를 확정한다.
@@ -725,15 +771,15 @@ async function handleRerollButton(interaction, action, promptId, indexStr) {
     const content = isRaidXpFrozen()
       ? `👾 **몬스터 때문에 XP 시스템이 고장 나 ${REROLL_NAME}을 쓸 수 없습니다.**`
       : `⚙️ **현재 관리자가 미니게임 XP를 일시 중지해 ${REROLL_NAME}을 쓸 수 없습니다.**`;
-    await interaction.update(notice(`${content}\n-# 결과는 그대로 확정되고 아이템은 쓰지 않았어요.`));
+    await interaction.update(notice(`${content}\n-# 결과는 그대로 확정되고 아이템은 쓰지 않았어요.`, { color: REROLL_COLOR }));
     return;
   }
   if (!hackUnlimited(prompt.guildId) && !useReroll(prompt.guildId, prompt.userId)) {
-    await interaction.update(notice(`⚠️ **${REROLL_NAME}이 없어요.** 결과가 그대로 확정됐어요.`));
+    await interaction.update(notice(`⚠️ **${REROLL_NAME}이 없어요.** 결과가 그대로 확정됐어요.`, { color: REROLL_COLOR }));
     return;
   }
   const left = rerollsOf(prompt.guildId, prompt.userId);
-  await interaction.update(notice(`${rerollEmoji()} **${REROLL_NAME}을 사용했어요!** ${index + 1}번 릴을 다시 돌리는 중...\n-# 남은 ${REROLL_NAME} ${rerollHaveText(left)}`));
+  await interaction.update(notice(`${rerollEmoji()} **${REROLL_NAME}이 깨어났어요!** ${index + 1}번 릴을 불태워 다시 돌려요...\n-# 남은 ${REROLL_NAME} ${rerollHaveText(left)}`, { color: REROLL_COLOR }));
 
   const spin = rerollReel(prompt.spin, index, bet);
   // 이미 이전 결과의 지급액까지 정산돼 있으므로 차액(음수 포함)만 반영해 그날 손익이 (새 지급 - 베팅)이 되게 한다.
@@ -746,11 +792,11 @@ async function handleRerollButton(interaction, action, promptId, indexStr) {
 
   let message = null;
   try {
-    message = await revealSpin(prompt.channel, prompt.message, lobby, bet, spin, prompt.hacks, prompt.reels);
+    message = await revealSpin(prompt.channel, prompt.message, lobby, bet, spin, prompt.hacks, null, { index, prevReels: prompt.spin.reels, note: `${index + 1}번 릴: ${prompt.spin.reels[index]} → ${spin.reels[index]} · ${spinLabel(prompt.spin)} → ${spinLabel(spin)}` });
   } catch (err) {
-    console.error('룰렛 재회전석 결과 공개 실패:', err);
+    console.error('룰렛 역린 결과 공개 실패:', err);
     logError('게임 오류', `룰렛 ${REROLL_NAME} 결과 채널 공개 실패 — ${userLabel(prompt.userId)}에게만 결과 표시`, err);
-    await interaction.followUp(buildResultPayload(lobby, resultView(bet, spin, prompt.hacks), { ephemeral: true })).catch(() => {});
+    await interaction.followUp(buildResultPayload(lobby, resultView(bet, spin, prompt.hacks, { index, note: `${index + 1}번 릴: ${prompt.spin.reels[index]} → ${spin.reels[index]} · ${spinLabel(prompt.spin)} → ${spinLabel(spin)}` }), { ephemeral: true })).catch(() => {});
   }
   if (result.leveledUp) announceLevelUp(interaction.client, prompt.guildId, prompt.userId, result.newLevel).catch(() => {});
 
@@ -827,4 +873,4 @@ async function handleRouletteButton(interaction) {
 }
 
 // buildLobbyPayload/buildResultPayload는 화면 모음·테스트에서 직접 그려 보려고 함께 내보낸다.
-module.exports = { buildLobbyPayload, buildWallErosionPayload, WALL_EROSION, buildSpinningPayload, buildResultPayload, buildHackPromptPayload, buildRerollPromptPayload, rerollReel, buildHackIntroPayload, startRouletteCommand, handleRouletteButton, loadRoulette, saveRoulette, MIN_BET, MAX_BET };
+module.exports = { buildLobbyPayload, buildWallErosionPayload, WALL_EROSION, buildSpinningPayload, buildResultPayload, buildHackPromptPayload, buildRerollPromptPayload, buildRerollIntroPayload, buildRerollSpinPayload, rerollReel, buildHackIntroPayload, startRouletteCommand, handleRouletteButton, loadRoulette, saveRoulette, MIN_BET, MAX_BET };

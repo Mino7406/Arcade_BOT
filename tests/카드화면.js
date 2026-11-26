@@ -78,6 +78,7 @@ async function buildScreens() {
   // 해킹 툴 앱 이모지는 봇이 켜져야 ID가 생기므로, 화면 모음에선 자리표시 ID를 넣고 그림은 로컬 파일로 보여 준다(LOCAL_EMOJI).
   req('handlers/게임/해킹툴.js').setHackToolEmojiId('0');
   req('handlers/게임/블랙월게이트웨이.js').setGatewayEmojiId('0');
+  req('handlers/게임/역린.js').setRerollEmojiId('0');
   req('handlers/매치/티어.js').usePreviewPositionEmojis(); // 포지션 아이콘도 같은 방식(LOCAL_EMOJI 의 pos_… 그림)
   // 전적 탭 버튼의 앱 이모지(rec_…)도 자리표시 ID 로 "등록된 것처럼" 만들고, 그림은 로컬 파일로 보여 준다
   await req('handlers/전적/이모지.js').ensureRecordEmojis({ application: { emojis: { fetch: async () => [], create: async ({ name }) => ({ id: '0', name }) } } });
@@ -256,7 +257,7 @@ async function buildScreens() {
   const rlLose = rl.buildResultPayload(rlb, { bet: 300, resultLine: '😢 **꽝**', netLine: '📉 **-300 XP**', net: -300, reels: ['💎', '🍒', '🍋'], multiplier: 0 });
   add('룰렛', '결과 — 꽝', '', rlLose, rlWith(rlLose));
   add('룰렛', '꽝 → 해킹 툴 사용 확인(본인에게만)', '해킹 툴이 있을 때만 · 60초 지나면 결과 확정', rl.buildHackPromptPayload({ id: '1', bet: 300 }, 2, { ephemeral: true }));
-  add('룰렛', '결과 직후 → 속성 재회전석 사용 확인(본인에게만)', '알바트리온 MVP 보상 · 재회전석이 있을 때만 · 릴 한 칸만 다시 돌림 · 60초 지나면 결과 확정', rl.buildRerollPromptPayload({ id: '1', bet: 300, spin: { reels: ['🍒', '🍒', '🍋'], kind: 'two', multiplier: 1.5, payout: 450 } }, 1, { ephemeral: true }));
+  add('룰렛', '결과 직후 → 역린 사용 확인(본인에게만)', '알바트리온 MVP 보상 · 역린이 있을 때만 · 릴 한 칸만 다시 돌림 · 60초 지나면 결과 확정', rl.buildRerollPromptPayload({ id: '1', bet: 300, spin: { reels: ['🍒', '🍒', '🍋'], kind: 'two', multiplier: 1.5, payout: 450 } }, 1, { ephemeral: true }));
   const rlHack = rl.buildResultPayload(rlb, { bet: 300, resultLine: '**🍋 레몬 트리플 매칭!** (×2.5)', netLine: '📈 **+450 XP**', net: 450, reels: ['🍋', '🍋', '🍋'], multiplier: 2.5, hacks: 1 });
   [0, 1, 2].forEach(step => {
     const intro = rl.buildHackIntroPayload(rlb, 300, ['💎', '🍒', '🍋'], step, 1);
@@ -279,6 +280,18 @@ async function buildScreens() {
   const gwWin = rl.buildResultPayload(rlb, { bet: 300, resultLine: '🎉 **JACKPOT!** (x10)', netLine: '📈 **+2700 XP**', net: 2700, reels: ['7️⃣', '7️⃣', '7️⃣'], multiplier: 10, gateway: true });
   add('룰렛', '게이트웨이 — 결과(100% 잭팟)', '블랙월 테마 결과 카드 · 부제에 블랙월 게이트웨이 사용', gwWin, rlWith(gwWin));
   add('룰렛', '결과 — 해킹 툴로 번복', '해킹된 기계 그림 · 보라 띠 · 부제에 사용 횟수', rlHack, rlWith(rlHack));
+  // 역린(알바트리온 MVP 보상): 결과 직후 한 릴만 다시 돌림 — 용 속성 도트 연출(4장) → 그 칸만 도는 화면 → 결과(분홍·보랏빛 테두리)
+  const rrPrev = ['🍒', '🍒', '🍋'];
+  ['용의 기운이 고른 칸에 맺히고 도트 고리가 돈다', '기운이 커지며 방사 빛줄기가 뻗고 칸의 그림이 타들어 감', '빛줄기가 기계 전체로 번지고 충격 고리 · 대부분 타서 새 릴이 드러남', '불씨가 흩날리고 칸은 용의 빛 테두리로 남음'].forEach((note, step) => {
+    const it = rl.buildRerollIntroPayload(rlb, 300, rrPrev, 2, step, 0);
+    add('룰렛', `역린 발동 연출 ${step + 1}/4`, note, it, rlWith(it));
+  });
+  const rrSpin = rl.buildRerollSpinPayload(rlb, 300, ['🍒', '🍒', null], 2, 1, 0);
+  add('룰렛', '역린으로 그 칸만 도는 중', '고른 칸만 돌고 나머지는 어둡게 · 둘레에서 불씨만 반짝임', rrSpin, rlWith(rrSpin));
+  const rrWin = rl.buildResultPayload(rlb, { bet: 300, resultLine: '**🍒 체리 트리플 매칭!** (×2)', netLine: '📈 **+300 XP**', net: 300, reels: ['🍒', '🍒', '🍒'], multiplier: 2, rerolled: 2, rerollNote: '3번 릴: 🍋 → 🍒 · 더블 → 🍒 트리플' });
+  add('룰렛', '결과 — 역린으로 뒤집음(이득)', '다시 돌린 칸에 분홍·보랏빛 테두리 · 빛줄기·불씨 · 부제에 역린 · 바뀐 내용 한 줄', rrWin, rlWith(rrWin));
+  const rrLose = rl.buildResultPayload(rlb, { bet: 300, resultLine: '😢 **꽝**', netLine: '📉 **-300 XP**', net: -300, reels: ['🍒', '🍋', '🍇'], multiplier: 0, rerolled: 1, rerollNote: '2번 릴: 🍒 → 🍋 · 더블 → 꽝' });
+  add('룰렛', '결과 — 역린으로 뒤집음(손해)', '다시 돌린 결과가 더 나쁠 수도 있음', rrLose, rlWith(rrLose));
 
   // ── 레벨 · 랭킹 · 퀴즈 ────────────────────────
   const guild = { id: 'g', members: { fetch: async ({ user }) => new Map(user.map((id, i) => [id, { displayName: ['민호', '지수', '하늘', '도윤', '서연', '준호', '예린', '태양', '나래', '현우', '다온', '시우'][i % 12] }])) } };
@@ -614,6 +627,42 @@ async function buildScreens() {
   add('레이드', '종료 안내 — 복구 실패 (결과 메시지에 답장)', '☠️ 복구 실패 · 합계 128명 · -17,536 XP', raidMod.buildEndNoticePayload({ kind: 'penalty', xp: 137, details: ['128명 · 합계 : -17,536 XP', '중단 시간 : 20:42~21:02 (20분 3초)'] }));
   add('레이드', '❔ 플레이 방법', '본인에게만 보이는 안내', raidMod.buildHelpView(m0));
 
+  // ── 알바트리온(고난이도 속성 레이드): 로비 · 전투 · 에스카톤 · 패배 · 토벌 보상(MVP 1000 XP + 역린) ──
+  {
+    const alatM = raidBattle.loadMonsters().find(m => m.id === 'alatreon');
+    if (alatM) {
+      const aParty = raidBattle.ROLE_SETS.elemental.map((role, i) => ({ userId: String(100 + i), name: ['민호', '지수', '하늘', '도윤'][i], role }));
+      const aState = (extra = {}) => ({ client: null, monster: alatM, guildId: '1', channelId: '2', phase: 'recruit', party: aParty.slice(0, 2), recruitEndsAt: 0, battle: null, battleEndsAt: 0, turnEndsAt: 0, freezesXp: true, hasImage: false, defeatStacks: 0, ...extra });
+      const l0 = await raidMod.recruitView(aState());
+      add('레이드', '알바트리온 — 준비 로비(첫 도전)', '재앙 강림 · 속성 직업 참가 · 억제 게이지 안내 · 보상(MVP +1000 XP · 역린 1개)', l0, rf(l0));
+      const l1 = await raidMod.recruitView(aState({ defeatStacks: 2 }));
+      add('레이드', '알바트리온 — 준비 로비(패배 후)', '꺾인 횟수가 소제목에 반영', l1, rf(l1));
+      const aBattle = (intent, element, extra = {}) => {
+        const rr = aState({ phase: 'battle', party: aParty, battleStartedAt: Date.now() - 5 * 60e3, battleEndsAt: Date.now() + 15 * 60e3, turnEndsAt: Date.now() + 25e3, ...extra });
+        rr.battle = createBattle(alatM, aParty, Math.random, { minParty: 1 });
+        rr.battle.intent = intent; rr.battle.alat.element = element;
+        return rr;
+      };
+      for (const [intent, el, title, sub] of [['flame', 'water', '전투 — 다음 행동 예고', '글자를 키운 "다음 행동" 카드 · 상성 직업 카드에 「억제력 증가」 칩'], ['smash', 'ice', '전투 — 에스카톤 예고', '필살기 카드 · 억제 게이지 · 전멸 위험/성공 가능']]) {
+        const v = await raidMod.battleView(aBattle(intent, el));
+        add('레이드', `알바트리온 ${title}`, sub, v, rf(v));
+      }
+      const aw = aBattle('flame', 'fire'); aw.battle.members.forEach(mm => choose(aw.battle, mm.userId, 'guard')); resolveTurn(aw.battle, () => 0.5); aw.showingResult = true;
+      const vr = await raidMod.battleView(aw);
+      add('레이드', '알바트리온 전투 — 화염 브레스 결과', '결과 화면은 쓴 순간의 속성으로 그리고, 속성 전환은 다음 선택 화면에서', vr, rf(vr));
+      add('레이드', '알바트리온 — 패배 채널 안내(전멸)', '알바트리온 톤 · 다시 도전 안내', raidMod.buildEndNoticePayload({ kind: 'defeat', tone: 'alat', outcome: 'wipe', xp: 0, stacks: 2, lost: 0, details: [] }));
+      add('레이드', '알바트리온 — 패배 채널 안내(시간 초과)', '', raidMod.buildEndNoticePayload({ kind: 'defeat', tone: 'alat', outcome: 'timeout', xp: 0, stacks: 3, lost: 0, details: [] }));
+      const ae = aBattle('flame', 'fire'); ae.phase = 'ended'; ae.endedAt = Date.now(); ae.frozenAt = Date.now() - 20 * 60e3; ae.battle.hp = 0;
+      const aev = await raidMod.endView(ae, 'clear', [
+        { userId: '100', xp: 1000, mvp: true, hackTool: false, reroll: true },
+        { userId: '101', xp: 300, mvp: false, hackTool: true },
+        { userId: '102', xp: 300, mvp: false, hackTool: true },
+        { userId: '103', xp: 300, mvp: false, hackTool: true },
+      ]);
+      add('레이드', '알바트리온 — 토벌 성공 결과', 'MVP +1000 XP + 🐲 역린 1개 · 나머지 +300 XP + 해킹 툴', aev, rf(aev));
+    }
+  }
+
   return screens;
 }
 
@@ -626,6 +675,8 @@ function localEmojiScript() {
   const map = Object.fromEntries(Object.values(hack.EMOJIS).map(e => [e.name, 'data:image/png;base64,' + fs.readFileSync(path.join(hack.EMOJI_DIR, e.file)).toString('base64')]));
   const gw = require(path.join(ROOT, 'handlers/게임/블랙월게이트웨이.js'));
   map[gw.GATEWAY_EMOJI.name] = 'data:image/png;base64,' + fs.readFileSync(path.join(gw.EMOJI_DIR, gw.GATEWAY_EMOJI.file)).toString('base64');
+  const rr = require(path.join(ROOT, 'handlers/게임/역린.js')); // 역린 앱 이모지(assets/이모지/reroll.png)
+  if (fs.existsSync(path.join(rr.EMOJI_DIR, rr.REROLL_EMOJI.file))) map[rr.REROLL_EMOJI.name] = 'data:image/png;base64,' + fs.readFileSync(path.join(rr.EMOJI_DIR, rr.REROLL_EMOJI.file)).toString('base64');
   // 게임 썸네일도 봇이 켜져야 여백 넣은 앱 이모지 ID가 생기므로, 원래 이모지 ID → 여백 그림(LOCAL_THUMB)
   const th = require(path.join(ROOT, 'handlers/공통/썸네일.js'));
   const thumbs = Object.fromEntries(Object.entries(th.SOURCES).map(([id, name]) => [id, 'data:image/png;base64,' + fs.readFileSync(path.join(ROOT, 'assets/썸네일', `${name}.png`)).toString('base64')]));

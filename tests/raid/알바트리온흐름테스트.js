@@ -92,11 +92,11 @@ const phase = () => raidMod.raidForTest(channel.guildId)?.phase;
   assert(!/화염기사|수정술사|뇌창사|빙결기사|검사|궁수|수호자|치유사/.test(desc()), '전투 화면에도 직업 이름 없음');
   await raidMod.forceEndRaid(MAIN);
 
-  // ── 클리어 보상: MVP 한 명만 속성 재회전석, 나머지는 해킹 툴 ──
+  // ── 클리어 보상: MVP 한 명만 역린, 나머지는 해킹 툴 ──
   err = await raidMod.forceSpawnRaid({ guildId: 'other', channel, client }, 'alatreon');
   for (const [uid, role] of [['1', 'fire'], ['2', 'water'], ['3', 'thunder'], ['4', 'ice']]) await press(uid, 'raid:role:' + role);
   assert(phase() === 'battle', '보상 시나리오: 전투 시작');
-  const rr = require(path.join(root, 'handlers/게임/재회전석.js'));
+  const rr = require(path.join(root, 'handlers/게임/역린.js'));
   const ht = require(path.join(root, 'handlers/게임/해킹툴.js'));
   raidMod.raidForTest(MAIN).battle.hp = 1;
   // 앞 순서(화·수·뇌)가 먼저 쓰러뜨리면 뒤 순서는 행동하지 못해 보상이 없으므로, 셋은 방어하고 마지막 순서(빙)가 쓰러뜨린다.
@@ -105,8 +105,8 @@ const phase = () => raidMod.raidForTest(channel.guildId)?.phase;
   await runTimers();
   assert(!raidMod.getRaidStatus(MAIN).active, '보상 시나리오: 클리어로 종료');
   const rerolls = ['1', '2', '3', '4'].map(u => rr.getRerolls(MAIN, u));
-  assert(rerolls.reduce((a, b) => a + b, 0) === 1 && rerolls[3] === 1, `클리어 보상: MVP(피해를 준 빙 직업) 한 명만 재회전석 1개 (${rerolls.join(',')})`);
-  assert(['1', '2', '3'].every(u => ht.getHackTools(MAIN, u) === 1) && ht.getHackTools(MAIN, '4') === 0, '클리어 보상: 나머지는 해킹 툴 1개, MVP는 해킹 툴 대신 재회전석');
+  assert(rerolls.reduce((a, b) => a + b, 0) === 1 && rerolls[3] === 1, `클리어 보상: MVP(피해를 준 빙 직업) 한 명만 역린 1개 (${rerolls.join(',')})`);
+  assert(['1', '2', '3'].every(u => ht.getHackTools(MAIN, u) === 1) && ht.getHackTools(MAIN, '4') === 0, '클리어 보상: 나머지는 해킹 툴 1개, MVP는 해킹 툴 대신 역린');
 
   // ── 전체 흐름 1: 상성 직업이 게이지를 채워 에스카톤을 억제하고 몬스터를 쓰러뜨린다 ──
   const joinAll = async (ids) => {
@@ -137,7 +137,7 @@ const phase = () => raidMod.raidForTest(channel.guildId)?.phase;
   assert(sawEscaton && suppressedAll, '전체 흐름 1: 에스카톤이 한 번 이상 오고 모두 억제됨');
   assert(!raidMod.getRaidStatus(MAIN).active, '전체 흐름 1: 몬스터를 쓰러뜨려 종료');
   if (process.env.DUMP_DIR) require('fs').writeFileSync(process.env.DUMP_DIR + '/alat-clear.png', images[images.length - 1]); // 종료 화면 확인용
-  assert(/CLEAR|토벌/.test(desc()) && desc().includes('속성 재회전석'), '전체 흐름 1: 종료 화면에 클리어와 속성 재회전석 보상 문구');
+  assert(/CLEAR|토벌/.test(desc()) && desc().includes('역린'), '전체 흐름 1: 종료 화면에 클리어와 역린 보상 문구');
 
   // ── 전체 흐름 2: 아무도 게이지를 안 채우면 에스카톤에 전멸한다 ──
   await joinAll([['21', 'fire'], ['22', 'water'], ['23', 'thunder'], ['24', 'ice']]);

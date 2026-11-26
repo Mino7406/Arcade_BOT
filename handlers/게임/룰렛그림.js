@@ -34,7 +34,7 @@ let font = null;
 let painter = null;
 let bg = null; // 배경 버퍼(RGB)
 let hackBg = null; // 해킹 툴로 번복할 때 쓰는 해킹된 기계 배경 버퍼(RGB)
-let skull = null; // 해킹 툴 해골 그림(크기별 RGBA 캐시)
+const emblems = new Map(); // 해골·역린 같은 그림 파일별 { 원본, 크기별 RGBA 캐시 }
 let idle = null; // 대기 화면 PNG 캐시
 
 function getFont() {
@@ -380,9 +380,11 @@ function decodePng(buf) {
 }
 
 // 해골 그림을 size(픽셀) 정사각형으로 줄여 둔다(상자 평균). 크기별로 한 번만 만든다.
-function getSkull(size) {
+function getSkull(size, file = SKULL_FILE) {
+  let skull = emblems.get(file);
   if (!skull) {
-    try { skull = { src: decodePng(fs.readFileSync(SKULL_FILE)), sized: new Map() }; } catch { skull = { src: null, sized: new Map() }; }
+    try { skull = { src: decodePng(fs.readFileSync(file)), sized: new Map() }; } catch { skull = { src: null, sized: new Map() }; }
+    emblems.set(file, skull);
   }
   if (!skull.src) return null;
   if (!skull.sized.has(size)) {
@@ -406,8 +408,8 @@ function getSkull(size) {
 }
 
 // 설계 좌표 (cx, cy) 가운데에 해골을 찍는다. size 는 설계 크기.
-function drawSkull(p, cx, cy, size) {
-  const px = Math.round(size * p.s), img = getSkull(px);
+function drawSkull(p, cx, cy, size, file = SKULL_FILE) {
+  const px = Math.round(size * p.s), img = getSkull(px, file);
   if (!img) return;
   const x0 = Math.round(cx * p.s - px / 2), y0 = Math.round(cy * p.s - px / 2);
   for (let y = 0; y < px; y++) {
@@ -511,7 +513,7 @@ function drawBulbs(p, phase) {
  * @param {number} [o.phase]            돌아가는 연출 프레임 번호(0~)
  * @param {boolean} [o.hacked]         해킹 툴로 번복 중 — 해킹된 기계(보라·시안 + 해골 + 글리치)로 그린다
  */
-function paintSlot({ reels = [null, null, null], bet, right = '', rightColor = '#ffe9a8', badge = '', badgeColor = '#ffd23f', winIdx = [], jackpot = false, phase = 0, hacked = false, wall = false } = {}) {
+function paintSlot({ reels = [null, null, null], bet, right = '', rightColor = '#ffe9a8', badge = '', badgeColor = '#ffd23f', winIdx = [], jackpot = false, phase = 0, hacked = false, wall = false, rerollIdx = null, rerolled = null } = {}) {
   const p = getPainter();
   const base = hacked && !wall ? getHackBg() : getBg();
   base.copy(p.buf);
@@ -526,6 +528,17 @@ function paintSlot({ reels = [null, null, null], bet, right = '', rightColor = '
     drawSymbol(p, reels[i], x + WIN_W / 2 + ox, WIN_CY + oy);
   }
 
+  // 역린 사용: 다시 돌릴 칸만 보랏빛 테두리가 맥동하고(phase 마다 두께가 달라짐) 나머지 칸은 어둡게 눌러 둔다.
+  if (rerollIdx != null) {
+    for (let i = 0; i < 3; i++) if (i !== rerollIdx) dimWindow(p, WIN_X[i], 0.45);
+    const rcx = WIN_X[rerollIdx] + WIN_W / 2; 
+    dragonSparks(p, 41 + phase, 22, rcx, WIN_CY, 100, true); // 도는 동안은 은은하게 — 칸 둘레에서 반짝이는 불씨만 // 칸 둘레로 용의 불씨가 흩날린다
+    const pulse = phase % 2 === 0 ? 0 : 3, x = WIN_X[rerollIdx];
+    p.strokeRoundRect(x - 9 - pulse, WIN_Y - 9 - pulse, WIN_W + 18 + pulse * 2, WIN_H + 18 + pulse * 2, 19, 5, '#4a0c44');
+    p.strokeRoundRect(x - 6, WIN_Y - 6, WIN_W + 12, WIN_H + 12, 16, 4, '#e8449e');
+    p.strokeRoundRect(x - 2, WIN_Y - 2, WIN_W + 4, WIN_H + 4, 12, 3, '#ffc4e4');
+  }
+
   // 당첨 릴 강조: 당첨 안 된 칸은 어둡게 눌러 대비를 키우고, 당첨 칸엔 굵고 밝은 테두리 + 바깥 빛 번짐.
   if (winIdx.length) {
     for (let i = 0; i < 3; i++) if (!winIdx.includes(i)) dimWindow(p, WIN_X[i], 0.42);
@@ -535,6 +548,19 @@ function paintSlot({ reels = [null, null, null], bet, right = '', rightColor = '
       p.strokeRoundRect(WIN_X[i] - 4, WIN_Y - 4, WIN_W + 8, WIN_H + 8, 14, 5, mid);
       p.strokeRoundRect(WIN_X[i] - 1, WIN_Y - 1, WIN_W + 2, WIN_H + 2, 11, 5, line);
     }
+  }
+
+  // 역린으로 다시 돌린 릴(결과 화면): 용 속성 분홍 테두리 + 불씨 — 어느 칸을 다시 돌렸는지 한눈에 보인다
+  if (rerolled != null) {
+    const x = WIN_X[rerolled];
+    p.strokeRoundRect(x - 12, WIN_Y - 12, WIN_W + 24, WIN_H + 24, 22, 1.6, '#0a0210'); // 어두운 외곽선
+    p.strokeRoundRect(x - 11, WIN_Y - 11, WIN_W + 22, WIN_H + 22, 21, 5, '#8a1a64'); // 바깥 열기
+    p.strokeRoundRect(x - 7, WIN_Y - 7, WIN_W + 14, WIN_H + 14, 17, 5, '#f04aa6'); // 굵은 본 테두리
+    p.strokeRoundRect(x - 3, WIN_Y - 3, WIN_W + 6, WIN_H + 6, 13, 3, '#ffd0ea'); // 안쪽 밝은 선
+    const rcx = x + WIN_W / 2; // 발동 연출의 '여운' 장면과 같은 빛줄기·고리·불씨를 심볼 위로 얇게 입힌다(심볼은 읽히게 코어는 없음)
+    dragonField(p, { cx: rcx, cy: WIN_CY, R: 200, coreR: 0, power: 0.5, rot: 0.9, seed: 31, alphaK: 0.62, pal: DRG_PINK }); // 심볼 위로도 얇게 지나가는 빛줄기(과하지 않게)
+    dragonRing(p, rcx, WIN_CY, 140, 0.8, 0.32, 0.45, null, DRG_PINK);
+    dragonSparks(p, 71, 38, rcx, WIN_CY, 165);
   }
 
   // 아래 판
@@ -772,6 +798,164 @@ function renderHackIntro({ reels, bet, step = 0 }) {
   return p.png();
 }
 
+// ── 역린 발동 연출: 알바트리온 용 속성 도트 연출(레이드 '용의 숨결'과 같은 결) ───────────────────────────
+// 레이드 연출과 같은 문법으로 그린다: 4px 도트 격자 · 순서 디더링(Bayer)으로 색 경계 · 부드러운 잡음(fbm) · 용 속성 램프(검보라 → 자홍 → 분홍 → 흰색).
+// 고른 칸에 용의 기운이 모여 터지며, 원래 칸의 그림이 불타는 종이처럼 잡음 무늬를 따라 타들어 가 사라지고 그 자리에서 새 릴이 돌기 시작한다.
+// 빛줄기와 불씨는 칸 밖(이웃한 릴·위아래 판)으로 번진다.
+//  ① 응축 : 칸이 어두워지고 한가운데 용의 기운이 작게 맺힌다 · 도트 고리가 돈다
+//  ② 격발 : 기운이 커지며 방사 빛줄기가 뻗고 칸의 그림이 가장자리부터 타들어 간다
+//  ③ 폭발 : 빛줄기가 기계 전체로 번지고 충격 고리가 퍼지며 대부분 타 없어져 새 릴이 드러난다
+//  ④ 여운 : 불씨와 가루가 흩날리고 칸은 용의 빛 테두리로 남는다 — 이어서 그 칸만 돈다
+const REROLL_INTRO_COUNT = 4;
+const REROLL_TEXT = ['용의 기운이 모인다...', '역린이 깨어난다...', '역린 발동!', '불씨가 흩날린다...'];
+const DRG = ['#12041a', '#2a0c52', '#5a1a96', '#9a2ab4', '#d84aa8', '#f0a8e8', '#ffffff']; // 레이드 용 속성 램프에서 어두운 쪽을 보랏빛으로 비튼 것(검보라 → 보라 → 자홍 → 연분홍 → 흰색)
+const DRG_LINE = '#0a0210';
+const CELL = 4; // 도트 한 칸(설계 좌표). 레이드 연출의 AG 와 같은 크기
+const BAY4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+const bay = (i, j) => (BAY4[(j & 3) * 4 + (i & 3)] + 0.5) / 16;
+const DRG_PINK = ['#12041a', '#34093e', '#6c1258', '#b01a74', '#e8407e', '#ffa0d4', '#ffffff']; // 도는 화면·결과 화면용: 분홍 위주에 보랏빛을 살짝만
+function dramp(v, i, j, pal = DRG) { const f = Math.max(0, Math.min(0.9999, v)) * (pal.length - 1), k = Math.floor(f); return pal[Math.min(pal.length - 1, k + (f - k > bay(i, j) ? 1 : 0))]; }
+const hash2 = (x, y, k = 0) => { let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(k | 0, 1274126177)) >>> 0; h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+function vnoise(x, y, k = 0) {
+  const xi = Math.floor(x), yi = Math.floor(y), u = (t) => t * t * (3 - 2 * t), fx = u(x - xi), fy = u(y - yi);
+  const a = hash2(xi, yi, k), b = hash2(xi + 1, yi, k), c = hash2(xi, yi + 1, k), d = hash2(xi + 1, yi + 1, k);
+  return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
+}
+const fbm = (x, y, k = 0) => vnoise(x, y, k) * 0.5 + vnoise(x * 2.1, y * 2.1, k + 1) * 0.3 + vnoise(x * 4.3, y * 4.3, k + 2) * 0.2;
+const hexA = (hex, a) => hex + Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16).padStart(2, '0');
+// 설계 좌표 (x, y) 가 있는 도트 칸의 픽셀 범위로 원본 버퍼 src 의 색을 p.buf 로 복사한다
+function copyCell(p, src, ci, cj) {
+  const sc = p.s, x0 = Math.round(ci * CELL * sc), x1 = Math.round((ci + 1) * CELL * sc), y0 = Math.round(cj * CELL * sc), y1 = Math.round((cj + 1) * CELL * sc);
+  for (let y = y0; y < Math.min(y1, p.h); y++) for (let x = x0; x < Math.min(x1, p.w); x++) { const i = (y * p.w + x) * 3; p.buf[i] = src[i]; p.buf[i + 1] = src[i + 1]; p.buf[i + 2] = src[i + 2]; }
+}
+function darkenCell(p, ci, cj, k) {
+  const sc = p.s, x0 = Math.round(ci * CELL * sc), x1 = Math.round((ci + 1) * CELL * sc), y0 = Math.round(cj * CELL * sc), y1 = Math.round((cj + 1) * CELL * sc);
+  for (let y = y0; y < Math.min(y1, p.h); y++) for (let x = x0; x < Math.min(x1, p.w); x++) { const i = (y * p.w + x) * 3; p.buf[i] *= k; p.buf[i + 1] *= k; p.buf[i + 2] *= k; }
+}
+const cell = (p, ci, cj, hex) => p.rect(ci * CELL, cj * CELL, CELL, CELL, hex);
+
+const inSkip = (skip, px, py) => !!skip && (Array.isArray(skip) ? skip : [skip]).some(r => px > r.x0 && px < r.x1 && py > r.y0 && py < r.y1);
+const winRect = (i, pad = 3) => ({ x0: WIN_X[i] - pad, x1: WIN_X[i] + WIN_W + pad, y0: WIN_Y - pad, y1: WIN_Y + WIN_H + pad });
+// 칸 테두리 바깥으로 번지는 용의 열기: 칸에서 멀어질수록 램프가 식는다(디더링). 칸 둘레가 달아오른 듯 보인다.
+function dragonHalo(p, rect, reach, strength = 1) {
+  for (let cj = Math.floor((rect.y0 - reach) / CELL); cj < Math.ceil((rect.y1 + reach) / CELL); cj++) for (let ci = Math.floor((rect.x0 - reach) / CELL); ci < Math.ceil((rect.x1 + reach) / CELL); ci++) {
+    const px = ci * CELL + CELL / 2, py = cj * CELL + CELL / 2;
+    if (px < 26 || px > 574 || py < 14 || py > 242) continue;
+    const dx = Math.max(rect.x0 - px, 0, px - rect.x1), dy = Math.max(rect.y0 - py, 0, py - rect.y1), dist = Math.hypot(dx, dy);
+    if (dist <= 0.1 || dist > reach) continue; // 칸 안쪽은 건드리지 않는다
+    const v = (1 - dist / reach) * strength;
+    if (v < 0.22) continue;
+    cell(p, ci, cj, hexA(dramp(0.5 + v * 0.5, ci, cj), 0.25 + v * 0.65));
+  }
+}
+// 용의 기운 한 덩어리: 중심에 맺힌 빛(core) + 방사 빛줄기(ray) + 잡음을 4px 도트 격자에 용 램프(디더링)로 칠한다. skip 은 칠하지 않을 사각형(결과 화면에서 심볼을 가리지 않게).
+function dragonField(p, { cx, cy, R, coreR, power = 1, rays = 13, rot = 0, seed = 11, skip = null, alphaK = 1, pal = DRG }) {
+  const X0 = 26, X1 = 574, Y0 = 14, Y1 = 242;
+  const fx0 = Math.max(X0, cx - R * 1.3), fx1 = Math.min(X1, cx + R * 1.3), fy0 = Math.max(Y0, cy - R), fy1 = Math.min(Y1, cy + R);
+  for (let cj = Math.floor(fy0 / CELL); cj < Math.ceil(fy1 / CELL); cj++) for (let ci = Math.floor(fx0 / CELL); ci < Math.ceil(fx1 / CELL); ci++) {
+    const px = ci * CELL + CELL / 2, py = cj * CELL + CELL / 2;
+    if (inSkip(skip, px, py)) continue;
+    const dx = px - cx, dy = (py - cy) / 0.8, dist = Math.hypot(dx, dy), d = dist / R, ang = Math.atan2(dy, dx);
+    const core = coreR > 0 ? Math.pow(Math.max(0, 1 - dist / coreR), 1.4) : 0;
+    const ray = Math.pow(Math.max(0, Math.cos(ang * rays / 2 + rot)), 7) * Math.pow(Math.max(0, 1 - d), 1.1) * power;
+    const n = fbm(px / 10, py / 10, seed) * 0.34 * Math.max(0, 1 - d * 0.9);
+    const v = core * 1.15 + ray * 0.95 + n - 0.1;
+    if (v < 0.17) continue; // 어두운 램프 색은 이웃한 릴 위에서 칙칙한 얼룩이 되므로 밝은 부분만 칠한다
+    cell(p, ci, cj, hexA(dramp(Math.max(v, 0.52), ci, cj, pal), Math.min(0.9, 0.3 + v * 0.7) * alphaK));
+  }
+}
+// 도트로 이어진 충격 고리(타원). thick 은 두께(도트 칸 수), density 는 점이 찍힐 확률
+function dragonRing(p, cx, cy, ringR, thick, density, alpha, skip = null, pal = DRG) {
+  const X0 = 26, X1 = 574, Y0 = 14, Y1 = 242;
+  for (let cj = Math.floor((cy - ringR) / CELL) - 1; cj < Math.ceil((cy + ringR) / CELL) + 1; cj++) for (let ci = Math.floor((cx - ringR * 1.25) / CELL) - 1; ci < Math.ceil((cx + ringR * 1.25) / CELL) + 1; ci++) {
+    const px = ci * CELL + CELL / 2, py = cj * CELL + CELL / 2;
+    if (px < X0 || px > X1 || py < Y0 || py > Y1) continue;
+    if (inSkip(skip, px, py)) continue;
+    const d = Math.hypot(px - cx, (py - cy) / 0.8);
+    if (Math.abs(d - ringR) < CELL * thick && hash2(ci, cj, 3) < density) cell(p, ci, cj, hexA(dramp(0.72 + hash2(ci, cj, 4) * 0.3, ci, cj, pal), alpha));
+  }
+}
+
+// 칸 둘레로 흩날리는 용의 불씨(분홍·흰 도트, 가끔 십자 반짝임). 같은 seed 면 같은 모양.
+function dragonSparks(p, seed, count, cx, cy, spread, big = false) {
+  const rnd = seeded(seed);
+  for (let k = 0; k < count; k++) {
+    const a = rnd() * Math.PI * 2, dd = (big ? 0.5 + rnd() * 0.55 : 0.45 + rnd() * 0.75) * spread, gx = Math.floor((cx + Math.cos(a) * dd * 1.15) / CELL), gy = Math.floor((cy + Math.sin(a) * dd * 0.75) / CELL);
+    if (gx * CELL < 26 || gx * CELL > 574 || gy * CELL < 14 || gy * CELL > 242) continue;
+    const bright = big ? rnd() < 0.65 : rnd() < 0.3, col = bright ? '#ffffff' : rnd() < 0.62 ? '#ff9ccf' : rnd() < 0.5 ? '#ee4a98' : '#c89cff';
+    cell(p, gx, gy, col);
+    if (bright || big) { const arm = bright ? '#ffb4dc' : '#e0408c'; cell(p, gx + 1, gy, arm); cell(p, gx - 1, gy, arm); cell(p, gx, gy + 1, arm); cell(p, gx, gy - 1, arm); }
+    if (big && bright && rnd() < 0.4) { cell(p, gx + 2, gy, '#ffe6f4'); cell(p, gx - 2, gy, '#ffe6f4'); cell(p, gx, gy + 2, '#ffe6f4'); cell(p, gx, gy - 2, '#ffe6f4'); } // 큰 반짝임은 십자가 길다
+  }
+}
+
+/**
+ * 역린 발동 연출 그림 한 장(PNG).
+ * @param {object} o
+ * @param {Array<string>} o.reels  지금 결과 릴(심볼 3개)
+ * @param {number} o.index         다시 돌릴 릴(0~2)
+ * @param {number} [o.bet]
+ * @param {number} o.step          0 ~ REROLL_INTRO_COUNT-1
+ */
+function renderRerollIntro({ reels, bet, index = 0, step = 0 }) {
+  const st = Math.max(0, Math.min(REROLL_INTRO_COUNT - 1, step));
+  const p = getPainter(), f = getFont();
+  getBg().copy(p.buf);
+  drawBulbs(p, st);
+  const x = WIN_X[index], cx = x + WIN_W / 2, cy = WIN_Y + WIN_H / 2;
+  for (let i = 0; i < 3; i++) {
+    if (reels?.[i]) { const [ox, oy] = SYMBOL_OFFSET[reels[i]] || [0, 0]; drawSymbol(p, reels[i], WIN_X[i] + WIN_W / 2 + ox, WIN_CY + oy); }
+    if (i !== index) dimWindow(p, WIN_X[i], 0.5);
+  }
+  const old = Buffer.from(p.buf); // 타들어 가기 전 모습
+  drawSpinningWindow(p, x, 3, index, getBg(), null);
+  const fresh = Buffer.from(p.buf); // 그 자리에서 돌고 있는 새 릴
+  old.copy(p.buf);
+
+  // 칸 안: 잡음 무늬를 따라 타들어 간다(진행도 prog 보다 잡음이 작은 곳부터 새 릴로 바뀜, 경계는 불타는 가장자리)
+  const prog = [0, 0.3, 0.78, 1.05][st], dark = [0.55, 0.62, 1, 1][st];
+  const c0 = Math.floor(x / CELL), c1 = Math.ceil((x + WIN_W) / CELL), r0 = Math.floor(WIN_Y / CELL), r1 = Math.ceil((WIN_Y + WIN_H) / CELL);
+  const burn = [];
+  for (let cj = r0; cj < r1; cj++) for (let ci = c0; ci < c1; ci++) {
+    const px = ci * CELL + CELL / 2, py = cj * CELL + CELL / 2;
+    if (px < x || px > x + WIN_W || py < WIN_Y || py > WIN_Y + WIN_H) continue;
+    // 가장자리일수록 먼저 타들어 간다(잡음 + 중심에서의 거리)
+    const d = Math.hypot((px - cx) / (WIN_W / 2), (py - cy) / (WIN_H / 2)), n = fbm(px / 9, py / 9, 5) * 0.75 + (1 - Math.min(1, d)) * 0.25;
+    if (n < prog - 0.07) copyCell(p, fresh, ci, cj);
+    else if (n < prog - 0.02) burn.push([ci, cj, 0.98]);
+    else if (n < prog + 0.035) burn.push([ci, cj, 0.62 + (prog + 0.035 - n) * 6]);
+    else if (dark < 1) darkenCell(p, ci, cj, dark);
+  }
+  for (const [ci, cj, v] of burn) cell(p, ci, cj, dramp(v, ci, cj));
+
+  // 용의 기운: 한가운데 맺힌 빛 + 방사 빛줄기 + 잡음. 칸 밖으로도 번지되 기계 몸체 안쪽에서만.
+  dragonField(p, { cx, cy, R: [78, 130, 250, 190][st], coreR: [30, 44, 66, 40][st], power: [0.25, 0.8, 1, 0.45][st], rot: st * 0.35, seed: 11 + st });
+  // 충격 고리(도트로 이어진 고리) — 단계가 갈수록 멀리 퍼진다
+  dragonRing(p, cx, cy, [38, 74, 150, 224][st], st === 2 ? 1.4 : 0.9, st === 3 ? 0.4 : 0.78, st === 3 ? 0.55 : 0.9);
+  const X0 = 26, X1 = 574, Y0 = 14, Y1 = 242;
+  // 불씨·가루: 분홍·흰 도트가 흩날린다(단계가 갈수록 멀리, 마지막엔 드문드문)
+  const spread = [60, 100, 230, 250][st], count = [14, 24, 110, 70][st], rnd = seeded(47 + st * 5);
+  for (let k = 0; k < count; k++) {
+    const a = rnd() * Math.PI * 2, dd = (0.2 + rnd() * 0.8) * spread, gx = Math.floor((cx + Math.cos(a) * dd) / CELL), gy = Math.floor((cy + Math.sin(a) * dd * 0.8 - (st >= 2 ? rnd() * 26 : 0)) / CELL);
+    const gxp = gx * CELL, gyp = gy * CELL;
+    if (gxp < X0 || gxp > X1 || gyp < Y0 || gyp > Y1) continue;
+    const bright = rnd() < 0.3, col = bright ? '#ffffff' : rnd() < 0.5 ? '#e0b0ff' : '#c04ae0';
+    cell(p, gx, gy, col);
+    if (bright && st >= 1) { cell(p, gx + 1, gy, '#e8b8ff'); cell(p, gx - 1, gy, '#e8b8ff'); cell(p, gx, gy + 1, '#e8b8ff'); cell(p, gx, gy - 1, '#e8b8ff'); } // 십자 반짝임
+  }
+  // 칸 테두리: 용의 빛(도트 램프)으로 — 단계가 갈수록 밝고 두껍다
+  const rim = [['#12041a', '#2a0c52', '#5a1a96'], ['#2a0c52', '#7a2ac0', '#c04ae0'], ['#5a1a96', '#c04ae0', '#e8c0ff'], ['#2a0c52', '#7a2ac0', '#d8b0ff']][st];
+  p.strokeRoundRect(x - 8, WIN_Y - 8, WIN_W + 16, WIN_H + 16, 18, 4, rim[0]);
+  p.strokeRoundRect(x - 5, WIN_Y - 5, WIN_W + 10, WIN_H + 10, 15, 3, rim[1]);
+  p.strokeRoundRect(x - 2, WIN_Y - 2, WIN_W + 4, WIN_H + 4, 12, 2, rim[2]);
+  p.strokeRoundRect(x - 10, WIN_Y - 10, WIN_W + 20, WIN_H + 20, 20, 1.5, DRG_LINE); // 어두운 외곽선(도트 그림 느낌)
+  const py = BOTTOM_PLATE_Y + PLATE_H / 2 - 1;
+  if (st >= 2) p.roundRect(53, BOTTOM_PLATE_Y + 3, 494, PLATE_H - 6, 10, '#150a14', 0.7); // 빛줄기가 판 위로 번져도 글자가 읽히게
+  if (bet != null) p.text(f, `베팅 : ${bet} XP`, 108, py, { size: 20, color: '#ffe9a8', align: 'left' });
+  p.text(f, st === 2 ? `${index + 1}번 릴 역린 발동!` : REROLL_TEXT[st], 492, py, { size: 22, color: ['#c8a0f0', '#e0b8ff', '#ffffff', '#e0b8ff'][st], align: 'right' });
+  return p.png();
+}
+
 // 대기(로비) 화면: 한 번만 그려 보관한다 — 로비를 열 때마다 새로 그리지 않는다.
 function idleImage() {
   if (!idle) idle = renderSlot({ reels: ['7️⃣', '7️⃣', '7️⃣'], right: '베팅을 골라 주세요', rightColor: '#c9b8a0' });
@@ -806,4 +990,4 @@ function symbolBounds(key) {
   return { ...box, dx: (box.left + box.right) / 2 - cx, dy: (box.top + box.bottom) / 2 - cy };
 }
 
-module.exports = { renderSlot, renderHackIntro, INTRO_STEP_COUNT, idleImage, warmUp, symbolBounds, drawSymbol, SYMBOLS };
+module.exports = { renderSlot, renderHackIntro, renderRerollIntro, REROLL_INTRO_COUNT, INTRO_STEP_COUNT, idleImage, warmUp, symbolBounds, drawSymbol, SYMBOLS };

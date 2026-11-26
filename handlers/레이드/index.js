@@ -30,7 +30,7 @@ const { card, payload: cardPayload, notice } = require('../공통/카드');
 const { writeJsonIfChanged } = require('../공통/저장');
 const { grantHackTool, HACK_TOOL_NAME, hackToolWith, hackToolEmoji } = require('../게임/해킹툴');
 const { GATEWAY_NAME, gatewayEmoji, grantGateway } = require('../게임/블랙월게이트웨이');
-const { REROLL_NAME, rerollEmoji, grantReroll } = require('../게임/재회전석');
+const { REROLL_NAME, REROLL_DESC, rerollEmoji, grantReroll } = require('../게임/역린');
 const { displayNameFromInteraction } = require('../공통/이름');
 const {
   PLAYER_MAX_HP, POTIONS_PER_BATTLE, POTION_HEAL, GUARD_DAMAGE_RATE, ROLES, ROLE_ORDER, rolesOfMonster, roleTitle, ACTIONS, MONSTERS, HARD_MONSTERS, ALL_MONSTERS,
@@ -270,13 +270,14 @@ async function recruitView(r, { redraw = true } = {}) {
   if (isPersistent(r) && !raidRules(r).drain) { // 대기 중 XP 차감이 없는 남아 있는 몬스터(알바트리온): 몇 번이든 다시 도전
     const pen = raidRules(r).defeatPenaltyXp ?? 0;
     sections.push({
-      text: `>>> ## ⛈️ 재앙 강림\n` +
-        `${m.name}${subjectJosa(m.name)} XP 시스템을 집어삼켜 **채팅 · 통화방 · 미니게임 XP 지급이 정지**되었습니다.\n` +
-        '-# 토벌할 때까지 사라지지 않아요 · 패배해도 몇 번이든 다시 도전할 수 있어요',
+      text: `>>> ## 🐉 다섯 속성의 재앙, 강림\n` +
+        `${m.name}${subjectJosa(m.name)} 하늘을 가르며 XP 시스템을 집어삼켰습니다. **채팅 · 통화방 · 미니게임 XP 지급이 정지**되었어요.\n` +
+        '-# 용을 쓰러뜨릴 때까지 정지는 풀리지 않아요 · 쓰러져도 몇 번이든 다시 도전할 수 있어요',
     });
     sections.push({
-      text: `## 💀 패배 ${r.defeatStacks || 0}회${pen > 0 ? ` · 1회마다 모든 유저 **-${pen} XP**` : ''}\n` +
-        `**파티 ${r.party.length} / ${PARTY_MAX}** · 역할 버튼을 눌러 참가하세요`,
+      text: `## 🔥💧⚡❄️ ${r.defeatStacks ? `${r.defeatStacks}번 꺾였지만, 용은 아직 하늘에 있다` : '속성을 읽고, 용을 억제하라'}${pen > 0 ? ` · 패배 1회마다 모든 유저 **-${pen} XP**` : ''}\n` +
+        `**파티 ${r.party.length} / ${PARTY_MAX}** · 속성 버튼을 눌러 참가하세요\n` +
+        '-# 용의 속성을 이기는 직업이 **억제 게이지**를 올려요 · 게이지가 가득 차야 **에스카톤**을 버텨요',
     });
   } else if (isPersistent(r)) {
     const rules = raidRules(r);
@@ -331,7 +332,8 @@ async function recruitView(r, { redraw = true } = {}) {
   });
   sections.push({
     // 이름표를 붙인 인용 블록 두 줄 — 보상과 시작 규칙을 한눈에
-    text: `> 🎁 **보상** : +${isPersistent(r) ? clearXpOf(r) : CLEAR_XP} XP · ${hackToolEmoji()} ${HACK_TOOL_NAME} 1개\n` + // ???도 일반 몬스터처럼 일반 파티원은 해킹 툴 1개(MVP 게이트웨이는 안내하지 않음)
+    text: `> 🎁 **보상** : +${isPersistent(r) ? clearXpOf(r) : CLEAR_XP} XP · ${hackToolEmoji()} ${HACK_TOOL_NAME} 1개\n` +
+      (raidRules(r)?.mvpItem === 'reroll' ? `> 👑 **MVP** : +${clearXpOf(r) + mvpBonusOf(r)} XP · ${rerollEmoji()} **${REROLL_NAME}** 1개 (해킹 툴 대신) — ${REROLL_DESC}\n` : '') + // ???도 일반 몬스터처럼 일반 파티원은 해킹 툴 1개(MVP 게이트웨이는 안내하지 않음)
       '> ▶️ **바로 시작** : 첫 참가자가 방장이 되며 시작 여부를 결정할 수 있어요.',
   });
   return assemble(accentOf(r, ACCENT.recruit), image, sections);
@@ -497,7 +499,7 @@ function endNoticeDetail(r, deducted) {
 }
 
 // 레이드 결과 메시지 아래 답장으로 올라오는 카드. kind: 'recover'(토벌 성공, XP 복구) | 'penalty'(토벌 실패, 모든 유저 XP 차감)
-function buildEndNoticePayload({ kind, xp, details = [], stacks, lost }) {
+function buildEndNoticePayload({ kind, xp, details = [], stacks, lost, tone, outcome }) {
   const defeat = kind === 'defeat'; // 남아 있는 몬스터에게 졌을 때(도주하지 않음)
   const penalty = kind === 'penalty' || defeat;
   const detailBlocks = [];
@@ -514,9 +516,9 @@ function buildEndNoticePayload({ kind, xp, details = [], stacks, lost }) {
   return cardPayload(card({
     color: penalty ? 'err' : 'ok',
     top: defeat ? `-# ☠️ **패배 ${stacks}회**` : penalty ? '-# ☠️ **복구 실패**' : '-# 🔧 **복구 완료**',
-    header: defeat && !(xp > 0) ? '파티가 쓰러졌습니다... 다시 도전하세요!' : defeat ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : penalty ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : 'XP 시스템이 복구되었습니다.',
+    header: tone === 'alat' && defeat && !(xp > 0) ? (outcome === 'timeout' ? '시간이 다했습니다... 용은 아직 하늘을 가르고 있어요' : '하늘이 갈라지고, 파티가 쓰러졌습니다...') : defeat && !(xp > 0) ? '파티가 쓰러졌습니다... 다시 도전하세요!' : defeat ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : penalty ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : 'XP 시스템이 복구되었습니다.',
     headerLevel: 3,
-    blocks: defeat && !(xp > 0) ? [{ text: '-# 몬스터는 도주하지 않았습니다. 새 파티를 모아 다시 도전할 수 있어요.' }] : defeat ? [...detailBlocks, { text: `📉 **지금까지 1인당 잃은 XP :** -${(lost ?? 0).toLocaleString()} XP\n-# 몬스터는 도주하지 않았습니다. 다시 도전할 때까지 XP가 계속 줄어요.` }] : detailBlocks,
+    blocks: tone === 'alat' && defeat && !(xp > 0) ? [{ text: '-# 알바트리온은 아직 하늘에 있어요. 속성을 읽고 억제 게이지를 채워 다시 도전하세요.' }] : defeat && !(xp > 0) ? [{ text: '-# 몬스터는 도주하지 않았습니다. 새 파티를 모아 다시 도전할 수 있어요.' }] : defeat ? [...detailBlocks, { text: `📉 **지금까지 1인당 잃은 XP :** -${(lost ?? 0).toLocaleString()} XP\n-# 몬스터는 도주하지 않았습니다. 다시 도전할 때까지 XP가 계속 줄어요.` }] : detailBlocks,
   }));
 }
 // 이름 끝 글자 받침에 따라 '이'/'가'를 고른다(한글이 아니면 '이(가)')
@@ -1064,7 +1066,7 @@ function onPersistentDefeat(r, outcome) {
   r.lostPerUser = (r.lostPerUser || 0) + penaltyXp;
   logSystem({ 유형: '레이드', 내용: `패배 ${r.defeatStacks}회 — ${r.monster.name} / ${OUTCOME_TEXT[outcome]}${r.battle ? `, ${r.battle.turn}턴, 남은 HP ${r.battle.hp}/${r.battle.maxHp}` : ''} / 모든 유저 -${penaltyXp} XP (${deducted?.affected ?? 0}명)` });
   const channel = r.message?.channel;
-  const notice = { kind: 'defeat', xp: penaltyXp, stacks: r.defeatStacks, lost: Math.round(r.lostPerUser), details: deducted?.affected ? [`${deducted.affected.toLocaleString()}명 · 합계 : -${deducted.total.toLocaleString()} XP`] : [] };
+  const notice = { kind: 'defeat', tone: r.monster.theme === 'alat' ? 'alat' : undefined, outcome, xp: penaltyXp, stacks: r.defeatStacks, lost: Math.round(r.lostPerUser), details: deducted?.affected ? [`${deducted.affected.toLocaleString()}명 · 합계 : -${deducted.total.toLocaleString()} XP`] : [] };
   // 모집 상태로 되돌린다(파티·전투 초기화, 대기 시간은 이어서)
   r.party = [];
   r.battle = null;
@@ -1105,7 +1107,7 @@ function finishRaid(r, outcome) {
       // 해킹 툴(룰렛 꽝 번복권)도 1개씩 — 레벨 시스템이 없는 테스트 서버에도 줘서 룰렛에서 시험해 볼 수 있게 한다.
       // 남아 있는 몬스터(???)는 MVP에게 해킹 툴 대신 자기 아이템(블랙월 게이트웨이)을 주고, 일반 파티원은 해킹 툴 1개씩.
       const wantsGateway = isPersistent(r) && mem === mvp && raidRules(r).mvpItem === 'gateway';
-      // 알바트리온(raid.mvpItem 'reroll')은 MVP 에게 해킹 툴 대신 속성 재회전석(최대 1개)을 준다.
+      // 알바트리온(raid.mvpItem 'reroll')은 MVP 에게 해킹 툴 대신 역린(최대 1개)을 준다.
       const wantsReroll = mem === mvp && raidRules(r)?.mvpItem === 'reroll';
       const hackTool = wantsGateway || wantsReroll ? false : grantHackTool(r.guildId, mem.userId); // 최대 보유면 false(못 받음)
       const gateway = wantsGateway ? grantGateway(r.guildId, mem.userId) : false; // 최대 보유면 false(못 받음)

@@ -24,7 +24,7 @@ const { loadRoulette, saveRoulette, handleRouletteButton } = require('./handlers
 const { loadBotMatchXp, saveBotMatchXp } = require('./handlers/게임/봇전한도');
 const { loadHackTools } = require('./handlers/게임/해킹툴');
 const { loadGateways } = require('./handlers/게임/블랙월게이트웨이');
-const { loadRerolls } = require('./handlers/게임/재회전석');
+const { loadRerolls } = require('./handlers/게임/역린');
 const { loadDmPrefs, saveDmPrefs, buildDmSettingPayload, handleDmSettingButton } = require('./handlers/매치/DM설정');
 const { loadRealmRoster, saveRealmRoster } = require('./forms/마크/명단');
 const { startQuizScheduler, handleQuizMessage } = require('./handlers/게임/퀴즈');
@@ -349,6 +349,7 @@ async function onReady(c) {
   // 카드 게임 썸네일(여백 넣어 65%)용 앱 이모지 확인·등록 — 복원하며 카드를 다시 그리기 전에 준비한다.
   await require('./handlers/게임/해킹툴').ensureHackToolEmoji(c); // 해킹 툴 앱 이모지(없으면 등록, 실패하면 🛠️)
   await require('./handlers/게임/블랙월게이트웨이').ensureGatewayEmoji(c); // 블랙월 게이트웨이 앱 이모지(없으면 등록, 실패하면 🌐)
+  await require('./handlers/게임/역린').ensureRerollEmoji(c); // 역린 앱 이모지(assets/이모지/reroll.png 가 있으면 등록, 없으면 🐲)
   await require('./handlers/공통/썸네일').ensureThumbEmojis(c).catch(err => console.error('썸네일 이모지 준비 실패(원래 그림으로 표시):', err));
   await require('./handlers/매치/티어').ensureTierEmojis(c).catch(err => console.error('티어 이모지 준비 실패(글자로 표시):', err));
   await require('./handlers/전적/이모지').ensureRecordEmojis(c).catch(err => console.error('전적 탭 이모지 준비 실패(기본 이모지로 표시):', err));
@@ -363,7 +364,7 @@ async function onReady(c) {
   loadRecordSearch(); // 전적 검색: 연결한 Riot ID와 받아 둔 경기 복원
   loadHackTools(); // 레이드 보상 해킹 툴 보유량 복원(바뀔 때마다 바로 저장)
   loadGateways(); // ??? 레이드 MVP 보상 블랙월 게이트웨이 보유량 복원
-  loadRerolls(); // 알바트리온 레이드 MVP 보상 속성 재회전석 보유량 복원
+  loadRerolls(); // 알바트리온 레이드 MVP 보상 역린 보유량 복원
   loadBotMatchXp(); // 끝말잇기·틱택토 봇전 일일 XP 한도 기록 복원
   loadDmPrefs(); // 내전/모집 DM 알림 끈 유저 목록 복원
   loadRealmRoster(); // 마인크래프트 렐름 승인 명단 복원

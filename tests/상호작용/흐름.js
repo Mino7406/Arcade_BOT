@@ -858,9 +858,9 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     assert(shown2.includes('JACKPOT') && !JSON.stringify(spin2._replied ?? '').includes('먼저 베팅'), '게이트웨이 사용 버튼만 눌러도 최대 베팅으로 자동 베팅 → 바로 돌려 JACKPOT');
   });
 
-  await flow('재회전석: 보유량은 최대 1개, 사용은 개수만큼만', async () => {
-    const rr = require(path.join(root, 'handlers/게임/재회전석.js'));
-    assert(rr.grantReroll('g1', 'rru1') === true && rr.grantReroll('g1', 'rru1') === false, '재회전석은 최대 1개(두 번째 지급은 false)');
+  await flow('역린: 보유량은 최대 1개, 사용은 개수만큼만', async () => {
+    const rr = require(path.join(root, 'handlers/게임/역린.js'));
+    assert(rr.grantReroll('g1', 'rru1') === true && rr.grantReroll('g1', 'rru1') === false, '역린은 최대 1개(두 번째 지급은 false)');
     assert(rr.getRerolls('g1', 'rru1') === 1 && rr.getRerolls('g2', 'rru1') === 0, '보유량은 서버(길드)별');
     assert(rr.useReroll('g1', 'rru1') === true && rr.getRerolls('g1', 'rru1') === 0 && rr.useReroll('g1', 'rru1') === false, '사용은 개수만큼만');
   });
@@ -963,7 +963,7 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
       const spin3 = mkInteraction({ user: 'h3', customId: `roulette:spin:${s3.id}`, message: s3._reply, guildId: TG });
       queue.push(0.1, 0.4, 0.6);
       await roulette.handleRouletteButton(spin3);
-      // 테스트 서버는 재회전석도 무제한이라 결과 직후 재회전 확인이 먼저 뜬다 — 넘기면 이어서 해킹 툴 확인
+      // 테스트 서버는 역린도 무제한이라 결과 직후 재회전 확인이 먼저 뜬다 — 넘기면 이어서 해킹 툴 확인
       const rp3 = client.rouletteHacks.get(spin3.id); // 재회전 확인(본인 전용 메시지) — 넘기면 같은 자리가 해킹 툴 확인으로 바뀐다
       const keep3 = mkInteraction({ user: 'h3', customId: `roulette:rrkeep:${spin3.id}`, message: rp3.msg, guildId: TG });
       await roulette.handleRouletteButton(keep3);
@@ -979,9 +979,9 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
     }
   });
 
-  // ── 속성 재회전석: 결과 직후 한 릴만 다시 돌리기 ──
-  await flow('룰렛: 속성 재회전석 — 한 릴만 재회전 · 연타 한 번만 · 넘기기/시간 초과는 그대로 · 차액 정산', async () => {
-    const rr = require(path.join(root, 'handlers/게임/재회전석.js'));
+  // ── 역린: 결과 직후 한 릴만 다시 돌리기 ──
+  await flow('룰렛: 역린 — 한 릴만 재회전 · 연타 한 번만 · 넘기기/시간 초과는 그대로 · 차액 정산', async () => {
+    const rr = require(path.join(root, 'handlers/게임/역린.js'));
     const pure = roulette.rerollReel({ reels: ['7️⃣', '7️⃣', '🍒'], payout: 0 }, 2, 10, () => '7️⃣');
     assert(pure.kind === 'triple' && pure.payout > 0 && pure.reels.join() === '7️⃣,7️⃣,7️⃣', 'rerollReel: 2번 칸만 바꿔 트리플이 됨');
     const orig = { reels: ['7️⃣', '7️⃣', '🍒'], payout: 0 };
@@ -1002,19 +1002,19 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
       return spin;
     };
     try {
-      // ① 재회전석 1개: 본인 전용 확인에 릴 버튼 3개 + 넘기기, 한 릴만 바뀌고 아이템 1개 소모, 차액만 정산
+      // ① 역린 1개: 본인 전용 확인에 릴 버튼 3개 + 넘기기, 한 릴만 바뀌고 아이템 1개 소모, 차액만 정산
       lv.applyXp('g1', 'rr1', 800, 'test'); rr.grantReroll('g1', 'rr1');
       const xp0 = lv.getXp('g1', 'rr1');
       const spin = await play('rr1', [0.1, 0.1, 0.4]); // 🍒 🍒 🍋 → 더블
       const prompt = client.rouletteHacks.get(spin.id);
       const ids = (JSON.stringify(prompt?.msg?.components ?? '').match(new RegExp(`roulette:rr:${spin.id}:[012]`, 'g')) ?? []);
-      assert(prompt?.kind === 'reroll' && ids.length === 3 && JSON.stringify(prompt.msg.components).includes(`roulette:rrkeep:${spin.id}`), '재회전석이 있으면 결과 직후 릴 3개 + 넘기기 확인이 뜸');
+      assert(prompt?.kind === 'reroll' && ids.length === 3 && JSON.stringify(prompt.msg.components).includes(`roulette:rrkeep:${spin.id}`), '역린이 있으면 결과 직후 릴 3개 + 넘기기 확인이 뜸');
       assert(!spin.replyDeleted, '확인이 떠 있는 동안 "돌리는 중" 안내를 지우지 않음');
       const paidBefore = prompt.spin.payout;
       queue.push(0.1); // 2번 릴이 🍒 → 🍒🍒🍒 트리플
       const use = mkInteraction({ user: 'rr1', customId: `roulette:rr:${spin.id}:2`, message: prompt.msg });
       await roulette.handleRouletteButton(use);
-      assert(rr.getRerolls('g1', 'rr1') === 0, '재회전석이 1개 줄어듦');
+      assert(rr.getRerolls('g1', 'rr1') === 0, '역린이 1개 줄어듦');
       const newPay = roulette.rerollReel({ reels: ['🍒', '🍒', '🍋'], payout: 0 }, 2, 10, () => '🍒').payout;
       assert(lv.getXp('g1', 'rr1') === xp0 - 10 + newPay, `재회전 뒤 손익 = 새 지급 ${newPay} - 베팅 10 (실제 ${lv.getXp('g1', 'rr1') - xp0})`);
       assert(newPay > paidBefore, '재회전으로 지급이 늘어남');
@@ -1024,10 +1024,10 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
       await roulette.handleRouletteButton(again);
       assert(JSON.stringify(again._reply?.components ?? '').includes('이미 확정된 결과예요.') && lv.getXp('g1', 'rr1') === xp0 - 10 + newPay && rr.getRerolls('g1', 'rr1') === 0, '연타해도 한 번만 처리(두 번째는 이미 확정)');
 
-      // ② 재회전석이 없으면 확인이 뜨지 않는다
+      // ② 역린이 없으면 확인이 뜨지 않는다
       lv.applyXp('g1', 'rr2', 800, 'test');
       const spin2 = await play('rr2', [0.1, 0.4, 0.6]);
-      assert(!client.rouletteHacks.has(spin2.id), '재회전석이 없으면 재회전 확인이 안 뜸');
+      assert(!client.rouletteHacks.has(spin2.id), '역린이 없으면 재회전 확인이 안 뜸');
 
       // ③ 넘기기: 아이템 그대로
       lv.applyXp('g1', 'rr3', 800, 'test'); rr.grantReroll('g1', 'rr3');
@@ -1064,7 +1064,22 @@ const assert = (cond, msg) => { if (!cond) fail(msg); };
       assert(hp6 && hp6.kind !== 'reroll', '재회전 뒤에도 꽝이면 해킹 툴 확인이 이어서 뜸');
       if (hp6) { clearTimeout(hp6.timeoutId); client.rouletteHacks.delete(use6.id); }
 
-      // ⑦ 테스트 서버: 재회전석이 줄지 않는다
+      // ⑧ 해킹 툴로 재도전한 새 결과에도 역린을 다시 묻는다(첫 결과에서 아꼈던 경우)
+      lv.applyXp('g1', 'rr8', 800, 'test'); rr.grantReroll('g1', 'rr8'); hack.grantHackTool('g1', 'rr8');
+      const spin8 = await play('rr8', [0.1, 0.4, 0.6]); // 꽝 → 역린 확인
+      const rpMsg8 = client.rouletteHacks.get(spin8.id).msg; // 확인 메시지(넘기면 같은 자리가 해킹 툴 확인으로 바뀐다)
+      const keep8 = mkInteraction({ user: 'rr8', customId: `roulette:rrkeep:${spin8.id}`, message: rpMsg8 });
+      await roulette.handleRouletteButton(keep8); // 역린은 넘기고 → 해킹 툴 확인
+      const hp8 = client.rouletteHacks.get(keep8.id);
+      assert(hp8 && hp8.kind !== 'reroll', '역린을 넘기면 해킹 툴 확인이 이어서 뜸');
+      queue.push(0.1, 0.1, 0.4); // 해킹 툴 재도전: 🍒🍒🍋 → 더블(꽝 아님)
+      const hk8 = mkInteraction({ user: 'rr8', customId: `roulette:hack:${keep8.id}`, message: rpMsg8 });
+      await roulette.handleRouletteButton(hk8);
+      const rp8 = client.rouletteHacks.get(hk8.id);
+      assert(rp8?.kind === 'reroll' && rr.getRerolls('g1', 'rr8') === 1, '해킹 툴 재도전 결과에도 역린 확인이 다시 뜸(아이템은 그대로)');
+      if (rp8) { clearTimeout(rp8.timeoutId); client.rouletteHacks.delete(hk8.id); }
+
+      // ⑦ 테스트 서버: 역린이 줄지 않는다
       const spin7 = await play('rr7', [0.1, 0.4, 0.6], TG);
       queue.push(0.4);
       await roulette.handleRouletteButton(mkInteraction({ user: 'rr7', customId: `roulette:rr:${spin7.id}:0`, message: client.rouletteHacks.get(spin7.id).msg, guildId: TG }));
