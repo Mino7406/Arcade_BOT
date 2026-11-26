@@ -3322,11 +3322,14 @@ function renderBattle(r) {
     if (b.alat && !r.showingResult && !m.ui?.noCounterMark) {
       const counterRole = require('./알바트리온').COUNTER[b.alat.element], mem = counterRole && b.members.find(q => q.role === counterRole && q.hp > 0);
       if (mem) {
-        const col = ELEMENT_COLOR[b.alat.element], x = 20 + activeRoles.indexOf(mem.role) * (CARD_W + CARD_GAP), cw = 86;
-        for (let k = 0; k < 4; k++) p.strokeRoundRect(x - 3 - k * 3, CARD_Y - 3 - k * 3, CARD_W + 6 + k * 6, CARD_H + 6 + k * 6, 14 + k * 3, 3, col, 0.4 - k * 0.09);
-        p.strokeRoundRect(x, CARD_Y, CARD_W, CARD_H, 12, 3, mixHex(col, '#ffffff', 0.35));
+        const col = '#ff4fd0', x = 20 + activeRoles.indexOf(mem.role) * (CARD_W + CARD_GAP), cw = 112;
+        p.strokeRoundRect(x - 2, CARD_Y - 2, CARD_W + 4, CARD_H + 4, 13, 1.5, col, 0.45); // 테두리는 얇게(선 한 겹)
+        p.strokeRoundRect(x, CARD_Y, CARD_W, CARD_H, 12, 1.5, mixHex(col, '#ffffff', 0.35));
+        const icx = x + CARD_W / 2, icy = CARD_Y + 74, mr = seedRng(b.turn * 17 + 5); // 직업 아이콘 뒤 속성 빛무리 + 위로 떠오르는 속성 빛 알갱이
+        haze(icx, icy, 62, col, 0.07); haze(icx, icy, 40, col, 0.07);
+        for (let q = 0; q < 9; q++) { const a = mr() * 6.28, rr = 30 + mr() * 38; dot(icx + Math.cos(a) * rr, icy + Math.sin(a) * rr * 0.8 - mr() * 14, 3 + Math.floor(mr() * 2), q % 3 ? col : '#ffffff'); }
         p.roundRect(x + CARD_W / 2 - cw / 2, CARD_Y - 11, cw, 22, 11, mixHex(col, '#000000', 0.35)); p.strokeRoundRect(x + CARD_W / 2 - cw / 2, CARD_Y - 11, cw, 22, 11, 1.5, mixHex(col, '#ffffff', 0.5));
-        text('▲ 효과적!', x + CARD_W / 2, CARD_Y, 14, '#ffffff', { maxWidth: cw - 8 });
+        text('▲ 억제력 증가', x + CARD_W / 2, CARD_Y, 14, '#ffffff', { maxWidth: cw - 8 });
       }
     }
     // 영혼 사냥: 결과 화면에서 고스트와 맞은 카드를 잇는다(누구를 노렸는지 보이게)
