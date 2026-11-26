@@ -461,29 +461,29 @@ function escCore(cx, cy, el, power = 1) { // 몸 한가운데에서 차오르는
   p.circle(cx, y, 3 * k, '#ffffff');
 }
 function escBanner(sup, el) { // 결과 화면 필살기 띠: 왼쪽 옆면에서 밀고 나오는 판 — 이름 + 억제 성공/실패 칩
-  const rim = sup ? '#8ec8ff' : '#ff4a3a', tw = Math.min(p.textWidth(B(), ESC_T.banner.title, 18), 160), cw = 60;
+  const rim = sup ? '#8ec8ff' : '#ff4a3a', tw = Math.min(p.textWidth(B(), ESC_T.banner.title, 18), 160), cw = 72;
   const bw = Math.min(tw + cw + 70, 300), c = sideCard('L', 132, bw, 38, 18, rim, sup ? '#0a1626' : '#1c0608');
   engraved(ESC_T.banner.title, c.x0 + tw / 2, c.cy + 1, 18, mixHex(sup ? '#ffd870' : '#ff9a6a', '#ffffff', 0.45), { maxWidth: 160 });
-  p.roundRect(c.x1 - cw, c.cy - 11, cw, 22, 5, sup ? '#7ee0a6' : '#ff6a5a'); p.strokeRoundRect(c.x1 - cw, c.cy - 11, cw, 22, 5, 1, mixHex(sup ? '#7ee0a6' : '#ff6a5a', '#ffffff', 0.5)); text(sup ? '억제 성공' : '억제 실패', c.x1 - cw / 2, c.cy, 13, '#10050c', { maxWidth: cw - 6 });
+  p.roundRect(c.x1 - cw, c.cy - 12, cw, 24, 5, sup ? '#7ee0a6' : '#ff6a5a'); p.strokeRoundRect(c.x1 - cw, c.cy - 12, cw, 24, 5, 1, mixHex(sup ? '#7ee0a6' : '#ff6a5a', '#ffffff', 0.5)); text(sup ? '억제 성공' : '억제 실패', c.x1 - cw / 2, c.cy, 15, '#10050c', { maxWidth: cw - 6 });
 }
 function alatNextBox(b, tele, warn, smash) { // 선택 화면 '다음 행동' 상자(알바트리온 전용): 오른쪽 옆면에서 밀고 나오는 판
   const A = require('./알바트리온'), el = b.alat.element;
   const col = warn ? '#ff4a3a' : (ELEMENT_COLOR[el] || '#c8c4d8');
   if (!smash) {
-    const c = sideCard('R', 132, 300, 38, 18, col), my = c.cy;
-    p.roundRect(c.x0, my - 12, 76, 24, 6, mixHex('#120a06', col, 0.35)); p.strokeRoundRect(c.x0, my - 12, 76, 24, 6, 1, mixHex(col, '#000000', 0.2)); text('다음 행동', c.x0 + 38, my, 14, mixHex(col, '#ffffff', 0.6));
-    const t0 = c.x0 + 84; text(tele, t0 + (c.x1 - t0) / 2, my, tele.length > 12 ? 14 : 17, '#f4e8d8', { maxWidth: c.x1 - t0 });
+    const c = sideCard('R', 130, 318, 44, 20, col), my = c.cy;
+    p.roundRect(c.x0, my - 15, 84, 30, 7, '#0c0604'); p.strokeRoundRect(c.x0, my - 15, 84, 30, 7, 1.5, mixHex(col, '#ffffff', 0.25)); text('다음 행동', c.x0 + 42, my, 17, '#ffffff');
+    const t0 = c.x0 + 90; text(tele, t0 + (c.x1 - t0) / 2, my, tele.length > 12 ? 16 : 20, '#ffffff', { maxWidth: c.x1 - t0 });
     return;
   }
   // 필살기 예고: 같은 옆면에 두 줄짜리 붉은 판(이름 + 억제 게이지)
   const ratio = Math.max(0, Math.min(1, b.alat.gauge / A.K.GAUGE_MAX)), full = ratio >= 1;
-  const c = sideCard('R', 132, 300, 58, 18, '#ff4a3a', '#140304'), top = c.cy - 14;
-  p.roundRect(c.x0, top - 10, 52, 20, 5, '#ff9a6a'); text(ESC_T.next.tag, c.x0 + 26, top, 14, '#10050c');
-  engraved(ESC_T.next.title, c.x0 + 60 + (c.x1 - c.x0 - 60) / 2, top + 1, 17, '#ffd9c8', { maxWidth: c.x1 - c.x0 - 66 });
-  const gx = c.x0, gw = 100, gy = c.cy + 6; // 억제 게이지(가득 차야 버틴다)
+  const c = sideCard('R', 130, 318, 66, 20, '#ff4a3a', '#140304'), top = c.cy - 16;
+  p.roundRect(c.x0, top - 12, 60, 24, 5, '#ff9a6a'); text(ESC_T.next.tag, c.x0 + 30, top, 17, '#10050c');
+  engraved(ESC_T.next.title, c.x0 + 68 + (c.x1 - c.x0 - 68) / 2, top + 1, 20, '#ffd9c8', { maxWidth: c.x1 - c.x0 - 74 });
+  const gx = c.x0, gw = 70, gy = c.cy + 8; // 억제 게이지(가득 차야 버틴다)
   p.roundRect(gx - 2, gy - 2, gw + 4, 14, 5, '#050102'); p.roundRect(gx, gy, Math.max(0, gw * ratio), 10, 4, full ? '#7ee0a6' : '#ff6a5a'); p.rect(gx + gw - 2, gy - 4, 3, 18, '#ffffff');
-  text(ESC_T.next.gauge(Math.round(b.alat.gauge)), gx + gw + 10, gy + 5, 14, '#ffd9c8', { align: 'left' });
-  text(full ? '성공 가능' : '전멸 위험', c.x1, gy + 5, 14, full ? '#7ee0a6' : '#ff7a6a', { align: 'right' });
+  text(ESC_T.next.gauge(Math.round(b.alat.gauge)), gx + gw + 8, gy + 5, 16, '#ffd9c8', { align: 'left' });
+  text(full ? '성공 가능' : '전멸 위험', c.x1, gy + 5, 16, full ? '#7ee0a6' : '#ff7a6a', { align: 'right' });
 }
 // 결과 화면(몬스터 위에 얹는 부분): 핵의 빛과 가는 가장자리 빛만. 화면·카드를 덮는 막이나 몸을 가로지르는 선은 쓰지 않는다(억제 성공은 띠 색과 따뜻한 빛으로 구분). stage 0 임계 · 1 방출 · 2 식음 · 3 여운
 function escFlash(stage, cx, cy, sup, el, targets = []) {
@@ -2958,7 +2958,9 @@ function renderBattle(r) {
     const smokeFrame = ambushStage === 0 && !!last?.ambushLanded; // 헤더가 아직 위장 몬스터 값인 단계(습격 착지만)
     background('battle', 120, 224);
     if (b.rage && isCorrupt(m)) rageGlitch = Math.max(1, b.turn | 0);
-    if (isAlat(m)) { alatThemeEl = b.alat?.element ?? null; alatThemeRage = b.rage; } // 테마 후처리가 지금 속성 색을 쓴다
+    // 속성은 턴 끝에 바뀌지만, 기술이 나간 결과 화면은 쓴 순간의 속성(prev)으로 그린다 — 전환은 다음 선택 화면에서 보여 준다
+    const alatShownEl = b.alat ? ((r.showingResult && b.alat.prev && (b.alat.shifted || last?.escaton)) ? b.alat.prev : b.alat.element) : null;
+    if (isAlat(m)) { alatThemeEl = alatShownEl; alatThemeRage = b.rage; } // 테마 후처리가 지금 속성 색을 쓴다
     const bodyGone = (m.theme === 'energy' && (r.showingResult ? !!(last?.ambushLanded || last?.cometLanded) : b.intent === 'recharge')) || (!r.showingResult && !isIntentHidden(b) && !!m.moves[b.intent]?.skyDot); // 돌덩이·하늘로 솟은 점(몸 없음)
     if (b.rage && !bodyGone) rageFx(m, W / 2, 196, 112, null, 'box'); // 분노: 바닥 불빛·불씨(몸이 없을 땐 둘 다 그리지 않는다)
 
@@ -3043,7 +3045,7 @@ function renderBattle(r) {
     let alatMouth = null, alatBody = null;
     if (!skyDotNow) {
       const mv = b.alat ? alatMotion(r.showingResult ? usedFx : null, b.intent === 'smash' && !r.showingResult, W / 2, monsterY, b.turn) : null; // 알바트리온: 기술마다 움직임(돌진·솟구침·젖힘·떨림)과 잔상
-      const ex = { rage: b.rage, pose, outline: shielded ? '#cfe8ff' : null, gray: isPhased(b), dormant: dormantNow, element: b.alat?.element };
+      const ex = { rage: b.rage, pose, outline: shielded ? '#cfe8ff' : null, gray: isPhased(b), dormant: dormantNow, element: alatShownEl };
       const bgSnap = b.alat && ALAT_FX.includes(usedFx) ? Buffer.from(p.buf) : null; // 몸 픽셀을 알아내려고 몬스터를 그리기 전 화면을 기억해 둔다
       if (mv) for (const gh of mv.ghosts) drawMonster(m, gh.x, gh.y, 112 * gh.s, { ...ex, gray: true }); // 잔상(흐린 그림자)
       if (mv) { if (mv.streaks) alatStreaks(mv); drawMonster(m, mv.x, mv.y, 112 * mv.s, ex); } else drawMonster(m, W / 2, monsterY, 112, ex);
@@ -3322,14 +3324,14 @@ function renderBattle(r) {
     if (b.alat && !r.showingResult && !m.ui?.noCounterMark) {
       const counterRole = require('./알바트리온').COUNTER[b.alat.element], mem = counterRole && b.members.find(q => q.role === counterRole && q.hp > 0);
       if (mem) {
-        const col = '#ff4fd0', x = 20 + activeRoles.indexOf(mem.role) * (CARD_W + CARD_GAP), cw = 112;
+        const col = '#ff4fd0', x = 20 + activeRoles.indexOf(mem.role) * (CARD_W + CARD_GAP), cw = 124;
         p.strokeRoundRect(x - 2, CARD_Y - 2, CARD_W + 4, CARD_H + 4, 13, 1.5, col, 0.45); // 테두리는 얇게(선 한 겹)
         p.strokeRoundRect(x, CARD_Y, CARD_W, CARD_H, 12, 1.5, mixHex(col, '#ffffff', 0.35));
         const icx = x + CARD_W / 2, icy = CARD_Y + 74, mr = seedRng(b.turn * 17 + 5); // 직업 아이콘 뒤 속성 빛무리 + 위로 떠오르는 속성 빛 알갱이
         haze(icx, icy, 62, col, 0.07); haze(icx, icy, 40, col, 0.07);
         for (let q = 0; q < 9; q++) { const a = mr() * 6.28, rr = 30 + mr() * 38; dot(icx + Math.cos(a) * rr, icy + Math.sin(a) * rr * 0.8 - mr() * 14, 3 + Math.floor(mr() * 2), q % 3 ? col : '#ffffff'); }
-        p.roundRect(x + CARD_W / 2 - cw / 2, CARD_Y - 11, cw, 22, 11, mixHex(col, '#000000', 0.35)); p.strokeRoundRect(x + CARD_W / 2 - cw / 2, CARD_Y - 11, cw, 22, 11, 1.5, mixHex(col, '#ffffff', 0.5));
-        text('▲ 억제력 증가', x + CARD_W / 2, CARD_Y, 14, '#ffffff', { maxWidth: cw - 8 });
+        p.roundRect(x + CARD_W / 2 - cw / 2, CARD_Y - 12, cw, 24, 12, mixHex(col, '#000000', 0.35)); p.strokeRoundRect(x + CARD_W / 2 - cw / 2, CARD_Y - 12, cw, 24, 12, 1.5, mixHex(col, '#ffffff', 0.5));
+        text('▲ 억제력 증가', x + CARD_W / 2, CARD_Y, 16, '#ffffff', { maxWidth: cw - 8 });
       }
     }
     // 영혼 사냥: 결과 화면에서 고스트와 맞은 카드를 잇는다(누구를 노렸는지 보이게)

@@ -36,6 +36,15 @@ const party = ['fire', 'water', 'thunder', 'ice'].map((role, i) => ({ userId: St
     require('fs').writeFileSync(path.join(${JSON.stringify(out)}, key + '.png'), v.files[0].attachment);
     console.log('saved', key);
   }
+  // 일반 선택 화면('다음 행동' 상자 + '억제력 증가' 칩)
+  for (const [key, intent, el] of [['next_flame', 'flame', 'water'], ['next_frost', 'frost', 'thunder']]) {
+    const rr = { client: null, monster: mon, guildId: '1', channelId: '2', phase: 'battle', party, recruitEndsAt: 0, battleEndsAt: Date.now() + 9e5, turnEndsAt: Date.now() + 25e3, freezesXp: true, hasImage: false };
+    rr.battle = B.createBattle(mon, party, Math.random, { minParty: 1 });
+    rr.battle.intent = intent; rr.battle.alat.element = el;
+    const v = await raidMod.battleView(rr);
+    require('fs').writeFileSync(path.join(${JSON.stringify(out)}, key + '.png'), v.files[0].attachment);
+    console.log('saved', key);
+  }
   // 에스카톤 결과 화면: 속성 × 단계(0~3) × 전멸/억제 성공 — ESC=1 일 때만(장수가 많다)
   if (process.env.ESC) for (const el of ['fire', 'water', 'thunder', 'ice', 'dragon']) for (const sup of [false, true]) for (const stage of [0, 1, 2, 3]) {
     if (sup && stage === 0) continue;

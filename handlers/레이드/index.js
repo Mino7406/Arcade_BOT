@@ -57,6 +57,7 @@ function resultMsFor(battle) {
   return (mv && ui?.resultMsByMove?.[mv]) ?? ui?.resultMs ?? RESULT_MS;
 }
 const ESC_TOTAL_MS = ESC_STAGE_MS.reduce((a, b) => a + b, 0);
+const ESC_END_EXTRA_MS = 3000; // 에스카톤으로 레이드가 끝날 때 마지막(소거) 장면에 더 얹는 시간
 const AMBUSH_CALM_MS = 4500;        // 폭발 뒤 마지막(잔잔한) 장면 시간 — 습격 착지 턴의 결과 화면은 둘을 합쳐 보여 준다
 const WARN_HOLD_MS = 5000;           // 모두 행동 불가(기절·빙결)여도 '방어하세요' 예고(습격·필살기) 화면은 이 시간만큼 보여 준 뒤 진행
 const AMBUSH_STAGE_MS = 1000;       // (미사용 상수 유지)
@@ -988,9 +989,9 @@ function advanceTurn(r) {
   deleteStartMention(r); // 시작 멘션은 1턴이 끝나면 지운다
   const outcome = resolveTurn(r.battle);
   if (r.battle.ambush?.phase === 'landed') r.monster = r.battle.monster; // 습격 착지 — 이제부터 진짜 몬스터
-  if (outcome === 'wipe' && r.battle.lastTurn?.escaton) { showEscatonEnd(r, outcome); return; } // 에스카톤에 전멸: 바로 결과로 넘기지 않고 폭발 → 사그라듦을 보여 준다
+  if (outcome && r.battle.lastTurn?.escaton) { showEscatonEnd(r, outcome); return; } // 에스카톤으로 끝나는 턴(전멸·토벌·시간 초과 모두): 바로 결과로 넘기지 않고 폭발 → 사그라듦 → 소거까지 보여 준다
   if (outcome) { finishRaid(r, outcome); return; }
-  if (Date.now() >= r.battleEndsAt) { finishRaid(r, 'timeout'); return; }
+  if (Date.now() >= r.battleEndsAt) { if (r.battle.lastTurn?.escaton) { showEscatonEnd(r, 'timeout'); return; } finishRaid(r, 'timeout'); return; }
   r.showingResult = true;
   const escTurn = !!r.battle.lastTurn?.escaton;
   r.escStage = escTurn ? 0 : undefined; // 에스카톤 턴: 폭발(0) → 사그라듦(1)
@@ -1046,7 +1047,7 @@ function showEscatonEnd(r, outcome) {
     r.showingResult = false;
     r.escStage = undefined;
     finishRaid(r, outcome);
-  }, ESC_TOTAL_MS);
+  }, ESC_TOTAL_MS + ESC_END_EXTRA_MS); // 마지막 '완전히 소거된' 장면이 그림 갱신 지연에 묻히지 않게 종료 때는 더 오래 둔다
 }
 
 // 레이드를 끝낸다. XP 정지 해제 · 보상 지급 · 상태 저장 · 복구 안내 후 결과 화면을 바로 보내게 한다.

@@ -9,11 +9,11 @@ const ELEMENT_NAME = { none: '무', fire: '화', water: '수', thunder: '뇌', i
 
 const K = {
   PHASE_MIN: 1, PHASE_MAX: 3,
-  CYCLE_MIN: 10, CYCLE_MAX: 12,
+  CYCLE_MIN: 9, CYCLE_MAX: 11,
   GAUGE_MAX: 100,
-  ATTACK_GAIN: 5, SKILL_GAIN: 15,
+  ATTACK_GAIN: 10, SKILL_GAIN: 29,
   DRAGON_EFF: 1 / 3,
-  ESCATON_HIT_RATE: 0.6, GUARD_RATE: 0.3, FROST_RATE: 0.6,
+  ESCATON_HIT_RATE: 0.5, GUARD_RATE: 0.3, FROST_RATE: 0.6,
   RESIST_RATE: 0.7, WEAK_RATE: 1.3, // 기술 속성 대 유저 속성: 반감·약점 피해 배율
 };
 
@@ -40,7 +40,8 @@ function gaugeGain(state, roleKey, action) {
 }
 
 function addGauge(state, amount) {
-  state.gauge = Math.max(0, Math.min(K.GAUGE_MAX, state.gauge + amount));
+  // 용 속성의 1/3 효율(5/3 등)이 쌓이며 99.99999…가 되어 '100/100인데 억제 실패'가 나지 않게 소수 둘째 자리로 맞춘다
+  state.gauge = Math.max(0, Math.min(K.GAUGE_MAX, Math.round((state.gauge + amount) * 100) / 100));
 }
 
 // 턴이 끝날 때 한 번 호출
