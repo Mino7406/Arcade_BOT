@@ -687,6 +687,7 @@
   "ui": {
     "moveBanner": "alat",
     "noRageMark": true,
-    "resultMs": 7000
+    "resultMs": 6000,
+    "resultMsByMove": { "attack": 3800, "flame": 6500, "torrent": 6500, "bolt": 5500, "frost": 6500, "dragonbreath": 7000 }
   }
 }

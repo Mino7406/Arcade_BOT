@@ -139,7 +139,7 @@ const phase = () => raidMod.raidForTest(channel.guildId)?.phase;
   if (process.env.DUMP_DIR) require('fs').writeFileSync(process.env.DUMP_DIR + '/alat-clear.png', images[images.length - 1]); // 종료 화면 확인용
   assert(/CLEAR|토벌/.test(desc()) && desc().includes('속성 재회전석'), '전체 흐름 1: 종료 화면에 클리어와 속성 재회전석 보상 문구');
 
-  // ── 전체 흐름 2: 아무도 게이지를 안 채우면 에스카톤에 전멸해 몬스터가 도망친다 ──
+  // ── 전체 흐름 2: 아무도 게이지를 안 채우면 에스카톤에 전멸한다 ──
   await joinAll([['21', 'fire'], ['22', 'water'], ['23', 'thunder'], ['24', 'ice']]);
   raidMod.raidForTest(MAIN).battle.alat.cycleTurn = raidMod.raidForTest(MAIN).battle.alat.cycleLen - 1;
   let g2 = 0, escatonLog = false;
@@ -150,8 +150,9 @@ const phase = () => raidMod.raidForTest(channel.guildId)?.phase;
     await runTimers();
   }
   assert(escatonLog, '전체 흐름 2: 에스카톤 로그(억제 실패)가 남음');
-  assert(!raidMod.getRaidStatus(MAIN).active, '전체 흐름 2: 전멸로 종료');
-  assert(/전멸|도망|FAILED/.test(desc()), `전체 흐름 2: 종료 화면에 전멸·도주 문구 (${desc().split('\n')[0]})`);
+  const r2 = raidMod.raidForTest(MAIN); // 알바트리온은 지속형(raid.persistent)이라 전멸해도 도망치지 않고 모집 상태로 돌아간다
+  assert(raidMod.getRaidStatus(MAIN).active && r2.phase === 'recruit', `전체 흐름 2: 전멸해도 종료되지 않고 모집 상태로 복귀 (phase ${r2?.phase})`);
+  assert(r2.defeatStacks === 1 && r2.party.length === 0 && !r2.battle, '전체 흐름 2: 패배 1회 누적, 파티·전투 초기화');
 
   // ── 테스트 서버: 1명이어도 시작 ──
   channel.guildId = TEST; message.channel = null;

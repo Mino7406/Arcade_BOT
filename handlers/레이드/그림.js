@@ -496,18 +496,19 @@ function escFlash(stage, cx, cy, sup, el, targets = []) {
   const pal6 = key === 'fire' ? FIRE6 : key === 'dragon' ? DRAGON6 : [pal[1], pal[2], pal[3], pal[4], pal[5], pal[6]];
   const ex = cx, ey = cy + 6, rnd = seedRng(900 + stage * 13), K = stage * 7, WALL_Y = 352, G = 2;
   const clampY = sup ? WALL_Y - 2 : H; // 억제 성공이면 방벽 아래(카드 줄)는 불길이 닿지 않는다
-  const orb = (buf, x, y, R, k, pl = pal) => buf.paint(x - R * 1.6, y - R * 1.6, x + R * 1.6, y + R * 1.6, (px, py, i, j) => {
+  const orb = (buf, x, y, R, k, pl = pal, dim = 1) => buf.paint(x - R * 1.6, y - R * 1.6, x + R * 1.6, y + R * 1.6, (px, py, i, j) => {
     if (py > clampY) return null;
     const dx = (px - x) / R, dy = (py - y) / R, n = fbm(px / 13 + k, py / 13 - k * 0.7, k) - 0.5, rr = Math.hypot(dx, dy) + n * 0.55;
-    return rr > 1 ? null : ramp(pl, 1.05 - rr * 0.95 + n * 0.25, i, j);
+    return rr > 1 ? null : ramp(pl, (1.05 - rr * 0.95 + n * 0.25) * dim, i, j);
   });
   // 전장을 채우는 불길 장막: 세로로 길게 늘인 노이즈(불 혀) + 아래가 뜨겁고 위가 성긴 높이 분포. cover 0~1 = 화면을 덮는 정도
-  const inferno = (buf, cover, hot, k) => buf.paint(0, 0, W, Math.min(H, clampY), (px, py, i, j) => {
+  const inferno = (buf, cover, hot, k, yMax = H) => buf.paint(0, 0, W, Math.min(yMax, clampY), (px, py, i, j) => {
     const yy = py / H, tongue = fbm(px / 20, py / 110 - k * 0.6, k + 2) - 0.5, puff = fbm(px / 70, py / 60, k + 5) - 0.5, r = Math.hypot(px - ex, (py - ey) * 1.3);
     let I = cover * (0.28 + 0.9 * Math.pow(yy, 0.9)) + tongue * 1.15 + puff * 0.55 + hot * Math.exp(-(r * r) / (2 * 190 * 190));
     I += (bay(i, j) - 0.5) * 0.1;
     if (I < 0.34) return null;
-    return ramp(pal, Math.min(1, 0.18 + (I - 0.34) * 1.15), i, j);
+    const s0 = Math.min(1, 0.18 + (I - 0.34) * 1.15);
+    return ramp(pal, s0, i, j);
   });
   const lava = (buf, y0) => buf.paint(20, y0, W - 20, 344, (px, py, i, j) => { // 달아오른 바닥: 어두운 암반 + 밝은 용암 줄기
     const n = fbm(px / 34, py / 16, 11), vein = 1 - Math.min(1, Math.abs(n - 0.5) * 7.5), f = (py - y0) / (344 - y0);
@@ -515,18 +516,57 @@ function escFlash(stage, cx, cy, sup, el, targets = []) {
     return ramp(pal, 0.18 + vein * 0.62 + f * 0.18 + (fbm(px / 9, py / 9, 12) - 0.5) * 0.2, i, j);
   });
   const embers = (n, y0, y1, big) => { for (let k = 0; k < n; k++) { const x = rnd() * W, y = y0 + rnd() * (y1 - y0), c = br.mote[k % 4]; if (y > clampY) continue; if (big && k % 6 === 0) { p.rect(Math.round(x / 2) * 2 - 2, Math.round(y / 2) * 2, 6, 2, c); p.rect(Math.round(x / 2) * 2, Math.round(y / 2) * 2 - 2, 2, 6, c); } else p.rect(Math.round(x / 2) * 2, Math.round(y / 2) * 2, 2 + (k % 3 === 0 ? 2 : 0), 2 + (k % 3 === 0 ? 2 : 0), c); } };
-  const glowBalls = (n) => { const buf = pixBuf(G); for (let k = 0; k < n; k++) orb(buf, 30 + rnd() * (W - 60), 50 + rnd() * 330, 5 + rnd() * 9, K + k, pal); buf.flush(null); }; // 사방으로 튀는 불똥 구슬
+  const glowBalls = (n) => { const buf = pixBuf(G); for (let k = 0; k < n; k++) { const x = 30 + rnd() * (W - 60), y = 50 + rnd() * 330; orb(buf, x, y, 5 + rnd() * 9, K + k, pal); } buf.flush(null); }; // 사방으로 튀는 불똥 구슬
   const pillars = (n, hMin, hMax, w) => { const buf = pixBuf(G); for (let k = 0; k < n; k++) pxFire(buf, 50 + (k + 0.3 + rnd() * 0.4) * ((W - 100) / n), 340 + rnd() * 4, w, hMin + rnd() * (hMax - hMin), pal6, K + k * 5, (rnd() - 0.5) * 0.7); buf.flush(line); };
+  // 용뢰(참고영상): 모으기 — 몸의 핵이 붉은 에너지 구가 되고 그 안에서만 흰 번개가 지직거린다(영상 23~26초) /
+  // 방출 첫 순간 — 하늘에서 몸을 지나 바닥까지 내리꽂는 흰 낙뢰와 붉은 빛무리(영상 27.5초). 검은 외곽선 없이 흰 심 → 분홍 → 붉은 디더링 빛무리로 불과 섞는다
+  const RYU = ['#3a0610', '#7a0c1c', '#c0142c', '#e8283c', '#ff5a6a', '#ffb4bc', '#fff4f4'];
+  const glowLine = (paths, coreW, haloR, inside = null, deep = false) => {
+    const cells = new Map();
+    for (const pts of paths) for (let s = 0; s < pts.length - 1; s++) { const [ax, ay] = pts[s], [bx, by] = pts[s + 1], n = Math.ceil(Math.hypot(bx - ax, by - ay)); for (let q = 0; q <= n; q++) { const i = Math.floor((ax + (bx - ax) * q / n) / G), j = Math.floor((ay + (by - ay) * q / n) / G); cells.set(i * 4096 + j, [i, j]); } }
+    const dist = new Map();
+    for (const [i, j] of cells.values()) for (let dj = -haloR; dj <= haloR; dj++) for (let di = -haloR; di <= haloR; di++) { const d = Math.hypot(di, dj); if (d > haloR) continue; const k = (i + di) * 4096 + j + dj, o = dist.get(k); if (!o || d < o[2]) dist.set(k, [i + di, j + dj, d]); }
+    const buf = pixBuf(G);
+    for (const [i, j, d] of dist.values()) {
+      const x = i * G + 1, y = j * G + 1; if (y > clampY || (inside && !inside(x, y))) continue;
+      if (d <= coreW) buf.set(i, j, '#ffffff');
+      else if (d <= coreW + 1.2) buf.set(i, j, RYU[5]);
+      else { const t = (d - coreW - 1.2) / (haloR - coreW - 1.2); if (bay(i, j) < Math.pow(1 - t, deep ? 1.1 : 1.6) * (deep ? 0.95 : 0.85)) buf.set(i, j, deep ? (t < 0.25 ? RYU[4] : t < 0.6 ? RYU[3] : RYU[2]) : (t < 0.4 ? RYU[4] : RYU[3])); }
+    }
+    buf.flush(null);
+  };
+  // 속성 구슬: 불 구슬과 같은 모양·도트로, 일부만 용(붉은 구 속 흰 번개)·빙(푸른 구 속 결정 반짝임)·뢰(노란 구 속 흰 번개)가 된다. 모으기의 붉은 구와 같은 모양말이라 따로 놀지 않는다
+  const ICE_ORB = ['#0e2c4c', '#1f5a8e', '#3a8ac8', '#6cc0ec', '#b4e6fa', '#e6f8ff', '#ffffff'];
+  const ORB6 = { fire: FIRE6, dragon: ['#3a0610', '#7a0c1c', '#c0142c', '#ff5a6a', '#ffb4bc', '#fff4f4'], ice: ['#0e2c4c', '#1f5a8e', '#3a8ac8', '#6cc0ec', '#b4e6fa', '#ffffff'], thunder: ['#3a2a00', '#7a5a00', '#c89a10', '#ffe040', '#fff59a', '#ffffff'] };
+  const elemOrbs = (n, rMin, rMax, dim = 1, big = 0) => {
+    const kinds = ['fire', 'fire', 'dragon', 'fire', 'ice', 'fire', 'thunder'], list = [];
+    for (let q = 0; q < n; q++) { const kd = kinds[q % kinds.length], R = q < big ? rMax + 4 + rnd() * 6 : rMin + rnd() * (rMax - rMin), x = 30 + rnd() * (W - 60), y = 50 + rnd() * 290; if (y + R > clampY) continue; list.push([kd, x, y, R, q]); }
+    // 불꽃: 구슬마다 그 속성 색의 불꽃이 위로 타오른다(구슬이 불덩이처럼 보이게). 빙은 끝에 서리 결정, 뢰는 둘레에 튀는 불꽃 알갱이
+    const fb = pixBuf(G);
+    for (const [kd, x, y, R, q] of list) if (R >= 5) pxFire(fb, x, y + R * 0.55, R * 2.1, R * (2.4 + (q % 3) * 0.4) * dim, ORB6[kd], K + q * 3 + 90, (q % 2 ? -1 : 1) * 0.35);
+    fb.flush(null);
+    const buf = pixBuf(G);
+    for (const [kd, x, y, R, q] of list) orb(buf, x, y, R, K + q + 70, kd === 'dragon' ? RYU : kd === 'ice' ? ICE_ORB : kd === 'thunder' ? ALAT_RAMP.thunder : pal, dim);
+    buf.flush(null);
+    for (const [kd, x, y, R] of list) { if (kd === 'fire' || R < 7) continue; const inR = (xx, yy) => Math.hypot(xx - x, yy - y) < R * 0.9;
+      if (kd === 'ice') { const sb = pixBuf(G); for (const a of [0, Math.PI / 3, -Math.PI / 3]) for (let t = -R * 0.6; t <= R * 0.6; t += 1) { const xx = x + Math.cos(a) * t, yy = y + Math.sin(a) * t; sb.set(Math.floor(xx / G), Math.floor(yy / G), Math.abs(t) < R * 0.25 ? '#ffffff' : ICE_ORB[5]); } sb.flush(null);
+        for (let c = 0; c < 2; c++) pxFlake(x + (rnd() - 0.5) * R * 1.6, y - R * (1.8 + rnd() * 1.4), false, '#ffffff', ICE_ORB[4]); } // 결정 반짝임 + 불꽃 끝에 맺힌 서리
+      else { const crk = []; for (let c = 0; c < 2; c++) { const a = rnd() * 6.28; crk.push(zigzag(x + Math.cos(a) * R * 0.15, y + Math.sin(a) * R * 0.15, x + Math.cos(a + 2.4) * R * 0.75, y + Math.sin(a + 2.4) * R * 0.75, rnd, 4, R * 0.4)); } glowLine(crk, 0, 1, inR);
+        if (kd === 'thunder') for (let c = 0; c < 6; c++) { const a = rnd() * 6.28, rr = R * (1.1 + rnd() * 0.6); p.rect(Math.round((x + Math.cos(a) * rr) / 2) * 2, Math.round((y + Math.sin(a) * rr) / 2) * 2, 2, 2, c % 2 ? '#ffffff' : '#fff59a'); } } } // 구 안의 흰 번개(뢰는 둘레에 튀는 불꽃 알갱이)
+  };
   if (stage === 0) { // 모으기 끝: 용암 바닥 · 바닥을 따라 일렁이는 불길 · 붉게 달아오른 핵
     alatTint(key, 0.05, 0.12);
     dotGlow(ex, ey, 300, 190, br.glow[0], 0.5); dotGlow(ex, ey, 160, 110, br.glow[1], 0.6);
-    { const buf = pixBuf(G); orb(buf, ex, ey, 34, K); buf.flush(null); }
+    dotGlow(ex, ey, 96, 74, RYU[2], 0.55); // 핵 둘레가 붉게 물든다
+    { const buf = pixBuf(G); orb(buf, ex, ey, 34, K, RYU); buf.flush(null); } // 붉은 에너지 구
+    { const crk = []; for (let q = 0; q < 4; q++) { const a = rnd() * 6.28, r0 = 4 + rnd() * 8, r1 = 26 + rnd() * 16; crk.push(zigzag(ex + Math.cos(a) * r0, ey + Math.sin(a) * r0, ex + Math.cos(a + (rnd() - 0.5)) * r1, ey + Math.sin(a + (rnd() - 0.5)) * r1 * 0.8, rnd, 5, 12)); }
+      glowLine(crk, 0, 3, (x, y) => Math.hypot(x - ex, y - ey) < 44); } // 구 안에서만 지직거리는 흰 번개
     embers(36, 130, 330, false);
   } else if (stage === 1) { // 방출: 불똥 → 불덩이가 화면을 삼킴 → 불길 장막
     p.roundRect(0, 0, W, H, 0, sup ? '#fff0d0' : pal[6], sup ? 0.08 : 0.1);
     alatTint(key, 0.05, 0.08);
     { const buf = pixBuf(G); inferno(buf, 0.95, 0.8, K); buf.flush(null); }
-    glowBalls(46);
+    elemOrbs(46, 5, 14, 1, 6); // 방출: 튀는 구슬 가운데 일부가 용·빙·뢰의 에너지 구(모으기의 붉은 구와 같은 모양)
     embers(120, 20, 620, true);
     if (sup) { // 억제 성공: 카드 위에 육각 무늬 방벽이 불길을 막는다
       const buf = pixBuf(G); buf.paint(0, 324, W, 384, (px, py, i, j) => { const yb = WALL_Y + Math.sin(px / 46) * 5, d = Math.abs(py - yb); if (d > 12) return null; return ramp(ice, 0.95 - d / 12 * 0.45 + (((i + (j & 1) * 2) % 5 === 0) ? 0.1 : 0), i, j); }); buf.flush('#0a2440');
@@ -541,11 +581,12 @@ function escFlash(stage, cx, cy, sup, el, targets = []) {
     alatTint(key, 0.04, 0.12);
     dotGlow(ex, ey, 300, 190, br.glow[0], 0.4);
     { const buf = pixBuf(G); inferno(buf, 0.22, 0.15, K); buf.flush(null); }
+    elemOrbs(16, 3, 8, 0.8, 0);
+    embers(80, 100, 560, false); // 식음: 이미 방출한 뒤라 입(몸 중심)의 불덩이는 그리지 않는다
     if (sup) { const buf = pixBuf(G); buf.paint(0, 330, W, 372, (px, py, i, j) => { const yb = WALL_Y + Math.sin(px / 46) * 5, d = Math.abs(py - yb); return d > 6 || bay(i, j) > 0.5 ? null : ramp(ice, 0.8 - d / 12, i, j); }); buf.flush(null); }
-    { const buf = pixBuf(G); orb(buf, ex, ey, 26, K); buf.flush(null); }
-    embers(80, 100, 560, false);
   } else { // 여운: 바닥에 남은 불과 불씨
     alatTint(key, 0.03, 0.1);
+    elemOrbs(8, 2, 5, 0.65, 0);
     embers(50, 100, 560, false);
   }
 }
@@ -2990,12 +3031,13 @@ function renderBattle(r) {
     const preFx = b.alat && ALAT_FX.includes(usedFx) && usedFx !== 'alflame' && usedFx !== 'alice' && usedFx !== 'albolt' ? Buffer.from(p.buf) : null; // 연출(뒤 층)을 그리기 전 화면 — 연출이 어디에 칠해졌는지 알아내려고
     const escCharge0 = b.alat && !r.showingResult && b.intent === 'smash' && !isIntentHidden(b); // 에스카톤 충전(선택 화면)
     const escBlast0 = b.alat && r.showingResult && last?.escaton ? { sup: !!last.escaton.suppressed, stage: Math.min(3, r.escStage ?? 0), el: last.escaton.element } : null; // 에스카톤 결과 화면(임계 → 방출 → 식음 → 여운)
-    const escEl = (e) => (e && e !== 'none' ? e : 'fire'); // 에스카톤이 물들이는 속성(무속성이면 불)
+    const escEl = () => 'fire'; // 에스카톤 저지먼트는 속성과 상관없이 하나의 연출(불 연출)로 통일 // 에스카톤이 물들이는 속성(무속성이면 불)
     if (escCharge0 || escBlast0) alatCalm = true; // 에스카톤 장면에서는 흩뿌리는 점 효과를 모두 끈다
     if (escCharge0) escCharge(W / 2, monsterY, escEl(b.alat.element));
     if (escBlast0) escField(escEl(escBlast0.el), W / 2, monsterY, [0.2, 0, 0.18, escBlast0.sup ? 0.1 : 0.4][escBlast0.stage], escBlast0.stage, escBlast0.sup); // 속성 전장(몬스터 뒤): 임계 → 방출(빛기둥) → 식음 → 여운(전멸이면 어둡게)
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'back', sporeColor, accentColor);
-    const shiftNow = b.alat?.shifted && b.alat.prev && !skyDotNow ? [b.alat.prev, b.alat.element] : null; // 방금 속성이 바뀐 화면(결과·다음 선택)
+    const shiftNow = b.alat?.shifted && b.alat.prev && !skyDotNow && !r.showingResult ? // 결과 화면(기술 연출 중)에는 띄우지 않는다 — 서리 숨결에 속성 전환 고리가 겹쳐 보이던 문제. 전환은 다음 선택 화면에서 보여 준다
+ [b.alat.prev, b.alat.element] : null; // 방금 속성이 바뀐 화면(결과·다음 선택)
     if (shiftNow) alatShiftBack(W / 2, monsterY, shiftNow[0], shiftNow[1]);
     // 투명화(유령): 다음 턴 동안 몸을 흐리게(회색)
     let alatMouth = null, alatBody = null;
@@ -3276,6 +3318,17 @@ function renderBattle(r) {
       return null;
     });
     if (escSaved) { b.members.forEach((m, i) => { m.hp = escSaved.hp[i]; }); last.hits = escSaved.hits; }
+    // 속성 상성 강조(선택 화면): 지금 속성을 억제하는 직업의 카드가 속성 색으로 맥동하고 '효과적!' 칩이 붙는다 — 이번 턴 누가 억제 게이지를 올리는지 한눈에 보이게
+    if (b.alat && !r.showingResult && !m.ui?.noCounterMark) {
+      const counterRole = require('./알바트리온').COUNTER[b.alat.element], mem = counterRole && b.members.find(q => q.role === counterRole && q.hp > 0);
+      if (mem) {
+        const col = ELEMENT_COLOR[b.alat.element], x = 20 + activeRoles.indexOf(mem.role) * (CARD_W + CARD_GAP), cw = 86;
+        for (let k = 0; k < 4; k++) p.strokeRoundRect(x - 3 - k * 3, CARD_Y - 3 - k * 3, CARD_W + 6 + k * 6, CARD_H + 6 + k * 6, 14 + k * 3, 3, col, 0.4 - k * 0.09);
+        p.strokeRoundRect(x, CARD_Y, CARD_W, CARD_H, 12, 3, mixHex(col, '#ffffff', 0.35));
+        p.roundRect(x + CARD_W / 2 - cw / 2, CARD_Y - 11, cw, 22, 11, mixHex(col, '#000000', 0.35)); p.strokeRoundRect(x + CARD_W / 2 - cw / 2, CARD_Y - 11, cw, 22, 11, 1.5, mixHex(col, '#ffffff', 0.5));
+        text('▲ 효과적!', x + CARD_W / 2, CARD_Y, 14, '#ffffff', { maxWidth: cw - 8 });
+      }
+    }
     // 영혼 사냥: 결과 화면에서 고스트와 맞은 카드를 잇는다(누구를 노렸는지 보이게)
     if (r.showingResult && usedFx === 'curse') {
       for (const uid of Object.keys(last.hits || {})) {

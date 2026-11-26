@@ -50,7 +50,12 @@ const MAX_MANUAL_SPAWN_AHEAD_DAYS = 30; // 관리자가 출현 시각을 직접 
 const RECRUIT_MS = 60 * 60 * 1000;  // 출현 후 모집 대기 시간 — 그동안 아무도 참가하지 않으면 몬스터 자동 도주
 const TURN_MS = 60 * 1000;          // 턴당 행동 선택 시간(못 고르면 자동 공격)
 const AMBUSH_EXPLODE_MS = 5500;     // 습격 착지 폭발 장면 시간
-const ESC_STAGE_MS = [1400, 2400, 2200, 2200]; // 에스카톤 저지먼트 결과 장면: 임계 → 방출 → 식음 → 여운. 전멸·버티기 모두 네 장면을 거친 뒤 넘어간다
+const ESC_STAGE_MS = [1800, 3000, 3600, 4400]; // 에스카톤 저지먼트 결과 장면: 임계 → 방출 → 식음 → 여운. 전멸·버티기 모두 네 장면을 거친 뒤 넘어간다(사그라드는 두 장면을 길게 — 전멸 때 마지막 장면까지 보이게)
+// 턴 결과 화면을 보여 주는 시간: 몬스터 ui.resultMsByMove[기술키] → ui.resultMs → RESULT_MS 순. 기술마다 연출 길이가 달라 일반 공격 뒤가 늘어지지 않게 한다.
+function resultMsFor(battle) {
+  const ui = battle.monster.ui, mv = battle.lastTurn?.monsterMoveKey;
+  return (mv && ui?.resultMsByMove?.[mv]) ?? ui?.resultMs ?? RESULT_MS;
+}
 const ESC_TOTAL_MS = ESC_STAGE_MS.reduce((a, b) => a + b, 0);
 const AMBUSH_CALM_MS = 4500;        // 폭발 뒤 마지막(잔잔한) 장면 시간 — 습격 착지 턴의 결과 화면은 둘을 합쳐 보여 준다
 const WARN_HOLD_MS = 5000;           // 모두 행동 불가(기절·빙결)여도 '방어하세요' 예고(습격·필살기) 화면은 이 시간만큼 보여 준 뒤 진행
@@ -1012,7 +1017,7 @@ function advanceTurn(r) {
     }
     armTurnTimer(r);
     requestRender(r, { image: true, immediate: true });
-  }, r.ambushStage === 0 ? AMBUSH_EXPLODE_MS + AMBUSH_CALM_MS : escTurn ? ESC_TOTAL_MS : (r.battle.monster.ui?.resultMs ?? RESULT_MS)); // 몬스터가 ui.resultMs 를 정하면 그 시간(??? 는 글리치 연출이 잘 보이게 더 길게)
+  }, r.ambushStage === 0 ? AMBUSH_EXPLODE_MS + AMBUSH_CALM_MS : escTurn ? ESC_TOTAL_MS : resultMsFor(r.battle)); // 몬스터가 ui.resultMs 를 정하면 그 시간(??? 는 글리치 연출이 잘 보이게 더 길게)
 }
 
 // 에스카톤 결과 장면의 단계(폭발 0 → 식음 1 → 불씨만 2)를 시간에 맞춰 넘기며 다시 그린다.
