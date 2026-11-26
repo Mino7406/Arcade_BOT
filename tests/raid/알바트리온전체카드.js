@@ -27,7 +27,7 @@ const play = (rr, rng = 0.5, gauge = null, guard = false) => { for (const m of r
   // ── 모집 ──
   for (const n of [0, 2, 4]) { const rr = base(n); rr.phase = 'recruit'; save('01_모집_' + n + '명', await raidMod.recruitView(rr)); }
   // ── 전투 선택 화면: 속성 5가지 ──
-  for (const el of ['fire', 'water', 'thunder', 'ice', 'dragon']) save('02_선택_' + el, await raidMod.battleView(mk(el, 'attack')));
+  for (const el of ['none', 'fire', 'water', 'thunder', 'ice', 'dragon']) save('02_선택_' + el, await raidMod.battleView(mk(el, 'attack')));
   // 선택 일부 완료 + 분노
   { const rr = mk('fire', 'attack'); rr.battle.members[0].choice = 'attack'; rr.battle.members[1].choice = 'guard'; save('03_선택_일부선택', await raidMod.battleView(rr)); }
   { const rr = mk('thunder', 'attack'); rr.battle.rage = true; rr.battle.hp = Math.round(rr.battle.maxHp * 0.3); save('04_선택_분노', await raidMod.battleView(rr)); }
@@ -36,9 +36,10 @@ const play = (rr, rng = 0.5, gauge = null, guard = false) => { for (const m of r
   // 분노 중 기술 결과
   { const rr = mk('ice', 'frost'); rr.battle.rage = true; rr.battle.hp = Math.round(rr.battle.maxHp * 0.3); play(rr); save('06_결과_분노_frost', await raidMod.battleView(rr)); }
   // ── 필살(에스카톤) ──
-  save('07_필살_준비', await raidMod.battleView(mk('water', 'smash')));
-  { const rr = mk('ice', 'smash'); play(rr, 0.5, 100, true); save('08_필살_억제성공', await raidMod.battleView(rr)); }
-  { const rr = mk('fire', 'smash'); play(rr, 0.5, 0, false); save('09_필살_억제실패', await raidMod.battleView(rr)); }
+  for (const el of ['fire', 'water', 'thunder', 'ice', 'dragon']) save('07_충전_' + el, await raidMod.battleView(mk(el, 'smash')));
+  for (const el of ['fire', 'water', 'thunder', 'ice', 'dragon']) { const rr = mk(el, 'smash'); play(rr, 0.5, 0, false); for (const st of [0, 1]) { rr.escStage = st; save('09a_' + el + '_단계' + st, await raidMod.battleView(rr)); } }
+  { const rr = mk('ice', 'smash'); play(rr, 0.5, 100, true); save('08_필살_억제성공', await raidMod.battleView(rr)); for (const st of [0, 1, 2, 3]) { rr.escStage = st; save('08_성공_단계' + st, await raidMod.battleView(rr)); } }
+  { const rr = mk('fire', 'smash'); play(rr, 0.5, 0, false); save('09_필살_억제실패', await raidMod.battleView(rr)); for (const st of [0, 1, 2, 3]) { rr.escStage = st; save('09_실패_단계' + st, await raidMod.battleView(rr)); } }
   // ── 쓰러진 파티원이 있는 전투 ──
   { const rr = mk('thunder', 'bolt'); rr.battle.members[1].hp = 0; rr.battle.members[2].hp = 18; play(rr); save('10_결과_쓰러짐', await raidMod.battleView(rr)); }
   { const rr = mk('water', 'attack'); rr.battle.alat.gauge = 60; save('12_게이지_60', await raidMod.battleView(rr)); }

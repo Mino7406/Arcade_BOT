@@ -50,6 +50,8 @@ const MAX_MANUAL_SPAWN_AHEAD_DAYS = 30; // 관리자가 출현 시각을 직접 
 const RECRUIT_MS = 60 * 60 * 1000;  // 출현 후 모집 대기 시간 — 그동안 아무도 참가하지 않으면 몬스터 자동 도주
 const TURN_MS = 60 * 1000;          // 턴당 행동 선택 시간(못 고르면 자동 공격)
 const AMBUSH_EXPLODE_MS = 5500;     // 습격 착지 폭발 장면 시간
+const ESC_STAGE_MS = [1400, 2400, 2200, 2200]; // 에스카톤 저지먼트 결과 장면: 임계 → 방출 → 식음 → 여운. 전멸·버티기 모두 네 장면을 거친 뒤 넘어간다
+const ESC_TOTAL_MS = ESC_STAGE_MS.reduce((a, b) => a + b, 0);
 const AMBUSH_CALM_MS = 4500;        // 폭발 뒤 마지막(잔잔한) 장면 시간 — 습격 착지 턴의 결과 화면은 둘을 합쳐 보여 준다
 const WARN_HOLD_MS = 5000;           // 모두 행동 불가(기절·빙결)여도 '방어하세요' 예고(습격·필살기) 화면은 이 시간만큼 보여 준 뒤 진행
 const AMBUSH_STAGE_MS = 1000;       // (미사용 상수 유지)
@@ -259,7 +261,18 @@ async function recruitView(r, { redraw = true } = {}) {
   }
   // XP 시스템이 고장 나 멈췄다는 걸 그림 바로 아래 큰 제목으로 강조해 참가 동기를 준다
   // (레벨 시스템이 없는 테스트 서버에서도 문구는 보여줌)
-  if (isPersistent(r)) {
+  if (isPersistent(r) && !raidRules(r).drain) { // 대기 중 XP 차감이 없는 남아 있는 몬스터(알바트리온): 몇 번이든 다시 도전
+    const pen = raidRules(r).defeatPenaltyXp ?? 0;
+    sections.push({
+      text: `>>> ## ⛈️ 재앙 강림\n` +
+        `${m.name}${subjectJosa(m.name)} XP 시스템을 집어삼켜 **채팅 · 통화방 · 미니게임 XP 지급이 정지**되었습니다.\n` +
+        '-# 토벌할 때까지 사라지지 않아요 · 패배해도 몇 번이든 다시 도전할 수 있어요',
+    });
+    sections.push({
+      text: `## 💀 패배 ${r.defeatStacks || 0}회${pen > 0 ? ` · 1회마다 모든 유저 **-${pen} XP**` : ''}\n` +
+        `**파티 ${r.party.length} / ${PARTY_MAX}** · 역할 버튼을 눌러 참가하세요`,
+    });
+  } else if (isPersistent(r)) {
     const rules = raidRules(r);
     sections.push({
       text: `>>> ## ⚠️ ░${glitchCode()}░ ${glitchStr('XP 시스템 오류', 0.15, 1)}\n` +
@@ -495,9 +508,9 @@ function buildEndNoticePayload({ kind, xp, details = [], stacks, lost }) {
   return cardPayload(card({
     color: penalty ? 'err' : 'ok',
     top: defeat ? `-# ☠️ **패배 ${stacks}회**` : penalty ? '-# ☠️ **복구 실패**' : '-# 🔧 **복구 완료**',
-    header: defeat ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : penalty ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : 'XP 시스템이 복구되었습니다.',
+    header: defeat && !(xp > 0) ? '파티가 쓰러졌습니다... 다시 도전하세요!' : defeat ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : penalty ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : 'XP 시스템이 복구되었습니다.',
     headerLevel: 3,
-    blocks: defeat ? [...detailBlocks, { text: `📉 **지금까지 1인당 잃은 XP :** -${(lost ?? 0).toLocaleString()} XP\n-# 몬스터는 도주하지 않았습니다. 다시 도전할 때까지 XP가 계속 줄어요.` }] : detailBlocks,
+    blocks: defeat && !(xp > 0) ? [{ text: '-# 몬스터는 도주하지 않았습니다. 새 파티를 모아 다시 도전할 수 있어요.' }] : defeat ? [...detailBlocks, { text: `📉 **지금까지 1인당 잃은 XP :** -${(lost ?? 0).toLocaleString()} XP\n-# 몬스터는 도주하지 않았습니다. 다시 도전할 때까지 XP가 계속 줄어요.` }] : detailBlocks,
   }));
 }
 // 이름 끝 글자 받침에 따라 '이'/'가'를 고른다(한글이 아니면 '이(가)')
@@ -607,7 +620,7 @@ function buildHelpView(monster) {
       '### 🧑‍🤝‍🧑 역할',
       ...rolesOfMonster(monster).map(k => `${roleTitle(k)} - ✨${ROLES[k].skill.name}: ${ROLES[k].skill.desc} · 쿨타임 ${ROLES[k].skill.cooldown}턴`),
     ].join('\n') },
-    { text: isPersistent({ monster }) ? `-# ⌛ 제한 시간 ${BATTLE_LIMIT_MS / 60000}분 · 시간 안에 쓰러뜨리지 못하거나 전멸하면 패배 — 몬스터는 도주하지 않고 모든 유저가 XP를 잃어요` : `-# ⌛ 제한 시간 ${BATTLE_LIMIT_MS / 60000}분 · 시간 안에 쓰러뜨리지 못하거나 전멸하면 몬스터가 도망쳐요(보상 없음)` },
+    { text: isPersistent({ monster }) ? `-# ⌛ 제한 시간 ${BATTLE_LIMIT_MS / 60000}분 · 시간 안에 쓰러뜨리지 못하거나 전멸하면 패배 — 몬스터는 도주하지 않고 ${(monster.raid?.defeatPenaltyXp ?? 0) > 0 ? '모든 유저가 XP를 잃어요' : '다시 도전할 수 있어요'}` : `-# ⌛ 제한 시간 ${BATTLE_LIMIT_MS / 60000}분 · 시간 안에 쓰러뜨리지 못하거나 전멸하면 몬스터가 도망쳐요(보상 없음)` },
   ];
   // 그림 없는 컨테이너 — 비공개 응답이라 Ephemeral과 Components V2 플래그를 함께 단다.
   return { ...assemble(ACCENT.battle, undefined, sections), flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral };
@@ -970,9 +983,12 @@ function advanceTurn(r) {
   deleteStartMention(r); // 시작 멘션은 1턴이 끝나면 지운다
   const outcome = resolveTurn(r.battle);
   if (r.battle.ambush?.phase === 'landed') r.monster = r.battle.monster; // 습격 착지 — 이제부터 진짜 몬스터
+  if (outcome === 'wipe' && r.battle.lastTurn?.escaton) { showEscatonEnd(r, outcome); return; } // 에스카톤에 전멸: 바로 결과로 넘기지 않고 폭발 → 사그라듦을 보여 준다
   if (outcome) { finishRaid(r, outcome); return; }
   if (Date.now() >= r.battleEndsAt) { finishRaid(r, 'timeout'); return; }
   r.showingResult = true;
+  const escTurn = !!r.battle.lastTurn?.escaton;
+  r.escStage = escTurn ? 0 : undefined; // 에스카톤 턴: 폭발(0) → 사그라듦(1)
   r.ambushStage = (r.battle.lastTurn?.ambushLanded || r.battle.lastTurn?.cometLanded) ? 0 : 3; // 습격 착지 턴이면 충돌 장면(0)부터
   requestRender(r, { image: true, immediate: true });
   const turn = r.battle.turn;
@@ -985,6 +1001,7 @@ function advanceTurn(r) {
       }, AMBUSH_EXPLODE_MS); // 폭발 장면을 보여 준 뒤 마지막 장면으로
     }
   }
+  if (escTurn) scheduleEscStages(r, turn);
   r.timer = setTimeout(() => {
     if (!isCurrent(r) || r.phase !== 'battle' || r.battle.turn !== turn) return;
     r.showingResult = false;
@@ -995,7 +1012,36 @@ function advanceTurn(r) {
     }
     armTurnTimer(r);
     requestRender(r, { image: true, immediate: true });
-  }, r.ambushStage === 0 ? AMBUSH_EXPLODE_MS + AMBUSH_CALM_MS : (r.battle.monster.ui?.resultMs ?? RESULT_MS)); // 몬스터가 ui.resultMs 를 정하면 그 시간(??? 는 글리치 연출이 잘 보이게 더 길게)
+  }, r.ambushStage === 0 ? AMBUSH_EXPLODE_MS + AMBUSH_CALM_MS : escTurn ? ESC_TOTAL_MS : (r.battle.monster.ui?.resultMs ?? RESULT_MS)); // 몬스터가 ui.resultMs 를 정하면 그 시간(??? 는 글리치 연출이 잘 보이게 더 길게)
+}
+
+// 에스카톤 결과 장면의 단계(폭발 0 → 식음 1 → 불씨만 2)를 시간에 맞춰 넘기며 다시 그린다.
+function scheduleEscStages(r, turn) {
+  let at = 0;
+  ESC_STAGE_MS.forEach((ms, i) => {
+    at += ms;
+    if (i + 1 >= ESC_STAGE_MS.length) return;
+    setTimeout(() => {
+      if (!isCurrent(r) || r.phase !== 'battle' || r.battle?.turn !== turn || !r.showingResult) return;
+      r.escStage = i + 1;
+      requestRender(r, { image: true, immediate: true });
+    }, at);
+  });
+}
+// 에스카톤에 전멸했을 때: 결과 화면을 폭발 → 식음 → 불씨만으로 보여 준 다음에야 패배·종료 처리를 한다.
+function showEscatonEnd(r, outcome) {
+  clearTimer(r);
+  r.showingResult = true;
+  r.escStage = 0;
+  const turn = r.battle.turn;
+  requestRender(r, { image: true, immediate: true });
+  scheduleEscStages(r, turn);
+  r.timer = setTimeout(() => {
+    if (!isCurrent(r) || r.phase !== 'battle' || r.battle?.turn !== turn) return;
+    r.showingResult = false;
+    r.escStage = undefined;
+    finishRaid(r, outcome);
+  }, ESC_TOTAL_MS);
 }
 
 // 레이드를 끝낸다. XP 정지 해제 · 보상 지급 · 상태 저장 · 복구 안내 후 결과 화면을 바로 보내게 한다.

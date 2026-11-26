@@ -15,7 +15,8 @@ const stateOf = (element, extra = {}) => ({ element, prev: null, phaseLeft: 2, c
 // initState
 {
   const s = A.initState(rng);
-  assert(ELEMENTS.includes(s.element), 'initState: 속성이 유효');
+  assert(s.element === 'none', 'initState: 전투 시작은 무속성');
+  assert(A.gaugeGain(s, 'water', 'skill') === 0, '무속성: 억제 게이지가 오르지 않는다');
   assert(inRange(s.phaseLeft, 1, 3), 'initState: phaseLeft 1~3');
   assert(inRange(s.cycleLen, 10, 12), 'initState: cycleLen 10~12');
   assert(s.gauge === 0 && s.cycleTurn === 1 && s.escatons === 0 && s.prev === null, 'initState: 초기값');
@@ -93,6 +94,8 @@ const stateOf = (element, extra = {}) => ({ element, prev: null, phaseLeft: 2, c
   const s = stateOf('fire', { gauge: 100, cycleTurn: 11, cycleLen: 11 });
   const r = A.resolveEscaton(s, members, { maxHp: 100, frost: false }, rng);
   assert(r.suppressed === true, 'resolveEscaton: 100이면 억제 성공');
+  assert(s.element === 'none', 'resolveEscaton: 직후엔 무속성');
+  { const t = A.initState(() => 0.5); t.element = 'fire'; t.phaseLeft = 3; A.resolveEscaton(t, members, { maxHp: 100, frost: false }, () => 0.5); A.advanceTurn(t, () => 0.5); assert(t.element === 'none', '에스카톤 다음 턴 동안 무속성 유지'); A.advanceTurn(t, () => 0.5); assert(t.element !== 'none' && t.shifted, '그 다음 턴 끝에 속성이 생긴다'); }
   assert(r.damage[0] === 60, 'resolveEscaton: 기본 피해 60');
   assert(r.damage[1] === 18, 'resolveEscaton: 방어 피해 18');
   assert(r.damage[2] === 0, 'resolveEscaton: hp 0인 사람 피해 0');

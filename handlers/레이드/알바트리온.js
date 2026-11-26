@@ -4,8 +4,8 @@
 const ELEMENTS = ['fire', 'water', 'thunder', 'ice', 'dragon'];
 // 몬스터 속성 → 그 속성을 억제하는 직업 키 (화←수←뇌←빙←화)
 const COUNTER = { fire: 'water', water: 'thunder', thunder: 'ice', ice: 'fire' };
-const ELEMENT_EMOJI = { fire: '🔥', water: '💧', thunder: '⚡', ice: '❄️', dragon: '🐉' };
-const ELEMENT_NAME = { fire: '화', water: '수', thunder: '뇌', ice: '빙', dragon: '용' };
+const ELEMENT_EMOJI = { none: '⚪', fire: '🔥', water: '💧', thunder: '⚡', ice: '❄️', dragon: '🐉' };
+const ELEMENT_NAME = { none: '무', fire: '화', water: '수', thunder: '뇌', ice: '빙', dragon: '용' };
 
 const K = {
   PHASE_MIN: 1, PHASE_MAX: 3,
@@ -21,7 +21,7 @@ const randInt = (rng, a, b) => a + Math.floor(rng() * (b - a + 1));
 
 function initState(rng) {
   return {
-    element: ELEMENTS[Math.floor(rng() * ELEMENTS.length)],
+    element: 'none', // 전투 시작은 무속성(억제 게이지도 안 오른다) — 첫 속성 변화 때 다섯 속성 중 하나로 바뀐다
     prev: null,
     shifted: false, // 방금 턴 끝에 속성이 바뀌었으면 true(다음 advanceTurn 때까지) — 화면이 '속성 전환' 연출을 띄운다
     phaseLeft: randInt(rng, K.PHASE_MIN, K.PHASE_MAX),
@@ -73,6 +73,11 @@ function resolveEscaton(state, members, opts, rng) {
   state.cycleTurn = 0;
   state.cycleLen = randInt(rng, K.CYCLE_MIN, K.CYCLE_MAX);
   state.escatons++;
+  // 에스카톤 직후엔 무속성으로 돌아간다 — 이 턴 끝의 advanceTurn 이 한 번, 다음 턴 끝이 한 번 더 깎으므로 무속성은 다음 1턴 동안 유지된다.
+  state.prev = state.element;
+  state.element = 'none';
+  state.shifted = false;
+  state.phaseLeft = 2;
   return { suppressed, damage };
 }
 

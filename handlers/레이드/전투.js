@@ -968,6 +968,7 @@ function resolveTurn(battle, rng = Math.random) {
     if (battle.alat && battle.intent === 'smash') {
       // 에스카톤 저지먼트: 게이지가 가득이면 고정 피해(방어·프로스트 월 적용), 아니면 살아 있는 전원 즉사
       const alive = aliveMembers(battle);
+      const gaugeBefore = battle.alat.gauge; // 터지기 직전의 억제 게이지
       const res = alat.resolveEscaton(battle.alat, alive.map(t => ({ hp: t.hp, guarding: !!t.guarding })), { maxHp: PLAYER_MAX_HP, frost: battle.frostTurn === battle.turn }, rng);
       alive.forEach((t, i) => {
         const dmg = res.damage[i];
@@ -976,7 +977,7 @@ function resolveTurn(battle, rng = Math.random) {
         t.hp = Math.max(0, t.hp - dmg);
         last.hits[t.userId] = (last.hits[t.userId] || 0) + dmg;
       });
-      last.escaton = { suppressed: res.suppressed };
+      last.escaton = { suppressed: res.suppressed, element: battle.alat.prev, gauge: gaugeBefore }; // element: 터뜨린 순간의 속성(그림이 전장을 그 색으로 물들인다)
       log.push(`${battle.monster.emoji} **${monsterName}**의 **${move.name}**! ${res.suppressed ? '억제 성공 — 모두 버텨냈다!' : '억제 실패 — 하늘이 모든 것을 삼킨다…'}`);
     } else if (move.target === 'self') {
       const before = battle.hp;

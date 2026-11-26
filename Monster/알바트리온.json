@@ -484,6 +484,7 @@
     "elementColors": {
       "fire": {
         "f": "#c8501a",
+      "s": "#6a3016",
         "g": "#ff8c23",
         "e": "#ffd060",
         "m": "#2e1810",
@@ -492,6 +493,7 @@
       },
       "water": {
         "f": "#2a7ac8",
+      "s": "#1e4c7c",
         "g": "#46cdff",
         "e": "#c4ecff",
         "m": "#122440",
@@ -500,6 +502,7 @@
       },
       "thunder": {
         "f": "#b8a020",
+      "s": "#544e14",
         "g": "#f0f546",
         "e": "#fff8b0",
         "m": "#2a2610",
@@ -508,6 +511,7 @@
       },
       "ice": {
         "f": "#5aa8d0",
+      "s": "#2c5c7c",
         "g": "#a8e4ff",
         "e": "#ffffff",
         "m": "#162c40",
@@ -516,6 +520,7 @@
       },
       "dragon": {
         "f": "#a0185a",
+      "s": "#701e4c",
         "g": "#e8407a",
         "e": "#ffa0d0",
         "m": "#2a1028",
@@ -603,7 +608,8 @@
       "guardBlocks": true,
       "status": {
         "name": "젖음",
-        "emoji": "💧"
+        "emoji": "💧",
+        "fx": "water"
       },
       "element": "water"
     },
@@ -632,11 +638,11 @@
         8
       ],
       "fx": "alice",
-      "effect": "fear",
-      "guardBlocks": true,
+      "effect": "stun",
       "status": {
-        "name": "동상",
-        "emoji": "❄️"
+        "name": "빙결",
+        "emoji": "🧊",
+        "fx": "ice"
       },
       "element": "ice"
     },
@@ -673,7 +679,14 @@
     }
   },
   "raid": {
+    "persistent": true,
+    "defeatPenaltyXp": 0,
     "mvpItem": "reroll"
   },
-  "theme": "alat"
+  "theme": "alat",
+  "ui": {
+    "moveBanner": "alat",
+    "noRageMark": true,
+    "resultMs": 7000
+  }
 }
