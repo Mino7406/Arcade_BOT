@@ -50,7 +50,7 @@ const MAX_MANUAL_SPAWN_AHEAD_DAYS = 30; // 관리자가 출현 시각을 직접 
 const RECRUIT_MS = 60 * 60 * 1000;  // 출현 후 모집 대기 시간 — 그동안 아무도 참가하지 않으면 몬스터 자동 도주
 const TURN_MS = 60 * 1000;          // 턴당 행동 선택 시간(못 고르면 자동 공격)
 const AMBUSH_EXPLODE_MS = 5500;     // 습격 착지 폭발 장면 시간
-const ESC_STAGE_MS = [1800, 3000, 3600, 4400]; // 에스카톤 저지먼트 결과 장면: 임계 → 방출 → 식음 → 여운. 전멸·버티기 모두 네 장면을 거친 뒤 넘어간다(사그라드는 두 장면을 길게 — 전멸 때 마지막 장면까지 보이게)
+const ESC_STAGE_MS = [1300, 3000, 3600, 4400]; // 에스카톤 저지먼트 결과 장면: 임계 → 방출 → 식음 → 여운. 전멸·버티기 모두 네 장면을 거친 뒤 넘어간다(사그라드는 두 장면을 길게 — 전멸 때 마지막 장면까지 보이게)
 // 턴 결과 화면을 보여 주는 시간: 몬스터 ui.resultMsByMove[기술키] → ui.resultMs → RESULT_MS 순. 기술마다 연출 길이가 달라 일반 공격 뒤가 늘어지지 않게 한다.
 function resultMsFor(battle) {
   const ui = battle.monster.ui, mv = battle.lastTurn?.monsterMoveKey;
