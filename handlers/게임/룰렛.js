@@ -267,7 +267,7 @@ function buildResultPayload(lobby, { bet, resultLine, netLine, net, reels, multi
       `### ${resultLine}　${netLine}`, // 결과와 손익을 한 줄에
       ...(rerolled != null && rerollNote ? [`-# ${rerollNote}`] : []),
     ],
-    footer: gateway ? wallFooter() : rerolled != null ? '🐉 용의 불길이 릴 한 칸을 다시 태웠어요.' : hacks > 0 ? HACK_FOOTER : '⏰ 하루에 한 번만 돌릴 수 있어요.',
+    footer: gateway ? wallFooter() : rerolled != null ? `${rerollEmoji()} 역린의 힘으로 릴 한 칸을 다시 돌렸어요.` : hacks > 0 ? HACK_FOOTER : '⏰ 하루에 한 번만 돌릴 수 있어요.',
   }), { files: [slotFile(png)], ...extra });
 }
 
@@ -524,7 +524,7 @@ function resultView(bet, spin, hacks, reroll = null) {
 }
 
 // 역린 발동 장면(돌기 전 4장): 알바트리온 용 속성 도트 연출 — 용의 기운이 모이고, 칸의 그림이 타들어 가며 새 릴이 드러난다.
-const REROLL_FOOTERS = ['용의 기운이 릴에 모여든다...', '잠들어 있던 역린이 깨어난다...', '역린이 터지며 릴이 타들어 간다!', '불씨가 흩날리며 새 릴이 돌기 시작한다...'];
+const REROLL_FOOTERS = ['역린 발동 중...', '역린 발동 중...', '역린 발동 중...', '역린 발동 중...']; // 장면마다 다르던 문구를 모두 같게
 function buildRerollIntroPayload(lobby, bet, reels, index, step, hacks = 0) {
   const png = renderRerollIntro({ reels, bet, index, step });
   return payload(card({
@@ -532,7 +532,7 @@ function buildRerollIntroPayload(lobby, bet, reels, index, step, hacks = 0) {
     header: `${rerollEmoji()} 룰렛머신`,
     sub: [`<@${lobby.userId}>`, `${rerollEmoji()} ${REROLL_NAME} 사용`, hackLabel(hacks)].filter(Boolean),
     blocks: [{ image: SLOT_URL, divider: true }],
-    footer: `${rerollEmoji()} ${index + 1}번 릴 — ${REROLL_FOOTERS[step] ?? REROLL_FOOTERS[0]}`,
+    footer: `${rerollEmoji()} ${REROLL_FOOTERS[step] ?? REROLL_FOOTERS[0]}`,
   }), { files: [slotFile(png)] });
 }
 // 역린 사용: 다시 돌릴 릴(index)만 금빛 테두리로 강조하고 그 칸만 돌아간다(나머지는 직전 결과 그대로 어둡게). reels 에서 null 인 칸이 도는 중.
@@ -543,7 +543,7 @@ function buildRerollSpinPayload(lobby, bet, reels, index, phase = 0, hacks = 0) 
     header: `${rerollEmoji()} 룰렛머신`,
     sub: [`<@${lobby.userId}>`, `${rerollEmoji()} ${REROLL_NAME} 사용`, hackLabel(hacks)].filter(Boolean),
     blocks: [{ image: SLOT_URL, divider: true }],
-    footer: `${rerollEmoji()} 용의 불길 속에서 ${index + 1}번 릴만 다시 돌아가요...`,
+    footer: `${rerollEmoji()} 역린 발동 중...`,
   }), { files: [slotFile(png)] });
 }
 

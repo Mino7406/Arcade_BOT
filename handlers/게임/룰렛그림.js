@@ -807,7 +807,7 @@ function renderHackIntro({ reels, bet, step = 0 }) {
 //  ③ 폭발 : 빛줄기가 기계 전체로 번지고 충격 고리가 퍼지며 대부분 타 없어져 새 릴이 드러난다
 //  ④ 여운 : 불씨와 가루가 흩날리고 칸은 용의 빛 테두리로 남는다 — 이어서 그 칸만 돈다
 const REROLL_INTRO_COUNT = 4;
-const REROLL_TEXT = ['용의 기운이 모인다...', '역린이 깨어난다...', '역린 발동!', '불씨가 흩날린다...'];
+const REROLL_TEXT = ['역린 발동 중...', '역린 발동 중...', '역린 발동 중...', '역린 발동 중...']; // 그림 안 문구도 모두 같게
 const DRG = ['#12041a', '#2a0c52', '#5a1a96', '#9a2ab4', '#d84aa8', '#f0a8e8', '#ffffff']; // 레이드 용 속성 램프에서 어두운 쪽을 보랏빛으로 비튼 것(검보라 → 보라 → 자홍 → 연분홍 → 흰색)
 const DRG_LINE = '#0a0210';
 const CELL = 4; // 도트 한 칸(설계 좌표). 레이드 연출의 AG 와 같은 크기
@@ -952,7 +952,7 @@ function renderRerollIntro({ reels, bet, index = 0, step = 0 }) {
   const py = BOTTOM_PLATE_Y + PLATE_H / 2 - 1;
   if (st >= 2) p.roundRect(53, BOTTOM_PLATE_Y + 3, 494, PLATE_H - 6, 10, '#150a14', 0.7); // 빛줄기가 판 위로 번져도 글자가 읽히게
   if (bet != null) p.text(f, `베팅 : ${bet} XP`, 108, py, { size: 20, color: '#ffe9a8', align: 'left' });
-  p.text(f, st === 2 ? `${index + 1}번 릴 역린 발동!` : REROLL_TEXT[st], 492, py, { size: 22, color: ['#c8a0f0', '#e0b8ff', '#ffffff', '#e0b8ff'][st], align: 'right' });
+  p.text(f, REROLL_TEXT[st], 492, py, { size: 22, color: ['#c8a0f0', '#e0b8ff', '#ffffff', '#e0b8ff'][st], align: 'right' });
   return p.png();
 }
 
