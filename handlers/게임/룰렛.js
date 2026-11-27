@@ -291,7 +291,7 @@ function buildHackPromptPayload(prompt, have, extra = {}) {
 function buildRerollPromptPayload(prompt, have, extra = {}) {
   const row = new ActionRowBuilder().addComponents(
     ...prompt.spin.reels.map((reel, i) => new ButtonBuilder().setCustomId(`roulette:rr:${prompt.id}:${i}`).setLabel(`${i + 1}번 릴 ${reel}`).setStyle(ButtonStyle.Primary)),
-    new ButtonBuilder().setCustomId(`roulette:rrkeep:${prompt.id}`).setLabel('아껴 두기').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`roulette:rrkeep:${prompt.id}`).setLabel('넘기기').setStyle(ButtonStyle.Secondary),
   );
   return payload(card({
     color: REROLL_COLOR,
@@ -781,7 +781,7 @@ async function handleRerollButton(interaction, action, promptId, indexStr) {
     return;
   }
   const left = rerollsOf(prompt.guildId, prompt.userId);
-  await interaction.update(notice(`${rerollEmoji()} **${REROLL_NAME}이 깨어났어요!** ${index + 1}번 릴을 불태워 다시 돌려요...\n-# 남은 ${REROLL_NAME} ${rerollHaveText(left)}`, { color: REROLL_COLOR }));
+  await interaction.update(notice(`${rerollEmoji()} 역린 발동 중...`, { color: REROLL_COLOR }));
 
   const spin = rerollReel(prompt.spin, index, bet);
   // 이미 이전 결과의 지급액까지 정산돼 있으므로 차액(음수 포함)만 반영해 그날 손익이 (새 지급 - 베팅)이 되게 한다.
