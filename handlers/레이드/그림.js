@@ -488,7 +488,11 @@ function alatNextBox(b, tele, warn, smash) { // 선택 화면 '다음 행동' �
   text(full ? '성공 가능' : '전멸 위험', c.x1, gy + 5, 16, full ? '#7ee0a6' : '#ff7a6a', { align: 'right' });
 }
 // 결과 화면(몬스터 위에 얹는 부분): 핵의 빛과 가는 가장자리 빛만. 화면·카드를 덮는 막이나 몸을 가로지르는 선은 쓰지 않는다(억제 성공은 띠 색과 따뜻한 빛으로 구분). stage 0 임계 · 1 방출 · 2 식음 · 3 여운
-function escFlash(stage, cx, cy, sup, el, targets = []) {
+function escFlash(stage, cx, cy, sup, el, targets = []) { // 방출·식음·여운은 매번 같은 그림이라 칸 목록을 저장해 재사용한다(첫 번째만 계산)
+  pixCacheCtx = stage >= 1 ? { key: `esc:${stage}:${el}:${sup ? 1 : 0}`, n: 0 } : null;
+  try { escFlashBody(stage, cx, cy, sup, el, targets); } finally { pixCacheCtx = null; }
+}
+function escFlashBody(stage, cx, cy, sup, el, targets = []) {
   // 에스카톤 저지먼트 결과 연출 — 몬헌 월드 영상(모으기 18~27초 → 방출 27.5초~)을 도트로 옮김.
   // 모으기 끝(stage 0): 어두운 붉은 하늘 · 바닥이 용암처럼 달아오름 · 곳곳에서 불기둥 · 가슴의 핵이 붉게 빛남
   // 방출(stage 1): 사방에서 불똥 구슬이 튀고 → 노랗고 하얀 불덩이가 화면을 뒤덮고 → 세로로 치솟는 불길 장막이 전장 전체를 채움
@@ -581,7 +585,7 @@ function escFlash(stage, cx, cy, sup, el, targets = []) {
     p.roundRect(0, 0, W, H, 0, '#1a0606', 0.4); // 어둡게 눌러 폭발이 도드라지게
     const BH = Math.min(H, clampY), SMOKE = ['#1a0d0a', '#2e1610', '#4a1a10'];
     // 불덩이 한 개: 가장자리가 울퉁불퉁하게 부풀고(노이즈로 휘어진 윤곽), 안쪽은 난류가 소용돌이치는 램프(흰 핵 → 노랑 → 주황 → 붉음), 바깥은 연기·그을음이 디더링으로 번진다.
-    const fireball = (cx, cy, R, seed, pl0, heat = 1, smoke = true, pat = null) => { const buf = pixBuf(G), M = R * 1.7;
+    const fireball = (cx, cy, R, seed, pl0, heat = 1, smoke = true, pat = null) => { const buf = pixBuf(G), M = R * 1.55;
       buf.paint(cx - M, Math.max(0, cy - M), cx + M, Math.min(BH, cy + M), (px, py, i, j) => {
         const dx = px - cx, dy = (py - cy) * 1.05, r = Math.hypot(dx, dy), th = Math.atan2(dy, dx);
         const warp = fbm(px / 60 + seed, py / 60, seed) - 0.5, lobe = fbm(Math.cos(th) * 1.7 + seed, Math.sin(th) * 1.7, seed + 4) - 0.5, edge = R * (0.8 + warp * 0.55 + lobe * 0.7);
@@ -614,7 +618,7 @@ function escFlash(stage, cx, cy, sup, el, targets = []) {
       if (kk === 4) { const rp = Math.sin(Math.hypot(px - ex, (py - ey) * 1.1) / 7 + (fbm(px / 50, py / 50, K + 5) - 0.5) * 7); return rp > 0.78 ? 0.22 * amp : rp < -0.86 ? -0.16 * amp : 0; }
       return 0;
     };
-    for (let q = 0; q < 16; q++) fireball(40 + rnd() * (W - 80), 150 + rnd() * (H - 190), 100 + rnd() * 90, 20 + q * 7, pal, 0.95, true, pat); // 화면 곳곳에서 번지는 불덩이들
+    for (let q = 0; q < 10; q++) fireball(40 + rnd() * (W - 80), 150 + rnd() * (H - 190), 90 + rnd() * 70, 20 + q * 7, pal, 0.95, true, pat); // 화면 곳곳에서 번지는 불덩이들
     fireball(ex, ey, 560, 3, pal, 1.05, true, pat); // 화면 전체를 삼키는 주 불덩이
     fireball(ex - 6, ey - 4, 170, 9, [pal[3], pal[4], pal[5], pal[6], '#ffffff'], 1.1, false); // 뜨거운 핵(흰빛)
     { const buf = pixBuf(G); // 충격파 고리 세 겹: 앞쪽(바깥) 가장자리는 흰 심으로 밝고 뒤쪽으로 갈수록 붉게 흐려지는 디더링 띠 — 군데군데 노이즈로 끊어져 찢긴 파동처럼 보인다
@@ -1076,6 +1080,15 @@ function slowBadge(cx, cy, turns, color) {
   btext(`${turns}턴`, cx, cy + 24, 15, color);
 }
 // 젖음(해일 소용돌이, slow): 푸른 테두리 네모 + 물방울 + 아래 물결 두 줄 + 남은 턴
+// 젖음 상태(아이콘 위): 은은하게 — 아이콘에 아주 옅은 물빛 막만 씌우고, 아이콘을 타고 흘러내리는 작은 물방울 두 개를 흐리게. 테두리·반사광은 없다.
+function wetIcon(cx, cy) {
+  p.circle(cx, cy, 33, '#46cdff', 0.07); // 아주 옅은 물빛 막
+  for (const [ox, oy, len] of [[-16, -4, 10], [14, 6, 12]]) { // 작은 물방울 두 개(줄기와 방울 모두 반투명)
+    const x = Math.round(cx + ox), y = Math.round(cy + oy);
+    p.roundRect(x - 0.5, y - len, 1, len, 0.5, '#9ad8ff', 0.3);
+    p.circle(x, y + 1.5, 2.2, '#7cc8ff', 0.55); p.circle(x - 0.6, y + 0.8, 0.7, '#ffffff', 0.8);
+  }
+}
 function wetBadge(cx, cy, turns) {
   p.rect(cx - 13, cy - 13, 26, 26, '#06142a'); p.strokeRoundRect(cx - 13, cy - 13, 26, 26, 2, 2, '#2a8ad0');
   p.poly([cx, cy - 11, cx + 3, cy - 5, cx + 7, cy + 0, cx + 7, cy + 3, cx + 5, cy + 6, cx - 5, cy + 6, cx - 7, cy + 3, cx - 7, cy + 0, cx - 3, cy - 5], '#46cdff');
@@ -1321,20 +1334,33 @@ function alatTint(el, tint = 0.14, vig = 0.06) {
 }
 // 도트 버퍼: 칸을 모아 두었다가 외곽선(빈 이웃 칸)과 함께 한 번에 칠한다
 const N8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]];
+// 같은 그림을 매번 새로 계산하지 않게 칸 목록을 저장해 둔다(에스카톤 방출처럼 화면 전체를 덮는 장면은 계산이 1.5초 넘게 걸려, 느린 호스트에서는 다음 단계가 건너뛰어졌다).
+// pixCacheCtx 가 켜져 있으면 pixBuf 를 만든 순서대로 번호를 붙여 칸 목록을 기억하고, 다음부터는 계산(paint 의 노이즈)을 건너뛰고 저장된 칸만 그린다. 그림이 항상 같은 장면에서만 켠다.
+let pixCacheCtx = null;
+const pixCache = new Map();
 function pixBuf(G = AG) { // G: 칸 크기(기본 4px, 2로 주면 더 잘게 칠한다)
-  const m = new Map();
+  const m = new Map(), ck = pixCacheCtx ? `${pixCacheCtx.key}:${pixCacheCtx.n++}` : null, hit = ck ? pixCache.get(ck) : null;
   const buf = {
     clipY: H, // 이 y 아래는 칠하지 않는다(몬스터 칸 연출이 카드 뒤로 비치지 않게)
-    set(i, j, c) { if (i >= 0 && j >= 0 && i * G < W && j * G < H) m.set(i * 1024 + j, [i, j, c]); },
+    set(i, j, c) { if (!hit && i >= 0 && j >= 0 && i * G < W && j * G < H) m.set(i * 1024 + j, [i, j, c]); },
     paint(x0, y0, x1, y1, fn) {
+      if (hit) return buf; // 저장된 그림이 있으면 계산하지 않는다
       for (let j = Math.max(0, Math.floor(y0 / G)); j * G < Math.min(H, y1); j++) for (let i = Math.max(0, Math.floor(x0 / G)); i * G < Math.min(W, x1); i++) {
         const c = fn(i * G + G / 2, j * G + G / 2, i, j); if (c) buf.set(i, j, c);
       }
       return buf;
     },
     flush(outline) {
-      if (outline) { const o = new Map(); for (const [i, j] of m.values()) for (const [di, dj] of N8) { const k = (i + di) * 1024 + j + dj; if (!m.has(k)) o.set(k, [i + di, j + dj]); } for (const [i, j] of o.values()) if (i >= 0 && j >= 0 && j * G < buf.clipY) p.rect(i * G, j * G, G, G, outline); }
-      for (const [i, j, c] of m.values()) if (j * G < buf.clipY) p.rect(i * G, j * G, G, G, c);
+      if (hit) { for (let q = 0; q < hit.n; q++) { const j = hit.j[q]; if (j * G < buf.clipY) p.rect(hit.i[q] * G, j * G, G, G, hit.pal[hit.c[q]]); } return; }
+      const list = [];
+      if (outline) { const o = new Map(); for (const [i, j] of m.values()) for (const [di, dj] of N8) { const k = (i + di) * 1024 + j + dj; if (!m.has(k)) o.set(k, [i + di, j + dj]); } for (const [i, j] of o.values()) if (i >= 0 && j >= 0) list.push([i, j, outline]); }
+      for (const [i, j, c] of m.values()) list.push([i, j, c]);
+      if (ck) { // 저장: 칸 좌표(Int16) + 색 번호(Uint8) — 색은 따로 모아 둔다
+        const pal = [], idx = new Map(), n = list.length, ai = new Int16Array(n), aj = new Int16Array(n), ac = new Uint8Array(n);
+        list.forEach(([i, j, c], q) => { let k = idx.get(c); if (k === undefined) { k = pal.length; pal.push(c); idx.set(c, k); } ai[q] = i; aj[q] = j; ac[q] = k; });
+        if (pal.length < 256) pixCache.set(ck, { i: ai, j: aj, c: ac, pal, n });
+      }
+      for (const [i, j, c] of list) if (j * G < buf.clipY) p.rect(i * G, j * G, G, G, c);
       m.clear();
     },
   };
@@ -2811,7 +2837,7 @@ function renderRecruit(r) {
   return render('모집', () => {
     const alat = isAlat(r.monster);
     background('recruit', 102, 240);
-    const title = alat ? '재앙의 용, 강림' : '몬스터 출현!';
+    const title = alat ? '천재지변 출현' : '몬스터 출현!';
     const tw = p.textWidth(B(), title, 46);
     if (isCorrupt(r.monster)) glitchText(title, W / 2, 47, 46, C.gold, { seed: 1, off: 5, strips: 6, shift: 9, holes: 6, tint: true });
     else if (alat) engraved(title, W / 2, 47, 46, '#f6e0b8');
@@ -3349,7 +3375,7 @@ usedFx === 'attack' ? 10 : usedFx === 'smash' || usedFx === 'burst' || usedFx ==
       if (!down && !r.showingResult && !isIntentHidden(b) && b.marks?.includes(mem.userId)) markEye(x + w - 36, y + 66);
       if (!down && isIced(b, mem)) iceCover(x + w / 2, y + 86); // 빙결: 아이콘이 얼음에 갇힘
       // 점액: 왼쪽 배지와 함께 아이콘 위 점액 얼룩도 그대로(사용자 요청). 이번 턴 맞은 카드는 타격 표시만.
-      if (!down && slowTurnsLeft(b, mem) > 0 && !(usedMove && last?.hits[mem.userId])) hitFx('sweep', x + w / 2, y + 86, fxColor);
+      if (!down && slowTurnsLeft(b, mem) > 0 && !(usedMove && last?.hits[mem.userId])) { if (mem.slowStatus?.fx === 'water') wetIcon(x + w / 2, y + 86); else hitFx('sweep', x + w / 2, y + 86, fxColor); } // 젖음은 점액 덩어리 대신 물막과 흘러내리는 물방울
       const hit = last?.hits[mem.userId];
       if (hit && usedFx && !last?.escaton) hitFx(usedFx, x + w / 2, y + 86, fxColor, sporeColor, accentColor);
       if (hit && skillCtx) skillCtx.targets.push({ x, y, w, h });
@@ -3651,7 +3677,20 @@ function warmUpLabels(monsters) {
   // 그리기 412ms + 압축 298ms(이벤트 루프 지연 826ms)였다 — 글자·픽셀 붙이기와 PNG 만들기 반복문이 처음 돌 때
   // 느린 탓이라, 봇이 한가한 시작 직후에 한 번씩 돌려 둔다. 결과 그림은 버리고 콘솔 기록도 남기지 않는다.
   for (const scene of sampleScenes(monsters[0])) jobs.push(() => { warming = true; try { scene(); } finally { warming = false; } });
+  const alatM = monsters.find(mm => mm.alat); // 에스카톤 방출·식음·여운은 처음 계산이 1초 넘게 걸려, 전투 중에 처음 나오면 다음 단계가 밀리므로 시작할 때 미리 계산해 둔다(저장된 칸 목록으로 이후엔 빠르다)
+  if (alatM) for (const st of [1, 2, 3]) jobs.push(() => { warming = true; try { escWarmScene(alatM, st); } finally { warming = false; } });
   return jobs;
+}
+
+// 에스카톤 결과 장면 하나(단계 st)를 가짜 전투로 그린다 — 미리 데우기 전용
+function escWarmScene(monster, st) {
+  const party = ROLE_ORDER.map((role, i) => ({ userId: `warm${i}`, name: ['아케이드', '레이드원', 'Player', '테스트'][i], role }));
+  const battle = createBattle(monster, party);
+  if (!battle.alat) return;
+  battle.intent = 'smash'; battle.alat.cycleTurn = battle.alat.cycleLen;
+  party.forEach(q => choose(battle, q.userId, 'attack'));
+  resolveTurn(battle);
+  renderBattle({ monster, party, battle, battleStartedAt: Date.now() - 180000, endedAt: Date.now(), showingResult: true, escStage: st });
 }
 
 // 미리 그려 볼 가짜 레이드(4인 파티, 한 턴 진행)

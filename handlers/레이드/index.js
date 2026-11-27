@@ -270,14 +270,12 @@ async function recruitView(r, { redraw = true } = {}) {
   if (isPersistent(r) && !raidRules(r).drain) { // 대기 중 XP 차감이 없는 남아 있는 몬스터(알바트리온): 몇 번이든 다시 도전
     const pen = raidRules(r).defeatPenaltyXp ?? 0;
     sections.push({
-      text: `>>> ## 🐉 다섯 속성의 재앙, 강림\n` +
-        `${m.name}${subjectJosa(m.name)} 하늘을 가르며 XP 시스템을 집어삼켰습니다. **채팅 · 통화방 · 미니게임 XP 지급이 정지**되었어요.\n` +
-        '-# 용을 쓰러뜨릴 때까지 정지는 풀리지 않아요 · 쓰러져도 몇 번이든 다시 도전할 수 있어요',
+      text: `>>> ## ⚠️ 천재지변 출현\n` +
+        '-# 용을 쓰러뜨릴 때까지 정지는 풀리지 않아요',
     });
     sections.push({
-      text: `## 🔥💧⚡❄️ ${r.defeatStacks ? `${r.defeatStacks}번 꺾였지만, 용은 아직 하늘에 있다` : '속성을 읽고, 용을 억제하라'}${pen > 0 ? ` · 패배 1회마다 모든 유저 **-${pen} XP**` : ''}\n` +
-        `**파티 ${r.party.length} / ${PARTY_MAX}** · 속성 버튼을 눌러 참가하세요\n` +
-        '-# 용의 속성을 이기는 직업이 **억제 게이지**를 올려요 · 게이지가 가득 차야 **에스카톤**을 버텨요',
+      text: `**파티 ${r.party.length} / ${PARTY_MAX}** · 속성 버튼을 눌러 참가하세요${pen > 0 ? ` · 패배 1회마다 모든 유저 **-${pen} XP**` : ''}\n` +
+        '-# 각 속성에 맞춰 공격해야 **억제 성공률**이 올라가요',
     });
   } else if (isPersistent(r)) {
     const rules = raidRules(r);
@@ -515,9 +513,9 @@ function buildEndNoticePayload({ kind, xp, details = [], stacks, lost, tone, out
   return cardPayload(card({
     color: penalty ? 'err' : 'ok',
     top: defeat ? `-# ☠️ **패배 ${stacks}회**` : penalty ? '-# ☠️ **복구 실패**' : '-# 🔧 **복구 완료**',
-    header: tone === 'alat' && defeat && !(xp > 0) ? (outcome === 'timeout' ? '시간이 다했습니다... 용은 아직 하늘을 가르고 있어요' : '하늘이 갈라지고, 파티가 쓰러졌습니다...') : defeat && !(xp > 0) ? '파티가 쓰러졌습니다... 다시 도전하세요!' : defeat ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : penalty ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : 'XP 시스템이 복구되었습니다.',
+    header: tone === 'alat' && defeat && !(xp > 0) ? (outcome === 'timeout' ? '시간이 다했습니다... 용은 아직 하늘을 가르고 있어요' : '파티는 쓰러졌지만, 용은 아직 그 자리에 있다...') : defeat && !(xp > 0) ? '파티가 쓰러졌습니다... 다시 도전하세요!' : defeat ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : penalty ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : 'XP 시스템이 복구되었습니다.',
     headerLevel: 3,
-    blocks: tone === 'alat' && defeat && !(xp > 0) ? [{ text: '-# 알바트리온은 아직 하늘에 있어요. 속성을 읽고 억제 게이지를 채워 다시 도전하세요.' }] : defeat && !(xp > 0) ? [{ text: '-# 몬스터는 도주하지 않았습니다. 새 파티를 모아 다시 도전할 수 있어요.' }] : defeat ? [...detailBlocks, { text: `📉 **지금까지 1인당 잃은 XP :** -${(lost ?? 0).toLocaleString()} XP\n-# 몬스터는 도주하지 않았습니다. 다시 도전할 때까지 XP가 계속 줄어요.` }] : detailBlocks,
+    blocks: tone === 'alat' && defeat && !(xp > 0) ? [{ text: '-# 몬스터는 도주하지 않았습니다. 새 파티를 모아 다시 도전할 수 있어요.' }] : defeat && !(xp > 0) ? [{ text: '-# 몬스터는 도주하지 않았습니다. 새 파티를 모아 다시 도전할 수 있어요.' }] : defeat ? [...detailBlocks, { text: `📉 **지금까지 1인당 잃은 XP :** -${(lost ?? 0).toLocaleString()} XP\n-# 몬스터는 도주하지 않았습니다. 다시 도전할 때까지 XP가 계속 줄어요.` }] : detailBlocks,
   }));
 }
 // 이름 끝 글자 받침에 따라 '이'/'가'를 고른다(한글이 아니면 '이(가)')
