@@ -527,7 +527,7 @@ function resultView(bet, spin, hacks, reroll = null) {
 // 역린 발동 장면(돌기 전 4장): 알바트리온 용 속성 도트 연출 — 용의 기운이 모이고, 칸의 그림이 타들어 가며 새 릴이 드러난다.
 const REROLL_FOOTERS = ['역린 발동 중...', '역린 발동 중...', '역린 발동 중...', '역린 발동 중...']; // 장면마다 다르던 문구를 모두 같게
 function buildRerollIntroPayload(lobby, bet, reels, index, step, hacks = 0) {
-  const png = renderRerollIntro({ reels, bet, index, step });
+  const png = renderRerollIntro({ reels, bet, index, step, hacked: hacks > 0 });
   return payload(card({
     color: REROLL_COLOR,
     header: `${rerollEmoji()} 룰렛머신`,
@@ -538,7 +538,7 @@ function buildRerollIntroPayload(lobby, bet, reels, index, step, hacks = 0) {
 }
 // 역린 사용: 다시 돌릴 릴(index)만 금빛 테두리로 강조하고 그 칸만 돌아간다(나머지는 직전 결과 그대로 어둡게). reels 에서 null 인 칸이 도는 중.
 function buildRerollSpinPayload(lobby, bet, reels, index, phase = 0, hacks = 0) {
-  const png = renderSlot({ reels, bet, phase, rerollIdx: index, right: '역린 발동 중...', rightColor: '#ffb0dc' });
+  const png = renderSlot({ reels, bet, phase, rerollIdx: index, hacked: hacks > 0, right: '역린 발동 중...', rightColor: '#ffb0dc' });
   return payload(card({
     color: REROLL_COLOR,
     header: `${rerollEmoji()} 룰렛머신`,

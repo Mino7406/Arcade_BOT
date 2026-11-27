@@ -897,18 +897,19 @@ function dragonSparks(p, seed, count, cx, cy, spread, big = false) {
  * @param {number} [o.bet]
  * @param {number} o.step          0 ~ REROLL_INTRO_COUNT-1
  */
-function renderRerollIntro({ reels, bet, index = 0, step = 0 }) {
+function renderRerollIntro({ reels, bet, index = 0, step = 0, hacked = false }) {
   const st = Math.max(0, Math.min(REROLL_INTRO_COUNT - 1, step));
   const p = getPainter(), f = getFont();
-  getBg().copy(p.buf);
-  drawBulbs(p, st);
+  const base = hacked ? getHackBg() : getBg(); // 해킹 툴을 먼저 썼으면 해킹된 기계 위에서 역린이 발동한다
+  base.copy(p.buf);
+  if (hacked) drawHackDecor(p, st); else drawBulbs(p, st);
   const x = WIN_X[index], cx = x + WIN_W / 2, cy = WIN_Y + WIN_H / 2;
   for (let i = 0; i < 3; i++) {
     if (reels?.[i]) { const [ox, oy] = SYMBOL_OFFSET[reels[i]] || [0, 0]; drawSymbol(p, reels[i], WIN_X[i] + WIN_W / 2 + ox, WIN_CY + oy); }
     if (i !== index) dimWindow(p, WIN_X[i], 0.5);
   }
   const old = Buffer.from(p.buf); // 타들어 가기 전 모습
-  drawSpinningWindow(p, x, 3, index, getBg(), null);
+  drawSpinningWindow(p, x, 3, index, base, null);
   const fresh = Buffer.from(p.buf); // 그 자리에서 돌고 있는 새 릴
   old.copy(p.buf);
 
@@ -953,6 +954,7 @@ function renderRerollIntro({ reels, bet, index = 0, step = 0 }) {
   if (st >= 2) p.roundRect(53, BOTTOM_PLATE_Y + 3, 494, PLATE_H - 6, 10, '#150a14', 0.7); // 빛줄기가 판 위로 번져도 글자가 읽히게
   if (bet != null) p.text(f, `베팅 : ${bet} XP`, 108, py, { size: 20, color: '#ffe9a8', align: 'left' });
   p.text(f, REROLL_TEXT[st], 492, py, { size: 22, color: ['#c8a0f0', '#e0b8ff', '#ffffff', '#e0b8ff'][st], align: 'right' });
+  if (hacked) applyGlitch(p, st + 7);
   return p.png();
 }
 
