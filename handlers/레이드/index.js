@@ -280,18 +280,16 @@ async function recruitView(r, { redraw = true } = {}) {
     });
   } else if (isPersistent(r)) {
     const rules = raidRules(r);
-    sections.push({
-      text: `>>> ## ⚠️ ░${glitchCode()}░ ${glitchStr('XP 시스템 오류', 0.15, 1)}\n` +
-        glitchStr(`${m.name}${subjectJosa(m.name)} XP 시스템을 ▓▓하고 있습니다.`, 0.08, 2) + '\n' +
-        glitchStr('**채팅 · 통화방 · 미니게임 XP 지급이 정지**되었습니다.', 0.07, 3) + '\n' +
-        glitchStr('-# 토벌하지 않으면 사라지지 않아요 · 기다리는 동안 모두의 XP가 계속 줄어요', 0.07, 4),
+    sections.push({ // 알바트리온과 같은 구성: 제목 + 작은 안내 / 시간·손실 / 패배 / 파티 (설명 문장은 줄이고, 줄바꿈이 생기는 줄은 구역을 나눈다)
+      text: `>>> ## ⚠️ ${glitchStr('XP 시스템 오류', 0.15, 1)}\n` +
+        '-# ' + glitchStr('토벌할 때까지 XP 지급 정지는 풀리지 않아요 · 기다리는 동안 모두의 XP가 계속 줄어요', 0.04, 4), // 서식(-#)은 깨지지 않게 문장에만 효과
     });
     sections.push({
       text: `## ⏳ \`${glitchClock()}\` ░${glitchStr('TIME_ERR', 0.3, 5)}\n` +
-        `📉 **지금까지 잃은 XP :** \`-${lostShown(r)} XP\` *(1인당)*\n` +
-        `💀 **패배 ${r.defeatStacks || 0}회** · 패배 1회마다 모든 유저 **-${rules.defeatPenaltyXp ?? 0} XP**\n` +
-        `**파티 ${r.party.length} / ${PARTY_MAX}** · 역할 버튼을 눌러 참가하세요`,
+        `📉 **지금까지 잃은 XP :** \`-${lostShown(r)} XP\` *(1인당)*`,
     });
+    sections.push({ text: `💀 **패배 ${r.defeatStacks || 0}회** · 패배 1회마다 모든 유저 **-${rules.defeatPenaltyXp ?? 0} XP**` });
+    sections.push({ text: `**파티 ${r.party.length} / ${PARTY_MAX}** · 역할 버튼을 눌러 참가하세요` });
   } else
   sections.push({
     text: '>>> ## 🚫 XP 시스템 고장!\n' + // 인용 블록(>>>)으로 세 줄 모두 묶는다
