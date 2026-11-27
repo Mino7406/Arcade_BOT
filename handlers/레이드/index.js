@@ -273,7 +273,8 @@ async function recruitView(r, { redraw = true } = {}) {
       text: `>>> ## ⚠️ 천재지변 출현\n` +
         '-# 용을 쓰러뜨릴 때까지 XP 지급 정지는 풀리지 않아요',
     });
-    if (pen > 0) sections.push({ text: `💀 **패배 ${r.defeatStacks || 0}회** · 패배 1회마다 모든 유저 **-${pen} XP**` }); // 파티 위에 별도 구역(한 줄에 붙이면 줄바꿈이 생긴다)
+    if (pen > 0) sections.push({ text: `📉 **지금까지 잃은 XP :** \`-${lostShown(r)} XP\` *(1인당)*\n` + // 블랙월과 같은 표시(패배로 잃은 XP 누적)
+      `💀 **패배 ${r.defeatStacks || 0}회** · 패배 1회마다 모든 유저 **-${pen} XP**` }); // 파티 위에 별도 구역(한 줄에 붙이면 줄바꿈이 생긴다)
     sections.push({
       text: `**파티 ${r.party.length} / ${PARTY_MAX}** · 속성 버튼을 눌러 참가하세요\n` +
         '-# 각 속성에 맞춰 공격해야 **억제 성공률**이 올라가요',
@@ -681,6 +682,8 @@ async function flush(r) {
     }
   } finally {
     r.flushing = false;
+    const waiters = r.flushWaiters; r.flushWaiters = null; // 그림이 실제로 올라가길 기다리던 쪽(에스카톤 단계 진행)을 깨운다
+    if (waiters) for (const done of waiters) done();
   }
 }
 
@@ -1006,8 +1009,7 @@ function advanceTurn(r) {
       }, AMBUSH_EXPLODE_MS); // 폭발 장면을 보여 준 뒤 마지막 장면으로
     }
   }
-  if (escTurn) scheduleEscStages(r, turn);
-  r.timer = setTimeout(() => {
+  const endResult = () => {
     if (!isCurrent(r) || r.phase !== 'battle' || r.battle.turn !== turn) return;
     r.showingResult = false;
     // 살아 있는 파티원이 전부 기절이면 고를 사람이 없으니 기다리지 않고 바로 이 턴을 진행한다.
@@ -1017,21 +1019,30 @@ function advanceTurn(r) {
     }
     armTurnTimer(r);
     requestRender(r, { image: true, immediate: true });
-  }, r.ambushStage === 0 ? AMBUSH_EXPLODE_MS + AMBUSH_CALM_MS : escTurn ? ESC_TOTAL_MS : resultMsFor(r.battle)); // 몬스터가 ui.resultMs 를 정하면 그 시간(??? 는 글리치 연출이 잘 보이게 더 길게)
+  };
+  if (escTurn && r.ambushStage !== 0) { playEscStages(r, turn, endResult); return; } // 에스카톤: 각 장면이 실제로 올라간 뒤부터 정해진 시간만큼 보여 주고, 끝나면 다음 턴(시계 기준 고정 시각이 아니라 올라간 시점 기준 — 업로드가 느려도 장면이 건너뛰어지거나 들쭉날쭉하지 않게)
+  r.timer = setTimeout(endResult, r.ambushStage === 0 ? AMBUSH_EXPLODE_MS + AMBUSH_CALM_MS : resultMsFor(r.battle)); // 몬스터가 ui.resultMs 를 정하면 그 시간(??? 는 글리치 연출이 잘 보이게 더 길게)
 }
 
-// 에스카톤 결과 장면의 단계(폭발 0 → 식음 1 → 불씨만 2)를 시간에 맞춰 넘기며 다시 그린다.
-function scheduleEscStages(r, turn) {
-  let at = 0;
-  ESC_STAGE_MS.forEach((ms, i) => {
-    at += ms;
-    if (i + 1 >= ESC_STAGE_MS.length) return;
-    setTimeout(() => {
-      if (!isCurrent(r) || r.phase !== 'battle' || r.battle?.turn !== turn || !r.showingResult) return;
-      r.escStage = i + 1;
-      requestRender(r, { image: true, immediate: true });
-    }, at);
-  });
+// 에스카톤 결과 장면의 단계(임계 0 → 방출 1 → 식음 2 → 여운 3)를 차례로 보여 준다.
+// 예전에는 시작 시각 기준 고정 시각(1.8초·4.8초…)에 단계를 넘겼는데, 그림 업로드가 느리면 그 단계가 잠깐만 보이거나 건너뛰어지고
+// 빠르면 길게 보여서 장면마다 길이가 들쭉날쭉했다. 이제는 각 단계 그림이 디스코드에 실제로 올라간 뒤부터 정해진 시간(ESC_STAGE_MS)만큼 보여 주고 넘긴다.
+const ESC_FLUSH_WAIT_MS = 8000; // 그림이 안 올라가는 경우(오류 등)에도 이 시간 뒤에는 넘어간다
+const sleepMs = (ms) => new Promise(res => setTimeout(res, ms));
+function afterFlush(r) { // 지금 요청된 화면 갱신이 끝날 때까지(없으면 바로)
+  if (!r.flushing && !r.flushTimer) return Promise.resolve();
+  return new Promise(res => { (r.flushWaiters ||= []).push(res); });
+}
+async function playEscStages(r, turn, onDone) {
+  const alive = () => isCurrent(r) && r.phase === 'battle' && r.battle?.turn === turn && r.showingResult;
+  for (let i = 0; i < ESC_STAGE_MS.length; i++) {
+    await Promise.race([afterFlush(r), sleepMs(ESC_FLUSH_WAIT_MS)]); // 이 단계 그림이 올라갈 때까지
+    if (!alive()) return;
+    await sleepMs(ESC_STAGE_MS[i]); // 올라간 뒤부터 최소 이 시간은 보여 준다
+    if (!alive()) return;
+    if (i + 1 < ESC_STAGE_MS.length) { r.escStage = i + 1; requestRender(r, { image: true, immediate: true }); }
+  }
+  onDone();
 }
 // 에스카톤에 전멸했을 때: 결과 화면을 폭발 → 식음 → 불씨만으로 보여 준 다음에야 패배·종료 처리를 한다.
 function showEscatonEnd(r, outcome) {
@@ -1040,13 +1051,14 @@ function showEscatonEnd(r, outcome) {
   r.escStage = 0;
   const turn = r.battle.turn;
   requestRender(r, { image: true, immediate: true });
-  scheduleEscStages(r, turn);
-  r.timer = setTimeout(() => {
-    if (!isCurrent(r) || r.phase !== 'battle' || r.battle?.turn !== turn) return;
-    r.showingResult = false;
-    r.escStage = undefined;
-    finishRaid(r, outcome);
-  }, ESC_TOTAL_MS + ESC_END_EXTRA_MS); // 마지막 '완전히 소거된' 장면이 그림 갱신 지연에 묻히지 않게 종료 때는 더 오래 둔다
+  playEscStages(r, turn, () => { // 마지막 '완전히 소거된' 장면이 그림 갱신 지연에 묻히지 않게 종료 때는 더 오래 둔다
+    r.timer = setTimeout(() => {
+      if (!isCurrent(r) || r.phase !== 'battle' || r.battle?.turn !== turn) return;
+      r.showingResult = false;
+      r.escStage = undefined;
+      finishRaid(r, outcome);
+    }, ESC_END_EXTRA_MS);
+  });
 }
 
 // 레이드를 끝낸다. XP 정지 해제 · 보상 지급 · 상태 저장 · 복구 안내 후 결과 화면을 바로 보내게 한다.
