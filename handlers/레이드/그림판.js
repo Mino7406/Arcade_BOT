@@ -338,14 +338,14 @@ class Painter {
     this.fill([outer, inner], hex);
   }
 
-  circle(cx, cy, r, hex) {
+  circle(cx, cy, r, hex, alpha = 1) {
     const pts = [];
     const n = Math.max(12, Math.ceil(r * 1.5));
     for (let k = 0; k < n; k++) { const a = (k / n) * Math.PI * 2; pts.push(cx + Math.cos(a) * r, cy + Math.sin(a) * r); }
-    this.fill([pts], hex);
+    this.fill([pts], hex, alpha);
   }
 
-  poly(pts, hex) { this.fill([pts], hex); }
+  poly(pts, hex, alpha = 1) { this.fill([pts], hex, alpha); }
 
   // 두께 있는 선(끝은 둥글게 처리하지 않고 반원 대신 사각 + 끝점 원).
   line(x1, y1, x2, y2, width, hex) {

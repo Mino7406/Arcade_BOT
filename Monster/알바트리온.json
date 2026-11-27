@@ -681,7 +681,8 @@
   "raid": {
     "persistent": true,
     "defeatPenaltyXp": 0,
-    "mvpBonusXp": 700,
+    "clearXp": 1000,
+    "mvpBonusXp": 0,
     "mvpItem": "reroll"
   },
   "theme": "alat",

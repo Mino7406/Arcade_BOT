@@ -272,10 +272,11 @@ function elementGlow(role, cx, cy, dim) {
   const glow = ELEMENT_GLOW[role];
   if (!glow || !/^#[0-9a-f]{6}$/i.test(C.card)) return;
   const k = dim ? 0.5 : 1;
-  [[33, 0.10], [28, 0.17], [22, 0.25]].forEach(([r, t]) => p.circle(cx, cy, r, mixHex(C.card, glow, t * k)));
+  // 속성색을 투명도로 얹는다(카드색과 섞은 불투명 원이면 밝은 기술 연출 위에서 어두운 원이 따로 떠 보인다)
+  [[33, 0.10], [28, 0.17], [22, 0.25]].forEach(([r, t]) => p.circle(cx, cy, r, glow, t * k));
   const sy = cy + 31, pts = [];
   for (let i = 0; i < 20; i++) { const a = i / 20 * Math.PI * 2; pts.push(cx + Math.cos(a) * 24, sy + Math.sin(a) * 4); }
-  p.poly(pts, mixHex(C.card, '#000000', 0.45));
+  p.poly(pts, '#000000', 0.3);
 }
 function roleIcon(role, cx, cy, dim = false) {
   const dy = ELEMENT_GLOW[role] ? -4 : 0;
@@ -1499,6 +1500,18 @@ function cardBorderFx(el, tx, k0, rnd) {
     for (let q = 0; q < 26; q++) { const s = Math.floor(rnd() * 4), t = rnd(), [ax, ay] = pts[s], [bx, by] = pts[s + 1], o = (rnd() - 0.3) * 22; const x = ax + (bx - ax) * t + (s % 2 ? o * (s === 1 ? 1 : -1) : 0), y = ay + (by - ay) * t + (s % 2 ? 0 : o * (s === 0 ? -1 : 1)); p.rect(snap(x), snap(y), 4, 4, rnd() < 0.5 ? '#ffffff' : R[5]); } // 테두리 둘레 불꽃 알갱이
     return;
   }
+  if (el === 'water') { // 젖음: 카드 전체에 옅은 물빛 막 + 위에서 흘러내리는 물줄기 몇 가닥(끝에 맺힌 방울). 테두리·거품은 그리지 않는다
+    p.roundRect(x0, y0, CARD_W, CARD_H, 12, R[3], 0.10);
+    p.roundRect(x0 + 3, y0 + 3, CARD_W - 6, 26, 10, R[5], 0.12); // 윗면 물막의 번들거림
+    const sr = seedRng(k0 * 7 + Math.floor(tx));
+    for (let q = 0; q < 6; q++) {
+      const sx = snap(x0 + 14 + sr() * (CARD_W - 28)), sy = y0 + 4 + sr() * 30, len = 22 + sr() * 70;
+      p.roundRect(sx - 1, sy, 3, len, 1.5, R[4], 0.38); // 물줄기
+      p.roundRect(sx - 1, sy, 1, len, 0.5, R[6], 0.35);  // 줄기의 하이라이트
+      p.circle(sx, sy + len + 2, 3.2, R[4], 0.7); p.circle(sx - 1, sy + len + 1, 1.2, R[6]); // 끝의 물방울
+    }
+    return;
+  }
   buf.paint(x0 - 6, y0 - 6, x1 + 6, y1 + 6, (x, y, i, j) => {
     const d = edgeD(x, y), n = fbm(x / 14, y / 14, k0 + tx); if (d < -5) return null;
     if (el === 'ice') { // 테두리부터 번지는 성에
@@ -1510,11 +1523,11 @@ function cardBorderFx(el, tx, k0, rnd) {
       if (d < thr * 0.35) return ramp(ALAT_RAMP.fire, 0.55 + (1 - d / (thr * 0.35)) * 0.45, i, j);
       return Math.abs(fbm(x / 9, y / 9, k0 + 5) - 0.5) < 0.04 ? '#ff7a2a' : (n > 0.55 ? '#4a1206' : '#240804');
     }
-    if (el === 'water') { // 윗변은 거품이 덮고, 옆으로 물이 흘러내린다
-      const top = y - y0, drip = Math.max(0, 1 - top / (40 + hash2(Math.floor(x / 12), 1, k0) * 160));
-      const thr = top < 30 ? 10 + n * 22 : 4 + n * 8 + (x - x0 < 14 || x1 - x < 14 ? drip * 20 : 0);
-      if (d > thr) return null;
-      return top < 26 && n > 0.45 ? '#ffffff' : ramp(R, 0.5 + (1 - d / thr) * 0.45, i, j);
+    if (el === 'water') { // 젖은 느낌만: 가장자리에 얇은 물막이 듬성듬성 비치고, 옆면을 따라 물방울 줄기가 조금 흘러내린다(카드를 덮지 않게 성기게)
+      const top = y - y0, drip = Math.max(0, 1 - top / (30 + hash2(Math.floor(x / 14), 1, k0) * 90));
+      const thr = 3 + n * 6 + (x - x0 < 10 || x1 - x < 10 ? drip * 10 : 0);
+      if (d > thr || bay(i, j) > 0.55 + (n - 0.5)) return null;
+      return d < 2 ? R[6] : ramp(R, 0.35 + (1 - d / thr) * 0.3, i, j);
     }
     if (el === 'dragon') { // 검붉은 잠식: 테두리에서 안으로 번지는 어둠과 그 속을 흐르는 붉은 핏줄
       const thr = 8 + n * 34; if (d > thr) return null;
@@ -1563,8 +1576,8 @@ function alatOverlay(fx, mx, my, targets, layer) {
       speedLines(mx, cy, 60, 100, 620, B.ray, rnd, 0.72, 110, H);
       return;
     }
-    for (const [tx, ty] of targets) { cardBorderFx('water', tx, k0, rnd); droplets(tx, ty + 30, 12, 60, 54, R, rnd); }
-    scatterMotes(B.mote, B.tail, rnd, 46, (x, y) => { const dx = x - mx, dy = y - cy, d = Math.hypot(dx, dy) || 1; return [dx / d, dy / d]; });
+    for (const [tx, ty] of targets) { cardBorderFx('water', tx, k0, rnd); }
+    scatterMotes(B.mote, B.tail, rnd, 16, (x, y) => { const dx = x - mx, dy = y - cy, d = Math.hypot(dx, dy) || 1; return [dx / d, dy / d]; });
   } else if (el === 'thunder') {
     // 천뢰 낙하: 먹구름이 소용돌이치며 갈라지고, 화면을 세로로 가르는 빛기둥이 맞은 사람 앞 바닥에 꽂힌다.
     // 꽂힌 자리엔 빛의 반구가 솟고, 두꺼운 충격파 고리가 원근으로 커지며 파티 쪽으로 밀려온다
@@ -2828,8 +2841,8 @@ function engraved(str, x, y, size, color, opt = {}) {
   text(str, x, y - 1, size, mixHex(color, '#ffffff', 0.35), opt);
   text(str, x, y + 1, size, color, opt);
 }
-function alatHeader(b) {
-  const A = require('./알바트리온'), al = b.alat, el = al.element, col = ELEMENT_GLOW[el] || '#c8a0ff', rage = b.rage;
+function alatHeader(b, shownEl) {
+  const A = require('./알바트리온'), al = b.alat, el = shownEl ?? al.element,col = ELEMENT_GLOW[el] || '#c8a0ff', rage = b.rage;
   const stone = '#33241a', rim = '#c08a50', rimDark = '#5a3c24';
   // 석판: 양 끝이 비스듬히 잘린 판 + 이중 테두리 + 위아래 균열 줄
   const plate = [30, 22, 56, 14, W - 56, 14, W - 30, 22, W - 22, 60, W - 30, 112, W - 56, 118, 56, 118, 30, 112, 22, 60];
@@ -2965,7 +2978,7 @@ function renderBattle(r) {
     if (b.rage && !bodyGone) rageFx(m, W / 2, 196, 112, null, 'box'); // 분노: 바닥 불빛·불씨(몸이 없을 땐 둘 다 그리지 않는다)
 
     // 상단: TURN 배지 · 몬스터 이름(분노) · HP 바 (알바트리온은 전용 헤더)
-    if (isAlat(m)) alatHeader(b);
+    if (isAlat(m)) alatHeader(b, alatShownEl);
     else {
     p.roundRect(30, 20, 118, 42, 10, '#2a2119');
     p.strokeRoundRect(30, 20, 118, 42, 10, 1.5, C.gold);
@@ -3313,7 +3326,7 @@ function renderBattle(r) {
       for (let k = 0; k < 2; k++) p.circle(gx + 80 + k * 18, y + 239, 6.5, k < mem.potions ? '#7ccf5a' : '#3a3328');
     }, (mem) => {
       const state = memberState(b, mem, r.showingResult);
-      if (usedMove && last?.hits[mem.userId]) return { color: '#ff4a3a', width: 4 }; // 이번 턴에 맞은 카드
+      if (usedMove && last?.hits[mem.userId]) return { color: ALAT_MOVE_COLOR[usedFx] || '#ff4a3a', width: 4 }; // 이번 턴에 맞은 카드(알바트리온 기술은 그 속성색)
       if (state === 'pending') return { color: isCorrupt(m) ? '#ff3a4a' : isAlat(m) ? '#f0a050' : '#ffb52e', width: 4 }; // 오염 테마는 붉은 테두리, 알바트리온은 보랏빛
       if (state === 'ready') return { color: '#3ecf6e', width: 2.5 };
       if (state === 'stunned') return { color: '#ffd23f', width: 2.5 };

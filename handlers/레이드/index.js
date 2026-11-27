@@ -333,7 +333,6 @@ async function recruitView(r, { redraw = true } = {}) {
   sections.push({
     // 이름표를 붙인 인용 블록 두 줄 — 보상과 시작 규칙을 한눈에
     text: `> 🎁 **보상** : +${isPersistent(r) ? clearXpOf(r) : CLEAR_XP} XP · ${hackToolEmoji()} ${HACK_TOOL_NAME} 1개\n` +
-      (raidRules(r)?.mvpItem === 'reroll' ? `> 👑 **MVP** : +${clearXpOf(r) + mvpBonusOf(r)} XP · ${rerollEmoji()} **${REROLL_NAME}** 1개 (해킹 툴 대신) — ${REROLL_DESC}\n` : '') + // ???도 일반 몬스터처럼 일반 파티원은 해킹 툴 1개(MVP 게이트웨이는 안내하지 않음)
       '> ▶️ **바로 시작** : 첫 참가자가 방장이 되며 시작 여부를 결정할 수 있어요.',
   });
   return assemble(accentOf(r, ACCENT.recruit), image, sections);
