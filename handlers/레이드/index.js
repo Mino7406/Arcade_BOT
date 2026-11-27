@@ -513,7 +513,7 @@ function buildEndNoticePayload({ kind, xp, details = [], stacks, lost, tone, out
   return cardPayload(card({
     color: penalty ? 'err' : 'ok',
     top: defeat ? `-# ☠️ **패배 ${stacks}회**` : penalty ? '-# ☠️ **복구 실패**' : '-# 🔧 **복구 완료**',
-    header: tone === 'alat' && defeat && !(xp > 0) ? (outcome === 'timeout' ? '시간이 다했습니다... 용은 아직 하늘을 가르고 있어요' : '파티는 쓰러졌지만, 용은 아직 그 자리에 있다...') : defeat && !(xp > 0) ? '파티가 쓰러졌습니다... 다시 도전하세요!' : defeat ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : penalty ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : 'XP 시스템이 복구되었습니다.',
+    header: tone === 'alat' && defeat && !(xp > 0) ? (outcome === 'timeout' ? '파티는 쓰러졌지만, 용은 아직 그 자리에 있다...' : '파티는 쓰러졌지만, 용은 아직 그 자리에 있다...') : defeat && !(xp > 0) ? '파티가 쓰러졌습니다... 다시 도전하세요!' : defeat ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : penalty ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : 'XP 시스템이 복구되었습니다.',
     headerLevel: 3,
     blocks: tone === 'alat' && defeat && !(xp > 0) ? [{ text: '-# 몬스터는 도주하지 않았습니다. 새 파티를 모아 다시 도전할 수 있어요.' }] : defeat && !(xp > 0) ? [{ text: '-# 몬스터는 도주하지 않았습니다. 새 파티를 모아 다시 도전할 수 있어요.' }] : defeat ? [...detailBlocks, { text: `📉 **지금까지 1인당 잃은 XP :** -${(lost ?? 0).toLocaleString()} XP\n-# 몬스터는 도주하지 않았습니다. 다시 도전할 때까지 XP가 계속 줄어요.` }] : detailBlocks,
   }));
