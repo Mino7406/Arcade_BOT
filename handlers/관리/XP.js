@@ -27,6 +27,7 @@ const {
 } = require('../레벨/레벨링');
 const { logAction } = require('../공통/로그');
 const { HACK_TOOL_NAME, HACK_TOOL_MAX, getHackTools, grantHackTool, useHackTool, hackToolEmoji, hackToolButtonEmoji } = require('../게임/해킹툴');
+const { REROLL_NAME, REROLL_MAX, getRerolls, grantReroll, useReroll, rerollEmoji, rerollButtonEmoji } = require('../게임/역린');
 const { GATEWAY_NAME, GATEWAY_MAX, getGateways, grantGateway, useGateway, gatewayEmoji, gatewayButtonEmoji } = require('../게임/블랙월게이트웨이');
 const { getRaidStatus, setAutoSpawn, setNextSpawnAt, setNextMonster, forceSpawnRaid, forceEndRaid } = require('../레이드');
 const { MONSTERS, HARD_MONSTERS } = require('../레이드/전투');
@@ -71,6 +72,7 @@ function persist() {
 const INVENTORY_ITEMS = [
   { key: 'hack', name: HACK_TOOL_NAME, max: HACK_TOOL_MAX, get: getHackTools, grant: grantHackTool, use: useHackTool, emoji: hackToolEmoji, buttonEmoji: hackToolButtonEmoji },
   { key: 'gateway', name: GATEWAY_NAME, max: GATEWAY_MAX, get: getGateways, grant: grantGateway, use: useGateway, emoji: gatewayEmoji, buttonEmoji: gatewayButtonEmoji },
+  { key: 'reroll', name: REROLL_NAME, max: REROLL_MAX, get: getRerolls, grant: grantReroll, use: useReroll, emoji: rerollEmoji, buttonEmoji: rerollButtonEmoji },
 ];
 const findItem = (key) => INVENTORY_ITEMS.find(it => it.key === key);
 

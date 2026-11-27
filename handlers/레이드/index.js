@@ -77,6 +77,7 @@ const rollPenaltyXp = () => FAIL_PENALTY_XP_MIN + Math.floor(Math.random() * (FA
 // persistent = 모집 시간 제한·도주 없음 · drain = 대기 중 모든 유저 XP 실시간 차감 · defeatPenaltyXp = 패배 1번당 고정 차감 · clearXp·mvpBonusXp·mvpItem = 보상.
 const raidRules = (r) => r?.monster?.raid ?? null;
 const isPersistent = (r) => !!raidRules(r)?.persistent;
+const isRerollRaid = (r) => raidRules(r)?.mvpItem === 'reroll'; // 알바트리온: 역린 보상(화면에는 XP만 표시)
 const clearXpOf = (r) => raidRules(r)?.clearXp ?? CLEAR_XP;
 const mvpBonusOf = (r) => raidRules(r)?.mvpBonusXp ?? MVP_BONUS_XP;
 const DRAIN_LOG_MS = 10 * 60 * 1000; // 대기 차감은 5초마다라 로그는 10분에 한 번만 요약해서 남긴다
@@ -330,7 +331,7 @@ async function recruitView(r, { redraw = true } = {}) {
   });
   sections.push({
     // 이름표를 붙인 인용 블록 두 줄 — 보상과 시작 규칙을 한눈에
-    text: `> 🎁 **보상** : +${isPersistent(r) ? clearXpOf(r) : CLEAR_XP} XP · ${hackToolEmoji()} ${HACK_TOOL_NAME} 1개\n` +
+    text: `> 🎁 **보상** : +${isPersistent(r) || isRerollRaid(r) ? clearXpOf(r) : CLEAR_XP} XP${isRerollRaid(r) ? '' : ` · ${hackToolEmoji()} ${HACK_TOOL_NAME} 1개`}\n` +
       '> ▶️ **바로 시작** : 첫 참가자가 방장이 되며 시작 여부를 결정할 수 있어요.',
   });
   return assemble(accentOf(r, ACCENT.recruit), image, sections);
@@ -543,13 +544,14 @@ function endSummary(r, outcome, rewards) {
     lines.push(`${name} 토벌되어 XP 시스템이 복구되었습니다.`);
     const mvp = rewards.find(x => x.mvp);
     const mvpName = mvp && b?.members.find(mem => mem.userId === mvp.userId)?.name;
-    if (mvpName) lines.push(`> 👑 **MVP** : ${mvpName} · ${rewardText(mvp.xp, mvp.hackTool, mvp.gateway, mvp.gatewayFull, mvp.reroll, mvp.rerollFull)}`);
+    const quiet = isRerollRaid(r); // 역린은 화면에 적지 않고 XP만 보여 준다
+    if (mvpName) lines.push(`> 👑 **MVP** : ${mvpName} · ${quiet ? rewardText(mvp.xp) : rewardText(mvp.xp, mvp.hackTool, mvp.gateway, mvp.gatewayFull, mvp.reroll, mvp.rerollFull)}`);
     // MVP 가 아닌 사람은 받은 것(해킹 툴 받았나)이 같은 사람끼리 한 줄로 묶는다 — 보통은 한 줄.
-    for (const got of [true, false]) {
-      const names = rewards.filter(x => !x.mvp && !!x.hackTool === got).map(x => b.members.find(mem => mem.userId === x.userId)?.name).filter(Boolean);
-      if (names.length) lines.push(`> 🎁 **보상** : ${names.join(', ')} · ${rewardText(clearXpOf(r), got)}`);
+    for (const got of quiet ? [false] : [true, false]) {
+      const names = rewards.filter(x => !x.mvp && (quiet || !!x.hackTool === got)).map(x => b.members.find(mem => mem.userId === x.userId)?.name).filter(Boolean);
+      if (names.length) lines.push(`> 🎁 **보상** : ${names.join(', ')} · ${rewardText(clearXpOf(r), got && !quiet)}`);
     }
-    const full = hackToolFullLine(r, rewards);
+    const full = quiet ? null : hackToolFullLine(r, rewards);
     if (full) lines.push(full);
     if (!rewards.length) lines.push('> 직접 행동한 파티원이 없어 보상이 없어요');
   } else if (outcome === 'wipe' || outcome === 'timeout' || outcome === 'noshow') {
@@ -575,7 +577,7 @@ async function endView(r, outcome, rewards = []) {
       body += `남은 HP **${b.hp.toLocaleString()}** / ${b.maxHp.toLocaleString()} · ${b.turn}턴\n\n` +
         b.members.map(mem => {
           const reward = rewards.find(x => x.userId === mem.userId);
-          const xp = reward ? ` ${reward.xp > 0 ? `· **+${reward.xp} XP**` : ''}${reward.mvp ? ' 👑MVP' : ''}${reward.hackTool ? ` · ${hackToolEmoji()}+1` : ''}${reward.gateway ? ` · ${gatewayEmoji()}+1` : ''}${reward.reroll ? ` · ${rerollEmoji()}+1` : ''}` : '';
+          const xp = reward ? ` ${reward.xp > 0 ? `· **+${reward.xp} XP**` : ''}${reward.mvp ? ' 👑MVP' : ''}${reward.hackTool ? ` · ${hackToolEmoji()}+1` : ''}${reward.gateway ? ` · ${gatewayEmoji()}+1` : ''}` : '';
           const idle = outcome === 'clear' && !reward ? ' · *(직접 행동하지 않아 보상 없음)*' : '';
           return `${ROLES[mem.role].emoji} **${mem.name}** — 피해 ${mem.damage.toLocaleString()} · 회복 ${mem.healing} · 방어 ${mem.blocked ?? 0}${xp}${idle}`;
         }).join('\n');
@@ -1117,10 +1119,11 @@ function finishRaid(r, outcome) {
       // 남아 있는 몬스터(???)는 MVP에게 해킹 툴 대신 자기 아이템(블랙월 게이트웨이)을 주고, 일반 파티원은 해킹 툴 1개씩.
       const wantsGateway = isPersistent(r) && mem === mvp && raidRules(r).mvpItem === 'gateway';
       // 알바트리온(raid.mvpItem 'reroll')은 MVP 에게 해킹 툴 대신 역린(최대 1개)을 준다.
-      const wantsReroll = mem === mvp && raidRules(r)?.mvpItem === 'reroll';
+      // 알바트리온: 파티원 전원이 역린을 받는다(MVP 2개, 일반 1개). 해킹 툴은 주지 않는다.
+      const wantsReroll = isRerollRaid(r);
       const hackTool = wantsGateway || wantsReroll ? false : grantHackTool(r.guildId, mem.userId); // 최대 보유면 false(못 받음)
       const gateway = wantsGateway ? grantGateway(r.guildId, mem.userId) : false; // 최대 보유면 false(못 받음)
-      const reroll = wantsReroll ? grantReroll(r.guildId, mem.userId) : false;
+      const reroll = wantsReroll ? grantReroll(r.guildId, mem.userId, mem === mvp ? 2 : 1) : 0;
       rewards.push({ userId: mem.userId, xp, mvp: mem === mvp, hackTool, gateway, gatewayFull: wantsGateway && !gateway, reroll, rerollFull: wantsReroll && !reroll });
       if (isExcludedGuild(r.guildId) || xp <= 0) continue;
       const result = applyXp(r.guildId, mem.userId, xp, `레이드 토벌 '${r.monster.name}'${mem === mvp ? ' (MVP)' : ''}`);

@@ -178,7 +178,7 @@ function buildLobbyCard(lobby) {
   return card({
     color: COLORS.info,
     header: '🎰 룰렛머신',
-    sub: ['하루 1회', lobby.hackTools > 0 ? `${hackToolEmoji()} ${HACK_TOOL_NAME} ${hackHaveText(lobby.hackTools)}` : null, lobby.gateways > 0 ? `${gatewayEmoji()} ${GATEWAY_NAME} ${gatewayHaveText(lobby.gateways)}` : null].filter(Boolean),
+    sub: ['하루 1회', lobby.hackTools > 0 ? `${hackToolEmoji()} ${HACK_TOOL_NAME} ${hackHaveText(lobby.hackTools)}` : null, lobby.gateways > 0 ? `${gatewayEmoji()} ${GATEWAY_NAME} ${gatewayHaveText(lobby.gateways)}` : null, lobby.rerolls > 0 ? `${rerollEmoji()} ${REROLL_NAME} ${rerollHaveText(lobby.rerolls)}` : null].filter(Boolean),
     blocks: [
       `<@${lobby.userId}>님, 베팅 XP를 고른 뒤 **🎰 돌리기**를 누르세요.`,
       { image: SLOT_URL },
@@ -393,6 +393,7 @@ async function startRouletteCommand(interaction) {
     maxAvailable: Math.min(MAX_BET, currentLevelXp),
     hackTools: hackToolsOf(guildId, userId),
     gateways: gatewaysOf(guildId, userId),
+    rerolls: rerollsOf(guildId, userId),
     gatewayArmed: false, // 블랙월 게이트웨이 발동 여부(돌리면 이번 판이 100% 잭팟)
     interaction,
     timeoutId: null,
@@ -537,7 +538,7 @@ function buildRerollIntroPayload(lobby, bet, reels, index, step, hacks = 0) {
 }
 // 역린 사용: 다시 돌릴 릴(index)만 금빛 테두리로 강조하고 그 칸만 돌아간다(나머지는 직전 결과 그대로 어둡게). reels 에서 null 인 칸이 도는 중.
 function buildRerollSpinPayload(lobby, bet, reels, index, phase = 0, hacks = 0) {
-  const png = renderSlot({ reels, bet, phase, rerollIdx: index, right: '불길 속에서 회전 중...', rightColor: '#ffb0dc' });
+  const png = renderSlot({ reels, bet, phase, rerollIdx: index, right: '역린 발동 중...', rightColor: '#ffb0dc' });
   return payload(card({
     color: REROLL_COLOR,
     header: `${rerollEmoji()} 룰렛머신`,
@@ -572,7 +573,8 @@ async function revealSpin(channel, message, lobby, bet, spin, hacks, introReels 
     const spinning = prevReels.map((r, i) => (i === index ? null : r));
     const frames = [
       ...Array.from({ length: REROLL_INTRO_COUNT }, (_, step) => [buildRerollIntroPayload(lobby, bet, prevReels, index, step, hacks), INTRO_STEP_MS]),
-      [buildRerollSpinPayload(lobby, bet, spinning, index, 1, hacks), SPIN_STEP_MS],
+      // 돌아가는 칸을 충분히 보여 주려고 여러 장(한 장이 1.3초)으로 나눈다
+      ...[1, 2, 3].map(ph => [buildRerollSpinPayload(lobby, bet, spinning, index, ph, hacks), SPIN_STEP_MS]),
     ];
     for (const [pl, wait] of frames) {
       if (message) { try { await message.edit(pl); } catch { message = null; } }

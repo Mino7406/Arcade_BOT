@@ -12,7 +12,7 @@ const REROLL_NAME = '역린';
 // 그림을 바꾸면 name 의 _v 숫자를 올려 새로 등록되게 한다.
 const EMOJI = { name: 'reroll_v2', file: 'reroll.png', fallback: '🐲', id: null };
 const EMOJI_DIR = path.join(__dirname, '..', '..', 'assets', '이모지');
-const REROLL_MAX = 1; // 최대 보유량
+const REROLL_MAX = 2; // 최대 보유량(레이드 보상: MVP 2개·일반 1개)
 const REROLL_DESC = '룰렛 결과가 나온 직후 릴 **한 칸**만 골라 다시 돌려요'; // 로비 보상 안내·사용 확인 창이 같이 쓰는 한 줄 설명
 async function ensureRerollEmoji(client) {
   const manager = client.application?.emojis;
@@ -65,12 +65,14 @@ function setCount(guildId, userId, n) {
   if (!items[guildId]) items[guildId] = {};
   if (n > 0) items[guildId][userId] = n; else delete items[guildId][userId];
 }
-function grantReroll(guildId, userId) {
+// count 개를 더한다(최대 보유량까지). 실제로 받은 개수를 돌려준다(0이면 한도라 못 받음).
+function grantReroll(guildId, userId, count = 1) {
   const have = getRerolls(guildId, userId);
-  if (have >= REROLL_MAX) return false; // 최대 보유면 못 받음
-  setCount(guildId, userId, have + 1);
+  const given = Math.max(0, Math.min(count, REROLL_MAX - have));
+  if (given <= 0) return 0;
+  setCount(guildId, userId, have + given);
   saveRerolls();
-  return true;
+  return given;
 }
 // 1개 사용. 썼으면 true, 없으면 false.
 function useReroll(guildId, userId) {
