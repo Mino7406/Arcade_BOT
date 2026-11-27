@@ -100,7 +100,7 @@ Object.assign(ROLES, {
   ice: {
     kind: 'frost', element: 'ice', hideName: true,
     name: '얼음', emoji: '❄️', attack: [60, 80], hpWeight: 1.0,
-    skill: { name: '프로스트 월', cooldown: 2, desc: '이번 턴 아군 전원이 받는 피해 -40%' },
+    skill: { name: '프로스트 월', cooldown: 3, desc: '이번 턴 아군 전원이 받는 피해 -40%' },
   },
 });
 const ROLE_SETS = { default: ROLE_ORDER, elemental: ['fire', 'water', 'thunder', 'ice'] };

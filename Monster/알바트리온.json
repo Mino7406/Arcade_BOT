@@ -680,7 +680,7 @@
   },
   "raid": {
     "persistent": true,
-    "defeatPenaltyXp": 0,
+    "defeatPenaltyXp": 200,
     "clearXp": 1000,
     "mvpBonusXp": 0,
     "mvpItem": "reroll"

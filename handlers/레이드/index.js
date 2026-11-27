@@ -271,10 +271,11 @@ async function recruitView(r, { redraw = true } = {}) {
     const pen = raidRules(r).defeatPenaltyXp ?? 0;
     sections.push({
       text: `>>> ## ⚠️ 천재지변 출현\n` +
-        '-# 용을 쓰러뜨릴 때까지 정지는 풀리지 않아요',
+        '-# 용을 쓰러뜨릴 때까지 XP 지급 정지는 풀리지 않아요',
     });
+    if (pen > 0) sections.push({ text: `💀 **패배 ${r.defeatStacks || 0}회** · 패배 1회마다 모든 유저 **-${pen} XP**` }); // 파티 위에 별도 구역(한 줄에 붙이면 줄바꿈이 생긴다)
     sections.push({
-      text: `**파티 ${r.party.length} / ${PARTY_MAX}** · 속성 버튼을 눌러 참가하세요${pen > 0 ? ` · 패배 1회마다 모든 유저 **-${pen} XP**` : ''}\n` +
+      text: `**파티 ${r.party.length} / ${PARTY_MAX}** · 속성 버튼을 눌러 참가하세요\n` +
         '-# 각 속성에 맞춰 공격해야 **억제 성공률**이 올라가요',
     });
   } else if (isPersistent(r)) {
@@ -513,9 +514,10 @@ function buildEndNoticePayload({ kind, xp, details = [], stacks, lost, tone, out
   return cardPayload(card({
     color: penalty ? 'err' : 'ok',
     top: defeat ? `-# ☠️ **패배 ${stacks}회**` : penalty ? '-# ☠️ **복구 실패**' : '-# 🔧 **복구 완료**',
-    header: tone === 'alat' && defeat && !(xp > 0) ? (outcome === 'timeout' ? '파티는 쓰러졌지만, 용은 아직 그 자리에 있다...' : '파티는 쓰러졌지만, 용은 아직 그 자리에 있다...') : defeat && !(xp > 0) ? '파티가 쓰러졌습니다... 다시 도전하세요!' : defeat ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : penalty ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : 'XP 시스템이 복구되었습니다.',
+    header: tone === 'alat' && defeat ? '파티는 쓰러졌지만, 용은 아직 그 자리에 있다...' : defeat && !(xp > 0) ? '파티가 쓰러졌습니다... 다시 도전하세요!' : defeat ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : penalty ? `모든 유저의 **${xp} XP**를 잃어버렸습니다...` : 'XP 시스템이 복구되었습니다.',
     headerLevel: 3,
-    blocks: tone === 'alat' && defeat && !(xp > 0) ? [{ text: '-# 몬스터는 도주하지 않았습니다. 새 파티를 모아 다시 도전할 수 있어요.' }] : defeat && !(xp > 0) ? [{ text: '-# 몬스터는 도주하지 않았습니다. 새 파티를 모아 다시 도전할 수 있어요.' }] : defeat ? [...detailBlocks, { text: `📉 **지금까지 1인당 잃은 XP :** -${(lost ?? 0).toLocaleString()} XP\n-# 몬스터는 도주하지 않았습니다. 다시 도전할 때까지 XP가 계속 줄어요.` }] : detailBlocks,
+    blocks: tone === 'alat' && defeat && !(xp > 0) ? [{ text: '-# 몬스터는 도주하지 않았습니다. 새 파티를 모아 다시 도전할 수 있어요.' }] : defeat && !(xp > 0) ? [{ text: '-# 몬스터는 도주하지 않았습니다. 새 파티를 모아 다시 도전할 수 있어요.' }] : tone === 'alat' && defeat ? [{ text: `모든 유저의 **${xp} XP**를 잃어버렸습니다...` }, ...detailBlocks, { text: `📉 **지금까지 1인당 잃은 XP :** -${(lost ?? 0).toLocaleString()} XP
+-# 몬스터는 도주하지 않았습니다. 새 파티를 모아 다시 도전할 수 있어요.` }] : defeat ? [...detailBlocks, { text: `📉 **지금까지 1인당 잃은 XP :** -${(lost ?? 0).toLocaleString()} XP\n-# 몬스터는 도주하지 않았습니다. 다시 도전할 때까지 XP가 계속 줄어요.` }] : detailBlocks,
   }));
 }
 // 이름 끝 글자 받침에 따라 '이'/'가'를 고른다(한글이 아니면 '이(가)')
