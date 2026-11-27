@@ -471,9 +471,10 @@ function alatNextBox(b, tele, warn, smash) { // 선택 화면 '다음 행동' �
   const A = require('./알바트리온'), el = b.alat.element;
   const col = warn ? '#ff4a3a' : (ELEMENT_COLOR[el] || '#c8c4d8');
   if (!smash) {
-    const c = sideCard('R', 130, 318, 44, 20, col), my = c.cy;
-    p.roundRect(c.x0, my - 15, 84, 30, 7, '#0c0604'); p.strokeRoundRect(c.x0, my - 15, 84, 30, 7, 1.5, mixHex(col, '#ffffff', 0.25)); text('다음 행동', c.x0 + 42, my, 17, '#ffffff');
-    const t0 = c.x0 + 90; text(tele, t0 + (c.x1 - t0) / 2, my, tele.length > 12 ? 16 : 20, '#ffffff', { maxWidth: c.x1 - t0 });
+    // 결과 화면의 스킬 이름 띠(왼쪽)와 같은 모양의 얇은 한 줄 띠를 오른쪽에: 앞쪽 화살표 + 새긴 예고 문구. 박스·이름표 없이 글자만 크게
+    const SZ = 22, avail0 = 262, tw = Math.min(p.textWidth(B(), tele, SZ), avail0), c = sideCard('R', 132, Math.min(tw + 66, 330), 38, 18, col);
+    for (let k = 0; k < 3; k++) { const lx = c.x0 + k * 8, al = 1 - k * 0.3; p.line(lx, c.cy - 7, lx + 5, c.cy, 2, mixHex('#120a06', col, al)); p.line(lx + 5, c.cy, lx, c.cy + 7, 2, mixHex('#120a06', col, al)); }
+    engraved(tele, c.x0 + 32 + tw / 2, c.cy + 1, SZ, mixHex(col, '#ffffff', 0.55), { maxWidth: avail0 });
     return;
   }
   // 필살기 예고: 같은 옆면에 두 줄짜리 붉은 판(이름 + 억제 게이지)
@@ -497,11 +498,23 @@ function escFlash(stage, cx, cy, sup, el, targets = []) {
   const pal6 = key === 'fire' ? FIRE6 : key === 'dragon' ? DRAGON6 : [pal[1], pal[2], pal[3], pal[4], pal[5], pal[6]];
   const ex = cx, ey = cy + 6, rnd = seedRng(900 + stage * 13), K = stage * 7, WALL_Y = 352, G = 2;
   const clampY = sup ? WALL_Y - 2 : H; // 억제 성공이면 방벽 아래(카드 줄)는 불길이 닿지 않는다
-  const orb = (buf, x, y, R, k, pl = pal, dim = 1) => buf.paint(x - R * 1.6, y - R * 1.6, x + R * 1.6, y + R * 1.6, (px, py, i, j) => {
-    if (py > clampY) return null;
-    const dx = (px - x) / R, dy = (py - y) / R, n = fbm(px / 13 + k, py / 13 - k * 0.7, k) - 0.5, rr = Math.hypot(dx, dy) + n * 0.55;
-    return rr > 1 ? null : ramp(pl, (1.05 - rr * 0.95 + n * 0.25) * dim, i, j);
-  });
+  // 속성 구슬(도트 구체): 왼쪽 위 광원의 구형 음영(램프+디더링) · 가장자리의 어두운 테두리 · 흰 하이라이트 · 바깥으로 디더링되며 번지는 빛무리.
+  const orb = (buf, x, y, R, k, pl = pal, dim = 1, swirl = 0) => { // swirl: 구 안에서 소용돌이치는 결(디더링 띠)의 세기
+    const HALO = R < 8 ? 2.2 : 1.9;
+    buf.paint(x - R * HALO, y - R * HALO, x + R * HALO, y + R * HALO, (px, py, i, j) => {
+      if (py > clampY) return null;
+      const dx = (px - x) / R, dy = (py - y) / R, d = Math.hypot(dx, dy), n = fbm(px / 13 + k, py / 13 - k * 0.7, k) - 0.5, rr = d + n * 0.22;
+      if (rr > 1) { // 빛무리: 구 바깥으로 갈수록 성기게(바이어 디더링) — 은은히 번진다
+        const t = (rr - 1) / (HALO - 1); if (t >= 1) return null;
+        return bay(i, j) < Math.pow(1 - t, 2.2) * 0.62 * dim ? ramp(pl, 0.22 + (1 - t) * 0.4, i, j) : null;
+      }
+      if (Math.hypot(dx + 0.34, dy + 0.4) < 0.17) return '#ffffff'; // 하이라이트(광원 쪽 작은 반사점)
+      const nz = Math.sqrt(Math.max(0, 1 - Math.min(1, d * d))), lam = Math.max(0, -dx * 0.42 - dy * 0.5 + nz * 0.76); // 구의 밝은 쪽
+      let t = 0.2 + lam * 0.62 + (1 - d) * (1 - d) * 0.32 + n * 0.16 + (swirl ? swirl * Math.sin(Math.atan2(dy, dx) * 3 + d * 15 + k * 0.7 + n * 3) * (0.4 + d) : 0); // 가운데가 뜨거운 핵 + 광원 쪽이 밝은 면
+      if (rr > 0.8) t = Math.min(t, 0.06 + (1 - rr) / 0.2 * 0.24); // 가장자리는 어두운 테두리로 눌러 윤곽을 잡는다
+      return ramp(pl, t * dim, i, j);
+    });
+  };
   // 전장을 채우는 불길 장막: 세로로 길게 늘인 노이즈(불 혀) + 아래가 뜨겁고 위가 성긴 높이 분포. cover 0~1 = 화면을 덮는 정도
   const inferno = (buf, cover, hot, k, yMax = H) => buf.paint(0, 0, W, Math.min(yMax, clampY), (px, py, i, j) => {
     const yy = py / H, tongue = fbm(px / 20, py / 110 - k * 0.6, k + 2) - 0.5, puff = fbm(px / 70, py / 60, k + 5) - 0.5, r = Math.hypot(px - ex, (py - ey) * 1.3);
@@ -557,37 +570,103 @@ function escFlash(stage, cx, cy, sup, el, targets = []) {
   };
   if (stage === 0) { // 모으기 끝: 용암 바닥 · 바닥을 따라 일렁이는 불길 · 붉게 달아오른 핵
     alatTint(key, 0.05, 0.12);
-    dotGlow(ex, ey, 300, 190, br.glow[0], 0.5); dotGlow(ex, ey, 160, 110, br.glow[1], 0.6);
-    dotGlow(ex, ey, 96, 74, RYU[2], 0.55); // 핵 둘레가 붉게 물든다
-    { const buf = pixBuf(G); orb(buf, ex, ey, 34, K, RYU); buf.flush(null); } // 붉은 에너지 구
+    dotGlow(ex, ey, 300, 190, br.glow[0], 0.2); dotGlow(ex, ey, 160, 110, br.glow[1], 0.26);
+    dotGlow(ex, ey, 96, 74, RYU[2], 0.24); // 핵 둘레가 붉게 물든다
+    { const buf = pixBuf(G); orb(buf, ex, ey, 34, K, ['#3a0808', '#8a1410', '#d03a14', '#ff7a2a', '#ffb347', '#ffe9a8', '#ffffff'], 1, 0.11); buf.flush(null); } // 에너지 구: 임계 직전의 용암빛(붉은 주황 → 금빛 핵) + 안쪽에서 소용돌이치는 디더링 결
     { const crk = []; for (let q = 0; q < 4; q++) { const a = rnd() * 6.28, r0 = 4 + rnd() * 8, r1 = 26 + rnd() * 16; crk.push(zigzag(ex + Math.cos(a) * r0, ey + Math.sin(a) * r0, ex + Math.cos(a + (rnd() - 0.5)) * r1, ey + Math.sin(a + (rnd() - 0.5)) * r1 * 0.8, rnd, 5, 12)); }
       glowLine(crk, 0, 3, (x, y) => Math.hypot(x - ex, y - ey) < 44); } // 구 안에서만 지직거리는 흰 번개
     embers(36, 130, 330, false);
   } else if (stage === 1) { // 방출: 불똥 → 불덩이가 화면을 삼킴 → 불길 장막
-    p.roundRect(0, 0, W, H, 0, sup ? '#fff0d0' : pal[6], sup ? 0.08 : 0.1);
     alatTint(key, 0.05, 0.08);
-    { const buf = pixBuf(G); inferno(buf, 0.95, 0.8, K); buf.flush(null); }
-    elemOrbs(46, 5, 14, 1, 6); // 방출: 튀는 구슬 가운데 일부가 용·빙·뢰의 에너지 구(모으기의 붉은 구와 같은 모양)
-    embers(120, 20, 620, true);
+    p.roundRect(0, 0, W, H, 0, '#1a0606', 0.4); // 어둡게 눌러 폭발이 도드라지게
+    const BH = Math.min(H, clampY), SMOKE = ['#1a0d0a', '#2e1610', '#4a1a10'];
+    // 불덩이 한 개: 가장자리가 울퉁불퉁하게 부풀고(노이즈로 휘어진 윤곽), 안쪽은 난류가 소용돌이치는 램프(흰 핵 → 노랑 → 주황 → 붉음), 바깥은 연기·그을음이 디더링으로 번진다.
+    const fireball = (cx, cy, R, seed, pl0, heat = 1, smoke = true, pat = null) => { const buf = pixBuf(G), M = R * 1.7;
+      buf.paint(cx - M, Math.max(0, cy - M), cx + M, Math.min(BH, cy + M), (px, py, i, j) => {
+        const dx = px - cx, dy = (py - cy) * 1.05, r = Math.hypot(dx, dy), th = Math.atan2(dy, dx);
+        const warp = fbm(px / 60 + seed, py / 60, seed) - 0.5, lobe = fbm(Math.cos(th) * 1.7 + seed, Math.sin(th) * 1.7, seed + 4) - 0.5, edge = R * (0.8 + warp * 0.55 + lobe * 0.7);
+        if (r < edge) {
+          const t = 1 - r / edge, sw = fbm(px / 15 + warp * 4, py / 15 - warp * 4, seed + 2) - 0.5, rays = Math.sin(th * 9 + lobe * 6) * 0.045 * (1 - t); // 소용돌이 난류 + 가장자리에서 바깥으로 흐르는 가는 결
+          const pv = pat ? pat(px, py, i, j, t) : 0; if (typeof pv === 'string') return pv; // 속성 무늬가 색을 직접 지정하면(번개의 하늘색) 그대로 쓴다
+          const I = (t * 0.88 + 0.1 + sw * 0.5 + rays) * heat + pv, pl = typeof pl0 === 'function' ? pl0(t, i, j, px, py) : pl0;
+          return I < 0.1 && smoke ? SMOKE[Math.min(2, Math.floor(bay(i, j) * 3))] : ramp(pl, I, i, j);
+        }
+        if (!smoke) return null; const h = (r - edge) / (R * 0.55); // 바깥 연기 고리: 그을음 갈색이 성기게
+        return h < 1 && bay(i, j) < Math.pow(1 - h, 1.8) * 0.8 ? SMOKE[Math.min(2, Math.floor(bay(i + 1, j + 2) * 3))] : null;
+      }); buf.flush(null); };
+    // 속성 표현: 색은 불꽃색 그대로 두고, 불덩이 바깥쪽 결(디더링 무늬)로 속성을 나타낸다. 화면 위치에 따라 완만하게 속성이 바뀌고(저주파 노이즈) 경계는 디더링으로 풀린다.
+    //   용 = 어두운 균열 + 갈라진 틈의 열기 · 불 = 무늬 없음 · 번개 = 흰 번개 결(가는 능선) · 얼음 = 격자 결정 + 서리 알갱이 · 물 = 겹겹의 물결 파문
+    const pat = (px, py, i, j, t) => {
+      const amp = Math.max(0, Math.min(1, (0.86 - t) / 0.45)); if (amp <= 0) return 0; // 가운데 핵은 깨끗하게(번개·얼음은 amp와 상관없이 또렷하게 그린다)
+      const nn = Math.max(0, Math.min(1, (fbm(px / 300 + 3, py / 260, K + 17) - 0.3) / 0.4)), jt = (bay(i, j) - 0.5) * 0.1, kk = [0.14, 0.41, 0.7, 0.85].filter(T => nn + jt > T).length; // 속성 구간 비율: 용 14% · 불 27% · 번개 29% · 얼음 15% · 물 15%(경계는 디더링으로 풀린다)
+      if (kk === 0) { const e = Math.abs(fbm(px / 26, py / 26, K + 30) - 0.5); return e < 0.028 ? -0.42 * amp : e < 0.05 ? 0.22 * amp : 0; }
+      if (kk === 2) { // 번개: 몸 중심에서 바깥으로 지그재그로 튀는 방전 줄기 — 반지름 방향으로 길게 늘인 노이즈 능선 + 반지름마다 꺾이는 흔들림 + 중간중간 끊김
+        const dx = px - ex, dy = (py - ey) * 1.08, r = Math.hypot(dx, dy), th = Math.atan2(dy, dx);
+        const zig = (fbm(r / 15 + 3, th * 2.5, K + 41) - 0.5) * 1.1, e = Math.abs(fbm(th * 7 + zig, r / 150, K + 40) - 0.5), seg = fbm(r / 52 + 9, th * 4, K + 50) > 0.5;
+        const v = e * (260 / Math.max(r, 130)) * (seg ? 1 : 3.2); // 먼 곳일수록 가늘게, 끊긴 구간은 거의 사라진다
+        if (v < 0.011) return '#ffffff';
+        if (v < 0.022) return '#d6f1ff'; // 연한 하늘빛 흰색
+        if (v < 0.038) return bay(i, j) < 0.55 ? '#7cc8ff' : '#3c94f0'; // 하늘색 → 파랑 테두리
+        if (v < 0.075) return bay(i, j) < (0.075 - v) / 0.037 * 0.75 ? 0.3 : 0; // 줄기 둘레가 번쩍이며 밝아지는 빛무리
+        return 0;
+      }
+      if (kk === 3) return 0; // 얼음은 가운데가 아니라 화면 테두리가 살짝 어는 것으로 표현한다(아래 frostEdge)
+      if (kk === 4) { const rp = Math.sin(Math.hypot(px - ex, (py - ey) * 1.1) / 7 + (fbm(px / 50, py / 50, K + 5) - 0.5) * 7); return rp > 0.78 ? 0.22 * amp : rp < -0.86 ? -0.16 * amp : 0; }
+      return 0;
+    };
+    for (let q = 0; q < 16; q++) fireball(40 + rnd() * (W - 80), 150 + rnd() * (H - 190), 100 + rnd() * 90, 20 + q * 7, pal, 0.95, true, pat); // 화면 곳곳에서 번지는 불덩이들
+    fireball(ex, ey, 560, 3, pal, 1.05, true, pat); // 화면 전체를 삼키는 주 불덩이
+    fireball(ex - 6, ey - 4, 170, 9, [pal[3], pal[4], pal[5], pal[6], '#ffffff'], 1.1, false); // 뜨거운 핵(흰빛)
+    { const buf = pixBuf(G); // 충격파 고리 세 겹: 앞쪽(바깥) 가장자리는 흰 심으로 밝고 뒤쪽으로 갈수록 붉게 흐려지는 디더링 띠 — 군데군데 노이즈로 끊어져 찢긴 파동처럼 보인다
+      buf.paint(0, 0, W, BH, (px, py, i, j) => {
+        const r = Math.hypot(px - ex, (py - ey) * 1.08);
+        for (const [R0, w] of [[300, 18], [450, 26], [610, 32]]) {
+          const d = r - R0; if (d < -w || d > w * 0.3) continue;
+          const gap = fbm(px / 34 + R0, py / 34, K + R0 / 50) > 0.34 ? 1 : 0.3, t = (d + w) / (w * 1.3); // t: 0(뒤쪽 끝) → 1(앞쪽 가장자리)
+          if (d > -w * 0.08 && d < w * 0.12 && gap === 1) return '#ffffff'; // 앞쪽 가장자리의 흰 심
+          if (bay(i, j) < Math.pow(t, 1.6) * 1.15 * gap) return ramp([pal[1], pal[2], pal[3], pal[4], pal[5]], t, i, j);
+          if (d > w * 0.12 && bay(i, j) < 0.35) return pal[1]; // 앞쪽 바깥에 남는 어두운 잔상 알갱이
+        }
+        return null;
+      }); buf.flush(null); }
+    { const buf = pixBuf(G), N = 96, sp = Array.from({ length: N }, (_, n) => ({ a: (n + rnd()) / N * 6.2832, r0: 130 + rnd() * 230, L: 140 + rnd() * 420, w: 1.3 + rnd() * 2.4, on: rnd() < 0.62 })); // 충격 줄기: 몸에서 바깥으로 뻗는, 끝이 뾰족하게 줄어드는 도트 줄기(머리는 흰색 → 꼬리로 갈수록 붉고 성김)
+      buf.paint(0, 0, W, BH, (px, py, i, j) => {
+        const dx = px - ex, dy = (py - ey) * 1.08, r = Math.hypot(dx, dy); if (r < 120) return null;
+        const th = (Math.atan2(dy, dx) + 6.2832) % 6.2832, b0 = Math.floor(th / 6.2832 * N);
+        for (let o = -1; o <= 1; o++) {
+          const m = sp[(b0 + o + N) % N]; if (!m.on) continue;
+          const u = (r - m.r0) / m.L; if (u < 0 || u > 1) continue;
+          let da = Math.abs(th - m.a); if (da > 3.1416) da = 6.2832 - da;
+          const half = m.w * (1 - u * 0.85), perp = r * Math.sin(da); // 폭: 시작이 굵고 끝으로 갈수록 가늘게
+          if (perp > half) continue;
+          const core = perp < half * 0.4; // 가운데 심은 밝게
+          if (bay(i, j) > (1 - u) * 1.1 + 0.08) continue; // 끝으로 갈수록 디더링으로 흩어진다
+          return core ? (u < 0.5 ? '#ffffff' : pal[5]) : (u < 0.55 ? pal[4] : pal[2]);
+        }
+        return null;
+      }); buf.flush(null); }
+    embers(60, 0, 620, true);
     if (sup) { // 억제 성공: 카드 위에 육각 무늬 방벽이 불길을 막는다
       const buf = pixBuf(G); buf.paint(0, 324, W, 384, (px, py, i, j) => { const yb = WALL_Y + Math.sin(px / 46) * 5, d = Math.abs(py - yb); if (d > 12) return null; return ramp(ice, 0.95 - d / 12 * 0.45 + (((i + (j & 1) * 2) % 5 === 0) ? 0.1 : 0), i, j); }); buf.flush('#0a2440');
       const sb = pixBuf(G); for (const [tx] of targets) pxBurst(sb, tx, WALL_Y, 34, ice, rnd); sb.flush('#0a2440');
       dotGlow(W / 2, WALL_Y, 440, 70, '#9ad0ff', 0.6);
-      for (const [tx] of targets) cardRim(tx, '#cfe8ff', '#6cb4dc');
     } else { // 전멸: 카드마다 불길이 덮치고 가장자리가 붉게
-      for (const [tx] of targets) cardRim(tx, pal[5], pal[3]);
       alatTint('fire', 0.05, 0.1);
     }
   } else if (stage === 2) { // 식음: 옅은 불길 줄기와 붉은 핵, 카드에 남은 그을음
     alatTint(key, 0.04, 0.12);
     dotGlow(ex, ey, 300, 190, br.glow[0], 0.4);
-    { const buf = pixBuf(G); inferno(buf, 0.22, 0.15, K); buf.flush(null); }
-    elemOrbs(16, 3, 8, 0.8, 0);
+    { const buf = pixBuf(G); // 식어 가는 열기: 바닥에서 올라오는 붉은 기운이 위로 갈수록 디더링으로 성기게 사라지고, 위쪽엔 연기
+      buf.paint(0, 112, W, Math.min(H, clampY), (px, py, i, j) => {
+        const f = (py - 112) / (H - 112), n = fbm(px / 46, py / 30 - K * 0.3, K + 4) - 0.5, heat = Math.pow(f, 1.6) * 0.95 + n * 0.3 - 0.12, smoke = (1 - f) * 0.35 + n * 0.25 - 0.12;
+        if (heat > 0.08 && bay(i, j) < heat * 1.1) return ramp(pal, 0.1 + heat * 0.65, i, j);
+        if (smoke > 0.05 && bay(i, j) < smoke) return ['#0e0706', '#1c0d0a', '#2e1610'][Math.min(2, Math.floor(bay(i, j) * 3))];
+        return null;
+      }); buf.flush(null); }
     embers(80, 100, 560, false); // 식음: 이미 방출한 뒤라 입(몸 중심)의 불덩이는 그리지 않는다
     if (sup) { const buf = pixBuf(G); buf.paint(0, 330, W, 372, (px, py, i, j) => { const yb = WALL_Y + Math.sin(px / 46) * 5, d = Math.abs(py - yb); return d > 6 || bay(i, j) > 0.5 ? null : ramp(ice, 0.8 - d / 12, i, j); }); buf.flush(null); }
   } else { // 여운: 바닥에 남은 불과 불씨
     alatTint(key, 0.03, 0.1);
-    elemOrbs(8, 2, 5, 0.65, 0);
     embers(50, 100, 560, false);
   }
 }
@@ -2451,21 +2530,14 @@ function alatPost(scene, el, heavy) {
   const inIcon = (x, y) => scene !== '모집' && scene !== '전투' ? false : ICON_KEEP.some(([kx, ky, kw, kh]) => x >= kx && x < kx + kw && y >= ky && y < ky + kh);
   const add = (x, y, c, k = 1) => { if (x < 0 || y < 0 || x >= w || y >= h || inIcon(x, y)) return; const j = (y * w + x) * 3; buf[j] = Math.min(255, buf[j] + Math.round(c[0] * k)); buf[j + 1] = Math.min(255, buf[j + 1] + Math.round(c[1] * k)); buf[j + 2] = Math.min(255, buf[j + 2] + Math.round(c[2] * k)); };
   const set = (x, y, c) => { x = Math.round(x); y = Math.round(y); if (x < 0 || y < 0 || x >= w || y >= h || inIcon(x, y)) return; const j = (y * w + x) * 3; buf[j] = c[0]; buf[j + 1] = c[1]; buf[j + 2] = c[2]; };
-  // ① 가장자리 빛
-  const band = (heavy ? 0.1 : 0.06);
+  // 가장자리에 속성색이 은은하게 스며드는 음영만(모서리 효과·불씨 점·주사선은 지저분해 보여 뺐다). 부드럽게 퍼지도록 폭을 넓히고 세기는 낮춘다.
+  const band = heavy ? 0.14 : 0.11, gain = heavy ? 0.26 : 0.17;
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const e = Math.min(Math.min(x, w - 1 - x) / w, Math.min(y, h - 1 - y) / h);
     if (e >= band) { if (x > w * band && x < w * (1 - band)) x = Math.floor(w * (1 - band)); continue; }
-    add(x, y, col, ((band - e) / band) ** 2 * (heavy ? 0.36 : 0.22));
+    const t = (band - e) / band;
+    add(x, y, col, t * t * (3 - 2 * t) * gain); // 부드러운 곡선(smoothstep)
   }
-  // ② 네 모서리 이펙트: 지금 속성에 맞춰 모양이 바뀐다(불=불길 · 물=물결과 물방울 · 번개=번개 줄기 · 얼음=서리 결정 · 용=검붉은 균열)
-  alatEdges(el, heavy, scene);
-  alatCorners(el, heavy, rnd, scene);
-  // ③ 불씨
-  for (let i = 0, n = alatCalm ? 0 : heavy ? 120 : 50; i < n; i++) { const x = Math.floor(rnd() * w), y = Math.floor(rnd() * h), sz = 1 + Math.floor(rnd() * 2); if (scene === '전투' && y < 124 * RENDER_SCALE) continue; // 헤더 구역엔 불씨를 뿌리지 않는다
-     for (let dy = 0; dy < sz; dy++) for (let dx = 0; dx < sz; dx++) set(x + dx, y + dy, rnd() < 0.5 ? col : [255, 255, 255]); }
-  // ④ 가는 주사선(한 줄 건너 아주 약하게 어둡게)
-  for (let y = 0; y < h; y += 4) for (let x = 0; x < w; x++) { if (inIcon(x, y)) continue; const j = (y * w + x) * 3; buf[j] = Math.round(buf[j] * 0.93); buf[j + 1] = Math.round(buf[j + 1] * 0.93); buf[j + 2] = Math.round(buf[j + 2] * 0.93); }
 }
 let themeKey = ''; // 배경 캐시 키 뒤에 붙는다(테마마다 배경을 따로 저장)
 // 화면 오염 후처리(6번째 시안 그대로, 실제 픽셀 675×480 단위): ① 가장자리 붉은 빛 ② 네 모서리 오염(옆 칸이 붉게 끌려와 어긋난 블록 ·
@@ -2708,7 +2780,7 @@ async function render(scene, draw, monster = null) {
     draw();
     if (corrupt && skillCtx && SKILL_FX.includes(skillCtx.fx)) skillGlitch(skillCtx, (skillCtx.fx.length * 977 + 13) >>> 0);
     if (corrupt) corruptPost(scene, scene.length * 31 + 7 + (rageGlitch ? rageGlitch * 53 : 0), !!rageGlitch); // 분노는 턴마다 깨진 모양이 달라진다
-    if (alatTheme) alatPost(scene, alatThemeEl ?? 'none', !!alatThemeRage); // 속성이 없는 화면(모집 로비·결과)은 무속성 테두리
+    if (alatTheme && scene !== '모집' && !alatCalm) alatPost(scene, alatThemeEl ?? 'none', !!alatThemeRage); // 속성이 없는 결과 화면은 무속성 테두리, 대기 로비(모집)는 테두리 효과 없음
     const t1 = process.hrtime.bigint();
     const png = painter.png();
     logRender(scene, Number(t1 - t0) / 1e6, Number(process.hrtime.bigint() - t1) / 1e6, png.length);
@@ -2905,7 +2977,6 @@ function alatHeader(b, shownEl) {
   // 왼쪽 방패 라벨
   const lx = gx - 26 + 4, ly = gy + gh / 2;
   p.poly([lx - 13, ly - 13, lx + 13, ly - 13, lx + 13, ly + 3, lx, ly + 15, lx - 13, ly + 3], rim); p.poly([lx - 10, ly - 10, lx + 10, ly - 10, lx + 10, ly + 2, lx, ly + 12, lx - 10, ly + 2], '#0d0805'); p.poly([lx - 7, ly - 7, lx + 7, ly - 7, lx + 7, ly + 1, lx, ly + 9, lx - 7, ly + 1], mixHex('#0d0805', col, full ? 0.9 : 0.45));
-  text('억제', lx, ly - 1, 11, '#ffffff');
   // 오른쪽 숫자 판
   const nx = gx + gw + sl2 + 26; // 왼쪽 방패 라벨과 대칭
   p.roundRect(nx - 24, gy - 5, 48, gh + 10, 7, '#0d0805', 0.85); p.strokeRoundRect(nx - 24, gy - 5, 48, gh + 10, 7, 1.5, full ? col : rimDark);
@@ -3021,7 +3092,8 @@ function renderBattle(r) {
     const sporeColor = m.sprite?.palette?.x || fxColor; // 포자 연출 색
     const accentColor = m.sprite?.palette?.p || sporeColor; // 반점 색(독기·파편)
     // 박치기·짓누르기는 파티 쪽(아래)으로 몸을 내밀어 그린다
-    const monsterY = 196 + (usedFx === 'attack' ? 10 : usedFx === 'smash' || usedFx === 'burst' || usedFx === 'icefall' ? 6 : 0);
+    const monsterY = 196 + (isAlat(m) ? 24 : 0) + ( // 알바트리온은 바닥띠 예고가 없어 몸이 위로 떠 보이므로 전체를 아래로 내린다
+usedFx === 'attack' ? 10 : usedFx === 'smash' || usedFx === 'burst' || usedFx === 'icefall' ? 6 : 0);
     // 보호막(단단해지기 다음 턴): 외곽선을 금속빛으로 바꾸고 둘레에 반짝임 + HP 바 왼쪽에 방패 배지
     const shielded = isShielded(b);
     if (shielded) {
@@ -3049,7 +3121,7 @@ function renderBattle(r) {
     const escEl = () => 'fire'; // 에스카톤 저지먼트는 속성과 상관없이 하나의 연출(불 연출)로 통일 // 에스카톤이 물들이는 속성(무속성이면 불)
     if (escCharge0 || escBlast0) alatCalm = true; // 에스카톤 장면에서는 흩뿌리는 점 효과를 모두 끈다
     if (escCharge0) escCharge(W / 2, monsterY, escEl(b.alat.element));
-    if (escBlast0) escField(escEl(escBlast0.el), W / 2, monsterY, [0.2, 0, 0.18, escBlast0.sup ? 0.1 : 0.4][escBlast0.stage], escBlast0.stage, escBlast0.sup); // 속성 전장(몬스터 뒤): 임계 → 방출(빛기둥) → 식음 → 여운(전멸이면 어둡게)
+    if (escBlast0) escField(escEl(escBlast0.el), W / 2, monsterY, [0.2, 0, 0.18, 0.4][escBlast0.stage], escBlast0.stage, false); // 속성 전장(몬스터 뒤): 임계 → 방출(빛기둥) → 식음 → 여운(전멸이면 어둡게)
     monsterFx(usedFx, W / 2, monsterY, fxColor, 'back', sporeColor, accentColor);
     const shiftNow = b.alat?.shifted && b.alat.prev && !skyDotNow && !r.showingResult ? // 결과 화면(기술 연출 중)에는 띄우지 않는다 — 서리 숨결에 속성 전환 고리가 겹쳐 보이던 문제. 전환은 다음 선택 화면에서 보여 준다
  [b.alat.prev, b.alat.element] : null; // 방금 속성이 바뀐 화면(결과·다음 선택)
@@ -3279,7 +3351,7 @@ function renderBattle(r) {
       // 점액: 왼쪽 배지와 함께 아이콘 위 점액 얼룩도 그대로(사용자 요청). 이번 턴 맞은 카드는 타격 표시만.
       if (!down && slowTurnsLeft(b, mem) > 0 && !(usedMove && last?.hits[mem.userId])) hitFx('sweep', x + w / 2, y + 86, fxColor);
       const hit = last?.hits[mem.userId];
-      if (hit && usedFx) hitFx(usedFx, x + w / 2, y + 86, fxColor, sporeColor, accentColor);
+      if (hit && usedFx && !last?.escaton) hitFx(usedFx, x + w / 2, y + 86, fxColor, sporeColor, accentColor);
       if (hit && skillCtx) skillCtx.targets.push({ x, y, w, h });
       if (r.showingResult && last?.minionTargets?.[mem.userId]) drawPixels(BANANA, x + w / 2 + 40, y + 110, 6); // 부하의 바나나 투척에 맞음
       // 받은 피해 숫자도 그 턴의 결과 화면에서만(다음 턴 선택 화면에는 남기지 않는다)
@@ -3326,7 +3398,7 @@ function renderBattle(r) {
       for (let k = 0; k < 2; k++) p.circle(gx + 80 + k * 18, y + 239, 6.5, k < mem.potions ? '#7ccf5a' : '#3a3328');
     }, (mem) => {
       const state = memberState(b, mem, r.showingResult);
-      if (usedMove && last?.hits[mem.userId]) return { color: ALAT_MOVE_COLOR[usedFx] || '#ff4a3a', width: 4 }; // 이번 턴에 맞은 카드(알바트리온 기술은 그 속성색)
+      if (usedMove && !last?.escaton && last?.hits[mem.userId]) return { color: ALAT_MOVE_COLOR[usedFx] || '#ff4a3a', width: 4 }; // 이번 턴에 맞은 카드(알바트리온 기술은 그 속성색)
       if (state === 'pending') return { color: isCorrupt(m) ? '#ff3a4a' : isAlat(m) ? '#f0a050' : '#ffb52e', width: 4 }; // 오염 테마는 붉은 테두리, 알바트리온은 보랏빛
       if (state === 'ready') return { color: '#3ecf6e', width: 2.5 };
       if (state === 'stunned') return { color: '#ffd23f', width: 2.5 };
@@ -3358,7 +3430,7 @@ function renderBattle(r) {
     }
     if (r.showingResult && ALAT_FX.includes(usedFx)) alatOverlay(usedFx, W / 2, monsterY, alatTargets, 'hit');
     if (ambushStage >= 0) ambushFlash(ambushStage, W / 2, monsterY);
-    if (r.showingResult && last?.escaton && b.alat) escFlash(Math.min(3, r.escStage ?? 0), W / 2, monsterY, !!last.escaton.suppressed, escEl(last.escaton.element), b.members.map(mm => [20 + activeRoles.indexOf(mm.role) * (CARD_W + CARD_GAP) + CARD_W / 2, CARD_Y + 70]));
+    if (r.showingResult && last?.escaton && b.alat) escFlash(Math.min(3, r.escStage ?? 0), W / 2, monsterY, false, escEl(last.escaton.element), b.members.map(mm => [20 + activeRoles.indexOf(mm.role) * (CARD_W + CARD_GAP) + CARD_W / 2, CARD_Y + 70]));
     if (r.showingResult && last?.escaton && b.alat && (r.escStage ?? 0) >= 1) escBanner(!!last.escaton.suppressed, escEl(last.escaton.element)); // 에스카톤 전용 스킬 띠(첫 장면은 타이틀 카드가 대신) // 에스카톤: 화면 전체 번쩍임과 다섯 속성 폭발(맨 위에 덮음) // 착지: 화면 전체 붉은 번쩍임과 폭발(맨 위에 덮음)
   }, r.battle?.monster ?? r.monster);
 }
