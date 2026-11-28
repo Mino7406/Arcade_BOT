@@ -168,7 +168,7 @@
     },
     "killnine": {
       "name": "kill -9",
-      "telegraph": "> kill -9 {target} — 프로세스 종료 시도",
+      "telegraph": "> kill -9 — 프로세스 종료 시도",
       "target": "single",
       "mark": true,
       "rageTargets": 2,

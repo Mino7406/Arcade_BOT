@@ -388,7 +388,7 @@ function effectLines(b) {
   const stenched = b.members.filter(mem => isStenched(b, mem));
   for (const [label, mems] of byStatus(stenched, 'stenchStatus')) lines.push(`${label}: ${mems.map(mem => `${mem.name}(${stenchTurnsLeft(b, mem)}턴)`).join(', ')} - **회복약 사용 불가 · 치유사 회복 -${minusPct(mems[0].stenchRate ?? 1)}%**`);
   const errored = b.members.filter(mem => isErrored(b, mem));
-  for (const [label, mems] of byStatus(errored, 'errorStatus')) lines.push(`${label}: ${mems.map(mem => `${mem.name}(${errorTurnsLeft(b, mem)}턴)`).join(', ')} - **고른 행동이 무작위로 바뀜(치유사 스킬로 해제)**`);
+  for (const [label, mems] of byStatus(errored, 'errorStatus')) lines.push(`${label}: ${mems.map(mem => `${mem.name}(${errorTurnsLeft(b, mem)}턴)`).join(', ')} - **고른 행동이 무작위로 바뀜 · 받는 치유량 50% 감소(치유사 스킬로 해제)**`);
   const vuln = b.members.filter(mem => isVulnerable(b, mem));
   for (const [label, mems] of byStatus(vuln, 'vulnStatus')) lines.push(`${label}: ${mems.map(mem => `${mem.name}(${vulnTurnsLeft(b, mem)}턴)`).join(', ')} - **받는 피해 +${Math.round(((mems[0].vulnRate ?? 1) - 1) * 100)}%(치유사 스킬로 해제)**`);
   const doomed = b.members.filter(mem => isDoomed(b, mem));
