@@ -9,7 +9,7 @@ const ELEMENT_NAME = { none: '무', fire: '화', water: '수', thunder: '뇌', i
 
 const K = {
   PHASE_MIN: 1, PHASE_MAX: 3,
-  CYCLE_MIN: 11, CYCLE_MAX: 13,
+  CYCLE_MIN: 10, CYCLE_MAX: 12,
   GAUGE_MAX: 100,
   ATTACK_GAIN: 10, SKILL_GAIN: 29,
   DRAGON_EFF: 1 / 3,
