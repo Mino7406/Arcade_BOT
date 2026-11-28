@@ -544,14 +544,23 @@ function endSummary(r, outcome, rewards) {
     lines.push(`${name} 토벌되어 XP 시스템이 복구되었습니다.`);
     const mvp = rewards.find(x => x.mvp);
     const mvpName = mvp && b?.members.find(mem => mem.userId === mvp.userId)?.name;
-    const quiet = isRerollRaid(r); // 역린은 화면에 적지 않고 XP만 보여 준다
-    if (mvpName) lines.push(`> 👑 **MVP** : ${mvpName} · ${quiet ? rewardText(mvp.xp) : rewardText(mvp.xp, mvp.hackTool, mvp.gateway, mvp.gatewayFull, mvp.reroll, mvp.rerollFull)}`);
-    // MVP 가 아닌 사람은 받은 것(해킹 툴 받았나)이 같은 사람끼리 한 줄로 묶는다 — 보통은 한 줄.
-    for (const got of quiet ? [false] : [true, false]) {
-      const names = rewards.filter(x => !x.mvp && (quiet || !!x.hackTool === got)).map(x => b.members.find(mem => mem.userId === x.userId)?.name).filter(Boolean);
-      if (names.length) lines.push(`> 🎁 **보상** : ${names.join(', ')} · ${rewardText(clearXpOf(r), got && !quiet)}`);
+    const rerollRaid = isRerollRaid(r);
+    if (mvpName) lines.push(`> 👑 **MVP** : ${mvpName} · ${rewardText(mvp.xp, mvp.hackTool, mvp.gateway, mvp.gatewayFull, mvp.reroll, mvp.rerollFull)}`);
+    if (rerollRaid) {
+      // 역린은 지급 수량이 보유 한도에 따라 달라지므로 받은 사람과 한도에 걸린 사람을 구분해 표시한다.
+      for (const [received, full] of [[true, false], [false, true]]) {
+        const group = rewards.filter(x => !x.mvp && (received ? x.reroll > 0 : x.rerollFull));
+        const names = group.map(x => b.members.find(mem => mem.userId === x.userId)?.name).filter(Boolean);
+        if (names.length) lines.push(`> 🎁 **보상** : ${names.join(', ')} · ${rewardText(clearXpOf(r), false, false, false, received ? 1 : 0, full)}`);
+      }
+    } else {
+      // MVP 가 아닌 사람은 받은 것(해킹 툴 받았나)이 같은 사람끼리 한 줄로 묶는다 — 보통은 한 줄.
+      for (const got of [true, false]) {
+        const names = rewards.filter(x => !x.mvp && !!x.hackTool === got).map(x => b.members.find(mem => mem.userId === x.userId)?.name).filter(Boolean);
+        if (names.length) lines.push(`> 🎁 **보상** : ${names.join(', ')} · ${rewardText(clearXpOf(r), got)}`);
+      }
     }
-    const full = quiet ? null : hackToolFullLine(r, rewards);
+    const full = rerollRaid ? null : hackToolFullLine(r, rewards);
     if (full) lines.push(full);
     if (!rewards.length) lines.push('> 직접 행동한 파티원이 없어 보상이 없어요');
   } else if (outcome === 'wipe' || outcome === 'timeout' || outcome === 'noshow') {
