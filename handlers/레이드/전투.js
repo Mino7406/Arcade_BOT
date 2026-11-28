@@ -142,7 +142,7 @@ const EFFECTS = ['slow', 'stun', 'shield', 'poison', 'confuse', 'chill', 'fear',
 //   아군 행동으로 부하를 다 처치하면 penalty(우울 상태): 다음 턴부터 turns턴 동안 몬스터가 받는 피해 × weakRate, 주는 피해 × dealRate(행동은 그대로).
 //   needMinions 기술(부하 합동 필살기)은 부하가 살아 있을 때만 고르고, 살아 있는 부하 한 마리마다 perMinion 피해를 더한다(그 턴 부하는 따로 공격하지 않음).
 //   ultimate: 필살기 2 — 필살기 1(smash)을 못 쓸 때 5턴 보장을 대신 채운다. 필살기끼리는 연속으로 나오지 않는다.
-// 오류(error — ??? 데이터 크래시): 맞은 사람(guardBlocks면 방어한 사람 제외)은 effectTurns턴 동안 고른 행동이 무작위 다른 행동으로 바뀐다(치유사 스킬로 해제).
+// 오류(error — 블랙월 데이터 크래시): 행동이 무작위로 바뀌고 받는 회복량이 50% 감소한다(치유사 스킬로 해제).
 // 취약(vuln — 취약점 분석, target none이면 살아 있는 전원): effectTurns턴 동안 받는 몬스터 피해 × effectRate(치유사 스킬로 해제).
 // 즉사(doom — kill -9): 다음 턴 아군 행동이 끝난 뒤 effectRate 확률로 HP 0(분노 중 rageRate). 방어한 사람은 안 걸리고(guardBlocks) 치유사 스킬로 해제.
 const SUMMON_COOLDOWN = 2; // 부하를 다 잃은 뒤 이만큼은 다시 부르지 않는다(바로 또 불러서 벌칙이 의미 없어지지 않게)
@@ -376,6 +376,31 @@ function pickNextIntent(battle, rng) {
   }
   const weights = battle.monster.intentWeights || INTENT_WEIGHTS;
   let pool = battle.rage ? weights.rage : weights.normal;
+  if (battle.monster.id === 'void') {
+    // 블랙월은 파티 상태와 직전 오버클록에 맞춰 기존 기술의 선택 확률을 조정한다.
+    pool = { ...pool };
+    const alive = aliveMembers(battle);
+    const half = Math.ceil(alive.length / 2);
+    const errored = alive.filter(m => isErrored(battle, m)).length;
+    const vulnerable = alive.filter(m => isVulnerable(battle, m)).length;
+    const hurt = alive.filter(m => m.hp <= PLAYER_MAX_HP * 0.65).length;
+    const doomed = alive.some(m => (m.doomTurn ?? 0) > battle.turn);
+
+    // 취약을 이미 걸어 둔 동안엔 분석을 반복하지 않는다. 취약이 비면 다시 분석 기회를 노린다.
+    pool.analyze *= vulnerable >= half ? 0 : 1.8;
+    // 회복이 필요한 파티에 오류를 걸고, 절반 이상이 이미 오류면 데이터 크래시를 아낀다.
+    pool.attack *= errored >= half ? 0.2 : hurt ? 1.8 : 1;
+    // 오버클록 뒤에는 바로 재충전하지 않고 기존 공격 기술로 강화 효과를 사용한다.
+    if (battle.powerRate > 1) {
+      pool.overclock = 0;
+      pool.attack *= 0.6;
+      pool.deadeye *= 1.8;
+      pool.killnine *= 1.4;
+      pool.smash *= 1.5;
+    }
+    // 낮은 체력의 표적이 있고 즉사 판정이 대기 중이지 않으면 kill -9를 더 노린다.
+    if (!doomed && alive.some(m => m.hp <= PLAYER_MAX_HP * 0.45)) pool.killnine *= 1.8;
+  }
   // 부하 부르기(summon)는 부하가 살아 있거나 다 잃은 지 얼마 안 됐으면, 합동 기술(needMinions)은 부하가 없으면 고르지 않는다
   if (battle.monster.minions) {
     const allowed = Object.fromEntries(Object.entries(pool).filter(([key]) => usable(key)));
@@ -570,7 +595,23 @@ function assignMarks(battle, rng = Math.random) {
   const pool = aliveMembers(battle).slice();
   const n = Math.min(battle.rage ? (move.rageTargets ?? 1) : 1, pool.length);
   const out = [];
-  while (out.length < n) out.push(pool.splice(Math.floor(rng() * pool.length), 1)[0].userId);
+  while (out.length < n) {
+    if (battle.monster.id === 'void') {
+      // 블랙월은 kill -9·데드아이로 위험한 대상을 우선 압박한다. 체력이 낮은 사람을 노리되,
+      // 비슷한 체력이면 치유사를 우선해 전투 흐름을 끊는다.
+      pool.sort((a, b) => {
+        const hpDiff = a.hp / PLAYER_MAX_HP - b.hp / PLAYER_MAX_HP;
+        if (Math.abs(hpDiff) > 0.1) return hpDiff;
+        return Number(b.role === 'healer') - Number(a.role === 'healer');
+      });
+      const tied = pool.filter(m => Math.abs(m.hp / PLAYER_MAX_HP - pool[0].hp / PLAYER_MAX_HP) <= 0.1);
+      const target = tied[Math.floor(rng() * tied.length)];
+      out.push(target.userId);
+      pool.splice(pool.indexOf(target), 1);
+    } else {
+      out.push(pool.splice(Math.floor(rng() * pool.length), 1)[0].userId);
+    }
+  }
   battle.marks = out;
 }
 // 표식 공격을 맞을 사람: 표식 대상(쓰러졌으면 표식 없는 다른 사람에게 옮김). 수호자가 도발하면 한 명 몫을 대신 맞는다.
@@ -646,9 +687,10 @@ function allChosen(battle) {
   return aliveMembers(battle).every(m => m.choice || isStunned(battle, m));
 }
 
-function heal(member, amount) {
+function heal(battle, member, amount) {
   const before = member.hp;
-  member.hp = Math.min(PLAYER_MAX_HP, member.hp + amount);
+  const received = isErrored(battle, member) ? Math.round(amount * 0.5) : amount;
+  member.hp = Math.min(PLAYER_MAX_HP, member.hp + received);
   return member.hp - before;
 }
 
@@ -823,7 +865,7 @@ function resolveTurn(battle, rng = Math.random) {
         const revived = [];
         const cleansed = new Set(); // 씻어낸 상태이상 이름(점액 등)
         for (const t of battle.members) {
-          if (t.hp > 0) healed += heal(t, isStenched(battle, t) ? Math.round(HEALER_HEAL * (t.stenchRate ?? 1)) : HEALER_HEAL); // 악취 중엔 회복 감소(씻어내지 못함)
+          if (t.hp > 0) healed += heal(battle, t, isStenched(battle, t) ? Math.round(HEALER_HEAL * (t.stenchRate ?? 1)) : HEALER_HEAL); // 악취 중엔 회복 감소(씻어내지 못함)
           else { t.hp = 25; healed += 25; revived.push(t.name); (last.revivedIds ??= []).push(t.userId); }
           if (slowTurnsLeft(battle, t) > 0) { t.slowUntil = 0; cleansed.add(t.slowStatus.name); } // 점액(slow)도 씻어낸다
           if (poisonStacks(battle, t) > 0) { t.poisonStacks = 0; t.poisonUntil = 0; cleansed.add(t.poisonStatus.name); } // 독도 씻어낸다
@@ -845,7 +887,7 @@ function resolveTurn(battle, rng = Math.random) {
       log.push(`${role.emoji} **${m.name}** 방어 태세`);
     } else if (action === 'potion') {
       m.potions--;
-      const healed = heal(m, POTION_HEAL);
+      const healed = heal(battle, m, POTION_HEAL);
       m.healing += healed;
       // 회복약은 독도 푼다(이번 턴 독 피해 전에 마시므로 그 턴 독 피해도 없음)
       const cured = poisonStacks(battle, m) > 0 ? m.poisonStatus : null;

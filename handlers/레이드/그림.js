@@ -3372,7 +3372,7 @@ usedFx === 'attack' ? 10 : usedFx === 'smash' || usedFx === 'burst' || usedFx ==
       roleIcon(roleKey, x + w / 2, y + 86, down);
       if (stenchK) stenchFront(x + w / 2, y + 86, stenchK);
       // 표식(영혼 사냥 예고 대상): 선택 화면에서 카드 오른쪽 위에 빛나는 눈
-      if (!down && !r.showingResult && !isIntentHidden(b) && b.marks?.includes(mem.userId)) markEye(x + w - 36, y + 66);
+      if (!down && !r.showingResult && !isIntentHidden(b) && m.id !== 'void' && b.marks?.includes(mem.userId)) markEye(x + w - 36, y + 66);
       if (!down && isIced(b, mem)) iceCover(x + w / 2, y + 86); // 빙결: 아이콘이 얼음에 갇힘
       // 점액: 왼쪽 배지와 함께 아이콘 위 점액 얼룩도 그대로(사용자 요청). 이번 턴 맞은 카드는 타격 표시만.
       if (!down && slowTurnsLeft(b, mem) > 0 && !(usedMove && last?.hits[mem.userId])) { if (mem.slowStatus?.fx === 'water') wetIcon(x + w / 2, y + 86); else hitFx('sweep', x + w / 2, y + 86, fxColor); } // 젖음은 점액 덩어리 대신 물막과 흘러내리는 물방울
