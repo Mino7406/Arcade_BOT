@@ -6,7 +6,7 @@
   "rageName": "알바트리온",
   "lore": "다섯 속성을 두르고 하늘을 가르는 용. (가칭·임시 설명)",
   "hard": true,
-  "testOnly": true,
+  "testOnly": false,
   "partyClasses": "elemental",
   "baseHp": 8600,
   "damageRate": 0.82,
